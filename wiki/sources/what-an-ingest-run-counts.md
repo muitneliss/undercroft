@@ -1,12 +1,12 @@
 ---
 title: What an ingest run counts
 type: source
-date: 2026-10-01
+date: 2026-10-06
 tags: []
 source: docs/reference/run-counts.md
 source_path: docs/reference/run-counts.md
-source_hash: ac2518048910f359845405141bc3d4c32b02586f24b9418a927329514b01dfcb
-ingested: 2026-10-01
+source_hash: db9cc5147e7a6884c3b55e9925cc819ba5823cbc9d14bde96c992eb782a9c704
+ingested: 2026-10-06
 ---
 
 # What an ingest run counts

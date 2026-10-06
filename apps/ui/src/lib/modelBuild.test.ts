@@ -16,7 +16,7 @@ describe("buildMark", () => {
     expect(buildMark("error")).toBe("lapsed");
     expect(buildMark(null)).toBe("absent");
     expect(buildMark("skipped")).toBe("pending");
-    expect(buildMarkLabel(vi, "error")).toBe("Dựng lỗi");
+    expect(buildMarkLabel(vi, "error")).toBe("Dựng thất bại");
     expect(buildMarkLabel(vi, null)).toBe("Chưa dựng");
   });
 });

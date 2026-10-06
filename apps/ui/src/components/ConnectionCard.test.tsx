@@ -65,7 +65,7 @@ describe("the last run", () => {
     expect(screen.getByText("HubSpot answered 401 after 0")).toBeDefined();
     // And a way into the ledger, at this run: the slip names the fault, the journal holds
     // what was refused and why.
-    expect(screen.getByRole("link", { name: "Xem trong nhật ký" }).getAttribute("href")).toBe(
+    expect(screen.getByRole("link", { name: "Xem trong Nhật ký" }).getAttribute("href")).toBe(
       "/tenants/CASE-0042/journal/run-1",
     );
   });
@@ -194,7 +194,7 @@ describe("the write plates, by who is reading", () => {
     render(everyState(false));
 
     // One account, not its kind: the journal opened here lists this source's runs alone.
-    expect(screen.getByRole("link", { name: /Các lần chạy/u }).getAttribute("href")).toBe(
+    expect(screen.getByRole("link", { name: /Xem các lần chạy/u }).getAttribute("href")).toBe(
       "/tenants/CASE-0042/journal?source=gmail",
     );
   });
@@ -224,7 +224,9 @@ describe("Disconnect", () => {
     fireEvent.click(screen.getByText("Ngắt kết nối…"));
 
     expect(ended).toEqual([]);
-    expect(screen.getByText("Các bản ghi đã vào kho thô vẫn được giữ nguyên.")).toBeDefined();
+    expect(
+      screen.getByText("Các bản ghi đã vào hồ dữ liệu thô vẫn được giữ nguyên."),
+    ).toBeDefined();
   });
 
   it("the second press names the account and disconnects it", () => {

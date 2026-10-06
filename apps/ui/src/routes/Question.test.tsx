@@ -143,7 +143,7 @@ describe("read first, edit by the address", () => {
     expect(screen.getByLabelText("Tên câu hỏi")).toBeDefined();
     expect(screen.getByRole("region", { name: "Dựng câu hỏi" })).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "Xong sửa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sửa xong" }));
     await waitFor(() => {
       expect(router.state.location.search).toBe("");
     });

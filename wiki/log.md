@@ -317,3 +317,4 @@
 ## [2026-10-06] ingest | ADR 0113 Every Action Is in the Audit Log and People Can Read It
 ## [2026-10-06] ingest | Runbook Sign-In Setup
 ## [2026-10-06] ingest | Runbook: Onboarding a new person
+## [2026-10-06] ingest | What an ingest run counts

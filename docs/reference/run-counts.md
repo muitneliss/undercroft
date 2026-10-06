@@ -94,7 +94,7 @@ today's scope. ADR 0091.
 
 ## One account's runs
 
-A source card's "Its runs" opens the Journal filtered to that account (`?source=` in the
+A source card's "View runs" opens the Journal filtered to that account (`?source=` in the
 address), and `runs list --source` does the same over the CLI and MCP. A second mailbox is its
 own account, so each card lists only its own runs.
 

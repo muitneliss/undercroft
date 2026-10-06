@@ -43,7 +43,7 @@ describe("LakeSummary", () => {
   it("nothing landed: an unprinted leaf that says what stands in the way, and no table", () => {
     render(leaf({ records: [], documents: [] }));
 
-    expect(screen.getByText("Chưa có gì về")).toBeDefined();
+    expect(screen.getByText("Chưa có dữ liệu nào về")).toBeDefined();
     expect(screen.getByText(NO_SCHEDULE)).toBeDefined();
     expect(screen.queryByRole("table")).toBeNull();
   });
@@ -98,7 +98,7 @@ describe("LakeSummary", () => {
       screen.getByText("3.5 kB trong 2 tệp riêng biệt · đọc được 1/4 · 0 bị từ chối · 3 chưa đọc"),
     ).toBeDefined();
 
-    expect(screen.queryByText("Chưa có gì về")).toBeNull();
+    expect(screen.queryByText("Chưa có dữ liệu nào về")).toBeNull();
   });
 
   /**

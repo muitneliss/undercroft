@@ -123,7 +123,7 @@ export function ConnectionCard({
   return (
     <article className={className} aria-labelledby={headingId}>
       <div className="grant__head">
-        <div className="stack stack--tight">
+        <div className="grant__identity stack stack--tight">
           {/* The accessible name is the source and nothing else: the status is
               its own element, so a heading never reads as "Xero, lapsed". */}
           <h3 id={headingId} className="grant__name">
@@ -232,7 +232,7 @@ function GrantGaps({ connection }: { connection: Connection }): React.JSX.Elemen
 type Card = CardPresentation;
 
 /**
- * When the grant runs, or since when it has lapsed: the row's third column.
+ * When the grant runs, or since when it has lapsed: the line of facts under the account.
  *
  * The cadence select is only on a granted source, and says so while a change to it is saved.
  */
@@ -258,7 +258,7 @@ function GrantTiming({
   const { t } = useTranslation();
 
   return (
-    <div className="grant__when stack stack--tight">
+    <div className="grant__when">
       {card.state === "connected" ? (
         <GrantWhen
           tenantId={tenantId}
@@ -276,10 +276,10 @@ function GrantTiming({
           instant; six days of it is a different conversation from six
           hours, and the operator is usually on the phone. */}
       {card.mark === "lapsed" && connection.expiresAt ? (
-        <>
+        <div className="grant__fact">
           <span className="label">{t("grant.since")}</span>
           <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
-        </>
+        </div>
       ) : null}
     </div>
   );

@@ -22,7 +22,7 @@ const SOURCE = "xero";
 const ORGANISATION = { id: "org-1", name: "Example Trading" };
 /** Every kind the shipped spec declares, as a Vietnamese reader sees them, in its order. */
 const EVERY_KIND =
-  "Liên hệ, Hóa đơn, Thanh toán, Giấy báo có, Báo giá, Đơn đặt hàng, Hóa đơn định kỳ, " +
+  "Liên hệ, Hoá đơn, Thanh toán, Giấy báo có, Báo giá, Đơn đặt hàng, Hoá đơn định kỳ, " +
   "Giao dịch liên kết, Mặt hàng, Khoản trả thừa, Khoản trả trước, Thanh toán theo lô, Nhóm liên hệ, " +
   "Hệ thống tài khoản, Danh mục theo dõi, Thuế suất, Tiền tệ, Giao dịch ngân hàng, " +
   "Chuyển tiền giữa tài khoản, Bút toán thủ công";

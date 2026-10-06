@@ -84,12 +84,12 @@ function mount(): { publishes: () => number } {
 it("publishing asks twice, and only the second press, which names the count, sends it", async () => {
   const server = mount();
 
-  fireEvent.click(await screen.findByRole("button", { name: "Publish danh mục" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Áp dụng danh mục" }));
   const confirm = screen.getByRole("button", { name: "Xác nhận: phân loại lại 1.200 tài liệu" });
   const sentAfterFirstPress = server.publishes();
   fireEvent.click(confirm);
 
-  expect(await screen.findByText(/Đã publish phiên bản 1/u)).toBeDefined();
+  expect(await screen.findByText(/Đã áp dụng phiên bản 1/u)).toBeDefined();
   expect(sentAfterFirstPress).toBe(0);
   expect(server.publishes()).toBe(1);
 });

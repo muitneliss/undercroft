@@ -13,6 +13,12 @@
  * re-sync row also says when the last full re-sync finished and, when one spans more than a day
  * of the provider's requests, how many days it takes.
  *
+ * Each fact is its own group -- a caption over its value -- and the column lays them in a line
+ * under the account rather than stacking them down a narrow column, the way a connection list
+ * in any data platform reads: a healthy grant is one line of facts, not a column of nine. The
+ * facts run left to right in the order an operator asks them: how often, what happened last,
+ * what happens next, how long the access lasts.
+ *
  * Running is a state, not a spinner. The mark is the half-printed pending geometry and the
  * word says so; the list behind this card polls while it is true, so the mark flips on its
  * own when the run ends.
@@ -66,37 +72,47 @@ export function GrantWhen({
 
   return (
     <>
-      <span className="label">{t("grant.schedule")}</span>
-      <Schedule
-        tenantId={tenantId}
-        source={connection.source}
-        edit={sync}
-        canEdit={canEdit}
-        busy={busy}
-        saving={saving}
-      />
-      {saving ? (
-        <span className="datum datum--quiet" role="status">
-          {t("grant.cadenceSaving")}
-        </span>
-      ) : null}
-
-      <span className="label">{t("grant.lastRun")}</span>
-      <span className="datum datum--quiet grant__run">
-        <StatusMark mark={runMark(status)} label={runMarkLabel(t, status)} />
-        {run !== null && status !== "running" ? (
-          <span>{relativeTime(run.startedAt, locale)}</span>
-        ) : null}
-        {run !== null && status === "ok" ? (
-          <span>
-            {t("run.landed", { count: run.seen, countText: formatCount(run.seen, locale) })}
+      <div className="grant__fact">
+        <span className="label">{t("grant.schedule")}</span>
+        <Schedule
+          tenantId={tenantId}
+          source={connection.source}
+          edit={sync}
+          canEdit={canEdit}
+          busy={busy}
+          saving={saving}
+        />
+        {saving ? (
+          <span className="datum datum--quiet" role="status">
+            {t("grant.cadenceSaving")}
           </span>
         ) : null}
-      </span>
+      </div>
 
-      <span className="label">{t("grant.nextRun")}</span>
-      <span className="datum datum--quiet">{nextRunNote(t, locale, connection)}</span>
-      <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
+      <div className="grant__fact">
+        <span className="label">{t("grant.lastRun")}</span>
+        <span className="datum datum--quiet grant__run">
+          <StatusMark mark={runMark(status)} label={runMarkLabel(t, status)} />
+          {run !== null && status !== "running" ? (
+            <span>{relativeTime(run.startedAt, locale)}</span>
+          ) : null}
+          {run !== null && status === "ok" ? (
+            <span>
+              {t("run.landed", { count: run.seen, countText: formatCount(run.seen, locale) })}
+            </span>
+          ) : null}
+        </span>
+      </div>
+
+      <div className="grant__fact">
+        <span className="label">{t("grant.nextRun")}</span>
+        <span className="datum datum--quiet">{nextRunNote(t, locale, connection)}</span>
+      </div>
+
+      <div className="grant__fact">
+        <span className="label">{t("grant.access")}</span>
+        <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
+      </div>
 
       <Resync
         tenantId={tenantId}
@@ -187,34 +203,40 @@ function Resync({
 
   return (
     <>
-      <span className="label">{t("grant.resync")}</span>
-      <Schedule
-        tenantId={tenantId}
-        source={connection.source}
-        edit={edit}
-        canEdit={canEdit}
-        busy={busy}
-        saving={saving}
-      />
-      {saving ? (
-        <span className="datum datum--quiet" role="status">
-          {t("grant.resyncSaving")}
+      <div className="grant__fact">
+        <span className="label">{t("grant.resync")}</span>
+        <Schedule
+          tenantId={tenantId}
+          source={connection.source}
+          edit={edit}
+          canEdit={canEdit}
+          busy={busy}
+          saving={saving}
+        />
+        {saving ? (
+          <span className="datum datum--quiet" role="status">
+            {t("grant.resyncSaving")}
+          </span>
+        ) : null}
+        <span className="datum datum--quiet">
+          {resync.lastWholeReadAt === null
+            ? t("grant.resyncNever")
+            : t("grant.resyncLast", { when: relativeTime(resync.lastWholeReadAt, locale) })}
         </span>
-      ) : null}
-      <span className="datum datum--quiet">
-        {resync.lastWholeReadAt === null
-          ? t("grant.resyncNever")
-          : t("grant.resyncLast", { when: relativeTime(resync.lastWholeReadAt, locale) })}
-      </span>
-      {resync.days !== null && resync.days > 1 && resync.budget !== null ? (
-        <p className="note">
-          {t("grant.resyncDays", {
-            count: resync.days,
-            budget: formatCount(resync.budget, locale),
-          })}
-        </p>
-      ) : null}
-      <p className="field__hint">{t("grant.resyncHint")}</p>
+      </div>
+      {/* What a full re-sync is for is a sentence, not a fact: it takes the strip's whole width
+          beneath the facts rather than stretching one of them. */}
+      <div className="grant__fact grant__fact--wide">
+        {resync.days !== null && resync.days > 1 && resync.budget !== null ? (
+          <p className="note">
+            {t("grant.resyncDays", {
+              count: resync.days,
+              budget: formatCount(resync.budget, locale),
+            })}
+          </p>
+        ) : null}
+        <p className="field__hint">{t("grant.resyncHint")}</p>
+      </div>
     </>
   );
 }

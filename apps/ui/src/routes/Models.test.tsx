@@ -149,7 +149,7 @@ describe("the build counts", () => {
       .map((link) => link.textContent ?? "");
     // Failed, never built, other, built, then all: each a figure over its state's word.
     expect(counts).toEqual([
-      "1Dựng lỗi",
+      "1Dựng thất bại",
       "2Chưa dựng",
       "1Kết quả khác",
       "2Dựng thành công",
@@ -216,7 +216,7 @@ describe("the search and the order", () => {
     const address = new URLSearchParams(router.state.location.search);
     expect([address.get("q"), address.get("build")]).toEqual(["STG_N", "never"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Xoá lọc" }));
+    fireEvent.click(screen.getByRole("button", { name: "Xoá bộ lọc" }));
     expect(router.state.location.search).toBe("");
     expect(listedNames()).toHaveLength(MODELS.length);
   });
