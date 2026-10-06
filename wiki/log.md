@@ -311,3 +311,6 @@
 ## [2026-10-06] ingest | ADR 0111 An Export Is a Link to a Streamed CSV
 ## [2026-10-06] ingest | Runbook: The undercroft CLI
 ## [2026-10-06] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-06] ingest | ADR 0112 Every Action Is in the Audit Log and People Can Read It
+## [2026-10-06] ingest | Runbook Sign-In Setup
+## [2026-10-06] ingest | Runbook: Onboarding a new person

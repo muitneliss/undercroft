@@ -21,13 +21,13 @@ import {
   tenantStatusProcedure,
 } from "./trpc.ts";
 
-/** A page: rows older than `before` (an id from the last page's `next`), at most `limit`. */
+/** A page as `runs.list` takes one: rows older than `cursor` (a page's `nextCursor`), at most `limit`. */
 const Page = z.object({
-  before: z
+  limit: z.number().int().min(1).max(100).default(50),
+  cursor: z
     .string()
     .regex(/^[1-9][0-9]{0,18}$/u)
     .optional(),
-  limit: z.number().int().min(1).max(200).default(50),
 });
 
 export const auditRouter = router({

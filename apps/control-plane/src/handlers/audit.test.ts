@@ -92,7 +92,7 @@ describe("what is recorded", () => {
       ),
     ).toBe("FORBIDDEN");
 
-    const { entries } = await caller(admin).audit.tenant({ tenantId: "CASE-1" });
+    const { items: entries } = await caller(admin).audit.tenant({ tenantId: "CASE-1" });
     expect(entries).toMatchObject([
       {
         action: "people.invite",
@@ -120,7 +120,7 @@ describe("what is recorded", () => {
       ),
     ).toBe("FORBIDDEN");
 
-    const { entries } = await caller(admin).audit.mine({});
+    const { items: entries } = await caller(admin).audit.mine({});
     expect(entries).toMatchObject([
       {
         action: "runs.trigger",
@@ -142,8 +142,8 @@ describe("what is recorded", () => {
       ),
     ).toBe("NOT_FOUND");
 
-    expect((await caller(admin).audit.tenant({ tenantId: "CASE-1" })).entries).toEqual([]);
-    expect((await caller(outsider).audit.mine({})).entries).toMatchObject([
+    expect((await caller(admin).audit.tenant({ tenantId: "CASE-1" })).items).toEqual([]);
+    expect((await caller(outsider).audit.mine({})).items).toMatchObject([
       {
         action: "people.removeMember",
         outcome: "refused",
@@ -163,7 +163,7 @@ describe("what is recorded", () => {
     });
     await caller(admin).people.revokeInvitation({ tenantId: "CASE-1", id: invited.id });
 
-    const { entries } = await caller(admin).audit.tenant({ tenantId: "CASE-1" });
+    const { items: entries } = await caller(admin).audit.tenant({ tenantId: "CASE-1" });
     expect(entries.map((entry) => [entry.action, entry.outcome, entry.detail])).toEqual([
       ["people.revokeInvitation", "ok", { id: invited.id }],
       ["people.invite", "ok", { email: "new@example.test", role: "member" }],
@@ -179,7 +179,7 @@ describe("what is recorded", () => {
       tests: {},
     });
 
-    expect((await caller(admin).audit.mine({})).entries).toEqual([]);
+    expect((await caller(admin).audit.mine({})).items).toEqual([]);
   });
 });
 
@@ -191,7 +191,7 @@ describe("who reads what", () => {
     await caller(ada).tenants.rename({ tenantId: "CASE-2", displayName: "Two" });
     await caller(bob).tenants.rename({ tenantId: "CASE-1", displayName: "One" });
 
-    const { entries } = await caller(ada).audit.mine({});
+    const { items: entries } = await caller(ada).audit.mine({});
     expect(entries.map((entry) => [entry.action, entry.tenantId])).toEqual([
       ["tenants.rename", "CASE-2"],
       ["session.setLocale", null],
@@ -205,7 +205,7 @@ describe("who reads what", () => {
     await caller(ada).tenants.rename({ tenantId: "CASE-2", displayName: "Two" });
     await caller(ada).session.setLocale({ locale: "en" });
 
-    const { entries } = await caller(ada).audit.tenant({ tenantId: "CASE-1" });
+    const { items: entries } = await caller(ada).audit.tenant({ tenantId: "CASE-1" });
     expect(entries.map((entry) => [entry.action, entry.tenantId])).toEqual([
       ["tenants.rename", "CASE-1"],
     ]);
@@ -218,7 +218,7 @@ describe("who reads what", () => {
     await caller(ada).tenants.rename({ tenantId: "CASE-1", displayName: "One" });
 
     expect(await codeOf(() => caller(ada).audit.all({}))).toBe("FORBIDDEN");
-    const { entries } = await caller(root, { superadmin: true }).audit.all({});
+    const { items: entries } = await caller(root, { superadmin: true }).audit.all({});
     expect(entries.map((entry) => [entry.action, entry.actor])).toEqual([
       ["tenants.rename", "ada@example.test"],
     ]);
@@ -231,12 +231,12 @@ describe("who reads what", () => {
     }
 
     const first = await caller(ada).audit.mine({ limit: 2 });
-    const second = await caller(ada).audit.mine({ limit: 2, before: first.next ?? "" });
-    expect([...first.entries, ...second.entries].map((entry) => entry.detail)).toEqual([
+    const second = await caller(ada).audit.mine({ limit: 2, cursor: first.nextCursor ?? "" });
+    expect([...first.items, ...second.items].map((entry) => entry.detail)).toEqual([
       { locale: "en" },
       { locale: "vi" },
       { locale: "en" },
     ]);
-    expect(second.next).toBeNull();
+    expect(second.nextCursor).toBeNull();
   });
 });

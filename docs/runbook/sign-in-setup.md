@@ -312,8 +312,9 @@ on that person's next request, even if they are signed in at the time. The one c
 refused is the one that would leave the customer with no admin: make someone else an admin
 first. The roster shows this in advance: while one member holds `admin`, that row says it is
 the last admin and offers neither a lower role nor Remove. Every role change and removal is
-written to `ops.audit_log` as `people.setRole` or `people.remove`, with who did it, when, and
-the role the person held before.
+written to `ops.audit_log` as `people.setRole` or `people.removeMember`, with who did it, when,
+and the role the person held before. An admin reads it under **Hoạt động / Activity** on the
+same page, or with `undercroft audit tenant`; refused attempts are there too.
 
 ## Skip sign-in locally
 

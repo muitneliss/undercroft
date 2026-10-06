@@ -130,9 +130,9 @@ describe("an export", () => {
       headers: { cookie },
     });
     const body = (await response.json()) as {
-      result: { data: { entries: { action: string; channel: string | null }[] } };
+      result: { data: { items: { action: string; channel: string | null }[] } };
     };
-    const exports = body.result.data.entries.filter((entry) =>
+    const exports = body.result.data.items.filter((entry) =>
       entry.action.startsWith("bi.exports."),
     );
     expect(exports.map((entry) => [entry.action, entry.channel])).toEqual([

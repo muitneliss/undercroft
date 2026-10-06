@@ -89,13 +89,14 @@ async function attributable(
 
 /** One page of rows, newest first, and the id to ask for the next page from. */
 export interface AuditPage {
-  readonly entries: readonly AuditRow[];
-  /** Pass as `before` for the page after this one; `null` when this is the last. */
-  readonly next: string | null;
+  readonly items: readonly AuditRow[];
+  /** Pass as `cursor` for the page after this one; `null` when this is the last. */
+  readonly nextCursor: string | null;
 }
 
+/** A page, the way `runs.list` asks for one: rows older than `cursor`, at most `limit`. */
 export interface PageRequest {
-  readonly before?: string | undefined;
+  readonly cursor?: string | undefined;
   readonly limit: number;
 }
 
@@ -109,10 +110,10 @@ async function page(
   request: PageRequest,
 ): Promise<AuditPage> {
   // One row past the page says whether there is another, without counting the table.
-  const rows = await list(exec, { ...filter, before: request.before, limit: request.limit + 1 });
-  const entries = rows.slice(0, request.limit);
-  const last = entries.at(-1);
-  return { entries, next: rows.length > request.limit && last !== undefined ? last.id : null };
+  const rows = await list(exec, { ...filter, before: request.cursor, limit: request.limit + 1 });
+  const items = rows.slice(0, request.limit);
+  const last = items.at(-1);
+  return { items, nextCursor: rows.length > request.limit && last !== undefined ? last.id : null };
 }
 
 /** A person's own actions, in every tenant and in none. */

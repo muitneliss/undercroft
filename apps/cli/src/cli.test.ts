@@ -317,8 +317,8 @@ describe("a write needs a person's permission, per environment", () => {
 
     const read = await undercroft(["audit", "mine", "--agent"]);
 
-    const { entries } = envelope(read).data as {
-      entries: { action: string; channel: string | null }[];
+    const { items: entries } = envelope(read).data as {
+      items: { action: string; channel: string | null }[];
     };
     expect(entries.map((entry) => [entry.action, entry.channel])).toEqual([
       ["runs.trigger", "cli"],

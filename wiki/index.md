@@ -115,6 +115,7 @@
 - [ADR 0109 A Binary Workbook Is Read into the Same Rows](sources/adr-0109-a-binary-workbook-is-read-into-the-same-rows.md)
 - [ADR 0110 A Tenant Can Be Deactivated](sources/adr-0110-a-tenant-can-be-deactivated.md)
 - [ADR 0111 An Export Is a Link to a Streamed CSV](sources/adr-0111-an-export-is-a-link-to-a-streamed-csv.md)
+- [ADR 0112 Every Action Is in the Audit Log and People Can Read It](sources/adr-0112-every-action-is-in-the-audit-log-and-people-can-read-it.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

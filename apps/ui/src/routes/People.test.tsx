@@ -17,6 +17,7 @@ import { MemoryRouter } from "react-router-dom";
 
 import { translatorFor } from "@/i18n/index.ts";
 import { People } from "@/routes/People.tsx";
+import { mountRoute } from "@/test/mountRoute.tsx";
 import { trpc } from "@/trpc.ts";
 
 const TENANT = "CASE-0042";
@@ -202,5 +203,55 @@ describe("the search in the address", () => {
     expect(screen.queryByText("bo@example.test")).toBeNull();
     expect(screen.queryByText(t("people.lastAdmin"))).toBeNull();
     expect(offered("ada@example.test")).toEqual({ roleSelect: true, remove: true });
+  });
+});
+
+describe("the customer's activity (ADR 0112)", () => {
+  /** The division at `?view=activity`, read by `role`, over a server that also answers its log. */
+  function openActivity(role: "admin" | "member") {
+    return mountRoute({
+      pattern: "/",
+      url: "/?view=activity",
+      element: <People tenantId={TENANT} signedInAs="ada@example.test" />,
+      answers: {
+        "tenants.get": () => ({ tenantId: TENANT, displayName: "Acme", role }),
+        "people.members": () => [{ userId: "u1", email: "ada@example.test", role }],
+        "people.invitations": () => [],
+        "audit.tenant": () => ({
+          items: [
+            {
+              id: "7",
+              at: "2026-10-06T02:00:00.000Z",
+              tenantId: TENANT,
+              actor: "bo@example.test",
+              userId: "u2",
+              channel: "assistant",
+              credential: null,
+              action: "connections.disconnect",
+              outcome: "ok",
+              reason: null,
+              detail: { source: "hubspot" },
+            },
+          ],
+          nextCursor: null,
+        }),
+      },
+    });
+  }
+
+  it("is a view for its admin, naming who did each thing and through which door", async () => {
+    openActivity("admin");
+
+    expect(await screen.findByText("bo@example.test")).toBeDefined();
+    expect(screen.getByText(t("activity.actions.connections_disconnect"))).toBeDefined();
+    expect(screen.getByText(t("activity.channel.assistant"))).toBeDefined();
+  });
+
+  it("is not offered to a member, whose address naming it opens the members", async () => {
+    const { received } = openActivity("member");
+
+    expect(await screen.findByText("ada@example.test")).toBeDefined();
+    expect(screen.queryByRole("link", { name: t("people.viewActivity") })).toBeNull();
+    expect(received.map((request) => request.path)).not.toContain("audit.tenant");
   });
 });

@@ -343,9 +343,9 @@ describe("signing in with a code lands on the platform's own user identity", () 
       },
     );
     const body = (await response.json()) as {
-      result: { data: { entries: { action: string; tenantId: string | null }[] } };
+      result: { data: { items: { action: string; tenantId: string | null }[] } };
     };
-    expect(body.result.data.entries.map((entry) => [entry.action, entry.tenantId])).toEqual([
+    expect(body.result.data.items.map((entry) => [entry.action, entry.tenantId])).toEqual([
       ["auth.signIn", null],
       ["auth.invitationRedeemed", "CASE-0042"],
     ]);
