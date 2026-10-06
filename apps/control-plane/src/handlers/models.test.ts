@@ -63,6 +63,7 @@ function caller(
     specReads: new Map(),
     googlePicker: null,
     signInMethods: [],
+    channel: "web",
     publicUrl: null,
   };
   return appRouter.createCaller(ctx);
@@ -156,11 +157,14 @@ describe("models.build", () => {
     });
     expect(built.ok).toBe(true);
     expect(worker.built).toEqual([{ tenantId: TENANT, model: "stg_deals", triggeredBy: admin }]);
-    const { rows } = await db.query<{ action: string }>(
-      "SELECT action FROM ops.audit_log WHERE tenant_id = $1",
+    const { rows } = await db.query<{ action: string; outcome: string }>(
+      "SELECT action, outcome FROM ops.audit_log WHERE tenant_id = $1 ORDER BY id",
       [TENANT],
     );
-    expect(rows.map((r) => r.action)).toEqual(["models.build"]);
+    expect(rows).toEqual([
+      { action: "models.build", outcome: "refused" },
+      { action: "models.build", outcome: "ok" },
+    ]);
   });
 
   it("a build already running is a CONFLICT the person can wait out, worded", async () => {

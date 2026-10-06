@@ -36,6 +36,7 @@ import type { Auth } from "./auth.ts";
 import type { OAuthRefused } from "./mcpAccessToken.ts";
 import type { Skill } from "./mcpSkills.ts";
 import type { Widgets } from "./mcpWidgets.ts";
+import { channelOf } from "./channel.ts";
 import type { Context, SessionUser, Via } from "./trpc.ts";
 
 export interface ServerDeps {
@@ -407,6 +408,7 @@ function contextFor(deps: ServerDeps, headers: Headers, door: Door, caller: Call
     user,
     credentialId,
     via,
+    channel: channelOf(door, headers),
     grant,
     superadmin,
     locale,

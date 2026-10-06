@@ -13,7 +13,7 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as macros from "../services/macros.ts";
 import { findingSentence, wordCheck } from "./checkWords.ts";
-import { requireRole, router, tenantProcedure } from "./trpc.ts";
+import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
 
 const definition = z.string().max(MAX_MACRO_SQL_BYTES);
 
@@ -65,7 +65,7 @@ export const macrosRouter = router({
         description: input.description,
         sql: input.sql,
         create: input.create,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
         actorId: ctx.user.userId,
       });
       if (outcome.ok) {
@@ -89,7 +89,7 @@ export const macrosRouter = router({
       const outcome = await macros.remove(ctx.exec, {
         tenantId: ctx.tenantId,
         name: input.name,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
       });
       if (outcome.ok) {
         return { ok: true };

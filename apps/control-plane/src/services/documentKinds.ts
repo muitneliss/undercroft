@@ -33,7 +33,7 @@ import {
   updateKindDescription,
 } from "@undercroft/db/repos";
 
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import type { InitialiseOutcome, WorkerClient } from "./workerClient.ts";
 
 /** Bumped when the shape below changes, so a new canonical form can never match an old hash. */
@@ -110,9 +110,9 @@ export async function list(exec: SqlExecutor, tenantId: string): Promise<Catalog
   };
 }
 
-interface Actor {
+interface Acting {
   readonly tenantId: string;
-  readonly actor: string;
+  readonly actor: Actor;
   readonly actorId: string;
 }
 
@@ -125,7 +125,7 @@ export type AddOutcome = { ok: true } | { ok: false; reason: "exists" | "descrip
  */
 export async function add(
   exec: SqlExecutor,
-  input: Actor & { kind: string; description: string | null },
+  input: Acting & { kind: string; description: string | null },
 ): Promise<AddOutcome> {
   const generic = GENERIC.get(input.kind);
   const description = input.description ?? generic;
@@ -153,7 +153,7 @@ export async function add(
 
 export async function update(
   exec: SqlExecutor,
-  input: Actor & { kind: string; description: string },
+  input: Acting & { kind: string; description: string },
 ): Promise<{ ok: true } | { ok: false; reason: "not-found" }> {
   const updated = await updateKindDescription(
     exec,
@@ -176,7 +176,7 @@ export async function update(
 
 export async function remove(
   exec: SqlExecutor,
-  input: Actor & { kind: string },
+  input: Acting & { kind: string },
 ): Promise<{ ok: true } | { ok: false; reason: "not-found" | "required" }> {
   if (input.kind === OTHER_KIND) {
     return { ok: false, reason: "required" };
@@ -202,7 +202,7 @@ export type PublishOutcome =
  * Publish the draft. A catalogue with no kind of its own is refused: `other` alone would classify
  * every document as nothing, at full price.
  */
-export async function publish(exec: SqlExecutor, input: Actor): Promise<PublishOutcome> {
+export async function publish(exec: SqlExecutor, input: Acting): Promise<PublishOutcome> {
   const kinds = await listKinds(exec, input.tenantId);
   if (!kinds.some((k) => k.kind !== OTHER_KIND)) {
     return { ok: false, reason: "empty" };
@@ -233,7 +233,7 @@ export async function publish(exec: SqlExecutor, input: Actor): Promise<PublishO
 export async function initialise(
   exec: SqlExecutor,
   worker: WorkerClient,
-  input: Actor,
+  input: Acting,
 ): Promise<InitialiseOutcome> {
   const outcome = await worker.initialiseDocumentKinds({
     tenantId: input.tenantId,

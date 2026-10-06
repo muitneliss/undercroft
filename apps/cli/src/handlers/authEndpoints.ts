@@ -18,7 +18,7 @@ import { request as httpsRequest } from "node:https";
 import type { Translate } from "../i18n/index.ts";
 import { failure, type Outcome, type Refusal, success } from "../services/output.ts";
 import { isRecord } from "../services/store.ts";
-import { type Connection, REQUEST_TIMEOUT_MS, unreachable } from "./remote.ts";
+import { CLIENT_HEADERS, type Connection, REQUEST_TIMEOUT_MS, unreachable } from "./remote.ts";
 
 /** What a sign-in endpoint answered that the CLI reads: the status, the cookies it set, its body. */
 interface AuthAnswer {
@@ -67,6 +67,7 @@ function postAuth(
       {
         method: "POST",
         headers: {
+          ...CLIENT_HEADERS,
           "content-type": "application/json",
           "content-length": String(Buffer.byteLength(payload)),
           "accept-language": connection.locale,

@@ -7,6 +7,12 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { create } from "./tenants.ts";
+import type { Actor } from "../repos/auditLog.ts";
+
+/** An address acting through the browser, as a router would name it from a session. */
+function asActor(email: string): Actor {
+  return { userId: null, email, channel: "web", credential: null };
+}
 
 let db: TestDatabase;
 
@@ -25,7 +31,7 @@ describe("tenants.create", () => {
     const result = await create(db, {
       tenantId: "CASE-0042",
       displayName: "Acme",
-      actor: "ops@example.test",
+      actor: asActor("ops@example.test"),
     });
     expect(result.ok).toBe(true);
 
@@ -39,12 +45,16 @@ describe("tenants.create", () => {
   });
 
   it("a reference that folds to an existing customer's login is refused, and leaves no row", async () => {
-    await create(db, { tenantId: "CASE-0042", displayName: "Acme", actor: "ops@example.test" });
+    await create(db, {
+      tenantId: "CASE-0042",
+      displayName: "Acme",
+      actor: asActor("ops@example.test"),
+    });
 
     const result = await create(db, {
       tenantId: "case_0042",
       displayName: "Acme again",
-      actor: "ops@example.test",
+      actor: asActor("ops@example.test"),
     });
     expect(result).toEqual({ ok: false, reason: "role-collision" });
 
@@ -53,11 +63,15 @@ describe("tenants.create", () => {
   });
 
   it("a reference already in use is still reported as such, not as a collision", async () => {
-    await create(db, { tenantId: "CASE-0042", displayName: "Acme", actor: "ops@example.test" });
+    await create(db, {
+      tenantId: "CASE-0042",
+      displayName: "Acme",
+      actor: asActor("ops@example.test"),
+    });
     const result = await create(db, {
       tenantId: "CASE-0042",
       displayName: "Acme",
-      actor: "ops@example.test",
+      actor: asActor("ops@example.test"),
     });
     expect(result).toEqual({ ok: false, reason: "already-exists" });
   });

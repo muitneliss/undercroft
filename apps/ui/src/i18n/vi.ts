@@ -23,6 +23,8 @@
  *   and `@/lib/money`, which decide a zone and a separator in one place each.
  */
 
+import type { ActionKey } from "@/lib/activity.ts";
+
 export const vi = {
   app: {
     name: "Undercroft",
@@ -455,6 +457,94 @@ export const vi = {
   },
 
   /** The consent page a model-context client's authorization lands on (ADR 0061). */
+  /**
+   * The audit log (ADR 0113), read on the account page and in a customer's People division.
+   * `actions` labels every action a row can name, keyed by the action with its dots turned into
+   * underscores; the `satisfies` makes a new action a typecheck error until it has a label. A
+   * reason (`FORBIDDEN`, `WRITES_DISABLED`) is a code an agent matches and is never translated.
+   */
+  activity: {
+    head: "Hoạt động",
+    leadMine:
+      "Mọi thao tác bạn đã làm, qua trình duyệt, CLI, MCP hay trợ lý, kể cả những lần bị từ chối.",
+    leadAll: "Mọi thao tác trên nền tảng, của mọi người, ở mọi khách hàng.",
+    leadTenant: "Mọi thao tác trong {{tenantId}}, của bất kỳ ai, kể cả những lần bị từ chối.",
+    scopeLabel: "Phạm vi nhật ký",
+    scopeMine: "Của tôi",
+    scopeAll: "Mọi khách hàng",
+    notLoaded: "Không tải được nhật ký hoạt động.",
+    none: "Chưa có hoạt động nào.",
+    caption_other: "{{count, number}} thao tác gần nhất",
+    colWhen: "Thời điểm",
+    colWho: "Người làm",
+    colAction: "Thao tác",
+    colCustomer: "Khách hàng",
+    colChannel: "Qua",
+    colOutcome: "Kết quả",
+    more: "Xem thêm",
+    loadingMore: "Đang tải thêm…",
+    channel: {
+      web: "Trình duyệt",
+      cli: "CLI",
+      mcp: "MCP",
+      assistant: "Trợ lý",
+    },
+    outcome: {
+      ok: "Thành công",
+      refused: "Bị từ chối",
+      failed: "Lỗi",
+    },
+    actions: {
+      session_signOut: "Đăng xuất",
+      session_setLocale: "Đổi ngôn ngữ",
+      tenants_create: "Tạo khách hàng",
+      tenants_rename: "Đổi tên khách hàng",
+      tenants_deactivate: "Ngừng kích hoạt khách hàng",
+      tenants_reactivate: "Kích hoạt lại khách hàng",
+      connections_startOAuth: "Bắt đầu kết nối một tài khoản",
+      connections_connected: "Kết nối một tài khoản",
+      connections_setScope: "Chọn phạm vi đọc",
+      connections_setToken: "Kết nối bằng token",
+      connections_setCadence: "Đặt tần suất đọc",
+      connections_setResync: "Đặt lịch đọc lại toàn bộ",
+      connections_disconnect: "Ngắt kết nối một tài khoản",
+      keys_mint: "Tạo khóa nạp dữ liệu",
+      keys_revoke: "Thu hồi khóa nạp dữ liệu",
+      people_invite: "Mời một người",
+      people_revokeInvitation: "Thu hồi lời mời",
+      people_setRole: "Đổi vai trò",
+      people_removeMember: "Gỡ quyền truy cập",
+      lake_query: "Truy vấn hồ dữ liệu thô",
+      models_check: "Kiểm tra mô hình",
+      models_save: "Lưu mô hình",
+      models_build: "Dựng mô hình",
+      models_delete: "Xóa mô hình",
+      macros_check: "Kiểm tra macro",
+      macros_save: "Lưu macro",
+      macros_delete: "Xóa macro",
+      documentKinds_add: "Thêm loại tài liệu",
+      documentKinds_update: "Sửa loại tài liệu",
+      documentKinds_remove: "Xóa loại tài liệu",
+      documentKinds_publish: "Publish danh mục loại tài liệu",
+      documentKinds_initialise: "Khởi tạo danh mục loại tài liệu",
+      bi_answer: "Trả lời một câu hỏi",
+      bi_runQuestion: "Chạy câu hỏi",
+      bi_questions_save: "Lưu câu hỏi",
+      bi_questions_delete: "Xóa câu hỏi",
+      bi_dashboards_save: "Lưu bảng điều khiển",
+      bi_dashboards_delete: "Xóa bảng điều khiển",
+      bi_exports_create: "Yêu cầu xuất CSV",
+      bi_exports_download: "Tải tệp CSV",
+      runs_trigger: "Chạy đồng bộ ngay",
+      account_tokens_mint: "Tạo token truy cập",
+      account_tokens_revoke: "Thu hồi token truy cập",
+      account_apps_revoke: "Thu hồi quyền của một ứng dụng",
+      auth_signIn: "Đăng nhập",
+      auth_refused: "Bị từ chối đăng nhập",
+      auth_invitationRedeemed: "Nhận lời mời",
+    } satisfies Record<ActionKey, string>,
+  },
+
   consent: {
     title: "Cho phép truy cập",
     lead: "{{name}} (chuyển hướng về {{host}}) xin làm việc với Undercroft thay mặt bạn, với đúng quyền bạn đang có ở mọi khách hàng.",
@@ -803,6 +893,7 @@ export const vi = {
     viewMembers_other: "Thành viên · {{count, number}}",
     viewInvites_other: "Lời mời đang chờ · {{count, number}}",
     viewRoles: "So sánh vai trò",
+    viewActivity: "Hoạt động",
     searchLabel: "Tìm địa chỉ email",
     clearSearch: "Xoá tìm kiếm",
     noMatch: "Không có địa chỉ nào khớp. Thử một phần khác của địa chỉ, hoặc xoá lọc.",

@@ -16,7 +16,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as accessTokens from "../services/accessTokens.ts";
 import * as connectedApps from "../services/connectedApps.ts";
-import { router, sessionProcedure } from "./trpc.ts";
+import { actorOf, router, sessionProcedure } from "./trpc.ts";
 
 export const accountRouter = router({
   tokens: router({
@@ -34,7 +34,7 @@ export const accountRouter = router({
       .mutation(({ ctx, input }) =>
         accessTokens.mint(ctx.exec, {
           userId: ctx.user.userId,
-          actor: ctx.user.email,
+          actor: actorOf(ctx),
           label: input.label,
           grant: input.grant,
           expiresInDays: input.expiresInDays,
@@ -47,7 +47,7 @@ export const accountRouter = router({
         const revoked = await accessTokens.revoke(ctx.exec, {
           userId: ctx.user.userId,
           id: input.id,
-          actor: ctx.user.email,
+          actor: actorOf(ctx),
         });
         if (!revoked) {
           throw new TRPCError({ code: "NOT_FOUND" });
@@ -73,7 +73,7 @@ export const accountRouter = router({
         const revoked =
           ctx.apps !== null &&
           (await connectedApps.revoke(ctx.exec, ctx.apps, {
-            email: ctx.user.email,
+            actor: actorOf(ctx),
             id: input.id,
           }));
         if (!revoked) {

@@ -72,6 +72,7 @@ function context(user: SessionUser | null, locale: Locale = DEFAULT_LOCALE): Con
     specReads: new Map(),
     googlePicker: null,
     signInMethods: [],
+    channel: "web",
     publicUrl: null,
   };
 }

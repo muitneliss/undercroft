@@ -227,6 +227,7 @@ describe("a consent that cannot start names the provider of the source pressed",
       specReads: new Map(),
       googlePicker: null,
       signInMethods: [],
+      channel: "web",
       publicUrl: null,
     };
     return appRouter.createCaller(ctx);
