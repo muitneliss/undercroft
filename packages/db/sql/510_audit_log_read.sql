@@ -1,4 +1,4 @@
--- ops.audit_log becomes something people read. ADR 0112.
+-- ops.audit_log becomes something people read. ADR 0113.
 --
 -- WHAT IS ADDED. Who acted, by id as well as address (`user_id`); how it ended (`outcome`, and
 -- `reason` for an attempt that did not succeed); and the door it came through (`channel`, and

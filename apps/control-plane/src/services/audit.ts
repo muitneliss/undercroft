@@ -1,6 +1,6 @@
 /**
  * The audit log's decisions: what a row says about an attempt, and who may read which rows.
- * ADR 0112.
+ * ADR 0113.
  *
  * Writing a successful change stays with the service that made it -- only it knows what
  * changed -- and goes through `repos/auditLog.ts` directly, as it always has. What is here is

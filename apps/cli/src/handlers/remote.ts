@@ -72,7 +72,7 @@ export interface Connection {
 const SURFACE_CODE: ReadonlyMap<string, SurfaceErrorCode> = new Map(Object.entries(BY_TRPC_CODE));
 
 /**
- * The header that tells the server this is the CLI, so its audit log can say so (ADR 0112). Sent
+ * The header that tells the server this is the CLI, so its audit log can say so (ADR 0113). Sent
  * on every request the CLI makes. Typed off the server's own constant, so the spelling cannot drift.
  */
 export const CLIENT_HEADERS: Readonly<

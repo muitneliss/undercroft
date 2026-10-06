@@ -197,7 +197,7 @@ export function registerExportRoute(app: Hono, deps: ExportRouteDeps): void {
       via: ctx.via,
       credential: ctx.credentialId,
     });
-    // And in the audit log, where a person reads it (ADR 0112). The router has admitted the
+    // And in the audit log, where a person reads it (ADR 0113). The router has admitted the
     // caller by now, so `user` is set; the guard is for the type, not a case that happens.
     if (ctx.user !== null) {
       await recordAction(ctx.exec, {

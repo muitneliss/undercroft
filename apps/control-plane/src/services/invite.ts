@@ -120,7 +120,7 @@ export async function resolveInvitedUser(
     await addMember(exec, invitation.tenantId, appUserId, invitation.role);
     await markAccepted(exec, invitation.id);
     // In the same transaction as the membership, unlike the refusal below: this row is the
-    // record of how somebody came to hold access (ADR 0112). No channel: Better Auth's hook
+    // record of how somebody came to hold access (ADR 0113). No channel: Better Auth's hook
     // runs before any door of ours has a context.
     await recordAudit(exec, {
       tenantId: invitation.tenantId,
@@ -204,7 +204,7 @@ export async function recordRefusal(
 }
 
 /**
- * Record that a person signed in: a session now exists for them (ADR 0112).
+ * Record that a person signed in: a session now exists for them (ADR 0113).
  *
  * `endpoint` is the Better Auth path that made the session -- which way in it was -- or `null`
  * where none was given. An address with no `app_user` is recorded by address alone, which the

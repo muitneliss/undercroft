@@ -206,7 +206,7 @@ describe("the search in the address", () => {
   });
 });
 
-describe("the customer's activity (ADR 0112)", () => {
+describe("the customer's activity (ADR 0113)", () => {
   /** The division at `?view=activity`, read by `role`, over a server that also answers its log. */
   function openActivity(role: "admin" | "member") {
     return mountRoute({

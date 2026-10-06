@@ -1,5 +1,5 @@
 /**
- * An audit row (ADR 0112) as the browser prints it: which label its action has, and what of its
+ * An audit row (ADR 0113) as the browser prints it: which label its action has, and what of its
  * detail a reader is shown.
  *
  * The action set is the server's (`AuditAction`, every mutation and the five events outside the

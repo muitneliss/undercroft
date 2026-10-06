@@ -1,5 +1,5 @@
 /**
- * What the account page's activity band promises (ADR 0112): a person reads their own actions in
+ * What the account page's activity band promises (ADR 0113): a person reads their own actions in
  * their language, a refusal with the server's own reason, an action no catalogue knows by its
  * name; older pages are fetched on asking; and only a superadmin is offered every customer's log.
  *

@@ -79,7 +79,7 @@ export interface Context {
   readonly credentialId: string;
   readonly via: Via;
   /**
-   * The door as the audit log names it (ADR 0112): `mcp` for a bearer, `cli` for a session the
+   * The door as the audit log names it (ADR 0113): `mcp` for a bearer, `cli` for a session the
    * CLI says it is sending, `assistant` for the assistant's own caller, otherwise `web`. Like
    * `via` it is for reading, never for authority -- the CLI's header is its own word.
    */
@@ -301,7 +301,7 @@ function namedTenant(raw: unknown): string | null {
 }
 
 /**
- * The audit log's half of every mutation (ADR 0112), outermost, so it sees what every gate below
+ * The audit log's half of every mutation (ADR 0113), outermost, so it sees what every gate below
  * it decided -- the grant guard's refusal included.
  *
  * A mutation `AUDITED` marks `none` is not an action and leaves no row. For the rest: an attempt

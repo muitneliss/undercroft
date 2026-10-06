@@ -1,5 +1,5 @@
 /**
- * Who writes each mutation's audit row (ADR 0112): a fact about a procedure the router cannot
+ * Who writes each mutation's audit row (ADR 0113): a fact about a procedure the router cannot
  * answer, kept beside the others in `surface.ts` and typed against the router the same way.
  *
  * Its own module because `surface.ts` is long enough already; the rules it states are the same
@@ -15,7 +15,7 @@ type InputField<P extends ProcedurePath> =
   InputOf<P> extends object ? keyof InputOf<P> & string : never;
 
 /**
- * Who writes a mutation's audit row when it takes effect (ADR 0112):
+ * Who writes a mutation's audit row when it takes effect (ADR 0113):
  *
  * - `service`: its service, which alone knows what changed -- the role held before, the old name.
  * - `{ fields }`: the router, copying these fields of the input. The fields are typed against
@@ -67,7 +67,6 @@ export const AUDITED: AuditTable = {
   "models.save": "service",
   "models.build": "service",
   "models.delete": "service",
-  "models.setContext": "service",
 
   "macros.check": "none",
   "macros.save": "service",

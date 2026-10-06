@@ -1,5 +1,5 @@
 /**
- * The door a caller came through, as the audit log names it (ADR 0112).
+ * The door a caller came through, as the audit log names it (ADR 0113).
  *
  * For reading, never for authority -- like `via` on the context. A bearer is the model-context
  * door; a cookie is the browser unless the CLI says it is the CLI, which is the CLI's own word.

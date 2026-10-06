@@ -21,11 +21,6 @@ The answer names the grain and the columns better than any question about tables
 Write the grain down as a sentence: "one row per HubSpot deal that has not been deleted".
 The unique test on the key column is that sentence, checked.
 
-- Which columns identify one row -- the key? One column, or several together (a composite
-  key: `deal_id` and `line_no`)?
-- Or is there no key, and why not: an event log where the same thing repeats, a snapshot of
-  free text? "No key" is an answer only with its reason.
-
 **3. Where does it come from?**
 
 - Which source and entity in the lake? Offer what `lake.summary` lists.
@@ -35,13 +30,12 @@ The unique test on the key column is that sentence, checked.
 
 **4. Which columns?**
 
-For each column, get five things:
+For each column, get four things:
 
 - its name in the table (lowercase letters, digits and underscores);
 - what it means, in one line;
 - where it comes from: a payload key, a column of the lake, or another model's column;
-- its type: text, a number, a date, a timestamp, a true/false;
-- its unit or currency, when it has one: `VND`, `USD`, `days`, `%`.
+- its type: text, a number, a date, a timestamp, a true/false.
 
 Check each payload key against a sample before you accept it (`lake.records`). A key the
 sample does not have is a question for the person, not a column.
@@ -59,13 +53,6 @@ sample does not have is a question for the person, not a column.
   `models.reference` lists for it, never cast by hand, and never becomes a float.
 - When a value is missing, it stays `NULL`. Ask only if the person wants something else,
   and write down what and why.
-
-**6a. Business rules**
-
-- Does the table apply a rule a reader must know to read it right -- "a deal counts as won
-  only in the closed-won stage", "a refund is a negative amount"? Write each one as a
-  sentence.
-- Or does it apply none? "None" is an answer, and it goes in the brief as one.
 
 **7. The name**
 
@@ -93,20 +80,14 @@ Write it back and ask the person to agree:
 Model:    stg_hubspot_deals
 For:      the pipeline dashboard's deal table
 One row:  one HubSpot deal that has not been deleted
-Key:      deal_id
 From:     source hubspot, entity deals
 Columns:  deal_id    text       the deal's HubSpot id               source_record_id
           deal_name  text       the deal's name                    payload.properties.dealname
           stage      text       its pipeline stage                 payload.properties.dealstage
-          amount     numeric    its amount in VND, NULL when unreadable  payload.properties.amount
+          amount     numeric    its amount, NULL when unreadable   payload.properties.amount
           closed_at  timestamp  when it closed, NULL if open       payload.properties.closedate
 Rows:     live records only
-Rules:    none
 Tests:    deal_id unique, not_null
 ```
-
-`Key:` is the columns that identify a row, or `none -- <why>`. `Rules:` is one sentence per
-rule, or `none`. Both, with the purpose, the grain and each column's meaning and unit, are
-what step 9 of the workflow saves as the model's business context.
 
 Nothing is drafted until the person says the brief is right.

@@ -6,10 +6,9 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { MAX_MODEL_SQL_BYTES, ModelContext, ModelName, ModelTests } from "@undercroft/contracts";
+import { MAX_MODEL_SQL_BYTES, ModelName, ModelTests } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
-import * as modelContext from "../services/modelContext.ts";
 import * as models from "../services/models.ts";
 import { notRun } from "./answers.ts";
 import { wordCheck } from "./checkWords.ts";
@@ -58,36 +57,6 @@ export const modelsRouter = router({
         });
       }
       return { ok: true };
-    }),
-
-  /**
-   * Approve a model's business context (ADR 0105). Saving is the approval, so it is an admin's,
-   * and it carries the `basis` that `get` answered with: a definition that changed since the
-   * reader looked is a CONFLICT and nothing is written, so nobody approves a definition they
-   * did not see. An agent drafts; a person with the grant says yes. Changes no SQL and gates
-   * no build.
-   */
-  setContext: requireRole("admin")
-    .input(z.object({ name: ModelName, basis: z.string().max(128), context: ModelContext }))
-    .mutation(async ({ ctx, input }) => {
-      const outcome = await modelContext.setContext(ctx.exec, {
-        tenantId: ctx.tenantId,
-        name: input.name,
-        basis: input.basis,
-        context: input.context,
-        actor: actorOf(ctx),
-        actorId: ctx.user.userId,
-      });
-      if (outcome.ok) {
-        return outcome.context;
-      }
-      if (outcome.reason === "not-found") {
-        throw new TRPCError({ code: "NOT_FOUND" });
-      }
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: messages(ctx.locale)("error.modelContextChanged", { name: input.name }),
-      });
     }),
 
   /**

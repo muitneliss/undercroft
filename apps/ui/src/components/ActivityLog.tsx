@@ -1,5 +1,5 @@
 /**
- * The audit log (ADR 0112): who did what, through which door, and how it ended.
+ * The audit log (ADR 0113): who did what, through which door, and how it ended.
  *
  * Three readers, one table. Which rows a reader may see is the server's gate on each procedure
  * -- `audit.mine` for anybody, `audit.tenant` for the customer's admin, `audit.all` for a

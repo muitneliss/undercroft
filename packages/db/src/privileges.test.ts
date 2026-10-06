@@ -460,7 +460,7 @@ describe("a run's event feed is granted like a refusal, not like a run", () => {
 });
 
 describe("the audit log is append-only in the database", () => {
-  // ADR 0112: a trail its own writer can edit is not evidence. Both halves: the control plane
+  // ADR 0113: a trail its own writer can edit is not evidence. Both halves: the control plane
   // appends and reads, and may neither change nor delete what it appended.
   it("the control plane appends and reads, and can neither change nor delete a row", async () => {
     await db.asRole("undercroft_app", async (tx) => {

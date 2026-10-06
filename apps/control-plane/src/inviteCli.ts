@@ -189,7 +189,7 @@ async function main(): Promise<void> {
         email: args.email,
         role: args.role,
         // An operator holding the database's DSN, not a person signed in through any door: the
-        // name every row this script has written carries, and no user or channel (ADR 0112).
+        // name every row this script has written carries, and no user or channel (ADR 0113).
         actor: { userId: null, email: "cli", channel: null, credential: null },
         notify: buildNotifier(args.locale),
       }),

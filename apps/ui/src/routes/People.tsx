@@ -175,7 +175,7 @@ function InviteBand({
 /**
  * The people division, in four views bound to `?view=`: who has access (the default), the
  * invitations still open with the form that sends one, what each role may do, and -- for an
- * admin -- everything done in the customer (ADR 0112).
+ * admin -- everything done in the customer (ADR 0113).
  *
  * The form and the role statements stay together on Invitations, as the design contract asks:
  * an admin choosing a role reads what it grants beside the choice. Compare roles repeats the

@@ -310,7 +310,7 @@ describe("a write needs a person's permission, per environment", () => {
     ]);
   });
 
-  it("what a person does through the CLI is in their own log as the CLI's (ADR 0112)", async () => {
+  it("what a person does through the CLI is in their own log as the CLI's (ADR 0113)", async () => {
     writeProfile("local", plane.origin, true);
     await signIn();
     await undercroft(["runs", "trigger", "--tenant-id", OWN, "--source", "hubspot", "--agent"]);

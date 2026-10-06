@@ -14,7 +14,7 @@
  * - which of the model-context door's two widgets draws its answer (`MCP_WIDGETS`), and the
  *   shape that answer arrives in there (`ToolContentOf`), which the widgets are typed against;
  * - who writes its AUDIT row when it takes effect, if anyone (`AUDITED`, in `audited.ts`, which
- *   is its own module only for length -- ADR 0112);
+ *   is its own module only for length -- ADR 0113);
  * - what a credential's GRANT lets through, given the effect (`grantAdmits`);
  * - what a refusal means to a caller that is not tRPC's own client (`BY_TRPC_CODE`).
  *
@@ -45,7 +45,7 @@ import type { AppRouter } from "./router.ts";
 
 export type { Grant } from "../services/accessTokens.ts";
 export type { Channel, Outcome } from "../services/audit.ts";
-/** What the browser labels an audit row by, and the header the CLI names itself with (ADR 0112). */
+/** What the browser labels an audit row by, and the header the CLI names itself with (ADR 0113). */
 export type { AuditAction } from "./audited.ts";
 export type { CLI_HEADER } from "./channel.ts";
 /**
@@ -156,9 +156,6 @@ export const EFFECTS: EffectTable = {
   "models.save": "write",
   "models.build": "write",
   "models.delete": "destructive",
-  // Approving a context is a person's decision about what a model means. It changes no SQL,
-  // but an agent with only a read grant must not be able to make it.
-  "models.setContext": "write",
 
   // As `models.check`: a POST for the text, reading only the tenant's names. Deleting a macro
   // deletes text the customer wrote, like deleting a model (ADR 0086).

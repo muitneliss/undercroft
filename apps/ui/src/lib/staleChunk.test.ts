@@ -10,7 +10,6 @@
 
 import { afterEach, describe, expect, test as it } from "bun:test";
 
-import { contextDraftFrom } from "@/lib/modelContextDraft.ts";
 import { draftFrom } from "@/lib/modelDraft.ts";
 import {
   type ChunkRecoveryDeps,
@@ -139,7 +138,6 @@ describe("holdsUnsavedWork", () => {
   afterEach(() => {
     useUiStore.setState({
       modelDraft: null,
-      modelContextDraft: null,
       assistantDraft: "",
       cronDraft: null,
       scopeDraft: null,
@@ -157,6 +155,9 @@ describe("holdsUnsavedWork", () => {
         name: "stg_deals",
         sql: "select 1 as deal_id",
         tests: { columns: {} },
+        updatedAt: "2026-09-17T10:00:00.000Z",
+        updatedBy: "u-1",
+        lastBuild: null,
       }),
     });
 
@@ -168,32 +169,12 @@ describe("holdsUnsavedWork", () => {
       name: "stg_deals",
       sql: "select 1 as deal_id",
       tests: { columns: {} },
+      updatedAt: "2026-09-17T10:00:00.000Z",
+      updatedBy: "u-1",
+      lastBuild: null,
     });
     useUiStore.setState({ modelDraft: { ...seeded, sql: "select 2 as deal_id" } });
 
-    expect(holdsUnsavedWork(useUiStore.getState())).toBe(true);
-  });
-
-  it("counts a business context edited since it was approved", () => {
-    const seeded = contextDraftFrom("CASE-0042", {
-      name: "stg_deals",
-      lastBuild: null,
-      context: {
-        state: "incomplete",
-        missing: ["purpose", "grain", "key", "columns", "rules"],
-        changes: [],
-        body: null,
-        reviewedBy: null,
-        reviewedAt: null,
-        basis: "b0",
-        absentColumns: null,
-        upstreamUndeclared: false,
-      },
-    });
-    useUiStore.setState({ modelContextDraft: seeded });
-    expect(holdsUnsavedWork(useUiStore.getState())).toBe(false);
-
-    useUiStore.getState().editModelContext({ purpose: "One row per open deal." });
     expect(holdsUnsavedWork(useUiStore.getState())).toBe(true);
   });
 

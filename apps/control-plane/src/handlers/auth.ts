@@ -339,7 +339,7 @@ function otpSignIn(
 
 /**
  * The hooks that admit a platform superadmin on a fresh install (ADR 0013), and record every
- * sign-in (ADR 0112).
+ * sign-in (ADR 0113).
  */
 function bootstrapHooks(
   config: AuthConfig,

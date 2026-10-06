@@ -1,8 +1,8 @@
 /**
- * `ops.audit_log`: append-only, who did what, through which door, to which tenant. ADR 0112.
+ * `ops.audit_log`: append-only, who did what, through which door, to which tenant. ADR 0113.
  *
  * `record` is the only INSERT, and nothing here updates or deletes: an audit trail that can be
- * edited is a story, not evidence. The database agrees -- `500_audit_log_read.sql` revokes the
+ * edited is a story, not evidence. The database agrees -- `510_audit_log_read.sql` revokes the
  * control plane's UPDATE and DELETE on the table.
  *
  * `detail` is passed in already serialised: what is worth recording about an action is the
@@ -11,7 +11,7 @@
 
 import type { SqlExecutor } from "@undercroft/db";
 
-/** The door an action came through. For reading, never for authority (ADR 0112). */
+/** The door an action came through. For reading, never for authority (ADR 0113). */
 export type Channel = "web" | "cli" | "mcp" | "assistant";
 
 /**

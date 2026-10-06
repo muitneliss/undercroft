@@ -74,7 +74,7 @@ export interface BindOptions {
  */
 export function bindTools(ctx: Context, options: BindOptions): ToolSet {
   // The browser's own context, named for what is acting: the audit log says an action the
-  // assistant took was the assistant's, on this person's authority (ADR 0112).
+  // assistant took was the assistant's, on this person's authority (ADR 0113).
   const caller = appRouter.createCaller({ ...ctx, channel: "assistant" });
   const tools: ToolSet = {};
 

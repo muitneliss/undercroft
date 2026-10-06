@@ -1,5 +1,5 @@
 /**
- * The audit log (ADR 0112), through the router as every door calls it, against PGlite.
+ * The audit log (ADR 0113), through the router as every door calls it, against PGlite.
  *
  * What is promised: an attempt is recorded however it ends, through whichever door; a
  * non-member's attempt never reaches the tenant's own log; and each reader sees exactly the rows

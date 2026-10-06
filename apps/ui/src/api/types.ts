@@ -99,7 +99,7 @@ export type PersonalToken = inferRouterOutputs<AppRouter>["account"]["tokens"]["
 /** One app a person let in through the OAuth flow, as `account.apps.list` returns it. */
 export type ConnectedApp = inferRouterOutputs<AppRouter>["account"]["apps"]["list"][number];
 
-/** One row of the audit log (ADR 0112), as each of its three readers answers it. */
+/** One row of the audit log (ADR 0113), as each of its three readers answers it. */
 export type AuditEntry = inferRouterOutputs<AppRouter>["audit"]["mine"]["items"][number];
 
 /** What has landed, per stream, as `lake.summary` returns it. */

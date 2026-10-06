@@ -1,5 +1,5 @@
 /**
- * The sign-in record (ADR 0112), as Better Auth's session hook.
+ * The sign-in record (ADR 0113), as Better Auth's session hook.
  *
  * A session is what every way in ends with -- a code, a Google account, the CLI's sign-in, a
  * development install -- so its creation is the one place all of them pass. Its own module beside

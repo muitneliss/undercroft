@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.67.0](https://github.com/muitneliss/undercroft/compare/v1.66.0...v1.67.0) (2026-10-06)
+
+
+### Features
+
+* a model carries no business context; ADR 0112 supersedes ADR 0105 ([#403](https://github.com/muitneliss/undercroft/issues/403)) ([9cf3548](https://github.com/muitneliss/undercroft/commit/9cf354890fd8fb454bdb030b8aebcfcb03a89316))
+
 ## [1.66.0](https://github.com/muitneliss/undercroft/compare/v1.65.0...v1.66.0) (2026-10-06)
 
 

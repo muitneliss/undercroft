@@ -1,4 +1,4 @@
-# 112. Every action is in the audit log, and people can read it
+# 113. Every action is in the audit log, and people can read it
 
 - Status: Accepted
 - Date: 2026-10-06
@@ -67,7 +67,7 @@ tenant, a platform superadmin everything.
    `bi.exports.download` (the download route).
 6. **Action names are procedure paths.** The legacy names (`bi.question.save`,
    `connection.cadence_set`, `people.remove`, …) are renamed in place by
-   `500_audit_log_read.sql`, so one key labels a row in every language. A connection sealed with a
+   `510_audit_log_read.sql`, so one key labels a row in every language. A connection sealed with a
    pasted token was `connection.connected` with `method: token`; it becomes `connections.setToken`.
 7. **Three procedures read it, one per audience, each on the gate that already means that
    audience**:

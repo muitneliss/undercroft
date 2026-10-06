@@ -1,5 +1,5 @@
 /**
- * Demo Co.'s audit log (ADR 0112), as the People division's Activity view reads it -- beside
+ * Demo Co.'s audit log (ADR 0113), as the People division's Activity view reads it -- beside
  * `demoBook.ts`, whose people did these things, and like `modelsBook.ts` its own file.
  *
  * Every value is invented (`.claude/rules/pii.md`); times sit a little before `VISUAL_NOW`.
@@ -13,7 +13,7 @@ import { TENANT } from "@/test/demoBook.ts";
 type Out = inferRouterOutputs<AppRouter>;
 
 /**
- * What was done in Demo Co. lately, newest first (ADR 0112): a sync an agent started over MCP, a
+ * What was done in Demo Co. lately, newest first (ADR 0113): a sync an agent started over MCP, a
  * role the operator changed in the browser, a write a read-only token was refused, and an
  * invitation accepted at sign-in -- one row for each door and each outcome the table prints.
  */

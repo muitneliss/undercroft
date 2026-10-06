@@ -477,7 +477,7 @@ describe("a deactivated customer", () => {
       }
     }
 
-    // `audit.tenant` answers so the admin can read who deactivated it (ADR 0112).
+    // `audit.tenant` answers so the admin can read who deactivated it (ADR 0113).
     expect(answered).toEqual(["audit.tenant", "tenants.get"]);
     expect(await refusedWith(() => admin.tenants.reactivate({ tenantId: "CASE-0001" }))).toBe(
       "NO_ERROR",

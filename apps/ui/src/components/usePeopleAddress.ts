@@ -7,7 +7,7 @@ import { useSearchParams } from "react-router-dom";
 
 /**
  * The four views of the division, in the order the plates print. Activity is the customer's audit
- * log (ADR 0112), which only its admin may read: `audit.tenant` refuses anybody else, so for them
+ * log (ADR 0113), which only its admin may read: `audit.tenant` refuses anybody else, so for them
  * the plate is not printed and an address naming it opens Members.
  */
 export const VIEWS = ["members", "invites", "roles", "activity"] as const;

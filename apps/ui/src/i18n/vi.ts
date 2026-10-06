@@ -459,7 +459,7 @@ export const vi = {
 
   /** The consent page a model-context client's authorization lands on (ADR 0061). */
   /**
-   * The audit log (ADR 0112), read on the account page and in a customer's People division.
+   * The audit log (ADR 0113), read on the account page and in a customer's People division.
    * `actions` labels every action a row can name, keyed by the action with its dots turned into
    * underscores; the `satisfies` makes a new action a typecheck error until it has a label. A
    * reason (`FORBIDDEN`, `WRITES_DISABLED`) is a code an agent matches and is never translated.
@@ -520,7 +520,6 @@ export const vi = {
       models_save: "Lưu mô hình",
       models_build: "Dựng mô hình",
       models_delete: "Xóa mô hình",
-      models_setContext: "Duyệt ngữ cảnh mô hình",
       macros_check: "Kiểm tra macro",
       macros_save: "Lưu macro",
       macros_delete: "Xóa macro",
@@ -1669,56 +1668,6 @@ export const vi = {
     deleteConfirm: "Xoá {{name}}",
     deleting: "Đang xoá…",
     notDeleted: "Chưa xoá được",
-    colContext: "Ngữ cảnh",
-    contextHead: "Ngữ cảnh nghiệp vụ",
-    contextLead:
-      "Một dòng là gì, khoá nào nhận ra một dòng, mỗi cột nghĩa là gì và mô hình áp dụng quy tắc nào: do người viết và duyệt. Trạng thái so định nghĩa lúc duyệt với định nghĩa hiện tại của mô hình và của các mô hình nó đọc trực tiếp.",
-    contextNotATest: "Đây là trạng thái tài liệu, không phải kiểm thử dữ liệu.",
-    contextCurrent: "Hiện hành",
-    contextNeedsReview: "Cần duyệt lại",
-    contextIncomplete: "Chưa đủ",
-    contextReviewed: "Duyệt {{when}}",
-    contextNone: "Chưa có ngữ cảnh nào được duyệt cho mô hình này.",
-    contextChangesHead: "Đã đổi từ khi duyệt",
-    contextMissingHead: "Còn thiếu",
-    changeOwnSql: "SQL của mô hình này đã đổi.",
-    changeOwnTests: "Các kiểm tra của mô hình này đã đổi.",
-    changeOwnColumns: "Các cột lần dựng tìm thấy ở mô hình này đã đổi.",
-    changeUpstreamSql: "SQL của {{model}}, mô hình mà mô hình này đọc, đã đổi.",
-    changeUpstreamTests: "Các kiểm tra của {{model}}, mô hình mà mô hình này đọc, đã đổi.",
-    changeUpstreamColumns: "Các cột đã dựng của {{model}}, mô hình mà mô hình này đọc, đã đổi.",
-    changeDependency: "Mô hình này bắt đầu hoặc thôi đọc {{model}}.",
-    changeMissing: "{{model}}, mô hình mà mô hình này đọc, không còn nữa.",
-    contextAbsentColumns: "Ngữ cảnh nêu những cột lần dựng gần nhất không có: {{columns}}.",
-    contextUpstreamUndeclared:
-      "Không đọc được một phần thượng nguồn của mô hình này từ khai báo của nó, nên thay đổi đi qua phần đó không được phát hiện.",
-    contextPurpose: "Mục đích",
-    contextGrain: "Một dòng là",
-    contextKey: "Khoá",
-    contextKeyDeclared: "Khoá đã khai báo",
-    contextKeyNone: "Không có khoá: {{reason}}",
-    contextColumns: "Định nghĩa cột",
-    contextRules: "Quy tắc nghiệp vụ",
-    contextRulesNone: "Không áp dụng quy tắc nào",
-    colDefinition: "Định nghĩa",
-    colUnit: "Đơn vị",
-    contextEdit: "Soạn và duyệt ngữ cảnh",
-    contextApproveLead:
-      "Lưu tức là duyệt: nội dung này thành ngữ cảnh hiện hành của mô hình, theo bản định nghĩa đã lưu. Một trợ lý chỉ soạn nháp; người duyệt là bạn.",
-    contextKeyDeclaredOption: "Các cột này nhận ra một dòng",
-    contextKeyNoneOption: "Không có khoá",
-    contextKeyColumnsLabel: "Cột khoá",
-    contextKeyColumnsHint: "Tên cột, cách nhau bằng dấu phẩy. Khoá ghép là nhiều cột.",
-    contextKeyReasonLabel: "Vì sao không có khoá",
-    contextDefinitionLabel: "Định nghĩa của {{column}}",
-    contextUnitLabel: "Đơn vị của {{column}}",
-    contextRulesListedOption: "Áp dụng các quy tắc sau",
-    contextRuleLabel: "Quy tắc {{n}}",
-    contextAddRule: "Thêm quy tắc",
-    contextSave: "Duyệt và lưu",
-    contextSaving: "Đang lưu…",
-    contextNotSaved: "Chưa lưu được ngữ cảnh",
-    contextSaveHint: "Ngữ cảnh được duyệt theo bản SQL đã lưu. Hãy lưu hoặc bỏ thay đổi SQL trước.",
   },
 
   /** A query result as a table: the same words for a preview, a failing-rows read, a question. */
