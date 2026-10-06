@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.66.0](https://github.com/muitneliss/undercroft/compare/v1.65.0...v1.66.0) (2026-10-06)
+
+
+### Features
+
+* a report's answer or a model's table exports as a streamed CSV (ADR 0111) ([#401](https://github.com/muitneliss/undercroft/issues/401)) ([e26fc56](https://github.com/muitneliss/undercroft/commit/e26fc56dd23e190f2776ea170516d93a490d42ce))
+
 ## [1.65.0](https://github.com/muitneliss/undercroft/compare/v1.64.0...v1.65.0) (2026-10-05)
 
 
