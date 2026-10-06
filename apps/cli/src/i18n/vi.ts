@@ -38,6 +38,7 @@ export const vi = {
     bi: "Báo cáo: câu hỏi, bảng điều khiển và lược đồ.",
     biQuestions: "Các câu hỏi đã lưu.",
     biDashboards: "Các bảng điều khiển.",
+    biExports: "Xuất mọi dòng của một câu hỏi, một định nghĩa hoặc một mô hình thành tệp CSV.",
     config: "Hồ sơ môi trường của CLI, và cấu hình công khai của máy chủ.",
     connections: "Các nguồn dữ liệu và quyền truy cập của chúng.",
     dq: "Chất lượng dữ liệu.",
@@ -63,6 +64,8 @@ export const vi = {
     configUse: "Chọn hồ sơ mặc định.",
     describe:
       "Liệt kê mọi lệnh cùng tác động của nó, hoặc mô tả một lệnh và lược đồ đầu vào của nó.",
+    biExportsDownload:
+      "Tải một bản xuất về tệp: liên kết mà `bi exports create` trả về, với phiên của bạn trên chính máy chủ đó.",
   },
 
   flag: {
@@ -88,6 +91,8 @@ export const vi = {
     profileName: "Tên hồ sơ.",
     commandName: "Lệnh cần mô tả, ví dụ `runs.trigger` hoặc `runs trigger`.",
     field: "Trường `{{name}}` của đầu vào.",
+    exportLink: "Liên kết (url hoặc path) mà `bi exports create` trả về.",
+    out: "Tệp để ghi CSV vào.",
   },
 
   prompt: {
@@ -106,6 +111,7 @@ export const vi = {
     signedInLocally: "Đã đăng nhập vào {{origin}} với {{email}}, tại máy này, không cần mã.",
     signedOut: "Đã đăng xuất khỏi {{origin}}.",
     noRows: "Không có dòng nào.",
+    downloaded: "Đã lưu {{bytes}} byte vào {{path}}.",
   },
 
   /**
@@ -181,5 +187,10 @@ export const vi = {
     CANCELLED: "Đã huỷ; không có gì thay đổi.",
     INTERNAL_ERROR: "Máy chủ gặp lỗi nội bộ.",
     traceId: "Mã truy vết: {{traceId}} — ghi kèm mã này khi báo lỗi.",
+    downloadElsewhere:
+      "Liên kết trỏ tới {{link}}, không phải {{origin}} mà lệnh này đang dùng. Phiên của bạn chỉ được gửi tới máy chủ đã cấp nó; hãy chọn đúng hồ sơ hoặc --url.",
+    downloadCut:
+      "Bản tải xuống bị ngắt giữa chừng nên không có tệp nào được ghi: một tệp thiếu dòng trông giống tệp đầy đủ. Hãy yêu cầu xuất lại.",
+    outUnwritable: "Không ghi được vào {{path}}.",
   },
 };

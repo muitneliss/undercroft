@@ -1,13 +1,14 @@
 /**
- * What the CSV promises: the rows on screen and nothing else, a figure's every digit and its
- * sign, a missing value as an empty field rather than 0, and no text cell that a spreadsheet
- * would run as a formula -- without turning a numeric column's negative amount into text.
+ * What a CSV this platform hands out promises, whether the browser built it from the rows on
+ * screen or the worker streamed an export: a figure's every digit and its sign, a missing value
+ * as an empty field rather than 0, and no text cell that a spreadsheet would run as a formula --
+ * without turning a numeric column's negative amount into text.
  */
 
 import { describe, expect, test as it } from "bun:test";
 
-import type { TableResult } from "@/api/types.ts";
 import { resultCsv } from "./csv.ts";
+import type { TableResult } from "./transformApi.ts";
 
 const LEDGER: TableResult = {
   columns: [

@@ -20,6 +20,7 @@ import {
   type CredentialInput,
   type DqFailuresRequest,
   DropModelResponse,
+  type ExportQueryRequest,
   type RawSearchRequest,
   type RawSearchResponse,
   type RevokeConnectionResponse,
@@ -40,6 +41,7 @@ import {
   REFUSAL_BY_STATUS,
   type WorkerFailure,
 } from "./workerRefusals.ts";
+import { exportOn } from "./workerExport.ts";
 import {
   type Envelope,
   envelopeOf,
@@ -128,6 +130,8 @@ export interface WorkerClient {
   dqFailures: (input: DqFailuresRequest) => Promise<WorkerOutcome<TableResult>>;
   /** SQL an author wrote, run as the tenant's read-only login. */
   runQuery: (input: QueryInput) => Promise<WorkerOutcome<TableResult>>;
+  /** Every row of that SQL as a CSV stream, as the same login (`workerExport.ts`, ADR 0111). */
+  exportQuery: (input: ExportQueryRequest) => Promise<WorkerOutcome<ReadableStream<Uint8Array>>>;
   /** The tenant's analytics schema, as that login sees it. */
   readSchema: (input: { tenantId: string }) => Promise<WorkerOutcome<SchemaResponse>>;
   /** One SELECT over the RAW lake, as the tenant's dbt login. Admin-only at the caller. */
@@ -324,6 +328,7 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     dropModel: drop,
     dqFailures: (input) => post("/v1/dq/failures", input),
     runQuery: (input) => query("/v1/queries/run", input),
+    exportQuery: exportOn(t),
     readSchema: (input) => post("/v1/queries/schema", input),
     // The raw lake's console. Same refusal handling, different login at the far end: the
     // worker answers this one as the tenant's dbt role, which is the only one that may read

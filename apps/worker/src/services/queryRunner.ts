@@ -44,6 +44,11 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** A driver's refusal of the author's SQL, as the refusal the author reads. */
+export function queryFailedBy(error: unknown): QueryFailed {
+  return new QueryFailed(messageOf(error), { cause: error });
+}
+
 /** Run one SELECT as the tenant's BI login and answer with up to `limit` rows. */
 export async function runQuery(
   deps: QueryDeps,

@@ -17,6 +17,7 @@ export const en = {
     bi: "Reports: questions, dashboards and the schema.",
     biQuestions: "Saved questions.",
     biDashboards: "Dashboards.",
+    biExports: "Every row of a question, a definition or a model, as a CSV file.",
     config: "The CLI's environment profiles, and the server's public configuration.",
     connections: "Data sources and their grants.",
     dq: "Data quality.",
@@ -42,6 +43,8 @@ export const en = {
     configUse: "Choose the default profile.",
     describe:
       "List every command with its effect, or describe one command and the schema of its input.",
+    biExportsDownload:
+      "Save an export to a file: the link `bi exports create` answered with, fetched with your session on that same server.",
   },
 
   flag: {
@@ -68,6 +71,8 @@ export const en = {
     profileName: "The profile's name.",
     commandName: "The command to describe, e.g. `runs.trigger` or `runs trigger`.",
     field: "The input's `{{name}}` field.",
+    exportLink: "The link (url or path) `bi exports create` answered with.",
+    out: "The file to write the CSV to.",
   },
 
   prompt: {
@@ -86,6 +91,7 @@ export const en = {
     signedInLocally: "Signed in to {{origin}} as {{email}}, on this machine, with no code.",
     signedOut: "Signed out of {{origin}}.",
     noRows: "No rows.",
+    downloaded: "Saved {{bytes}} bytes to {{path}}.",
   },
 
   page: {
@@ -154,5 +160,10 @@ export const en = {
     CANCELLED: "Cancelled; nothing changed.",
     INTERNAL_ERROR: "The server had an internal error.",
     traceId: "Trace ID: {{traceId}} -- quote it when you report this.",
+    downloadElsewhere:
+      "The link points to {{link}}, not {{origin}}, which this command is using. Your session is only ever sent to the server that issued it; choose the right profile or --url.",
+    downloadCut:
+      "The download was cut off, so no file was written: a file missing rows looks like a whole one. Ask for the export again.",
+    outUnwritable: "Could not write to {{path}}.",
   },
 };

@@ -59,6 +59,7 @@ function caller(userId: string, email: string, worker: WorkerClient, locale: "vi
     specReads: new Map(),
     googlePicker: null,
     signInMethods: [],
+    publicUrl: null,
   };
   return appRouter.createCaller(ctx);
 }
@@ -171,5 +172,37 @@ describe("bi.answer and bi.runQuestion", () => {
     expect(await caller(viewer, "v@example.test", worker).bi.schema({ tenantId: TENANT })).toEqual({
       tables: [],
     });
+  });
+});
+
+describe("bi.exports", () => {
+  it("a viewer may export a saved question, as they may read it, but not a definition", async () => {
+    const viewer = await seedMember("v@example.test", "viewer");
+    const member = await seedMember("m@example.test", "member");
+    const worker = new InMemoryWorkerClient();
+    const saved = await caller(member, "m@example.test", worker).bi.questions.save({
+      tenantId: TENANT,
+      name: "Doanh thu",
+      definition: SQL,
+      chart: CHART,
+    });
+    const asViewer = caller(viewer, "v@example.test", worker);
+
+    const refused = await refusal(() =>
+      asViewer.bi.exports.create({
+        tenantId: TENANT,
+        source: { kind: "definition", definition: SQL },
+      }),
+    );
+    expect(refused.code).toBe("FORBIDDEN");
+
+    const exported = await asViewer.bi.exports.create({
+      tenantId: TENANT,
+      source: { kind: "question", questionId: saved.id },
+    });
+    expect(exported.fileName).toBe("Doanh thu.csv");
+    expect((await asViewer.bi.exports.get({ tenantId: TENANT, id: exported.id })).sql).toBe(
+      "select 1 as n",
+    );
   });
 });

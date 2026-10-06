@@ -100,6 +100,10 @@ export const procedureSentences: SentenceTable = {
   "bi.dashboards.get": "One dashboard.",
   "bi.dashboards.save": "Save a dashboard. Members and above.",
   "bi.dashboards.delete": "Delete a dashboard. Members and above.",
+  "bi.exports.create":
+    "Export every row of a saved question, a definition or a dbt model as a CSV file; answers with a download link good for 15 minutes, to you alone. Open it in a browser signed in to Undercroft, or fetch it with `undercroft bi exports download`. Definitions and models: members and above.",
+  "bi.exports.get":
+    "One export you asked for that has not expired: the SQL it runs and its file name.",
   "dq.failures": "The rows a failed data-quality test stored. Admins.",
   "runs.list": "The ledger of runs, newest first; all accounts, or one source's.",
   "runs.get": "One run, with the scope it read with, its refusals and dbt steps.",

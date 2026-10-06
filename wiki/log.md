@@ -308,3 +308,6 @@
 ## [2026-10-05] ingest | ADR 0110 A Tenant Can Be Deactivated
 ## [2026-10-05] ingest | Runbook: The undercroft CLI
 ## [2026-10-05] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-06] ingest | ADR 0111 An Export Is a Link to a Streamed CSV
+## [2026-10-06] ingest | Runbook: The undercroft CLI
+## [2026-10-06] ingest | Runbook: Connecting an agent over MCP

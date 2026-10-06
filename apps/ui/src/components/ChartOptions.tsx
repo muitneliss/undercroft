@@ -11,7 +11,7 @@ import { CHART_TYPES, type ChartConfig, type ChartType } from "@undercroft/contr
 import { useTranslation } from "react-i18next";
 
 import { CHART_TYPE_KEY } from "@/lib/chartTypes.ts";
-import { isNumericType } from "@/lib/plot.ts";
+import { isNumericType } from "@undercroft/contracts/results";
 import { useId } from "react";
 
 /** The drawings offered first. The rest of `CHART_TYPES` sits in the fold, in its order. */

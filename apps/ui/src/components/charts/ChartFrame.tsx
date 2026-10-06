@@ -33,7 +33,7 @@ import { ResultTable } from "@/components/ResultTable.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { type ChartPoint, resolveColumns, type Series, toSeries } from "@/lib/chartData.ts";
 import { type PivotFigure, pivot } from "@/lib/pivot.ts";
-import { isNumericType } from "@/lib/plot.ts";
+import { isNumericType } from "@undercroft/contracts/results";
 
 // The geo plugin and the projection maths ride only with a map.
 const GeoChart = lazy(() =>

@@ -51,10 +51,16 @@ const BY_TOOL: ReadonlyMap<string, string> = new Map(
 );
 
 /**
- * The CLI's own commands whose first word is also a router topic (`config.google`). They are
- * local -- `apps/cli/src/commands.ts` -- so no procedure answers them, and they are not unknown.
+ * The CLI's own commands whose first word is also a router topic (`config.google`, `bi.answer`).
+ * They are local -- `apps/cli/src/commands.ts` -- so no procedure answers them, and they are not
+ * unknown. `bi exports download` saves an export's link to a file (ADR 0111).
  */
-const CLI_LOCAL: ReadonlySet<string> = new Set(["config show", "config set-profile", "config use"]);
+const CLI_LOCAL: ReadonlySet<string> = new Set([
+  "config show",
+  "config set-profile",
+  "config use",
+  "bi exports download",
+]);
 
 const INLINE_CODE = /`(?<code>[^`\n]+)`/gu;
 const FENCE = /^```[^\n]*\n(?<body>[\s\S]*?)^```/gmu;
@@ -82,7 +88,10 @@ function codeIn(text: string): string[] {
 
 /** The procedure a CLI command line names, `null` if it names none, `undefined` if not ours. */
 function commandPath(words: readonly string[]): string | null | undefined {
-  if (!TOPICS.has(words[0] ?? "") || CLI_LOCAL.has(words.slice(0, 2).join(" "))) {
+  const local = words.some(
+    (_word, at) => at > 0 && CLI_LOCAL.has(words.slice(0, at + 1).join(" ")),
+  );
+  if (!TOPICS.has(words[0] ?? "") || local) {
     return undefined;
   }
   for (let end = words.length; end >= 2; end -= 1) {

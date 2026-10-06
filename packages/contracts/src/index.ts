@@ -153,6 +153,8 @@ export {
   DropModelRequest,
   DropModelResponse,
   DroppedRelation,
+  ExportQueryRequest,
+  isNumericType,
   MAX_PREVIEW_ROWS,
   MAX_QUERY_ROWS,
   MAX_QUERY_SQL_BYTES,
@@ -161,6 +163,14 @@ export {
   SchemaResponse,
   TableResult,
 } from "./transformApi.ts";
+export {
+  CSV_BOM,
+  CSV_MEDIA_TYPE,
+  csvFileName,
+  csvHeader,
+  csvRows,
+  resultCsv,
+} from "./csv.ts";
 export { lakeKeyOf, RawRecord, streamOf } from "./rawRecord.ts";
 export {
   ACCOUNT_KEY_LENGTH,

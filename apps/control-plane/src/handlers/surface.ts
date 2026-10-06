@@ -176,6 +176,10 @@ export const EFFECTS: EffectTable = {
   "bi.questions.delete": "destructive",
   "bi.dashboards.save": "write",
   "bi.dashboards.delete": "destructive",
+  // A POST for the definition, like `bi.answer`, and a read like it: what it keeps is the
+  // asking -- a fifteen-minute row the download finds -- never data. A read grant may export
+  // what it may already read (ADR 0111).
+  "bi.exports.create": "read",
 
   "runs.trigger": "write",
 

@@ -23,6 +23,7 @@ import { NO_SUPERADMINS } from "../services/superadmin.ts";
 import { unavailableJudge } from "../services/assistant/judge.ts";
 import { registerAssistantRoutes } from "./chat.ts";
 import { bearerContext, createContext, resolveCaller, type ServerDeps } from "./context.ts";
+import { registerExportRoute } from "./exports.ts";
 import { registerMcpRoute } from "./mcp.ts";
 import { registerOAuthRoutes } from "./oauth.ts";
 import { appRouter } from "./router.ts";
@@ -177,6 +178,22 @@ function registerAuthRoutes(app: Hono, deps: ServerDeps): void {
   app.all("/.well-known/*", (c) => auth.handler(c.req.raw));
 }
 
+/**
+ * An export's download (ADR 0111): the one route that answers either door, because a person
+ * opens it from a chat in a signed-in browser and an agent fetches it with its bearer. The
+ * `Authorization` header chooses, and a request carrying one is never admitted by its cookie.
+ * Before the catch-all, like every route here, though `/api/` already keeps the shell off it.
+ */
+function registerExportDownload(app: Hono, deps: ServerDeps): void {
+  registerExportRoute(app, {
+    admit: (headers) =>
+      headers.has("authorization")
+        ? bearerContext(deps, headers)
+        : createContext(deps, headers, "cookie"),
+    ...(deps.log === undefined ? {} : { log: deps.log }),
+  });
+}
+
 export function createServer(deps: ServerDeps): Hono {
   const app = new Hono();
 
@@ -216,6 +233,8 @@ export function createServer(deps: ServerDeps): Hono {
     ...(deps.widgets === undefined ? {} : { widgets: deps.widgets }),
     ...(deps.skills === undefined ? {} : { skills: deps.skills }),
   });
+
+  registerExportDownload(app, deps);
 
   // Registered LAST, so /api and /trpc above always win over the catch-all. A request for a
   // real built asset gets that file; anything else gets index.html, because the router lives

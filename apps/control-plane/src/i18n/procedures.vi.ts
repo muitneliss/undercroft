@@ -114,6 +114,9 @@ export const procedureSentences: SentenceTable = {
   "bi.dashboards.get": "Một bảng điều khiển.",
   "bi.dashboards.save": "Lưu một bảng điều khiển. Thành viên trở lên.",
   "bi.dashboards.delete": "Xoá một bảng điều khiển. Thành viên trở lên.",
+  "bi.exports.create":
+    "Xuất mọi dòng của một câu hỏi đã lưu, một định nghĩa hoặc một mô hình dbt thành tệp CSV; trả về một liên kết tải xuống dùng được 15 phút, chỉ cho chính bạn. Mở liên kết trong trình duyệt đã đăng nhập Undercroft, hoặc tải bằng `undercroft bi exports download`. Định nghĩa và mô hình: thành viên trở lên.",
+  "bi.exports.get": "Một bản xuất bạn đã yêu cầu và còn hạn: SQL nó chạy và tên tệp.",
   "dq.failures": "Các dòng mà một kiểm thử chất lượng dữ liệu đã lưu khi thất bại. Quản trị.",
   "runs.list": "Sổ các lần chạy, mới nhất trước; mọi tài khoản, hoặc của một nguồn.",
   "runs.get": "Một lần chạy, với phạm vi nó đã đọc, các dòng bị từ chối và các bước dbt.",
