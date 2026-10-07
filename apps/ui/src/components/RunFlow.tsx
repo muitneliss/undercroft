@@ -56,6 +56,7 @@ import { Link } from "react-router-dom";
 import type { RunDetail, RunEventView } from "@/api/types.ts";
 import { ArrowLeft, ArrowRight } from "@/components/Icon.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
+import { cssToken } from "@/lib/cssToken.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { deriveRunFlow, type RunStage } from "@/lib/runFlow.ts";
 import { type Place, railPlan, railWidth, STATION_HEIGHT } from "@/lib/runFlowLayout.ts";
@@ -227,6 +228,7 @@ function toNodes(stages: readonly RunStage[]): StationNode[] {
  */
 function toEdges(stages: readonly RunStage[]): Edge[] {
   const edges: Edge[] = [];
+  const arrowInk = cssToken("--ink-2", "#56513f");
   for (let i = 1; i < stages.length; i += 1) {
     const from = stages[i - 1];
     const to = stages[i];
@@ -241,9 +243,8 @@ function toEdges(stages: readonly RunStage[]): Edge[] {
         animated: from.mark === "pending",
         className: `run-link run-link--${from.mark}`,
         // The marker is drawn into a shared <defs>, outside this edge's class, so its
-        // colour cannot come from the stylesheet the way the path's does. Ink 2 as a
-        // literal, matching `--ink-2`'s own value at the top of `index.css`.
-        markerEnd: { type: MarkerType.ArrowClosed, width: 13, height: 13, color: "#56513f" },
+        // colour cannot come from the stylesheet the way the path's does: `--ink-2`, read.
+        markerEnd: { type: MarkerType.ArrowClosed, width: 13, height: 13, color: arrowInk },
         focusable: false,
         selectable: false,
         reconnectable: false,

@@ -24,6 +24,7 @@
  * whether they declined it or it ran.
  */
 
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { PRIVILEGED_TOOLS, proofSentence, proofValues } from "@/lib/assistantProofs.ts";
@@ -57,6 +58,8 @@ export function Proof({
   onAnswer: (approvalId: string, approved: boolean) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const confirmLabelId = useId();
+  const confirmHintId = useId();
   const tool = toolNameOf(part);
   const typed = useUiStore((state) => state.assistantConfirm);
   const setTyped = useUiStore((state) => state.setAssistantConfirm);
@@ -89,15 +92,23 @@ export function Proof({
         // `row-field-alignment` (ADR 0027).
         <div className="row row--field">
           <label className="field">
-            <span className="label">{t("assistant.proof.confirmLabel")}</span>
+            <span className="label" id={confirmLabelId}>
+              {t("assistant.proof.confirmLabel")}
+            </span>
+            {/* Named by the caption alone and described by the hint: the hint sits inside the
+                label for its layout, and without these it became part of the field's name. */}
             <input
+              aria-labelledby={confirmLabelId}
+              aria-describedby={confirmHintId}
               className="input"
               type="text"
               value={typed}
               placeholder={expected}
               onChange={(event): void => setTyped(event.target.value)}
             />
-            <span className="field__hint">{t("assistant.proof.confirmHint", { expected })}</span>
+            <span className="field__hint" id={confirmHintId}>
+              {t("assistant.proof.confirmHint", { expected })}
+            </span>
           </label>
         </div>
       )}

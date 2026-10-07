@@ -172,7 +172,9 @@ export function DocumentKinds({ tenantId }: { tenantId: string }): React.JSX.Ele
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("kinds.head")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("kinds.head")}
+      </div>
       <div className="body stack">
         <h1>{t("kinds.title")}</h1>
         <p className="prose prose--lead">{t("kinds.lead", { tenantId })}</p>
@@ -196,13 +198,13 @@ export function DocumentKinds({ tenantId }: { tenantId: string }): React.JSX.Ele
       {isAdmin && kinds.length > 0 ? (
         <>
           <div className="band-rule" />
-          <div className="head">{t("kinds.addHead")}</div>
+          <h2 className="head">{t("kinds.addHead")}</h2>
           <div className="body stack">
             <KindAdd available={available} tenantId={tenantId} add={writes.add} />
           </div>
 
           <div className="band-rule" />
-          <div className="head">{t("kinds.publishHead")}</div>
+          <h2 className="head">{t("kinds.publishHead")}</h2>
           <div className="body stack">
             <KindPublish
               tenantId={tenantId}

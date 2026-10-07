@@ -304,12 +304,14 @@ export function ScopePicker({
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("nav.sources")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("nav.sources")}
+      </div>
       <ScopeLead kind={kind} review={review} />
 
       <div className="band-rule" />
 
-      <div className="head">{sourceLabel(source, connections.data)}</div>
+      <h2 className="head">{sourceLabel(source, connections.data)}</h2>
       <div className="body stack">
         <ScopeAccount source={source} account={current?.externalAccountLabel ?? ""} />
         <ScopeSteps paths={paths} review={review} />

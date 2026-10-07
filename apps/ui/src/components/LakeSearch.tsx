@@ -75,57 +75,59 @@ function Hits({
   const locale = useUiStore((state) => state.locale);
 
   return (
-    <Table>
-      <TableCaption>{t("lake.searchHits", { count: hits.length })}</TableCaption>
-      <TableHeader>
-        <TableRow>
-          <TableHead scope="col">{t("lake.searchColWhere")}</TableHead>
-          <TableHead scope="col">{t("lake.searchColMatch")}</TableHead>
-          <TableHead scope="col">{t("lake.colObserved")}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {hits.map((hit) => {
-          const notes = hitNotes(t, hit, locale);
-          return (
-            <TableRow key={`${hit.kind}:${hit.source}:${hitWhere(hit)}`}>
-              <TableCell>
-                <span className="label">
-                  {hit.kind === "record"
-                    ? t("lake.searchKindRecord")
-                    : t("lake.searchKindDocument")}
-                </span>
-                <div className="datum">{hitWhere(hit)}</div>
-                {hit.kind === "record" ? (
-                  // Into the browser above, on the stream this row belongs to. A document hit
-                  // gets no such link: the catalogue is paged by source alone, so it would land
-                  // the reader on a list they would then have to search again by eye.
-                  <Link
-                    className="datum datum--quiet"
-                    to={`?${new URLSearchParams(
-                      streamParams({ kind: "records", source: hit.source, entity: hit.entity }),
-                    ).toString()}`}
-                  >
-                    {t("lake.searchOpenStream")}
-                  </Link>
-                ) : null}
-              </TableCell>
-              <TableCell>
-                <Excerpt query={query} text={hit.excerpt} />
-                {notes.map((note) => (
-                  <div className="note" key={note}>
-                    {note}
-                  </div>
-                ))}
-              </TableCell>
-              <TableCell className="datum datum--quiet">
-                {formatDateTime(hit.observedAt, locale)}
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+    <div className="table-scroll">
+      <Table>
+        <TableCaption>{t("lake.searchHits", { count: hits.length })}</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col">{t("lake.searchColWhere")}</TableHead>
+            <TableHead scope="col">{t("lake.searchColMatch")}</TableHead>
+            <TableHead scope="col">{t("lake.colObserved")}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {hits.map((hit) => {
+            const notes = hitNotes(t, hit, locale);
+            return (
+              <TableRow key={`${hit.kind}:${hit.source}:${hitWhere(hit)}`}>
+                <TableCell>
+                  <span className="label">
+                    {hit.kind === "record"
+                      ? t("lake.searchKindRecord")
+                      : t("lake.searchKindDocument")}
+                  </span>
+                  <div className="datum">{hitWhere(hit)}</div>
+                  {hit.kind === "record" ? (
+                    // Into the browser above, on the stream this row belongs to. A document hit
+                    // gets no such link: the catalogue is paged by source alone, so it would land
+                    // the reader on a list they would then have to search again by eye.
+                    <Link
+                      className="datum datum--quiet"
+                      to={`?${new URLSearchParams(
+                        streamParams({ kind: "records", source: hit.source, entity: hit.entity }),
+                      ).toString()}`}
+                    >
+                      {t("lake.searchOpenStream")}
+                    </Link>
+                  ) : null}
+                </TableCell>
+                <TableCell>
+                  <Excerpt query={query} text={hit.excerpt} />
+                  {notes.map((note) => (
+                    <div className="note" key={note}>
+                      {note}
+                    </div>
+                  ))}
+                </TableCell>
+                <TableCell className="datum datum--quiet">
+                  {formatDateTime(hit.observedAt, locale)}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 

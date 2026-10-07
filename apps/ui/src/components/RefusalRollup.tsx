@@ -75,36 +75,38 @@ export function RefusalRollup({
 
   return (
     <div className="stack stack--tight">
-      <table className="table">
-        <caption>{t("journal.rollupHead")}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{t("journal.colReason")}</th>
-            <th scope="col" className="num">
-              {t("journal.colCount")}
-            </th>
-            <th scope="col">{t("journal.colStatus")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {reasonCounts.map((row) => (
-            <ReasonRow
-              key={`${row.entity ?? ""}/${row.reason}`}
-              row={row}
-              scope={scope}
-              locale={locale}
-              open={openReason === row.reason}
-              // Only the reasons whose records survive can be unfolded. A reason with none is
-              // a row that does not pretend to be a control -- a press that opened an empty
-              // list would be the original defect again, one fold deeper.
-              records={refusals.filter((refusal) => refusal.reason === row.reason)}
-              onToggle={(): void => {
-                toggleReason(scope, row.reason);
-              }}
-            />
-          ))}
-        </tbody>
-      </table>
+      <div className="table-scroll">
+        <table className="table">
+          <caption>{t("journal.rollupHead")}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("journal.colReason")}</th>
+              <th scope="col" className="num">
+                {t("journal.colCount")}
+              </th>
+              <th scope="col">{t("journal.colStatus")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reasonCounts.map((row) => (
+              <ReasonRow
+                key={`${row.entity ?? ""}/${row.reason}`}
+                row={row}
+                scope={scope}
+                locale={locale}
+                open={openReason === row.reason}
+                // Only the reasons whose records survive can be unfolded. A reason with none is
+                // a row that does not pretend to be a control -- a press that opened an empty
+                // list would be the original defect again, one fold deeper.
+                records={refusals.filter((refusal) => refusal.reason === row.reason)}
+                onToggle={(): void => {
+                  toggleReason(scope, row.reason);
+                }}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {/* Said once under the table rather than on every row: it is a fact about the run's age,
           not about any one reason. Without it a month-old run reads as a count with nothing

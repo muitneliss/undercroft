@@ -43,40 +43,42 @@ export function StepsTable({
   const { t } = useTranslation();
 
   return (
-    <Table>
-      <TableCaption>{t("journal.stepsHead")}</TableCaption>
-      <TableHeader>
-        <TableRow>
-          <TableHead scope="col">{t("journal.colStep")}</TableHead>
-          <TableHead scope="col">{t("journal.colStatus")}</TableHead>
-          <TableHead scope="col" className="num">
-            {t("journal.colFailures")}
-          </TableHead>
-          <TableHead scope="col" className="num">
-            {t("journal.colTook")}
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {steps.map((step) => (
-          <TableRow key={step.uniqueId}>
-            <TableCell className="datum">{stepName(step)}</TableCell>
-            <TableCell>{step.status}</TableCell>
-            <TableCell className="num">
-              {step.failures === null ? MISSING : formatCount(step.failures, locale)}
-            </TableCell>
-            <TableCell className="num datum datum--quiet">
-              {step.executionMs === null
-                ? MISSING
-                : formatDuration(
-                    new Date(0).toISOString(),
-                    new Date(step.executionMs).toISOString(),
-                    locale,
-                  )}
-            </TableCell>
+    <div className="table-scroll">
+      <Table>
+        <TableCaption>{t("journal.stepsHead")}</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col">{t("journal.colStep")}</TableHead>
+            <TableHead scope="col">{t("journal.colStatus")}</TableHead>
+            <TableHead scope="col" className="num">
+              {t("journal.colFailures")}
+            </TableHead>
+            <TableHead scope="col" className="num">
+              {t("journal.colTook")}
+            </TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {steps.map((step) => (
+            <TableRow key={step.uniqueId}>
+              <TableCell className="datum">{stepName(step)}</TableCell>
+              <TableCell>{step.status}</TableCell>
+              <TableCell className="num">
+                {step.failures === null ? MISSING : formatCount(step.failures, locale)}
+              </TableCell>
+              <TableCell className="num datum datum--quiet">
+                {step.executionMs === null
+                  ? MISSING
+                  : formatDuration(
+                      new Date(0).toISOString(),
+                      new Date(step.executionMs).toISOString(),
+                      locale,
+                    )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

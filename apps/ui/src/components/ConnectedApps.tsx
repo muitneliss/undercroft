@@ -73,42 +73,46 @@ export function ConnectedApps(): React.JSX.Element {
       {apps.data.length === 0 ? (
         <p className="note">{t("apps.none")}</p>
       ) : (
-        <Table>
-          <TableCaption>{t("apps.caption", { count: apps.data.length })}</TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead scope="col">{t("apps.colName")}</TableHead>
-              <TableHead scope="col">{t("apps.colHost")}</TableHead>
-              <TableHead scope="col">{t("tokens.colGrant")}</TableHead>
-              <TableHead scope="col">{t("apps.colGranted")}</TableHead>
-              <TableHead scope="col">{t("tokens.colRevoke")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {apps.data.map((app) => (
-              <TableRow key={app.id}>
-                <TableCell className="datum">{app.name ?? t("apps.unnamed")}</TableCell>
-                <TableCell className="datum datum--quiet">{orMissing(app.redirectHost)}</TableCell>
-                <TableCell className="datum datum--quiet">{grantWord(t, app.grant)}</TableCell>
-                <TableCell className="datum datum--quiet">
-                  {formatDate(app.grantedAt, locale)}
-                </TableCell>
-                <TableCell>
-                  <button
-                    className="plate plate--small"
-                    type="button"
-                    disabled={revoking !== null}
-                    onClick={(): void => {
-                      revoke.mutate({ id: app.id });
-                    }}
-                  >
-                    {revoking === app.id ? t("tokens.revoking") : t("tokens.revoke")}
-                  </button>
-                </TableCell>
+        <div className="table-scroll">
+          <Table>
+            <TableCaption>{t("apps.caption", { count: apps.data.length })}</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">{t("apps.colName")}</TableHead>
+                <TableHead scope="col">{t("apps.colHost")}</TableHead>
+                <TableHead scope="col">{t("tokens.colGrant")}</TableHead>
+                <TableHead scope="col">{t("apps.colGranted")}</TableHead>
+                <TableHead scope="col">{t("tokens.colRevoke")}</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {apps.data.map((app) => (
+                <TableRow key={app.id}>
+                  <TableCell className="datum">{app.name ?? t("apps.unnamed")}</TableCell>
+                  <TableCell className="datum datum--quiet">
+                    {orMissing(app.redirectHost)}
+                  </TableCell>
+                  <TableCell className="datum datum--quiet">{grantWord(t, app.grant)}</TableCell>
+                  <TableCell className="datum datum--quiet">
+                    {formatDate(app.grantedAt, locale)}
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      className="plate plate--small"
+                      type="button"
+                      disabled={revoking !== null}
+                      onClick={(): void => {
+                        revoke.mutate({ id: app.id });
+                      }}
+                    >
+                      {revoking === app.id ? t("tokens.revoking") : t("tokens.revoke")}
+                    </button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {revoke.isError ? (

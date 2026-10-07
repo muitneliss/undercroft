@@ -11,6 +11,7 @@
  */
 
 import type { Filter, FilterOp, VisualDefinition } from "@undercroft/contracts/bi";
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { SchemaView } from "@/api/types.ts";
@@ -56,10 +57,21 @@ export function FilterList({
   onPatch: (patch: Patch) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const headId = useId();
+  const hintId = useId();
 
+  // A group, so the hint on parameters is read on the way into the filters it is about rather
+  // than only by someone who reads past the last of them.
   return (
-    <div className="stack stack--tight">
-      <span className="label">{t("bi.filtersHead")}</span>
+    <div
+      aria-describedby={hintId}
+      aria-labelledby={headId}
+      className="stack stack--tight"
+      role="group"
+    >
+      <span className="label" id={headId}>
+        {t("bi.filtersHead")}
+      </span>
       {filters.map((filter, index) => (
         // Keyed by position: a filter has no identity of its own, and two filters on the
         // same column with the same operator are a legitimate thing to write.
@@ -72,7 +84,9 @@ export function FilterList({
           onPatch={onPatch}
         />
       ))}
-      <p className="field__hint">{t("bi.paramHint", { example: "{{period_from}}" })}</p>
+      <p className="field__hint" id={hintId}>
+        {t("bi.paramHint", { example: "{{period_from}}" })}
+      </p>
       {columns.length === 0 ? null : (
         <div className="row">
           <button

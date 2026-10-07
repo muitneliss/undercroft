@@ -347,12 +347,29 @@ describe("the tab strip", () => {
  */
 describe("the interleaf", () => {
   it("takes a column beside the leaf rather than floating over it", () => {
+    viewport(1440);
     const book = render(`<div class="book book--interleaved"></div>`);
     const style = globalThis.getComputedStyle(book);
-    expect(style.gridTemplateAreas).toContain("leaf interleaf");
+    const desk = { areas: style.gridTemplateAreas, columns: style.gridTemplateColumns };
+    viewport(WINDOW);
+    expect(desk.areas).toContain("leaf interleaf");
     // Two columns: the leaf gives way, the sheet is fixed. A conversation read at a changing
     // width rewraps every time somebody opens a division.
-    expect(style.gridTemplateColumns).toBe("minmax(0, 1fr) 24rem");
+    expect(desk.columns).toBe("minmax(0, 1fr) 24rem");
+  });
+
+  it("takes the leaf's place on a tablet rather than squeezing the page to a sliver", () => {
+    // At 800px a 24rem conversation beside a leaf that still hung its margin column left the
+    // page 148px wide, and every table on it ran off its own edge.
+    viewport(900);
+    const book = render(`<div class="book book--interleaved"><div class="leaf"></div></div>`);
+    const tablet = {
+      areas: globalThis.getComputedStyle(book).gridTemplateAreas,
+      leaf: globalThis.getComputedStyle(book.querySelector(".leaf") as Element).display,
+    };
+    viewport(WINDOW);
+    expect(tablet.areas).toBe('"rail" "interleaf"');
+    expect(tablet.leaf).toBe("none");
   });
 
   it("is a closed book's single column until it is opened", () => {
@@ -361,12 +378,15 @@ describe("the interleaf", () => {
   });
 
   it("carries a hairline and no shadow, because ply is declared once", () => {
+    viewport(1440);
     const sheet = render(`<aside class="interleaf"></aside>`);
     const style = globalThis.getComputedStyle(sheet);
+    const desk = { border: style.borderLeftStyle, shadow: style.boxShadow };
+    viewport(WINDOW);
     // DESIGN.md's Ply Rule: a surface with a border does not also carry a shadow. This sheet
     // is bound in rather than standing off the board.
-    expect(style.borderLeftStyle).toBe("solid");
-    expect(style.boxShadow).toBe("");
+    expect(desk.border).toBe("solid");
+    expect(desk.shadow).toBe("");
   });
 
   it("wears no division hue: it belongs to the reader, not to a section", () => {

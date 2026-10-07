@@ -69,7 +69,7 @@ function sliceData(series: Series): SliceData {
         label: first?.label ?? "",
         data: (first?.values ?? []).map((v) => v ?? 0),
         backgroundColor: series.labels.map((_l, i) => colourFor(i)),
-        borderColor: "#fbf8f0",
+        borderColor: TOKENS.leaf,
         borderWidth: 1,
       },
     ],

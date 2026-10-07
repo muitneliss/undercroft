@@ -65,7 +65,9 @@ function GenericForm({
 function CustomForm({ tenantId, add }: { tenantId: string; add: AddMutation }): React.JSX.Element {
   const { t } = useTranslation();
   const nameId = useId();
+  const nameHintId = useId();
   const descriptionId = useId();
+  const descriptionHintId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLInputElement>(null);
   return (
@@ -89,6 +91,7 @@ function CustomForm({ tenantId, add }: { tenantId: string; add: AddMutation }): 
         <input
           className="input mono"
           id={nameId}
+          aria-describedby={nameHintId}
           ref={nameRef}
           required={true}
           maxLength={63}
@@ -96,7 +99,9 @@ function CustomForm({ tenantId, add }: { tenantId: string; add: AddMutation }): 
           autoComplete="off"
           disabled={add.isPending}
         />
-        <p className="field__hint">{t("kinds.addCustomNameHint")}</p>
+        <p className="field__hint" id={nameHintId}>
+          {t("kinds.addCustomNameHint")}
+        </p>
       </div>
       <div className="field">
         <label className="label" htmlFor={descriptionId}>
@@ -105,13 +110,16 @@ function CustomForm({ tenantId, add }: { tenantId: string; add: AddMutation }): 
         <input
           className="input"
           id={descriptionId}
+          aria-describedby={descriptionHintId}
           ref={descriptionRef}
           required={true}
           maxLength={500}
           autoComplete="off"
           disabled={add.isPending}
         />
-        <p className="field__hint">{t("kinds.addCustomDescriptionHint")}</p>
+        <p className="field__hint" id={descriptionHintId}>
+          {t("kinds.addCustomDescriptionHint")}
+        </p>
       </div>
       <div className="row">
         <button className="plate" type="submit" disabled={add.isPending}>

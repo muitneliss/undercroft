@@ -28,7 +28,7 @@
  */
 
 import { useId, useRef } from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 
 import { CustomerIndex } from "@/components/CustomerIndex.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
@@ -56,7 +56,11 @@ function AddTenantPanel({
   isSuperadmin: boolean;
   addTenant: {
     isPending: boolean;
-    error: ServerError | null;
+    error:
+      | (ServerError & {
+          readonly data?: { readonly code?: string | undefined } | null | undefined;
+        })
+      | null;
     mutate: (input: { tenantId: string; displayName: string }) => void;
   };
   idFieldRef: React.RefObject<HTMLInputElement | null>;
@@ -65,6 +69,7 @@ function AddTenantPanel({
   tenantNameId: string;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const idHintId = useId();
   return (
     <>
       {isSuperadmin ? (
@@ -92,18 +97,29 @@ function AddTenantPanel({
                 className="input"
                 disabled={addTenant.isPending}
                 id={tenantIdFieldId}
+                aria-describedby={idHintId}
+                // A conflict is the one refusal about the ID itself: it is already taken.
+                aria-invalid={addTenant.error?.data?.code === "CONFLICT"}
                 name="tenantId"
                 placeholder={t("tenants.idPlaceholder")}
                 ref={idFieldRef}
                 required={true}
                 type="text"
               />
-              <p className="field__hint">{t("tenants.idHint")}</p>
+              <p className="field__hint" id={idHintId}>
+                {t("tenants.idHint")}
+              </p>
             </div>
 
             <div className="field">
+              {/* The one field of the two that may be left empty, and the label says so: the
+                  ID is the one the browser insists on, and nothing else told them apart. */}
               <label className="label" htmlFor={tenantNameId}>
-                {t("tenants.nameLabel")}
+                <Trans
+                  i18nKey="common.optionalLabel"
+                  values={{ label: t("tenants.nameLabel") }}
+                  components={{ small: <span className="datum--quiet" /> }}
+                />
               </label>
               <input
                 autoComplete="off"
@@ -179,7 +195,9 @@ export function Tenants(): React.JSX.Element {
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("nav.customers")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("nav.customers")}
+      </div>
       <div className="body stack">
         <div className="customer-home__heading">
           <div className="stack stack--tight">
@@ -202,14 +220,14 @@ export function Tenants(): React.JSX.Element {
 
       <div className="band-rule" />
 
-      <div className="head">{t("tenants.guideHead")}</div>
+      <h2 className="head">{t("tenants.guideHead")}</h2>
       <p className="body prose">{t("tenants.guideBody")}</p>
 
       <div className="band-rule" />
 
-      <div className="customer-home__add head" id={addCustomerId}>
+      <h2 className="customer-home__add head" id={addCustomerId}>
         {t("tenants.addHead")}
-      </div>
+      </h2>
       <div className="body stack">
         <AddTenantPanel
           isSuperadmin={session.data?.superadmin === true}

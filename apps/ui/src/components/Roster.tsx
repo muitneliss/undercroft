@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { Address } from "@/components/Address.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
+import { StatusLine } from "@/components/StatusLine.tsx";
 import { byAddress, isRole, ROLES, soleAdmin } from "@/lib/roles.ts";
 import type { trpc } from "@/trpc.ts";
 
@@ -77,11 +78,7 @@ function RoleCell({
           </option>
         ))}
       </select>
-      {saving ? (
-        <span className="field__hint" role="status">
-          {t("people.roleSaving")}
-        </span>
-      ) : null}
+      <StatusLine as="span" className="field__hint" text={saving ? t("people.roleSaving") : null} />
     </td>
   );
 }
@@ -146,19 +143,21 @@ function MembershipOutcome({
       {setRole.isError ? (
         <Errata heading={t("people.roleNotChanged")} live={true} error={setRole.error} />
       ) : null}
-      {setRole.isSuccess ? (
-        <p className="note" role="status">
-          {t("people.roleChanged", { email: setRole.data.email, role: setRole.data.role })}
-        </p>
-      ) : null}
+      <StatusLine
+        className="note"
+        text={
+          setRole.isSuccess
+            ? t("people.roleChanged", { email: setRole.data.email, role: setRole.data.role })
+            : null
+        }
+      />
       {remove.isError ? (
         <Errata heading={t("people.notRemoved")} live={true} error={remove.error} />
       ) : null}
-      {remove.isSuccess ? (
-        <p className="note" role="status">
-          {t("people.removed", { email: remove.data.email })}
-        </p>
-      ) : null}
+      <StatusLine
+        className="note"
+        text={remove.isSuccess ? t("people.removed", { email: remove.data.email }) : null}
+      />
     </>
   );
 }
@@ -186,43 +185,45 @@ function RosterTable({
   const { t } = useTranslation();
   const reader = signedInAs.toLowerCase();
   return (
-    <table className="table">
-      <caption>{caption}</caption>
-      <thead>
-        <tr>
-          <th scope="col">{t("people.colAddress")}</th>
-          <th scope="col">{t("people.colRole")}</th>
-          {isAdmin ? <th scope="col">{t("people.colRemove")}</th> : null}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((member) => (
-          <tr key={member.userId}>
-            <td className="datum datum--quiet">
-              {member.email.toLowerCase() === reader ? (
-                <span className="stack stack--tight">
-                  <Address email={member.email} />
-                  <span className="label">{t("people.you")}</span>
-                </span>
-              ) : (
-                <Address email={member.email} />
-              )}
-            </td>
-            <RoleCell
-              member={member}
-              last={member === last}
-              isAdmin={isAdmin}
-              setRole={setRole}
-              tenantId={tenantId}
-            />
-            {isAdmin && member === last ? <td /> : null}
-            {isAdmin && member !== last ? (
-              <RemoveCell email={member.email} remove={remove} tenantId={tenantId} />
-            ) : null}
+    <div className="table-scroll">
+      <table className="table">
+        <caption>{caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{t("people.colAddress")}</th>
+            <th scope="col">{t("people.colRole")}</th>
+            {isAdmin ? <th scope="col">{t("people.colRemove")}</th> : null}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((member) => (
+            <tr key={member.userId}>
+              <td className="datum datum--quiet">
+                {member.email.toLowerCase() === reader ? (
+                  <span className="stack stack--tight">
+                    <Address email={member.email} />
+                    <span className="label">{t("people.you")}</span>
+                  </span>
+                ) : (
+                  <Address email={member.email} />
+                )}
+              </td>
+              <RoleCell
+                member={member}
+                last={member === last}
+                isAdmin={isAdmin}
+                setRole={setRole}
+                tenantId={tenantId}
+              />
+              {isAdmin && member === last ? <td /> : null}
+              {isAdmin && member !== last ? (
+                <RemoveCell email={member.email} remove={remove} tenantId={tenantId} />
+              ) : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

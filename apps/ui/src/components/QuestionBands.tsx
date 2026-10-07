@@ -24,6 +24,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { CopyLink } from "@/components/CopyLink.tsx";
 import { Errata } from "@/components/Errata.tsx";
+import { StatusLine } from "@/components/StatusLine.tsx";
 import { Separator } from "@/components/ui/separator.tsx";
 import { withPoint } from "@/lib/chartData.ts";
 import { divisionPath } from "@/lib/divisions.ts";
@@ -225,14 +226,19 @@ function DraftNote({
   save: Save;
 }): React.JSX.Element | null {
   const { t } = useTranslation();
-  if (isQuestionDirty(draft)) {
-    return <span className="datum datum--quiet">{t("bi.unsaved")}</span>;
-  }
-  return save.isSuccess ? (
-    <span className="datum datum--quiet" role="status">
-      {t("bi.savedNote")}
-    </span>
-  ) : null;
+  const dirty = isQuestionDirty(draft);
+  // The saved note's region stays mounted while the draft is clean, so "Saved" is announced
+  // when the save answers rather than mounted unheard beside the text it carries.
+  return (
+    <>
+      {dirty ? <span className="datum datum--quiet">{t("bi.unsaved")}</span> : null}
+      <StatusLine
+        as="span"
+        className="datum datum--quiet"
+        text={!dirty && save.isSuccess ? t("bi.savedNote") : null}
+      />
+    </>
+  );
 }
 
 /**
@@ -260,7 +266,7 @@ export function ParamsBand({
   return (
     <>
       <Separator className="band-rule" />
-      <div className="head">{t("bi.paramsHead")}</div>
+      <h2 className="head">{t("bi.paramsHead")}</h2>
       <div className="body stack">
         <p className="prose">{t("bi.paramsLead")}</p>
         <form
@@ -326,7 +332,7 @@ export function DeleteBand({
   return (
     <>
       <Separator className="band-rule" />
-      <div className="head">{t("bi.deleteHead")}</div>
+      <h2 className="head">{t("bi.deleteHead")}</h2>
       <div className="body stack">
         <p className="prose">{t("bi.deleteLead", { name: draft.name })}</p>
         <details className="tokenform">

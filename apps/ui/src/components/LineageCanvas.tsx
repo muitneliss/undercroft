@@ -54,6 +54,7 @@ import {
   type WireEdge,
 } from "@/components/LineageCards.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { cssToken } from "@/lib/cssToken.ts";
 import { useFullscreen } from "@/lib/fullscreen.ts";
 import { type Focus, laneLabel, nodeState } from "@/lib/lineage.ts";
 import { type Arrangement, CARD_H, CARD_W, edgeId, useArrangement } from "@/lib/lineageArrange.ts";
@@ -106,6 +107,7 @@ function toNodes(t: TFunction, drawn: Graph, arrangement: Arrangement): Node[] {
 
 function toEdges(drawn: Graph, arrangement: Arrangement): WireEdge[] {
   const missing = new Set(drawn.nodes.filter((n) => n.kind === "missing").map((n) => n.id));
+  const ink = cssToken("--ink-2", "#56513f");
   return drawn.edges
     .filter((edge) => edge.from !== edge.to)
     .map((edge) => {
@@ -126,8 +128,8 @@ function toEdges(drawn: Graph, arrangement: Arrangement): WireEdge[] {
               : { route, from, to },
         },
         // Drawn into a shared <defs>, outside the edge's class, so its colour cannot come from
-        // the stylesheet: `--ink-2`'s own value, as the run map's arrow does.
-        markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: "#56513f" },
+        // the stylesheet: `--ink-2`, read, as the run map's arrow does.
+        markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: ink },
         focusable: false,
         selectable: false,
       };
@@ -181,13 +183,11 @@ function Furniture({
         zoomable={true}
       />
       <Panel className="row" position="top-right">
+        {/* The label says what a press does, so there is no `aria-pressed` as well: with both, a
+            screen reader hears "Exit full screen, pressed" -- the state twice and contradicting
+            itself. The row is not a `langset`, so a pressed plate would not look pressed either. */}
         {screen.available ? (
-          <button
-            aria-pressed={screen.on}
-            className="plate plate--small"
-            onClick={screen.toggle}
-            type="button"
-          >
+          <button className="plate plate--small" onClick={screen.toggle} type="button">
             {screen.on ? t("lineage.exitFullscreen") : t("lineage.fullscreen")}
           </button>
         ) : null}
