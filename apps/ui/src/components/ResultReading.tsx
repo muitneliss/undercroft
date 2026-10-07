@@ -27,6 +27,7 @@ import { useSearchParams } from "react-router-dom";
 import type { TableResult } from "@/api/types.ts";
 import { ResultTable } from "@/components/ResultTable.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { StatusLine } from "@/components/StatusLine.tsx";
 import { POINT, pointFromSearch, rowsAt, withPoint } from "@/lib/chartData.ts";
 import { type QuestionPane, withPane } from "@/lib/questionPane.ts";
 
@@ -86,11 +87,10 @@ function MarkedRows({
   const { t } = useTranslation();
   return (
     <div className="stack stack--tight">
-      {marked.size > 0 ? (
-        <p className="note" role="status">
-          {t("bi.rowsMarked", { count: marked.size })}
-        </p>
-      ) : null}
+      <StatusLine
+        className="note"
+        text={marked.size > 0 ? t("bi.rowsMarked", { count: marked.size }) : null}
+      />
       <ResultTable result={result} locale={locale} marked={marked} />
     </div>
   );

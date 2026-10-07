@@ -16,10 +16,16 @@
  * roll the stack back to this build, so a prettier "1.4.0" would be a worse answer. The
  * word beside it is what makes the line mean something to a screen reader, which would
  * otherwise read a bare version number with nothing to attach it to.
+ *
+ * The contact address closes the line, as it closes multnelis.org's and the blog's: the
+ * foot is where a reader looks for who answers, and the colophon is the one foot every
+ * page shares. It is a link, so it is set apart at the far end rather than between the
+ * label and the tag it names.
  */
 
 import { useTranslation } from "react-i18next";
 
+import { CONTACT_EMAIL } from "@/lib/contact.ts";
 import { RELEASE } from "@/lib/release.ts";
 
 export function Colophon(): React.JSX.Element {
@@ -29,6 +35,10 @@ export function Colophon(): React.JSX.Element {
     <footer className="colophon">
       <span className="label">{t("app.release")}</span>
       <span className="datum">{RELEASE}</span>
+      <span className="colophon__contact">
+        <span className="label">{t("app.contact")}</span>
+        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+      </span>
     </footer>
   );
 }

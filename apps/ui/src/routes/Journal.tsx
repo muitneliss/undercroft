@@ -152,7 +152,9 @@ function Ledger({ tenantId }: { tenantId: string }): React.JSX.Element {
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("nav.journal")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("nav.journal")}
+      </div>
       <div className="body stack">
         <h1>{t("journal.title")}</h1>
         <p className="prose prose--lead">{t("journal.lead", { tenantId })}</p>

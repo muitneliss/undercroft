@@ -44,6 +44,7 @@ import {
 import { FunnelController, TrapezoidElement } from "chartjs-chart-funnel";
 
 import type { ChartPoint, Series } from "@/lib/chartData.ts";
+import { cssToken } from "@/lib/cssToken.ts";
 import { formatCount, formatDecimal, MISSING } from "@/lib/money.ts";
 
 ChartJS.register(
@@ -69,20 +70,16 @@ ChartJS.register(
 );
 
 /** The tokens the leaf is set in, read once. Chart.js can only ease, so it does not move. */
-function applyTokens(): { ink: string; rule: string } {
-  const style = getComputedStyle(document.documentElement);
-  function token(name: string, fallback: string): string {
-    const value = style.getPropertyValue(name).trim();
-    return value === "" ? fallback : value;
-  }
-  const ink = token("--ink", "#16150f");
-  const rule = token("--rule", "rgba(22, 21, 15, 0.16)");
+function applyTokens(): { ink: string; rule: string; leaf: string } {
+  const ink = cssToken("--ink", "#16150f");
+  const rule = cssToken("--rule", "rgba(22, 21, 15, 0.16)");
   ChartJS.defaults.animation = false;
-  ChartJS.defaults.font.family = token("--face-mono", "monospace");
+  ChartJS.defaults.font.family = cssToken("--face-mono", "monospace");
   ChartJS.defaults.font.size = 11;
-  ChartJS.defaults.color = token("--ink-2", "#56513f");
+  ChartJS.defaults.color = cssToken("--ink-2", "#56513f");
   ChartJS.defaults.borderColor = rule;
-  return { ink, rule };
+  // The leaf the chart is printed on: what a slice's edge is drawn in, so it reads as a cut.
+  return { ink, rule, leaf: cssToken("--leaf", "#fbf8f0") };
 }
 
 export const TOKENS = applyTokens();

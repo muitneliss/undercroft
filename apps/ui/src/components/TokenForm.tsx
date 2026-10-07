@@ -13,7 +13,7 @@
  * as a slot.
  */
 
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Errata } from "@/components/Errata.tsx";
@@ -31,6 +31,7 @@ export function TokenForm({
   const utils = trpc.useUtils();
   const tokenFieldRef = useRef<HTMLInputElement>(null);
   const fieldId = `token-${source}`;
+  const hintId = useId();
 
   const setToken = trpc.connections.setToken.useMutation({
     onSuccess: async () => {
@@ -59,12 +60,17 @@ export function TokenForm({
           className="input"
           disabled={setToken.isPending}
           id={fieldId}
+          aria-describedby={hintId}
+          // The one thing the refusal below can be about is this token, so the field says so.
+          aria-invalid={setToken.isError}
           name="token"
           ref={tokenFieldRef}
           required={true}
           type="password"
         />
-        <p className="field__hint">{t("grant.tokenHint")}</p>
+        <p className="field__hint" id={hintId}>
+          {t("grant.tokenHint")}
+        </p>
       </div>
 
       {setToken.isError ? (

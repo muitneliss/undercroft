@@ -12,14 +12,36 @@
  * solved alpha.
  */
 
+import { lazy, Suspense } from "react";
 import { useLocation, useRoutes, useSearchParams } from "react-router-dom";
 
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { useLocalSignIn } from "@/components/useLocalSignIn.ts";
 import { appRoutes } from "@/routeTable.tsx";
-import { Landing } from "@/routes/Landing.tsx";
 import { SignIn } from "@/routes/SignIn.tsx";
 import { trpc } from "@/trpc.ts";
+
+/**
+ * The public cover, fetched only by a reader who lands on it.
+ *
+ * Split for the reason `routeTable.tsx` splits the divisions: the cover carries the vault film
+ * (`lib/vault/`) and five stylesheets of its own, and a signed-in reader -- who never sees it --
+ * was downloading all of it on every first paint.
+ */
+const Landing = lazy(() =>
+  import("@/routes/Landing.tsx").then((module) => ({ default: module.Landing })),
+);
+
+/** What a page shows while its own code is still arriving: the title page, setting its lines. */
+function TitlePage(): React.JSX.Element {
+  return (
+    <main className="titlepage">
+      <div className="titlepage__leaf">
+        <Skeleton rows={3} />
+      </div>
+    </main>
+  );
+}
 
 /**
  * The book, opened at whichever division the URL names.
@@ -52,17 +74,15 @@ export function App(): React.JSX.Element {
     !session.isSuccess &&
     localSignIn !== "automatic"
   ) {
-    return <Landing />;
+    return (
+      <Suspense fallback={<TitlePage />}>
+        <Landing />
+      </Suspense>
+    );
   }
 
   if (session.isPending) {
-    return (
-      <main className="titlepage">
-        <div className="titlepage__leaf">
-          <Skeleton rows={3} />
-        </div>
-      </main>
-    );
+    return <TitlePage />;
   }
 
   if (session.isError) {

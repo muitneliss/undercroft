@@ -150,7 +150,7 @@ function ObjectChoice({
         <div className="index__field">
           {runs.map((run) => (
             <section key={runKey(run.kind)} className="index__run">
-              <h2 className="label index__head">{t(RUN_HEAD[runKey(run.kind)])}</h2>
+              <h3 className="label index__head">{t(RUN_HEAD[runKey(run.kind)])}</h3>
               <div className="index__cols">
                 {run.items.map((item) => (
                   <label key={item.id} className="punch">

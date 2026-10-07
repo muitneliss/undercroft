@@ -205,7 +205,7 @@ function ColumnChoice({
       </label>
       {field === undefined ? null : (
         <select
-          aria-label={`${column.name}: ${t("bi.aggNone")}`}
+          aria-label={t("bi.aggregateFor", { column: column.name })}
           className="input input--select"
           value={field.aggregate ?? NONE}
           onChange={(event): void => {
