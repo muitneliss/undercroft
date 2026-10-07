@@ -103,6 +103,10 @@ const SET = {
   lily_b: "decoration/nature/waterlily_B.gltf",
   reeds_a: "decoration/nature/waterplant_A.gltf",
   reeds_b: "decoration/nature/waterplant_B.gltf",
+  watermill: "buildings/blue/building_watermill_blue.gltf",
+  cloud_big: "decoration/nature/cloud_big.gltf",
+  cloud_small: "decoration/nature/cloud_small.gltf",
+  flag: "decoration/props/flag_blue.gltf",
 } as const;
 
 /** Read only to tell the team cells from the rest: they are what changes between variants. */

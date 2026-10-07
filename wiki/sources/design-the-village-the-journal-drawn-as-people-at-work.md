@@ -5,7 +5,7 @@ date: 2026-10-07
 tags: []
 source: docs/design/village.md
 source_path: docs/design/village.md
-source_hash: 48fb9db3fbeff0eff505cbb74728c401baa0f423cb2a0e2f821d0042f0aee33f
+source_hash: 3db436c7423fc5cadd4248d36ee665de162915616fd3f34f80a51d73bed39126
 ingested: 2026-10-07
 ---
 
@@ -13,30 +13,21 @@ ingested: 2026-10-07
 
 The concept document for the Journal's village view ([[ADR 0115 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion]]). It owns the cast, the layout, the visual language and the mapping from runs to actions.
 
-* **Direction contract.** THESIS: a reader who does not know the words can watch data arrive, be kept and be made into something, with refusals visibly set aside. OWN-WORLD: the design system's inks on KayKit models. MOTION: stop-motion at 10 fps, keyed that way at build time. TRUTH: nothing moves without a run; the picture may lag by one walk, the words never do.
-* **Visual language.** Every surface is printed in the nearest step of a design-system tonal ramp, by hue family:
+* **Direction contract.** A reader who does not know the words watches data arrive, be kept and be made into something. Stop-motion at 10 fps. Nothing moves without a run.
+* **Visual language.** Every surface lies along a design-system tonal ramp by family:
 
-  * fields and trees in Grass
-  * timber, skin and sand in Sienna
-  * stone in Bone and Ink
-  * water in Teal
-  * roads in Page
+  * Grass for fields and trees
+  * Sienna for timber and skin
+  * Bone and Ink for stone
+  * Teal for the glossy lake
+  * Page for the roads
 
-  There are Ink outlines (finer on characters) and four stepped tones. Canonical division hues appear only on roofs, and vermilion only on slips. The repaint reads per-vertex `_CELL` and `_SHADE` against the cell gradients in `atlas.json`. `village.test.ts` holds the ramps equal to `design.json`, and holds that every vertex is in them.
-* **Layout.** Buildings run left to right along the data path:
-  * gatehouse with source roads: Sources
-  * village sign: Customers
-  * town hall and bell: Journal
-  * stone vault with the lake behind it, reading room and archive: Raw lake
-  * workshop: Models
-  * printing house: Reports
-  * houses: People
-  * Dressing makes it lived in: props by each building, trees and rocks on the edges, lilies and reeds on the lake.
-  * Roads follow the connections.
-* **Cast.** Courier (Ranger), vault keeper (Rogue), scribe (Mage), artisan (Barbarian), inspector (Knight), carter (Ranger), and the bell, all printed in the ramps.
+  Ink outlines, finer on characters. The scene is photographed like a miniature (`look.ts`): a warm key light, soft shadows on the board and the page, ambient occlusion, a tilt-shift focus band, page grain and a vignette. The repaint uses `_CELL`, `_SHADE` and the cell gradients; `village.test.ts` holds the ramps equal to `design.json` and every vertex along them.
+* **Ambience** (`ambience.ts`). Drifting cloud shadows, two small clouds, windmill sails, a watermill wheel and division flags. It claims nothing and holds still under reduced motion.
+* **Layout.** Buildings run left to right along the data path, one per division, with dressing (props, trees, lake plants), the watermill, and a flag per division. Roads follow the connections.
+* **Cast.** Courier, vault keeper, scribe, artisan, inspector, carter, and the bell, all printed in the ramps.
 * **Evidence table.** It maps each rule in `script.ts` to what the village shows. dbt reports steps only at the end.
-* **Access.** The canvas is `aria-hidden` and the frame `aria-busy` until loaded. The work list and the buildings list carry the words, and `data-lit` answers pointing.
-* **Live data.** `runs.list` every 5 or 15 s, `runs.events` every 1 s for running runs, `runs.get` once for the newest closed build, and `connections.list`.
-* **Budgets.** About 1.3 MB of compressed models; at most 10 draws a second; rendered at 2 to 3 times the screen's pixels and downscaled; about 100k triangles on a busy morning; disposed on close.
-* **Assets.** See `apps/ui/src/assets/village/README.md`.
-* **Visual regression.** Two settled-frame baselines in `Journal.vrt.test.tsx`.
+* **Access.** The canvas is `aria-hidden` and the frame `aria-busy` until loaded. A work list and a buildings list carry the words, and `data-lit` answers pointing.
+* **Live data.** `runs.list` every 5 or 15 s, `runs.events` every 1 s, `runs.get` once for the newest closed build, and `connections.list`.
+* **Budgets.** About 1.3 MB of models; at most 10 draws a second; 2 to 3 times supersampled; disposed on close.
+* **Visual regression.** Two settled-frame baselines.

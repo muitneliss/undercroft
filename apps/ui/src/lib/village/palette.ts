@@ -2,7 +2,7 @@
  * What colour each part of the village is painted: the design system's own inks (ADR 0115).
  *
  * KayKit paints every model from a gradient atlas. The village keeps KayKit's drawing and none of
- * its colours: every vertex is repainted with the nearest ink in the design system's tonal ramps
+ * its colours: every vertex is repainted along one of the design system's tonal ramps
  * (`apps/ui/.impeccable/design.json`, copied below and held to it by `village.test.ts`).
  *
  *   - A vertex's source colour is its atlas cell's gradient at the height the vertex sat in it
@@ -10,8 +10,8 @@
  *   - Its FAMILY is read from its hue: a grey takes the Bone or Ink ramp, a green Grass, a blue
  *     Ultramarine, a cyan Teal, a purple Violet, a strong yellow Chrome, a strong red or orange
  *     Oxide, and an earth (wood, leather, skin, sand) Sienna.
- *   - Its STEP is the step of that ramp nearest its lightness. Snapping to steps rather than
- *     mixing is what keeps it printed: a press has a fixed set of inks.
+ *   - Its colour is that ramp read at its lightness: between the two steps either side of it, so
+ *     a surface shades smoothly through the system's own colours and never leaves its ramp.
  *
  * Two exceptions, both the book's rules:
  *
@@ -184,24 +184,37 @@ function familyOf(hex: string): Family {
   return nearest;
 }
 
-/** The step of a ramp nearest a colour's lightness, never a division's own hue. */
-function stepOf(ramp: readonly string[], hex: string): string {
+/**
+ * A ramp read at a colour's lightness: the mix of the two steps either side of it, or the end
+ * step past either end. A division's own hue is left out of the ramp, so only a roof wears it.
+ */
+function alongRamp(ramp: readonly string[], hex: string): string {
   const { lightness } = oklch(hex);
-  let nearest = ramp[0] ?? hex;
-  let closest = Number.POSITIVE_INFINITY;
-  for (const step of ramp.filter((candidate) => !RESERVED.has(candidate))) {
-    const apart = Math.abs(oklch(step).lightness - lightness);
-    if (apart < closest) {
-      nearest = step;
-      closest = apart;
+  const steps = ramp
+    .filter((step) => !RESERVED.has(step))
+    .map((step) => ({ step, lightness: oklch(step).lightness }));
+  const [first] = steps;
+  const last = steps.at(-1);
+  if (first === undefined || last === undefined) {
+    return hex;
+  }
+  if (lightness <= first.lightness) {
+    return first.step;
+  }
+  for (let at = 1; at < steps.length; at += 1) {
+    const below = steps[at - 1];
+    const above = steps[at];
+    if (below !== undefined && above !== undefined && lightness <= above.lightness) {
+      const share = (lightness - below.lightness) / (above.lightness - below.lightness);
+      return mix(below.step, above.step, share);
     }
   }
-  return nearest;
+  return last.step;
 }
 
 /**
- * The colour a vertex is painted: its cell's gradient at `shade` (0 top, 1 bottom), printed in
- * the nearest ink. `roof` is the division hue of the building the vertex belongs to, or `null`.
+ * The colour a vertex is painted: its cell's gradient at `shade` (0 top, 1 bottom), read along
+ * its family's ramp. `roof` is the division hue of the building the vertex belongs to, or `null`.
  */
 export function vertexColour(
   atlas: AtlasFacts,
@@ -211,10 +224,10 @@ export function vertexColour(
 ): string {
   const source = mix(atlas.top[cell] ?? "#808080", atlas.bottom[cell] ?? "#808080", shade);
   if (atlas.team?.includes(cell) === true) {
-    return roof ?? stepOf(RAMPS.bone, source);
+    return roof ?? alongRamp(RAMPS.bone, source);
   }
   if (atlas.water?.includes(cell) === true) {
-    return stepOf(RAMPS.teal, mix(source, "#ffffff", WATER_LIFT));
+    return alongRamp(RAMPS.teal, mix(source, "#ffffff", WATER_LIFT));
   }
-  return stepOf(RAMPS[familyOf(source)], source);
+  return alongRamp(RAMPS[familyOf(source)], source);
 }

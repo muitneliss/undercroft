@@ -29,28 +29,36 @@ may lag the data by one walk; the words beside it never lag.
 
 | In the scene                          | Ink                                                    | Why                                                       |
 | ------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------- |
-| Every surface of every model          | The step of a design-system ramp nearest it, by family | The models keep KayKit's drawing in the system's own inks |
-| Fields and trees                      | Grass steps                                            | A green is printed in Grass                               |
-| Timber, leather, skin, sand           | Sienna steps                                           | An earth is printed in Sienna                             |
-| Stone and grey cloth                  | Bone and Ink steps                                     | A grey is printed in the stock and the ink                |
-| Water                                 | Teal steps, lifted                                     | The lake is the Raw lake's ground                         |
+| Every surface of every model          | Its family's design-system ramp, read at its lightness | The models keep KayKit's drawing in the system's own inks |
+| Fields and trees                      | Along Grass                                            | A green is printed in Grass                               |
+| Timber, leather, skin, sand           | Along Sienna                                           | An earth is printed in Sienna                             |
+| Stone and grey cloth                  | Along Bone and Ink                                     | A grey is printed in the stock and the ink                |
+| Water                                 | Along Teal, lifted, a little glossy                    | The lake is the Raw lake's ground                         |
 | Roads                                 | Page `#f7f3e7`                                         | The paths are the page showing through                    |
-| Outlines of every model               | Ink `#16150f`, finer on a character                    | Rules, never shadows                                      |
-| The lit tones of a face               | Four steps from one raking light                       | Stepped, not graded                                       |
+| Outlines of every model               | Ink `#16150f`, finer on a character                    | The print's line                                          |
+| Light                                 | A warm key from the north-west, a sky-and-grass fill   | A model on a desk under a lamp                            |
+| Shadows                               | Soft, on the board and on the page beneath it          | An object on the page casts one; a sheet does not         |
 | A building's roof and flag            | Its division's canonical hue, and only there           | The Wheel Rule: the hue names the division, and opens it  |
 | Errata slip (failed, refused, lapsed) | Vermilion rules on Slip ground                         | The Vermilion Rule: only the slip                         |
 
-There are no cast shadows, no fog, no bloom and no depth of field. The camera is orthographic and
-fixed, looking from the south: it does not orbit or zoom.
+The frame is photographed like a crafted miniature (`lib/village/look.ts`): ambient occlusion in
+every crease, a tilt-shift band of focus through the middle of the village, and the page's grain
+and a lamp's falloff toward the corners laid over everything. There is no fog and no bloom. The
+camera is orthographic and fixed, looking from the south: it does not orbit or zoom.
+
+Weather and machinery move on their own (`lib/village/ambience.ts`): clouds whose shadows drift
+across the board, two small clouds at the back, the windmill's sails, the watermill's wheel at
+the lake's east shore, and a flag in each division's hue beside its building. None of it is a
+character, and none of it claims anything about a run. Under reduced motion it holds still.
 
 How the repaint works: the asset script replaces each vertex's UV with the atlas cell KayKit
 painted it from (`_CELL`) and how far down that cell's gradient (`_SHADE`), and records the
 colours at each cell's two ends (`atlas.json`). The browser reads each vertex's source colour off
-that gradient, finds its family by hue (a grey, a green, a blue, an earth…) and paints it the
-step of that family's ramp nearest its lightness (`lib/village/palette.ts`). The ramps are the
-design system's own, and `village.test.ts` holds them equal to `design.json`, holds that every
-vertex is printed in one of them, never in vermilion or a division's canonical hue, and that
-only a building's team cells take its roof's hue.
+that gradient, finds its family by hue (a grey, a green, a blue, an earth…) and paints it that
+family's ramp read at its lightness, between the two steps either side (`lib/village/palette.ts`).
+The ramps are the design system's own, and `village.test.ts` holds them equal to `design.json`,
+holds that every vertex lies along one of them, never in vermilion or a division's canonical
+hue, and that only a building's team cells take its roof's hue.
 
 ## Layout
 

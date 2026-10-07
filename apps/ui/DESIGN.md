@@ -437,11 +437,14 @@ it shows a proof slip with its content address.
 a small printed diorama (ADR 0115, `docs/design/village.md`). It is a view of the Journal, not a
 division, and the ledger stays the default.
 
-- **Printed in the system's inks.** Every colour in the scene is a step of one of the tonal
-  ramps above (`.impeccable/design.json`): fields and trees in Grass, the lake in Teal, timber
-  and skin in Sienna, stone in Bone and Ink, a blue cloak in Ultramarine. Every model is outlined
-  in Ink, and a face takes one of four stepped tones from one raking light. There are no cast
-  shadows, no fog and no glow. The camera is fixed: it does not orbit or zoom.
+- **A model village on the desk.** It is photographed like a crafted miniature: a warm key light
+  from the north-west, soft shadows on the board and on the page beneath it, ambient occlusion
+  in every crease, a tilt-shift band of focus, and the page's grain over the frame. "Rules, never
+  shadows" holds for the book's sheets; the village is an object standing on the page, so it
+  casts one. The camera is fixed: it does not orbit or zoom.
+- **In the system's inks.** Every colour lies along one of the tonal ramps above
+  (`.impeccable/design.json`): fields and trees on Grass, the lake on Teal, timber and skin on
+  Sienna, stone on Bone and Ink, a blue cloak on Ultramarine. Every model is outlined in Ink.
 - **The wheel, read literally.** A division's canonical hue is worn only by the roof of the
   building that stands for that division, and pressing the building opens it; there the hue
   names the division, as a tab's does. Everything else takes a ramp's other steps. Vermilion is

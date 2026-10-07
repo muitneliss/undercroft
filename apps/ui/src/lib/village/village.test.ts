@@ -163,8 +163,37 @@ describe("the village around them", () => {
 
 describe("the paint", () => {
   const shades = [0, 0.5, 1];
-  const inks = new Set(Object.values(RAMPS).flat());
   const atlases: AtlasFacts[] = [atlas.set, ...Object.values(atlas.folk)];
+
+  function rgb(hex: string): number[] {
+    return [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+  }
+
+  /** Whether a colour lies between two neighbouring steps of a ramp, a division's hue left out. */
+  function onARamp(colour: string, left: ReadonlySet<string>): boolean {
+    const [r = 0, g = 0, b = 0] = rgb(colour);
+    return Object.values(RAMPS).some((ramp) => {
+      const steps = ramp.filter((step) => !left.has(step)).map(rgb);
+      return steps.slice(1).some((above, at) => {
+        const below = steps[at] ?? above;
+        const span = above.map((channel, c) => channel - (below[c] ?? 0));
+        const length = span.reduce((sum, d) => sum + d * d, 0) || 1;
+        const share = Math.min(
+          1,
+          Math.max(
+            0,
+            ((r - (below[0] ?? 0)) * (span[0] ?? 0) +
+              (g - (below[1] ?? 0)) * (span[1] ?? 0) +
+              (b - (below[2] ?? 0)) * (span[2] ?? 0)) /
+              length,
+          ),
+        );
+        return [r, g, b].every(
+          (channel, c) => Math.abs(channel - ((below[c] ?? 0) + share * (span[c] ?? 0))) <= 1.5,
+        );
+      });
+    });
+  }
 
   function everyColour(facts: AtlasFacts, roof: string | null): string[] {
     return facts.top.flatMap((_, cell) =>
@@ -172,13 +201,13 @@ describe("the paint", () => {
     );
   }
 
-  it("prints every vertex in an ink of the design system, never vermilion or a division's hue", () => {
-    const forbidden = ["#cf2f16", ...DIVISIONS.map((division) => division.hue)];
+  it("paints every vertex along one of the design system's ramps, never in vermilion or a division's hue", () => {
+    const forbidden = new Set(["#cf2f16", ...DIVISIONS.map((division) => division.hue)]);
     for (const facts of atlases) {
       const colours = everyColour(facts, null);
 
-      expect(colours.filter((colour) => !inks.has(colour))).toEqual([]);
-      expect(colours.filter((colour) => forbidden.includes(colour))).toEqual([]);
+      expect(colours.filter((colour) => !onARamp(colour, forbidden))).toEqual([]);
+      expect(colours.filter((colour) => forbidden.has(colour))).toEqual([]);
     }
   });
 

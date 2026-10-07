@@ -17,10 +17,7 @@
  */
 
 import {
-  AmbientLight,
   Box3,
-  Color,
-  DirectionalLight,
   Group,
   type Object3D,
   OrthographicCamera,
@@ -28,9 +25,10 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import { OutlineEffect } from "three/addons/effects/OutlineEffect.js";
 
+import { Ambience } from "@/lib/village/ambience.ts";
 import { Figure, FRAME_SECONDS } from "@/lib/village/folk.ts";
+import { Look } from "@/lib/village/look.ts";
 import { readTokens } from "@/lib/village/paint.ts";
 import { type VillageHooks, VillagePointer } from "@/lib/village/pointer.ts";
 import { placeProps } from "@/lib/village/props.ts";
@@ -50,20 +48,13 @@ export interface VillageElements {
 const FRAME_MS = FRAME_SECONDS * 1000;
 /** The camera's bearing on the board: from the south, raised, turned a little from the east. */
 const CAMERA_AT = new Vector3(5, 15, 17);
-/** The one raking light, low from the north-west. */
-const LIGHT_AT = new Vector3(-10, 9, -4);
-/**
- * The light, split so a face turned fully to the lamp lands on its token's own colour
- * (ambient + rake = 1) and the toon ramp steps the rest down toward two thirds of it. Each is
- * scaled by pi because three's Lambert term divides by it.
- */
-const AMBIENT = 0.66 * Math.PI;
-const RAKE = 0.34 * Math.PI;
 /** Room around the board inside the frame, as a share of it. */
 const MARGIN = 0.04;
 /** The highest the frame fits to: a spire does not get to leave a strip of empty page. */
 const FIT_HEIGHT = 1.6;
-const OUTLINE_THICKNESS = 0.0026;
+/** Drawn at twice the screen's pixels or more, then downscaled: crisp ink at a miniature's scale. */
+const LEAST_RATIO = 2;
+const MOST_RATIO = 3;
 /** The bell's swing, one position a frame: two full swings when a scheduled run opens. */
 const BELL_SWING = [0.35, 0, -0.35, 0, 0.35, 0, -0.35, 0];
 
@@ -85,7 +76,8 @@ function seenExtent(box: Box3, camera: OrthographicCamera): [number, number, num
 
 export class VillageFilm {
   private readonly renderer: WebGLRenderer;
-  private readonly effect: OutlineEffect;
+  private readonly look: Look;
+  private readonly ambience: Ambience;
   private readonly scene = new Scene();
   private readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
   private readonly figures = new Map<string, Figure>();
@@ -115,10 +107,8 @@ export class VillageFilm {
     this.elements = elements;
     this.renderer = renderer;
     this.stage = stage;
-    this.effect = new OutlineEffect(renderer, {
-      defaultThickness: OUTLINE_THICKNESS,
-      defaultColor: new Color(readTokens(elements.frame).ink).toArray(),
-    });
+    this.look = new Look(renderer, this.scene, this.camera, readTokens(elements.frame));
+    this.ambience = new Ambience(stage.root, stage.piece);
     this.pointer = new VillagePointer(
       elements,
       this.camera,
@@ -141,7 +131,8 @@ export class VillageFilm {
   static async start(elements: VillageElements, hooks: VillageHooks): Promise<VillageFilm | null> {
     let renderer: WebGLRenderer | null = null;
     try {
-      renderer = new WebGLRenderer({ canvas: elements.canvas, antialias: true, alpha: true });
+      // No antialias here: the look's composer multisamples its own buffer.
+      renderer = new WebGLRenderer({ canvas: elements.canvas, antialias: false });
       const stage = await loadStage(readTokens(elements.frame));
       const film = new VillageFilm(elements, hooks, renderer, stage);
       film.build();
@@ -161,13 +152,10 @@ export class VillageFilm {
   }
 
   private build(): void {
-    this.renderer.setClearColor(0x00_00_00, 0);
-    // Drawn at twice the screen's pixels or more, then downscaled: the ink outlines and the
-    // figures' faces stay crisp at the diorama's small scale. Ten frames a second can afford it.
-    this.renderer.setPixelRatio(Math.min(3, Math.max(2, globalThis.devicePixelRatio || 1)));
-    const light = new DirectionalLight(0xff_ff_ff, RAKE);
-    light.position.copy(LIGHT_AT);
-    this.scene.add(new AmbientLight(0xff_ff_ff, AMBIENT), light, this.stage.root, this.props);
+    this.renderer.setPixelRatio(
+      Math.min(MOST_RATIO, Math.max(LEAST_RATIO, globalThis.devicePixelRatio || 1)),
+    );
+    this.scene.add(this.stage.root, this.props, this.ambience.group);
     this.camera.position.copy(CAMERA_AT);
     this.camera.lookAt(0, 0, 0);
     this.camera.updateMatrixWorld();
@@ -185,6 +173,7 @@ export class VillageFilm {
     const width = Math.max(1, canvas.clientWidth);
     const height = Math.max(1, canvas.clientHeight);
     this.renderer.setSize(width, height, false);
+    this.look.setSize(width, height, this.renderer.getPixelRatio());
     const box = new Box3().setFromObject(this.stage.root);
     box.max.y = Math.min(box.max.y, FIT_HEIGHT);
     const [left, right, bottom, top] = seenExtent(box, this.camera);
@@ -255,6 +244,7 @@ export class VillageFilm {
         figure.step();
       }
       this.swingBell();
+      this.ambience.step();
       this.draw();
     }
     this.frame = requestAnimationFrame((next) => this.tick(next));
@@ -270,7 +260,7 @@ export class VillageFilm {
   }
 
   private draw(): void {
-    this.effect.render(this.scene, this.camera);
+    this.look.render();
   }
 
   dispose(): void {
@@ -284,6 +274,7 @@ export class VillageFilm {
       figure.dispose();
     }
     this.stage.dispose();
+    this.look.dispose();
     this.renderer.dispose();
   }
 }

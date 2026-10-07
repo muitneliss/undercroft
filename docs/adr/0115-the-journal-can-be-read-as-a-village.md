@@ -50,15 +50,27 @@ relation as the cover's film to its two lists.
   values on a plain object, as the vault's does (`apps/ui/src/lib/vault/runtime.ts`). Nothing
   in the frame loop is React state (`state.md`). React passes it the query data and reads back
   nothing but `data-` attributes.
-- **A printed diorama, in the design system's own inks.**
-  - Every colour is a step of one of the design system's tonal ramps (`.impeccable/design.json`):
-    a green takes Grass, a blue Ultramarine, a purple Violet, wood and skin Sienna, stone Bone
-    and Ink, and so on, at the step nearest its lightness. KayKit's gradients survive as steps,
-    so the models keep their detail and lose their own colours. Roads are Page.
+- **A model village on a desk, in the design system's own inks.** The first impression is the
+  point of the view, so it is photographed like a crafted miniature rather than drawn like a
+  diagram (`lib/village/look.ts`).
+  - Every colour lies along one of the design system's tonal ramps (`.impeccable/design.json`):
+    a green on Grass, a blue on Ultramarine, a purple on Violet, wood and skin on Sienna, stone on
+    Bone and Ink, read at its own lightness between the two steps either side. KayKit's
+    gradients survive, so the models keep their detail and lose their own colours. Roads are
+    Page. Every surface carries a faint paper grain fixed in the world.
+  - Surfaces are lit, not flat: a warm key light from the north-west, a sky-and-grass fill, and
+    a dim room reflected in the lake.
+  - The village casts soft shadows, on itself and onto the page under the board, and ambient
+    occlusion darkens every crease. "Rules, never shadows" governs the book's printed sheets,
+    whose depth is ply. The village is not a sheet: it is an object standing on the desk, and an
+    object casts a shadow. Without one it reads as a sticker, not as a place.
   - Every model is outlined in Ink, a character more finely than a building.
-  - Faces take four stepped tones from one raking light, by toon shading, with no smooth
-    gradient.
-  - Nothing casts a shadow ("Rules, never shadows").
+  - A tilt-shift lens keeps a band through the village sharp and softens the near and far
+    edges, which is what makes a real place read as a miniature. The page's grain and a lamp's
+    falloff toward the corners are laid over the frame.
+  - Weather and machinery move on their own: clouds whose shadows cross the board, the
+    windmill's sails, the watermill's wheel, the division flags. None of it is a character and
+    none of it claims anything about a run. Under reduced motion it holds still.
   - A division's own hue, the canonical step of its ramp, is worn only by the roof and flag of
     the building that stands for that division, and pressing the building opens it. That is the
     Wheel Rule read literally: where the canonical hue appears, it names the division. A wheat
@@ -115,7 +127,8 @@ relation as the cover's film to its two lists.
   script's tools join the root's dev dependencies: `@gltf-transform/core`, `functions` and
   `extensions`, `meshoptimizer` and `pngjs`. All are exact-pinned.
 - The control plane's content-type allow-list learns `.glb`.
-- The visual-regression tier forces reduced motion, so a village baseline is a settled frame:
+- Every pass of the look is deterministic, including the occlusion's noise. The
+  visual-regression tier forces reduced motion, so a village baseline is a settled frame:
   canvas, work list and buildings in one picture. The tier waits for it, because the frame is
   `aria-busy` until the models load. The Playwright image's software WebGL painted the same
   pixels in a baseline run and a later comparison run, so the canvas is kept in the baseline.

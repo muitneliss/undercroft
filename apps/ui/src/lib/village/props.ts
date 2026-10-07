@@ -58,6 +58,9 @@ export function roadSegment(painter: Painter, from: Point, to: Point): Group {
       painter.flat(tokens.page, false),
     ),
   );
+  for (const strip of segment.children) {
+    strip.receiveShadow = true;
+  }
   segment.position.set((from.x + to.x) / 2, 0.01, (from.z + to.z) / 2);
   segment.rotation.y = -Math.atan2(to.z - from.z, to.x - from.x);
   return segment;

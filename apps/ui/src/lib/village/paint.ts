@@ -1,38 +1,40 @@
 /**
- * The village's one way of putting colour on a model: a toon material with four stepped tones
- * under the one raking light, and a vertex colour in the design system's inks (`palette.ts`).
+ * The village's one way of putting colour on a model: a lit material whose colour is the design
+ * system's own ramps (`palette.ts`), printed on paper.
  *
  * Every model is repainted from `_cell` and `_shade`, the attributes the asset script writes in
  * place of each vertex's UV: which cell of KayKit's atlas the vertex was painted from, and how far
  * down that cell's gradient. Nothing keeps KayKit's own colours and nothing reads a texture.
+ *
+ * Every surface also carries a faint grain, fixed in the world rather than on the screen, so a
+ * roof reads as a printed sheet folded into a roof and the grain does not swim as figures walk.
+ * The lake has its own material: still, a little glossy, catching the sky.
  */
 
 import {
   BufferAttribute,
   Color,
-  DataTexture,
+  type Material,
   Mesh,
-  MeshToonMaterial,
-  NearestFilter,
+  MeshStandardMaterial,
   type Object3D,
-  RedFormat,
+  type WebGLProgramParametersWithUniforms,
 } from "three";
 
 import { division } from "@/lib/divisions.ts";
 import { type AtlasFacts, type Tokens, vertexColour } from "@/lib/village/palette.ts";
 
-/** The four tones a face can take under the one raking light, darkest first. */
-const TONE_STEPS = [0, 96, 176, 255];
-/**
- * A figure's outline, finer than a building's: at a figure's size the building's line closes
- * over the face it is drawing.
- */
-const FIGURE_OUTLINE = 0.0014;
-/** `_shade` is a byte: 0 at the top of a cell's gradient, 255 at the bottom. */
-const SHADE_FULL = 255;
-
 /** The slip's ground is written as a literal in index.css, beside the slip; so here. */
 const SLIP_GROUND = "#fdf0eb";
+/** A figure's outline, finer than a building's: at a figure's size the building's line closes over the face. */
+const FIGURE_OUTLINE = 0.0012;
+/** `_shade` is a byte: 0 at the top of a cell's gradient, 255 at the bottom. */
+const SHADE_FULL = 255;
+/** Paper: how matte a surface is, and how strongly the grain shows. */
+const ROUGHNESS = 0.82;
+const WATER_ROUGHNESS = 0.08;
+const GRAIN_SIZE = 38;
+const GRAIN_STRENGTH = 0.07;
 
 /** The book's tokens, off the stylesheet: the one place they are defined. */
 export function readTokens(element: Element): Tokens {
@@ -54,42 +56,90 @@ export function readTokens(element: Element): Tokens {
   };
 }
 
-function toonRamp(): DataTexture {
-  const ramp = new DataTexture(new Uint8Array(TONE_STEPS), TONE_STEPS.length, 1, RedFormat);
-  ramp.minFilter = NearestFilter;
-  ramp.magFilter = NearestFilter;
-  ramp.generateMipmaps = false;
-  ramp.needsUpdate = true;
-  return ramp;
+/**
+ * Prints a grain into a material: a fine, fixed-in-the-world speckle that lightens and darkens
+ * the colour by a few per cent, the way ink sits unevenly on a sheet.
+ */
+function printGrain(material: MeshStandardMaterial): MeshStandardMaterial {
+  material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms): void => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vGrainAt;")
+      .replace(
+        "#include <worldpos_vertex>",
+        "#include <worldpos_vertex>\nvGrainAt = (modelMatrix * vec4(transformed, 1.0)).xyz;",
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        [
+          "#include <common>",
+          "varying vec3 vGrainAt;",
+          "float grainHash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }",
+        ].join("\n"),
+      )
+      .replace(
+        "#include <color_fragment>",
+        [
+          "#include <color_fragment>",
+          `float grain = grainHash(floor(vGrainAt * ${GRAIN_SIZE.toFixed(1)}));`,
+          `diffuseColor.rgb *= 1.0 + (grain - 0.5) * ${GRAIN_STRENGTH.toFixed(3)};`,
+        ].join("\n"),
+      );
+  };
+  material.customProgramCacheKey = (): string => "village-grain";
+  return material;
+}
+
+function paper(
+  over: ConstructorParameters<typeof MeshStandardMaterial>[0] = {},
+): MeshStandardMaterial {
+  return printGrain(new MeshStandardMaterial({ roughness: ROUGHNESS, metalness: 0, ...over }));
+}
+
+/** A mesh painted from water cells alone is the lake's surface. */
+function isWater(mesh: Mesh, atlas: AtlasFacts): boolean {
+  const cells = mesh.geometry.getAttribute("_cell");
+  const { water } = atlas;
+  if (cells === undefined || water === undefined || cells.count === 0) {
+    return false;
+  }
+  for (let at = 0; at < cells.count; at += 1) {
+    if (!water.includes(Math.round(cells.getX(at)))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export class Painter {
   readonly tokens: Tokens;
-  private readonly material: MeshToonMaterial;
-  private readonly figureMaterial: MeshToonMaterial;
+  private readonly material = paper({ vertexColors: true });
+  private readonly figureMaterial = paper({ vertexColors: true });
+  private readonly waterMaterial = new MeshStandardMaterial({
+    vertexColors: true,
+    roughness: WATER_ROUGHNESS,
+    metalness: 0,
+  });
   private readonly painted = new Map<string, BufferAttribute>();
   private readonly inks = new WeakMap<AtlasFacts, Map<string, Color>>();
-  private readonly flats = new Map<string, MeshToonMaterial>();
-  private readonly ramp = toonRamp();
+  private readonly flats = new Map<string, MeshStandardMaterial>();
 
   constructor(tokens: Tokens) {
     this.tokens = tokens;
-    this.material = new MeshToonMaterial({ vertexColors: true, gradientMap: this.ramp });
-    this.figureMaterial = this.material.clone();
     this.figureMaterial.userData = { outlineParameters: { thickness: FIGURE_OUTLINE } };
   }
 
   /**
-   * One flat colour, shaded like everything else. `outlined: false` is for what lies flat on the
+   * One flat colour, lit like everything else. `outlined: false` is for what lies flat on the
    * board, a road, whose outline would draw its seams.
    */
-  flat(hex: string, outlined = true): MeshToonMaterial {
+  flat(hex: string, outlined = true): MeshStandardMaterial {
     const key = `${hex}|${outlined ? "outlined" : "bare"}`;
     const known = this.flats.get(key);
     if (known !== undefined) {
       return known;
     }
-    const made = new MeshToonMaterial({ color: new Color(hex), gradientMap: this.ramp });
+    const made = paper({ color: new Color(hex) });
     if (!outlined) {
       made.userData = { outlineParameters: { visible: false } };
     }
@@ -106,7 +156,8 @@ export class Painter {
     const hue = roof === null ? null : division(roof).hue;
     object.traverse((child) => {
       if (child instanceof Mesh) {
-        this.paintMesh(child, atlas, hue, this.material);
+        const material = isWater(child, atlas) ? this.waterMaterial : this.material;
+        this.paintMesh(child, atlas, hue, material);
       }
     });
   }
@@ -120,12 +171,9 @@ export class Painter {
     });
   }
 
-  private paintMesh(
-    mesh: Mesh,
-    atlas: AtlasFacts,
-    hue: string | null,
-    material: MeshToonMaterial,
-  ): void {
+  private paintMesh(mesh: Mesh, atlas: AtlasFacts, hue: string | null, material: Material): void {
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     const cells = mesh.geometry.getAttribute("_cell");
     const shades = mesh.geometry.getAttribute("_shade");
     if (cells === undefined) {
@@ -173,9 +221,9 @@ export class Painter {
   dispose(): void {
     this.material.dispose();
     this.figureMaterial.dispose();
+    this.waterMaterial.dispose();
     for (const flat of this.flats.values()) {
       flat.dispose();
     }
-    this.ramp.dispose();
   }
 }

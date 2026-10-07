@@ -35,7 +35,7 @@ The packs themselves are not in the repository. The script makes four changes:
 - **Paint.** The textures are dropped. Each vertex's UV is replaced by `_CELL`, the atlas cell it
   was painted from, and `_SHADE`, how far down that cell's gradient. `atlas.json` records the
   colours at each cell's two ends, plus which cells are a building's team colour and which are
-  water. The browser prints every vertex in the nearest step of the design system's tonal ramps
+  water. The browser paints every vertex along one of the design system's tonal ramps
   (`lib/village/palette.ts`), so no colour from the packs is shown.
 - **Variants.** Buildings are taken in their blue variant only. The red variant is read only to
   tell which cells are the team colour.

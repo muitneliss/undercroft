@@ -73,6 +73,7 @@ function isLake(x: number, z: number): boolean {
 
 const BUILDING_SCALE = 1.5;
 const PROP_SCALE = 2;
+const FLAG_SCALE = 3;
 /** Where a lily or a reed sits: on the water, which lies below the grass. */
 const WATER_LEVEL = -0.18;
 
@@ -121,7 +122,16 @@ const DRESSING: readonly Placement[] = [
   { piece: "lily_b", x: 3.4, z: -5, turn: 1, scale: 1.5, division: null, y: WATER_LEVEL },
   { piece: "lily_a", x: 4.8, z: -6, turn: 2, scale: 1.5, division: null, y: WATER_LEVEL },
   { piece: "reeds_a", x: -0.9, z: -3.5, turn: 0, scale: 1.5, division: null, y: WATER_LEVEL },
-  { piece: "reeds_b", x: 5.8, z: -3.6, turn: 0, scale: 1.5, division: null, y: WATER_LEVEL },
+  { piece: "reeds_b", x: 5.2, z: -5.6, turn: 0, scale: 1.5, division: null, y: WATER_LEVEL },
+  // The watermill at the lake's east shore; its wheel turns with the weather (`ambience.ts`).
+  { piece: "watermill", x: 7.1, z: -4.4, turn: 3, scale: BUILDING_SCALE, division: null },
+  // Each division's flag beside its building, in the division's hue.
+  { piece: "flag", x: -6.9, z: -3.3, turn: 0, scale: FLAG_SCALE, division: "sources" },
+  { piece: "flag", x: -2.9, z: -5.1, turn: 0, scale: FLAG_SCALE, division: "journal" },
+  { piece: "flag", x: -2, z: -2.3, turn: 0, scale: FLAG_SCALE, division: "lake" },
+  { piece: "flag", x: 6.5, z: -1.9, turn: 0, scale: FLAG_SCALE, division: "models" },
+  { piece: "flag", x: 11.5, z: 1.7, turn: 0, scale: FLAG_SCALE, division: "reports" },
+  { piece: "flag", x: 10.2, z: -6, turn: 0, scale: FLAG_SCALE, division: "people" },
 ];
 
 /** Every building, prop and tree, in the order they are placed. */
