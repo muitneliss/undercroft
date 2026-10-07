@@ -118,6 +118,7 @@
 - [ADR 0112 A Model Carries No Business Context](sources/adr-0112-a-model-carries-no-business-context.md)
 - [ADR 0113 Every Action Is in the Audit Log and People Can Read It](sources/adr-0113-every-action-is-in-the-audit-log-and-people-can-read-it.md)
 - [ADR 0114 The Model Builder Finds Out What Is Needed Before It Builds Anything](sources/adr-0114-the-model-builder-finds-out-what-is-needed-before-it-builds-anything.md)
+- [ADR 0115 The Title Page Is Printed In The Reader's Weather](sources/adr-0115-the-title-page-is-printed-in-the-reader-s-weather.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

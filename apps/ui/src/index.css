@@ -4806,6 +4806,481 @@
     flex: 1;
   }
 
+  /* -- the title page's sky ------------------------------------------------------ */
+
+  /*
+   * The board the sign-in leaf lies on, printed in the reader's weather (`Weather.tsx`).
+   *
+   * The leaf does not change: every word on it reads as it does on a plain board. Only the
+   * board does, in three independent dials the page sets as attributes -- the light from the
+   * clock, the sky from a reading, the chill from a measured temperature -- and the ground is
+   * mixed from them rather than listed per combination:
+   *
+   *   ground = (light's stock, chilled toward Leaf) wetted toward Ink 2
+   *
+   * Every mark is a hairline engraving used as a MASK and filled with a token, so one drawing
+   * is Ink on a lit board and Bone on a night one. Every movement is `steps()`, a flip book of a
+   * few frames per loop -- the same printed motion as the leaf's turn, never an eased drift.
+   */
+  .titlepage--sky {
+    --sky-ground: var(--bone);
+    --sky-mark: var(--ink);
+    --sky-lamp: var(--hue-chrome);
+    --sky-lettering: var(--ink);
+    --chill: 0%;
+    --wet: 0%;
+    position: relative;
+    isolation: isolate;
+    /* The leaf is centred on its own and the almanac hangs beneath it, so the consent note
+     coming and going never moves the leaf or the plate the reader just pressed. */
+    grid-template-rows: 1fr auto 1fr;
+    gap: var(--s-4);
+    /* Held once, so the board and an unlit body standing on it are the same ground. */
+    --sky-board: color-mix(
+      in oklab,
+      color-mix(in oklab, var(--sky-ground) calc(100% - var(--chill)), var(--leaf))
+        calc(100% - var(--wet)),
+      var(--ink-2)
+    );
+    background: var(--sky-board);
+    transition: background-color var(--turn);
+  }
+
+  .titlepage--sky[data-light="dawn"] {
+    --sky-ground: #f2e1c4;
+  }
+
+  .titlepage--sky[data-light="dusk"] {
+    --sky-ground: #dfcaa6;
+  }
+
+  /* Night inks the board, as the cover does in the dark: the marks and the lettering on the
+   board turn to Bone. The leaf stays Leaf, which is what a page under a lamp looks like. */
+  .titlepage--sky[data-light="night"] {
+    --sky-ground: var(--ink);
+    --sky-mark: var(--bone);
+    --sky-lamp: var(--bone);
+    --sky-lettering: var(--bone);
+  }
+
+  .titlepage--sky[data-sky="cloud"] {
+    --wet: 10%;
+  }
+
+  /* Fog pales the board rather than darkening it: the world going white, not grey. */
+  .titlepage--sky[data-sky="fog"] {
+    --chill: 40%;
+  }
+
+  .titlepage--sky:is([data-sky="drizzle"], [data-sky="rain"], [data-sky="storm"]) {
+    --wet: 18%;
+  }
+
+  /* Snow is the one sky printed light on dark: a lowered board, Leaf marks. */
+  .titlepage--sky[data-sky="snow"] {
+    --wet: 26%;
+  }
+
+  .titlepage--sky[data-cold="true"]:not([data-light="night"]) {
+    --chill: 45%;
+  }
+
+  .weather {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+    /* A change of weather is a new sheet, so it inks in rather than travelling. */
+    animation: ink-set var(--pass) both;
+  }
+
+  /*
+   * The sheet the sky is printed on stands still and thins out where the leaf lies, so the
+   * weather gathers at the board's edges and the form sits in a calm. It is the sheet that is
+   * masked and not each layer, because the layers move: a calm carried along with the rain
+   * would pulse once a loop.
+   */
+  .weather__sheet {
+    position: absolute;
+    inset: 0;
+    mask-image: radial-gradient(
+      ellipse 62% 72% at 50% 50%,
+      rgb(0 0 0 / 0.12) 0%,
+      rgb(0 0 0 / 0.12) 38%,
+      #000 100%
+    );
+  }
+
+  .weather__sheet > div {
+    position: absolute;
+    background: var(--sky-mark);
+    mask-repeat: repeat;
+  }
+
+  .titlepage--sky > .titlepage__leaf {
+    grid-row: 2;
+  }
+
+  /*
+   * The band the sun or moon travels in (`courseAt`): the whole board on a wide screen, and on
+   * a phone the strip above the leaf, which would otherwise cover the body at every hour.
+   */
+  .weather__arc {
+    position: absolute;
+    inset: 0;
+  }
+
+  .weather__course {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: var(--sky-mark);
+    stroke-width: 1;
+    stroke-dasharray: 1 7;
+    stroke-linecap: round;
+    opacity: 0.45;
+  }
+
+  .weather__course path {
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* The sun or moon, at its place on the course. In outline when only the clock is known,
+   inked when a reading says the sky is clear. */
+  .weather__arc > .weather__body {
+    position: absolute;
+    width: 9rem;
+    aspect-ratio: 1;
+    translate: -50% -50%;
+    background: none;
+  }
+
+  .weather__body svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  /* Unlit, the disc is the board's own ground, so the ruled course stops at its rim. */
+  .weather__disc {
+    fill: var(--sky-board);
+    stroke: var(--sky-mark);
+    stroke-width: 1.5;
+  }
+
+  .weather__sun[data-lit="true"] .weather__disc {
+    fill: var(--sky-lamp);
+    stroke: var(--ink);
+  }
+
+  .weather__moon[data-lit="true"] .weather__disc {
+    fill: var(--sky-lamp);
+  }
+
+  /* Unlit, the rays stand still in outline. Lit, they tick round like a clock hand: 5° a frame,
+   two frames a second. */
+  .weather__rays {
+    fill: none;
+    stroke: var(--sky-mark);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    opacity: 0.5;
+  }
+
+  .weather__sun[data-lit="true"] .weather__rays {
+    stroke: var(--ink);
+    opacity: 1;
+    transform-origin: 0 0;
+    animation: rays-tick 36s steps(72) infinite;
+  }
+
+  @keyframes rays-tick {
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  .weather__sheet > .weather__stars {
+    inset: 0;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cpath d='M62 83L63.25 86.75L67 88L63.25 89.25L62 93L60.75 89.25L57 88L60.75 86.75ZM300 36L301 39L304 40L301 41L300 44L299 41L296 40L299 39ZM210 244L211.5 248.5L216 250L211.5 251.5L210 256L208.5 251.5L204 250L208.5 248.5ZM370 326L371 329L374 330L371 331L370 334L369 331L366 330L369 329Z'/%3E%3Ccircle cx='140' cy='170' r='1.2'/%3E%3Ccircle cx='30' cy='300' r='1'/%3E%3Ccircle cx='260' cy='120' r='1'/%3E%3Ccircle cx='390' cy='200' r='1.3'/%3E%3Ccircle cx='110' cy='390' r='1'/%3E%3C/svg%3E");
+    mask-size: 420px 420px;
+    animation: twinkle 2.6s steps(1) infinite;
+  }
+
+  .weather__sheet > .weather__stars--late {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560'%3E%3Cpath d='M120 176L121 179L124 180L121 181L120 184L119 181L116 180L119 179ZM430 65L431.25 68.75L435 70L431.25 71.25L430 75L428.75 71.25L425 70L428.75 68.75ZM300 466L301 469L304 470L301 471L300 474L299 471L296 470L299 469Z'/%3E%3Ccircle cx='40' cy='40' r='1.2'/%3E%3Ccircle cx='220' cy='110' r='1'/%3E%3Ccircle cx='520' cy='260' r='1.3'/%3E%3Ccircle cx='60' cy='450' r='1'/%3E%3Ccircle cx='380' cy='520' r='1.1'/%3E%3Ccircle cx='340' cy='250' r='1'/%3E%3Ccircle cx='480' cy='400' r='1'/%3E%3C/svg%3E");
+    mask-size: 560px 560px;
+    animation-duration: 1.7s;
+    animation-delay: -0.8s;
+  }
+
+  @keyframes twinkle {
+    0%,
+    100% {
+      opacity: 0.85;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
+
+  /* Clouds are banks of ruled hairlines -- the book's own rule, stacked -- that shuffle along
+   one step a second. The tile is one step wider than the board so the loop has no seam. */
+  .weather__sheet > .weather__cloud {
+    --tile-w: 960px;
+    top: 0;
+    left: 0;
+    width: calc(100% + var(--tile-w));
+    height: 46%;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='960' height='240'%3E%3Cpath d='M104 40H160M82 47H182M66 54H204M58 61H214M70 68H200M96 75H170M524 120H590M500 128H622M478 136H648M464 144H666M460 152H672M476 160H654M510 168H612M820 70H858M808 77H874M822 84H860' stroke='%23000' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+    mask-size: var(--tile-w) 240px;
+    opacity: 0.45;
+    animation: drift 112s steps(112) infinite;
+  }
+
+  .weather__sheet > .weather__cloud--far {
+    --tile-w: 576px;
+    top: 5%;
+    mask-size: var(--tile-w) 144px;
+    opacity: 0.22;
+    animation-duration: 168s;
+    animation-timing-function: steps(84);
+  }
+
+  .titlepage--sky[data-sky="storm"] .weather__cloud {
+    height: 64%;
+    opacity: 0.7;
+  }
+
+  @keyframes drift {
+    to {
+      translate: calc(-1 * var(--tile-w)) 0;
+    }
+  }
+
+  .weather__sheet > .weather__fog {
+    --tile-w: 960px;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: calc(100% + var(--tile-w));
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='960' height='140'%3E%3Cpath d='M40 16H260M420 16H520M700 16H900M120 40H380M600 40H820M0 64H90M260 64H560M880 64H960M160 88H300M480 88H760M60 112H240M380 112H460M640 112H900' stroke='%23000' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+    mask-size: var(--tile-w) 140px;
+    opacity: 0.28;
+    animation: drift 96s steps(96) infinite;
+  }
+
+  .weather__sheet > .weather__fog--far {
+    mask-position: 0 70px;
+    opacity: 0.14;
+    animation-direction: reverse;
+  }
+
+  /* Rain is hatching, and it falls a tile a loop in four frames: a flip book, not a stream.
+   The layer starts one tile above the board so the loop lands where it began. */
+  .weather__sheet > .weather__rain {
+    --tile-h: 120px;
+    top: calc(-1 * var(--tile-h));
+    right: 0;
+    bottom: 0;
+    left: 0;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M14 4l-4 22M44 22l-5 28M78 6l-4 20M104 38l-5 26M26 60l-4 22M60 70l-5 28M92 88l-4 20M116 2l-3 16M8 92l-3 18M70 36l-3 14M40 100l-3 16M112 76l-3 14' stroke='%23000' stroke-width='1.2' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+    mask-size: var(--tile-h) var(--tile-h);
+    opacity: 0.4;
+    animation: fall 400ms steps(4) infinite;
+  }
+
+  .weather__sheet > .weather__rain--far {
+    --tile-h: 72px;
+    opacity: 0.2;
+    animation-duration: 640ms;
+  }
+
+  .titlepage--sky[data-sky="drizzle"] .weather__rain {
+    --tile-h: 140px;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cpath d='M12 10l-1.5 7M52 24l-1.5 8M96 8l-1 6M128 40l-1.5 7M30 58l-1.5 8M76 66l-1 6M112 92l-1.5 8M18 112l-1 6M58 120l-1.5 7M100 128l-1 6M64 30l-1 5M8 70l-1 6' stroke='%23000' stroke-width='1.2' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+    opacity: 0.45;
+    animation-duration: 1.2s;
+    animation-timing-function: steps(6);
+  }
+
+  .titlepage--sky[data-sky="drizzle"] .weather__rain--far {
+    display: none;
+  }
+
+  .titlepage--sky[data-sky="storm"] .weather__rain {
+    --tile-h: 96px;
+    opacity: 0.55;
+    animation-duration: 280ms;
+    animation-timing-function: steps(3);
+  }
+
+  @keyframes fall {
+    to {
+      translate: 0 var(--tile-h);
+    }
+  }
+
+  /* Snow steps down a tile in twelve frames each way of a sway, five frames a second. */
+  .weather__sheet > .weather__snow {
+    --tile-h: 160px;
+    top: calc(-1 * var(--tile-h));
+    right: -1.5rem;
+    bottom: 0;
+    left: -1.5rem;
+    background: var(--leaf);
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Ccircle cx='18' cy='22' r='1.8'/%3E%3Ccircle cx='70' cy='12' r='1.4'/%3E%3Ccircle cx='122' cy='34' r='2'/%3E%3Ccircle cx='40' cy='76' r='1.4'/%3E%3Ccircle cx='96' cy='88' r='1.8'/%3E%3Ccircle cx='146' cy='110' r='1.4'/%3E%3Ccircle cx='20' cy='132' r='2'/%3E%3Ccircle cx='74' cy='148' r='1.4'/%3E%3Ccircle cx='128' cy='150' r='1.8'/%3E%3Cpath d='M60 50v10M55.7 52.5l8.6 5M55.7 57.5l8.6-5M138 70v10M133.7 72.5l8.6 5M133.7 77.5l8.6-5M100 120v8M96.5 122l7 4M96.5 126l7-4' stroke='%23000' stroke-width='1.1' stroke-linecap='round'/%3E%3C/svg%3E");
+    mask-size: var(--tile-h) var(--tile-h);
+    opacity: 0.85;
+    animation: settle 4.8s steps(12) infinite;
+  }
+
+  .weather__sheet > .weather__snow--far {
+    --tile-h: 96px;
+    opacity: 0.45;
+    animation-duration: 6.4s;
+  }
+
+  @keyframes settle {
+    50% {
+      translate: 0.75rem calc(var(--tile-h) / 2);
+    }
+    100% {
+      translate: 0 var(--tile-h);
+    }
+  }
+
+  /* Lightning: two short exposures every nine seconds, well under three flashes a second. */
+  .weather__sheet > .weather__flash {
+    inset: 0;
+    background: var(--leaf);
+    opacity: 0;
+    animation: flash 9s steps(1) infinite;
+  }
+
+  @keyframes flash {
+    0%,
+    88%,
+    90%,
+    93%,
+    100% {
+      opacity: 0;
+    }
+    89% {
+      opacity: 0.5;
+    }
+    92% {
+      opacity: 0.3;
+    }
+  }
+
+  /* Frost gathers in the corners and does not move. The corners are the container's mask and
+   the crystals its child's, so the crystals show only where a corner lets them. */
+  .weather__sheet > .weather__frost {
+    inset: 0;
+    background: none;
+    mask-image:
+      radial-gradient(circle at 0 0, #000 3rem, transparent 12rem),
+      radial-gradient(circle at 100% 0, #000 3rem, transparent 12rem),
+      radial-gradient(circle at 0 100%, #000 3rem, transparent 12rem),
+      radial-gradient(circle at 100% 100%, #000 3rem, transparent 12rem);
+    mask-repeat: no-repeat;
+  }
+
+  .weather__frost::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--sky-mark);
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72'%3E%3Cpath d='M20 13v14M13.9 16.5l12.2 7M13.9 23.5l12.2-7M20 15.5l-2-2M20 15.5l2-2M20 24.5l-2 2M20 24.5l2 2M52 48v9M48.1 50.25l7.8 4.5M48.1 54.75l7.8-4.5' stroke='%23000' stroke-width='1' stroke-linecap='round'/%3E%3Ccircle cx='6' cy='58' r='0.9'/%3E%3Ccircle cx='60' cy='12' r='0.9'/%3E%3Ccircle cx='38' cy='36' r='0.7'/%3E%3C/svg%3E");
+    mask-size: 72px 72px;
+    opacity: 0.45;
+  }
+
+  /* Reduced motion holds the first frame of every loop. The sheet still inks in -- `--pass` is
+   opacity, the one token the preference leaves alone -- so a change of weather is still seen. */
+  @media (prefers-reduced-motion: reduce) {
+    .weather *,
+    .weather *::before {
+      animation: none;
+    }
+  }
+
+  /*
+   * The almanac: one line beneath the leaf saying what the board is printing and on what
+   * evidence, and the one plate that changes it. At night it takes the cover's inversion --
+   * the book's own tokens remapped onto Ink -- so the plate and its focus ring invert by their
+   * existing rules instead of being redrawn.
+   */
+  .almanac {
+    grid-row: 3;
+    align-self: start;
+    width: min(34rem, 100%);
+    display: grid;
+    gap: var(--s-2);
+    color: var(--sky-lettering);
+  }
+
+  .titlepage--sky[data-light="night"] .almanac {
+    --ink: #efe9d9;
+    --ink-2: #c9c2ad;
+    --leaf: #16150f;
+    --rule-strong: rgba(239, 233, 217, 0.44);
+  }
+
+  /* Head, reading, plates. The head never wraps away from its reading -- alone on a line it
+   would be an eyebrow -- so on a phone the reading wraps under itself and the plates drop. */
+  .almanac__line {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: var(--s-2) var(--s-3);
+  }
+
+  .almanac__head,
+  .almanac__datum {
+    color: inherit;
+  }
+
+  .almanac__head {
+    white-space: nowrap;
+  }
+
+  .almanac__plates {
+    display: flex;
+    gap: var(--s-2);
+  }
+
+  @media (max-width: 760px) {
+    .almanac__line {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .almanac__plates {
+      grid-column: 1 / -1;
+    }
+
+    .weather__arc {
+      top: 0.75rem;
+      bottom: auto;
+      height: 4.5rem;
+    }
+
+    .weather__arc > .weather__body {
+      width: 3.25rem;
+    }
+  }
+
+  .almanac__note {
+    font-family: var(--face-prose);
+    font-size: 1rem;
+    line-height: 1.45;
+    max-width: 62ch;
+  }
+
   /* -- adaptation ---------------------------------------------------------------
  *
  * "Width deals fewer leaves, four columns to two to one." The tab strip moves to
