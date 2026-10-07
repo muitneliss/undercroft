@@ -178,7 +178,7 @@ function VillageBoard({
 
   return (
     <div className="stack" ref={boardRef}>
-      <div className="village" ref={frameRef}>
+      <div className="village" ref={frameRef} aria-busy="true">
         <div className="village__picture" aria-hidden="true">
           <canvas ref={canvasRef} />
         </div>

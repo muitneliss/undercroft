@@ -16,8 +16,8 @@ import setUrl from "@/assets/village/set.glb?url";
 import { boardTiles, PLACEMENTS } from "@/lib/village/layout.ts";
 import { Painter } from "@/lib/village/paint.ts";
 import type { AtlasFacts, Tokens } from "@/lib/village/palette.ts";
-import { makeBell, makeSlip, roadSegment, slipTexture } from "@/lib/village/props.ts";
-import { roadLines } from "@/lib/village/roads.ts";
+import { makeBell, roadOf, slipMaker, slipTexture } from "@/lib/village/props.ts";
+import { roadLines, sourceRoadLine } from "@/lib/village/roads.ts";
 
 export interface Cast {
   /** The five models, by KayKit name, each a rigged group to clone. */
@@ -32,6 +32,8 @@ export interface Stage {
   readonly piece: (name: string) => Object3D;
   /** An errata slip on its post. */
   readonly slip: () => Object3D;
+  /** A source's road by slot, built once and given back each time. */
+  readonly sourceRoad: (slot: number) => Object3D;
   /** The bell, which the runtime swings. */
   readonly bell: Object3D;
   readonly dispose: () => void;
@@ -85,14 +87,8 @@ function boardOf(painter: Painter, pieces: ReadonlyMap<string, Object3D>): Group
     ground.position.set(tile.x, 0, tile.z);
     root.add(ground);
   }
-  for (const line of roadLines(Number.POSITIVE_INFINITY)) {
-    for (let at = 1; at < line.length; at += 1) {
-      const from = line[at - 1];
-      const to = line[at];
-      if (from !== undefined && to !== undefined) {
-        root.add(roadSegment(painter, from, to));
-      }
-    }
+  for (const line of roadLines()) {
+    root.add(roadOf(painter, line));
   }
   for (const spot of PLACEMENTS) {
     const made = pieceOf(painter, pieces, spot.piece, spot.division);
@@ -124,19 +120,27 @@ export async function loadStage(tokens: Tokens): Promise<Stage> {
     painter.paint(model, ATLAS.folk[name] ?? { cells: [] }, null);
   }
   const texture = slipTexture(painter);
+  const roads = new Map<number, Object3D>();
 
   return {
     root,
     cast: { models, clips: clips.animations },
     piece: (name): Object3D => pieceOf(painter, pieces, name),
-    slip: (): Object3D => makeSlip(painter, texture),
+    slip: slipMaker(painter, texture),
+    sourceRoad: (slot): Object3D => {
+      const known = roads.get(slot) ?? roadOf(painter, sourceRoadLine(slot));
+      roads.set(slot, known);
+      return known;
+    },
     bell,
     dispose: (): void => {
-      root.traverse((child) => {
-        if (child instanceof Mesh) {
-          child.geometry.dispose();
-        }
-      });
+      for (const object of [root, ...roads.values()]) {
+        object.traverse((child) => {
+          if (child instanceof Mesh) {
+            child.geometry.dispose();
+          }
+        });
+      }
       texture.dispose();
       painter.dispose();
     },

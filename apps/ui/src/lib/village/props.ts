@@ -85,22 +85,39 @@ export function slipTexture(painter: Painter): CanvasTexture {
   return texture;
 }
 
-/** An errata slip on its post. Its card is named, so a figure can tip it in. */
-export function makeSlip(painter: Painter, texture: CanvasTexture): Object3D {
-  const holder = new Group();
-  const post = new Mesh(
-    new CylinderGeometry(0.02, 0.02, 0.5, 6),
-    painter.flat(painter.tokens.ink2),
-  );
-  post.position.y = 0.25;
-  const card = new Mesh(
-    new PlaneGeometry(0.5, 0.34),
-    new MeshBasicMaterial({ map: texture, side: DoubleSide }),
-  );
-  card.position.y = 0.62;
-  card.name = "card";
-  holder.add(post, card);
-  return holder;
+/**
+ * What makes errata slips on their posts. A slip's card is named, so a figure can tip it in. The
+ * parts are made once and shared: the props are rebuilt on every poll, and a slip that brought
+ * its own geometry each time would leave a little behind each time.
+ */
+export function slipMaker(painter: Painter, texture: CanvasTexture): () => Object3D {
+  const postGeometry = new CylinderGeometry(0.02, 0.02, 0.5, 6);
+  const postMaterial = painter.flat(painter.tokens.ink2);
+  const cardGeometry = new PlaneGeometry(0.5, 0.34);
+  const cardMaterial = new MeshBasicMaterial({ map: texture, side: DoubleSide });
+  return (): Object3D => {
+    const holder = new Group();
+    const post = new Mesh(postGeometry, postMaterial);
+    post.position.y = 0.25;
+    const card = new Mesh(cardGeometry, cardMaterial);
+    card.position.y = 0.62;
+    card.name = "card";
+    holder.add(post, card);
+    return holder;
+  };
+}
+
+/** A line of road segments, as one object. */
+export function roadOf(painter: Painter, line: readonly Point[]): Group {
+  const road = new Group();
+  for (let at = 1; at < line.length; at += 1) {
+    const from = line[at - 1];
+    const to = line[at];
+    if (from !== undefined && to !== undefined) {
+      road.add(roadSegment(painter, from, to));
+    }
+  }
+  return road;
 }
 
 /** A bell from a turned profile, hung in a frame of two posts and a beam. Its swing is named. */
@@ -134,6 +151,8 @@ export function makeBell(painter: Painter): Object3D {
 export interface PropMakers {
   readonly piece: (name: string) => Object3D;
   readonly slip: () => Object3D;
+  /** A source's road by slot; the same object each time it is asked for. */
+  readonly sourceRoad: (slot: number) => Object3D;
 }
 
 function placed(made: Object3D, at: Point, y: number, scale: number): Object3D {
@@ -149,6 +168,9 @@ function placed(made: Object3D, at: Point, y: number, scale: number): Object3D {
  */
 export function placeProps(group: Group, make: PropMakers, scene: VillageScene): void {
   group.clear();
+  for (const slot of new Set(scene.roads.map((road) => road.slot))) {
+    group.add(make.sourceRoad(slot));
+  }
   for (let at = 0; at < scene.vaultLevel; at += 1) {
     const spot = { x: VAULT_STACK.x + (at % 3) * PILE_SPACING, z: VAULT_STACK.z };
     group.add(placed(make.piece("crate"), spot, Math.floor(at / 3) * 0.34, CRATE_SCALE));

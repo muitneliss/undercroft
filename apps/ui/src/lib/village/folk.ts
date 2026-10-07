@@ -148,6 +148,10 @@ function stay(to: string, clip: string): Leg {
   return { to, clip, hold: null, carrying: false };
 }
 
+/** What a press lands on, shared by every figure: the skinned meshes' own bounds lag their pose. */
+const HIT_BOX = new BoxGeometry(0.5, 0.9, 0.5);
+const HIT_MATERIAL = new MeshBasicMaterial();
+
 export class Figure {
   /** The figure's place in the world: moved and turned, never scaled. */
   readonly holder = new Group();
@@ -183,8 +187,7 @@ export class Figure {
     this.crate.position.set(0, 0.15, 0.55);
     this.crate.visible = false;
     this.body.getObjectByName("chest")?.add(this.crate);
-    // What a press lands on: the skinned meshes' own bounds lag their pose, so a plain box.
-    const hit = new Mesh(new BoxGeometry(0.5, 0.9, 0.5), new MeshBasicMaterial());
+    const hit = new Mesh(HIT_BOX, HIT_MATERIAL);
     hit.position.y = 0.45;
     hit.visible = false;
     hit.name = `${FIGURE_TARGET}${actor.key}`;

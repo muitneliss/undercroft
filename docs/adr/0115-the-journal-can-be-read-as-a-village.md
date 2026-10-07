@@ -59,7 +59,7 @@ relation as the cover's film to its two lists.
   - A building's roof wears the hue of the division it stands for, and pressing the building
     opens that division. That is the Wheel Rule read literally: there the hue names which
     division it is.
-  - Characters are Bone and Ink and never wear a hue.
+  - Characters wear the book's neutrals only, never a hue.
   - Vermilion appears only on errata slips: a refused record set aside, a failed test, a
     failed run.
 - **KayKit models, CC0.** A subset of the free tiers of KayKit Adventurers, Character
@@ -70,10 +70,11 @@ relation as the cover's film to its two lists.
   colours, and the full packs are never committed.
 - **The camera is fixed.** It is an orthographic, isometric diorama with no orbit and no zoom.
   The reader has nothing to steer, so they never lose the picture.
-- **The canvas carries no words.** It is `aria-hidden`. Every name, count and time is DOM text
-  from the i18n catalogues: the list of who is working beside the scene, and the proof slip
-  shown for a character under the pointer or in focus. Pressing a character opens its run at
-  `/journal/:runId`.
+- **The canvas carries no words.** It is `aria-hidden`. Every name and time is DOM text from the
+  i18n catalogues: the work list beneath the scene, which names every character, what they are
+  doing and for whom, with a link to the run, and the list of buildings with the division each
+  opens. Pointing at a figure or a building in the picture lights its row; pressing it goes where
+  the row goes. A keyboard reader uses the rows, so the canvas needs no focus of its own.
 
 ## The boundary
 
@@ -83,8 +84,8 @@ relation as the cover's film to its two lists.
 - Under `prefers-reduced-motion` the loop never runs. Each poll paints one settled frame that
   puts every character where its run says it is now, and nothing walks between frames. The
   preference means "move me less", not "tell me less" (ADR 0014).
-- A failed WebGL context, or a model that does not load, renders the existing unprinted-leaf
-  state with its reason. It is not an empty canvas.
+- A failed WebGL context, or a model that does not load, puts a sentence saying so in the
+  frame, above the work list, which still says who is doing what. It is not an empty canvas.
 - A count is never told by how many crates are drawn. Crates are a gauge (ADR 0032), and the
   figure lives only in DOM text, in mono, through the reader's locale.
 
@@ -107,13 +108,15 @@ relation as the cover's film to its two lists.
 
 ## Consequences
 
-- `three` and a dev-only glTF tool join the dependencies, each exact-pinned. `three` is admitted
-  only into the village chunk.
+- `three` joins the UI's dependencies and is admitted only into the village chunk. The asset
+  script's tools join the root's dev dependencies: `@gltf-transform/core`, `functions` and
+  `extensions`, `meshoptimizer` and `pngjs`. All are exact-pinned.
 - The control plane's content-type allow-list learns `.glb`.
-- The visual-regression tier forces reduced motion, so a village baseline is a settled frame.
-  Whether headless Chromium's software WebGL paints it deterministically is an open question.
-  Until an experiment answers it, the tier covers the village's DOM half (the list and the
-  slips) and not the canvas.
+- The visual-regression tier forces reduced motion, so a village baseline is a settled frame:
+  canvas, work list and buildings in one picture. The tier waits for it, because the frame is
+  `aria-busy` until the models load. The Playwright image's software WebGL painted the same
+  pixels in a baseline run and a later comparison run, so the canvas is kept in the baseline.
+  If it ever stops being repeatable, the fix is a narrower baseline, not a looser tolerance.
 - `docs/design/village.md` owns the cast, the layout and the mapping from each operation to
   what a character does. A change to what the village claims starts in the script's tests.
-- `apps/ui/DESIGN.md` gains the village under its own heading when the view ships, not before.
+- `apps/ui/DESIGN.md` describes the village under its own heading.

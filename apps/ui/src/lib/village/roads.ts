@@ -203,19 +203,20 @@ function nodeAt(name: string): Point {
   return NODES[name] ?? { x: 0, z: 0 };
 }
 
-/** The roads drawn on the board: the main road, its branches, one per source slot, and the API's. */
-export function roadLines(slots: number): readonly (readonly Point[])[] {
-  const lines: Point[][] = [
+/** The roads every village has: the main road, its branches, and the lake-API road. */
+export function roadLines(): readonly (readonly Point[])[] {
+  return [
     [...MAIN_ROAD.map(nodeAt), { x: 11.6, z: 0 }],
     ...BRANCHES.filter(([, to]) => !to.endsWith("Rest") && to !== "inspect").map(([from, to]) => [
       nodeAt(from),
       nodeAt(to),
     ]),
   ];
-  for (let slot = 0; slot < Math.min(slots, ROAD_SLOTS); slot += 1) {
-    lines.push([nodeAt(`road${slot}Edge`), nodeAt(`road${slot}Bend`), nodeAt("gateWest")]);
-  }
-  return lines;
+}
+
+/** One source's road, from the west edge to the gate: drawn only for a source that has one. */
+export function sourceRoadLine(slot: number): readonly Point[] {
+  return [nodeAt(`road${slot}Edge`), nodeAt(`road${slot}Bend`), nodeAt("gateWest")];
 }
 
 /** Where a source road's barrier stands, across it, when the grant has lapsed. */

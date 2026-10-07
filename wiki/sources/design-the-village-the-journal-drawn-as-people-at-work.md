@@ -5,7 +5,7 @@ date: 2026-10-07
 tags: []
 source: docs/design/village.md
 source_path: docs/design/village.md
-source_hash: b657fe4afed2e57f54d33590c0f5786a4390bf5e121d653727ad48d98cba3880
+source_hash: cdacf19e305626e2e239977c1ff5da46c8db67aa76ea33f181503f7130c8ead5
 ingested: 2026-10-07
 ---
 
@@ -13,30 +13,32 @@ ingested: 2026-10-07
 
 The concept document for the Journal's village view ([[ADR 0115 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion]]). It owns the cast, the layout, the visual language and the mapping from runs to actions.
 
-* **Direction contract.** THESIS: a reader who does not know the words can watch data arrive, be kept and be made into something, with refusals visibly set aside. OWN-WORLD: the book's stock, inks and wheel, on KayKit models repainted to the tokens. MOTION: stop-motion at 10 fps, one settled frame under reduced motion. TRUTH: nothing moves without a run; the picture may lag by one walk, the words never do.
-* **Visual language.** Bone, Page and Leaf ground; Ink outlines; three stepped tones from one raking light; roofs in their division's hue; characters in Bone and Ink; water in teal lifted toward Bone; vermilion only on errata slips. No shadows, fog, bloom or depth of field. The camera is fixed, orthographic and isometric.
-* **Layout.** One building per division along the data path:
-
-  * gatehouse and roads: Sources, chrome
-  * town hall and bell: Journal, grass
-  * stone vault on the lake, with a reading room and an archive: Raw lake, teal
-  * workshop: Models, violet
-  * printing house: Reports, sienna
-  * houses: People, ultramarine
-  * village sign: Customers, oxide
-
-  Each road belongs to a connection, and a lapsed grant bars its road with a slip.
-* **The cast**, from the free KayKit Adventurers:
-  * the bell (a prop) for schedule ticks
-  * Courier (Ranger) for ingest and the lake-API handcart
-  * Vault keeper (Rogue) for landing and load
-  * Scribe (Mage) for extract and semantic runs
-  * Artisan (Barbarian) for transform and build
-  * Inspector (Knight) for dbt tests
-* **Evidence table.** It maps each run event to an action: `run_opened` by trigger, `run_waiting`, `entity_started`, `entity_not_granted`, the gauges, `documents_landed`, refusals, `entity_done`, the extract and semantic progress, the child run hand-off via `parent_run_id`, `run_step` model and test, `no_models`, `run_closed`, `run_failed`, `run_stopped`, and connection `expired`. Closed runs are not replayed; the latest closed run per source leaves a trace.
-* **Access.** The canvas is `aria-hidden`; a DOM work list and proof slips carry the text; names are i18n keys, Vietnamese first.
-* **Live data.** It polls `runs.list` every 5 s while a run is running and every 15 s otherwise, `runs.get` and `runs.events` at the Journal's rates, and `connections.list`.
-* **Budgets.** A `three`-only chunk; 2 MB or less of compressed models; 60,000 triangles or fewer; 10 draws a second at most; DPR of 2 or less; disposed on close.
-* **Assets.** Downloaded by hand from itch.io, subset, repainted and compressed by a task-run script, committed with `LICENSE.txt` and `PROVENANCE.md`.
-* **Phases.** Docs; the scene; the characters; ingest; build; the rest; connected.
-* **Open questions.** When `run_step` rows are written; whether headless WebGL is deterministic; how to repaint the atlas.
+* **Direction contract.** THESIS: a reader who does not know the words can watch data arrive, be kept and be made into something, with refusals visibly set aside. OWN-WORLD: the book's tokens on KayKit models. MOTION: stop-motion at 10 fps, keyed that way at build time. TRUTH: nothing moves without a run; the picture may lag by one walk, the words never do.
+* **Visual language.** Bone and Page ground, Ink outlines, stepped tones from one raking light, neutrals by lightness, roofs in their division's hue, characters neutral, water in teal lifted toward Bone, vermilion only on slips. The repaint works from a per-vertex `_CELL` and `atlas.json`, using tokens read off `index.css`; `village.test.ts` holds that no character can take a hue.
+* **Layout.** Buildings run left to right along the data path:
+  * gatehouse with source roads: Sources
+  * village sign: Customers
+  * town hall and bell: Journal
+  * stone vault with the lake behind it, reading room and archive: Raw lake
+  * workshop: Models
+  * printing house: Reports
+  * houses: People
+  * The lake-API road comes from the south edge.
+  * Roads follow the connections (up to five slots). A disconnected source has no road; a lapsed grant's road is barred with a slip.
+* **Cast.** Courier (Ranger), vault keeper (Rogue), scribe (Mage), artisan (Barbarian), inspector (Knight), carter (Ranger), and the bell.
+* **Evidence table.** It maps each derivation rule in `script.ts` to what the village shows:
+  * fetching, waiting and barred states from the running ingest's last event
+  * the keeper laying while anyone brings
+  * failed runs under slips until a newer run
+  * the hand-off while a child build runs
+  * the scribe and the artisan for their run kinds
+  * the inspector after a closed build with tests
+  * carters for lake-API runs
+  * the bell for a scheduled run opened in the last eight seconds
+  * gauges for the vault pile, set-aside crates and finished pieces
+  * dbt reports steps only at the end.
+* **Access.** The canvas is `aria-hidden` and the frame `aria-busy` until loaded; a failure sentence replaces an empty box. The work list and the buildings list carry the words, and `data-lit` answers pointing.
+* **Live data.** `runs.list` every 5 or 15 s, `runs.events` every 1 s for running runs, `runs.get` once for the newest closed build, and `connections.list`.
+* **Budgets.** A `three`-only chunk; about 1 MB of compressed models; at most 10 draws a second; DPR of 2 or less; about 100k triangles on a busy morning; disposed on close.
+* **Assets.** See `apps/ui/src/assets/village/README.md`.
+* **Visual regression.** Two settled-frame baselines in `Journal.vrt.test.tsx`; software WebGL is repeatable.

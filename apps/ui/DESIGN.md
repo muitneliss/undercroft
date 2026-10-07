@@ -417,6 +417,25 @@ it shows a proof slip with its content address.
 - **Cover sizes:** a 4.5rem headline (3.75rem under 1100px, 2rem on a phone) and a 1.5rem lead.
   These are local to the cover, not steps of the operating type ramp.
 
+## The Journal's Village
+
+`/tenants/:id/journal?view=village` reads the same runs as the ledger, drawn as people at work in
+a small printed diorama (ADR 0115, `docs/design/village.md`). It is a view of the Journal, not a
+division, and the ledger stays the default.
+
+- **Printed, not rendered.** The ground is Bone and Page, every model is outlined in Ink, and a
+  face takes one of three stepped tones from one raking light. There are no cast shadows, no fog
+  and no glow. The camera is fixed: it does not orbit or zoom.
+- **The wheel, read literally.** A building's roof wears the hue of the division it stands for,
+  and pressing the building opens that division; there the hue names the division, as a tab's
+  does. Characters wear neutrals only. Vermilion is the errata slip's, here too: a failed run, a
+  refused record set aside, a lapsed road.
+- **Stop-motion.** The world moves ten frames a second and holds between them: ADR 0014's
+  stepped motion in three dimensions. Under reduced motion each poll paints one settled frame.
+- **Words beside the picture.** The canvas is `aria-hidden` and draws no letter. The work list
+  and the buildings list beneath it are the content; pointing at a figure or a building lights its
+  row with the hovered row's wash.
+
 ## Do's and Don'ts
 
 ### Do:

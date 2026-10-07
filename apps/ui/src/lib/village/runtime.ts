@@ -8,7 +8,8 @@
  * hands it a scene (`show`), and the film writes back only `data-` attributes on the page's own
  * elements: `data-lit` on the words the pointer is over in the picture (`pointer.ts`), and
  * `data-village` on the frame, `failed` where there is no WebGL or a model would not load, which
- * shows the frame's own sentence saying so instead of an empty box.
+ * shows the frame's own sentence saying so instead of an empty box. The frame is `aria-busy`
+ * until then.
  *
  * The loop runs only while the canvas is on screen and the tab is visible. Under
  * `prefers-reduced-motion` it never runs: each `show` paints one settled frame with everyone
@@ -144,13 +145,19 @@ export class VillageFilm {
       const stage = await loadStage(readTokens(elements.frame));
       const film = new VillageFilm(elements, hooks, renderer, stage);
       film.build();
-      elements.frame.setAttribute("data-village", "ready");
+      VillageFilm.settle(elements.frame, "ready");
       return film;
     } catch {
       renderer?.dispose();
-      elements.frame.setAttribute("data-village", "failed");
+      VillageFilm.settle(elements.frame, "failed");
       return null;
     }
+  }
+
+  /** The frame is busy until the models load or will not: then it says which. */
+  private static settle(frame: HTMLElement, state: "ready" | "failed"): void {
+    frame.setAttribute("data-village", state);
+    frame.removeAttribute("aria-busy");
   }
 
   private build(): void {
