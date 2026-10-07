@@ -1161,6 +1161,16 @@
     font-size: var(--t-micro);
   }
 
+  /* Pushed to the far end of the rule, so the one link at the foot does not sit between
+   the label and the tag it names; on a narrow leaf it wraps to its own line. */
+  .colophon__contact {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    margin-left: auto;
+    font-size: var(--t-micro);
+  }
+
   /* -- prose ------------------------------------------------------------------- */
 
   /*

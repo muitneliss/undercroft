@@ -8,6 +8,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
 import { usePageLamp } from "@/components/usePageLamp.ts";
 import { useVaultFilm, type VaultRefs } from "@/components/useVaultFilm.ts";
+import { CONTACT_EMAIL } from "@/lib/contact.ts";
 import { STAGES, STEPS, type StepId } from "@/lib/vault/model.ts";
 import type { VaultWords } from "@/lib/vault/runtime.ts";
 import { useUiStore } from "@/store.ts";
@@ -20,8 +21,6 @@ import "@/styles/home.css";
 
 const DOCUMENTATION = "https://github.com/muitneliss/undercroft#documentation";
 const MCP_SETUP = "https://github.com/muitneliss/undercroft/blob/main/docs/runbook/mcp-setup.md";
-/** The address multnelis answers at, the same one multnelis.org and the blog print. */
-const CONTACT_EMAIL = "contact@multnelis.org";
 const WORKFLOW_STEPS = [
   { title: "landing.workflowConnectTitle", body: "landing.workflowConnectBody" },
   { title: "landing.workflowAskTitle", body: "landing.workflowAskBody" },

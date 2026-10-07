@@ -41,6 +41,8 @@ export const vi = {
      * never reformatted: it is the literal string that rolls the stack back to this build.
      */
     release: "Phiên bản",
+    /** Labels the contact address at the far end of the colophon. */
+    contact: "Liên hệ",
     /**
      * A tab running a release the server has replaced. "Is now live" rather than "new":
      * after a rollback the live release is the older one, and the tab is just as stale.

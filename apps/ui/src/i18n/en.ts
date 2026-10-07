@@ -21,6 +21,7 @@ export const en = {
     signOut: "Sign out",
     signingOut: "Signing out…",
     release: "Version",
+    contact: "Contact",
     releaseLive: "Version {{release}} is now live. Reload the page to use it.",
     reload: "Reload",
     staleChunk: "This page belongs to a newer release",
