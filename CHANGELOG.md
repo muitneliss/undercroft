@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.70.0](https://github.com/muitneliss/undercroft/compare/v1.69.0...v1.70.0) (2026-10-07)
+
+
+### Features
+
+* **skills:** the model builder asks through the host's question tool ([#410](https://github.com/muitneliss/undercroft/issues/410)) ([bf3e954](https://github.com/muitneliss/undercroft/commit/bf3e9549ad24de0a49fd8aec12a5cc65570d6322))
+
 ## [1.69.0](https://github.com/muitneliss/undercroft/compare/v1.68.0...v1.69.0) (2026-10-07)
 
 
