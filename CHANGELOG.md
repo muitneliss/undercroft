@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.69.0](https://github.com/muitneliss/undercroft/compare/v1.68.0...v1.69.0) (2026-10-07)
+
+
+### Features
+
+* **skills:** the model builder finds out what is needed before it builds (ADR 0114) ([#408](https://github.com/muitneliss/undercroft/issues/408)) ([b4e76f6](https://github.com/muitneliss/undercroft/commit/b4e76f68a77672dce7b0c0ca017680ea899461a0))
+
 ## [1.68.0](https://github.com/muitneliss/undercroft/compare/v1.67.0...v1.68.0) (2026-10-06)
 
 
