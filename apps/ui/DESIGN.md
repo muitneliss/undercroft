@@ -437,13 +437,15 @@ it shows a proof slip with its content address.
 a small printed diorama (ADR 0115, `docs/design/village.md`). It is a view of the Journal, not a
 division, and the ledger stays the default.
 
-- **Printed, not rendered.** The ground is Bone and Page, every model is outlined in Ink, and a
-  face takes one of three stepped tones from one raking light. There are no cast shadows, no fog
-  and no glow. The camera is fixed: it does not orbit or zoom.
-- **The wheel, read literally.** A building's roof wears the hue of the division it stands for,
-  and pressing the building opens that division; there the hue names the division, as a tab's
-  does. Characters wear neutrals only. Vermilion is the errata slip's, here too: a failed run, a
-  refused record set aside, a lapsed road.
+- **Printed in the system's inks.** Every colour in the scene is a step of one of the tonal
+  ramps above (`.impeccable/design.json`): fields and trees in Grass, the lake in Teal, timber
+  and skin in Sienna, stone in Bone and Ink, a blue cloak in Ultramarine. Every model is outlined
+  in Ink, and a face takes one of four stepped tones from one raking light. There are no cast
+  shadows, no fog and no glow. The camera is fixed: it does not orbit or zoom.
+- **The wheel, read literally.** A division's canonical hue is worn only by the roof of the
+  building that stands for that division, and pressing the building opens it; there the hue
+  names the division, as a tab's does. Everything else takes a ramp's other steps. Vermilion is
+  the errata slip's, here too: a failed run, a refused record set aside, a lapsed road.
 - **Stop-motion.** The world moves ten frames a second and holds between them: ADR 0014's
   stepped motion in three dimensions. Under reduced motion each poll paints one settled frame.
 - **Words beside the picture.** The canvas is `aria-hidden` and draws no letter. The work list

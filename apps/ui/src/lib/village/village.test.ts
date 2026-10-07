@@ -3,11 +3,14 @@
  * over a failure, and a hue is worn only by a roof, never by a character.
  */
 
+import { readFileSync } from "node:fs";
+
 import { describe, expect, test as it } from "bun:test";
 
 import type { RunEventView, RunView } from "@/api/types.ts";
 import atlas from "@/assets/village/atlas.json" with { type: "json" };
-import { cellColour, type Tokens } from "@/lib/village/palette.ts";
+import { DIVISIONS } from "@/lib/divisions.ts";
+import { type AtlasFacts, RAMPS, vertexColour } from "@/lib/village/palette.ts";
 import { type Actor, deriveVillage, type VillageInput } from "@/lib/village/script.ts";
 import { run, runDetail } from "@/test/fixtures.ts";
 
@@ -159,31 +162,43 @@ describe("the village around them", () => {
 });
 
 describe("the paint", () => {
-  const tokens: Tokens = {
-    leaf: "#fbf8f0",
-    page: "#f7f3e7",
-    bone: "#efe9d9",
-    ink: "#16150f",
-    ink2: "#56513f",
-    ink3: "#6b6450",
-    teal: "#0f7673",
-    errata: "#cf2f16",
-    slip: "#fdf0eb",
-  };
-  const hue = "#634cb0";
+  const shades = [0, 0.5, 1];
+  const inks = new Set(Object.values(RAMPS).flat());
+  const atlases: AtlasFacts[] = [atlas.set, ...Object.values(atlas.folk)];
 
-  it("never puts a division's hue on a character", () => {
-    for (const facts of Object.values(atlas.folk)) {
-      const colours = facts.cells.map((_, cell) => cellColour(tokens, facts, cell, hue));
+  function everyColour(facts: AtlasFacts, roof: string | null): string[] {
+    return facts.top.flatMap((_, cell) =>
+      shades.map((shade) => vertexColour(facts, cell, shade, roof)),
+    );
+  }
 
-      expect(colours).not.toContain(hue);
+  it("prints every vertex in an ink of the design system, never vermilion or a division's hue", () => {
+    const forbidden = ["#cf2f16", ...DIVISIONS.map((division) => division.hue)];
+    for (const facts of atlases) {
+      const colours = everyColour(facts, null);
+
+      expect(colours.filter((colour) => !inks.has(colour))).toEqual([]);
+      expect(colours.filter((colour) => forbidden.includes(colour))).toEqual([]);
     }
   });
 
-  it("puts the roof's hue on a building's team cells and nowhere else on it", () => {
-    const colours = atlas.set.cells.map((_, cell) => cellColour(tokens, atlas.set, cell, hue));
-    const roofed = colours.flatMap((colour, cell) => (colour === hue ? [cell] : []));
+  it("puts a roof's hue on a building's team cells and nowhere else on it", () => {
+    // A roof no ink could be by chance, so a cell wearing it can only have been given it.
+    const roof = "#010203";
+    const roofed = atlas.set.top.flatMap((_, cell) =>
+      shades.every((shade) => vertexColour(atlas.set, cell, shade, roof) === roof) ? [cell] : [],
+    );
 
     expect(roofed).toEqual(atlas.set.team);
+  });
+
+  it("keeps the inks exactly as the design system's tonal ramps give them", () => {
+    const design = JSON.parse(
+      readFileSync(new URL("../../../.impeccable/design.json", import.meta.url), "utf8"),
+    ) as { extensions: { colorMeta: Record<string, { tonalRamp?: string[] }> } };
+
+    for (const [family, ramp] of Object.entries(RAMPS)) {
+      expect(ramp).toEqual(design.extensions.colorMeta[family]?.tonalRamp ?? []);
+    }
   });
 });

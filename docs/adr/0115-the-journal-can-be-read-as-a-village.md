@@ -50,18 +50,21 @@ relation as the cover's film to its two lists.
   values on a plain object, as the vault's does (`apps/ui/src/lib/vault/runtime.ts`). Nothing
   in the frame loop is React state (`state.md`). React passes it the query data and reads back
   nothing but `data-` attributes.
-- **A printed diorama, in the book's own tokens.**
-  - The ground is Bone and Page.
-  - Every model is outlined in Ink.
-  - Faces take three stepped tones from one raking light, by toon shading with a three-step
-    ramp, and no smooth gradient.
+- **A printed diorama, in the design system's own inks.**
+  - Every colour is a step of one of the design system's tonal ramps (`.impeccable/design.json`):
+    a green takes Grass, a blue Ultramarine, a purple Violet, wood and skin Sienna, stone Bone
+    and Ink, and so on, at the step nearest its lightness. KayKit's gradients survive as steps,
+    so the models keep their detail and lose their own colours. Roads are Page.
+  - Every model is outlined in Ink, a character more finely than a building.
+  - Faces take four stepped tones from one raking light, by toon shading, with no smooth
+    gradient.
   - Nothing casts a shadow ("Rules, never shadows").
-  - A building's roof wears the hue of the division it stands for, and pressing the building
-    opens that division. That is the Wheel Rule read literally: there the hue names which
-    division it is.
-  - Characters wear the book's neutrals only, never a hue.
-  - Vermilion appears only on errata slips: a refused record set aside, a failed test, a
-    failed run.
+  - A division's own hue, the canonical step of its ramp, is worn only by the roof and flag of
+    the building that stands for that division, and pressing the building opens it. That is the
+    Wheel Rule read literally: where the canonical hue appears, it names the division. A wheat
+    field takes Chrome's other steps, never Chrome itself.
+  - Vermilion is in no ramp the village paints from. It appears only on errata slips: a refused
+    record set aside, a failed test, a failed run, a lapsed road.
 - **KayKit models, CC0.** A subset of the free tiers of KayKit Adventurers, Character
   Animations and Medieval Hexagon is vendored under `apps/ui/src/assets/village/`, beside its
   licence and a provenance note: the pack, its version, and what was changed. The assets are

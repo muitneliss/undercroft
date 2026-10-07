@@ -63,7 +63,7 @@ const RAKE = 0.34 * Math.PI;
 const MARGIN = 0.04;
 /** The highest the frame fits to: a spire does not get to leave a strip of empty page. */
 const FIT_HEIGHT = 1.6;
-const OUTLINE_THICKNESS = 0.0032;
+const OUTLINE_THICKNESS = 0.0026;
 /** The bell's swing, one position a frame: two full swings when a scheduled run opens. */
 const BELL_SWING = [0.35, 0, -0.35, 0, 0.35, 0, -0.35, 0];
 
@@ -162,7 +162,9 @@ export class VillageFilm {
 
   private build(): void {
     this.renderer.setClearColor(0x00_00_00, 0);
-    this.renderer.setPixelRatio(Math.min(2, globalThis.devicePixelRatio || 1));
+    // Drawn at twice the screen's pixels or more, then downscaled: the ink outlines and the
+    // figures' faces stay crisp at the diorama's small scale. Ten frames a second can afford it.
+    this.renderer.setPixelRatio(Math.min(3, Math.max(2, globalThis.devicePixelRatio || 1)));
     const light = new DirectionalLight(0xff_ff_ff, RAKE);
     light.position.copy(LIGHT_AT);
     this.scene.add(new AmbientLight(0xff_ff_ff, AMBIENT), light, this.stage.root, this.props);

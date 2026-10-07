@@ -26,6 +26,8 @@ export interface Placement extends Point {
   readonly turn: number;
   readonly scale: number;
   readonly division: DivisionId | null;
+  /** Height above the board, for what floats: a lily sits on the lake, below the grass. */
+  readonly y?: number;
 }
 
 export type PlaceId =
@@ -70,6 +72,57 @@ function isLake(x: number, z: number): boolean {
 }
 
 const BUILDING_SCALE = 1.5;
+const PROP_SCALE = 2;
+/** Where a lily or a reed sits: on the water, which lies below the grass. */
+const WATER_LEVEL = -0.18;
+
+/**
+ * What makes the village look lived in rather than laid out: work left by each building, trees
+ * on the edges, plants on the lake. Kept apart from the buildings so the map of what stands for
+ * what stays short.
+ */
+const DRESSING: readonly Placement[] = [
+  // The gate: what the couriers have stacked inside it.
+  { piece: "crate_big", x: -6.6, z: -2.5, turn: 0, scale: PROP_SCALE, division: null },
+  { piece: "barrel", x: -6.1, z: -3.1, turn: 0, scale: PROP_SCALE, division: null },
+  { piece: "sack", x: -6.8, z: 2.6, turn: 1, scale: PROP_SCALE, division: null },
+  { piece: "lumber", x: -5.8, z: 2.9, turn: 0, scale: PROP_SCALE, division: null },
+  // The hall and its yard.
+  { piece: "grain", x: -6.6, z: -5.8, turn: 0, scale: 1, division: null },
+  { piece: "rock_e", x: -5.3, z: -1.6, turn: 0, scale: PROP_SCALE, division: null },
+  // The vault and the reading room, on the shore.
+  { piece: "stone", x: -1.6, z: -2.9, turn: 0, scale: PROP_SCALE, division: null },
+  { piece: "bucket", x: 1, z: -1.8, turn: 0, scale: PROP_SCALE, division: null },
+  { piece: "crate_long", x: 4.8, z: -1.5, turn: 1, scale: PROP_SCALE, division: null },
+  // The archive, across the road.
+  { piece: "barrel", x: 0.7, z: 3.2, turn: 0, scale: PROP_SCALE, division: null },
+  { piece: "crate", x: 3, z: 3.3, turn: 0, scale: PROP_SCALE, division: null },
+  // The workshop's timber, stone and ladder.
+  { piece: "lumber", x: 9.1, z: -2.8, turn: 1, scale: PROP_SCALE, division: null },
+  { piece: "stone", x: 9.3, z: -1.7, turn: 0, scale: PROP_SCALE, division: null },
+  { piece: "ladder", x: 8.8, z: -3.4, turn: 0, scale: PROP_SCALE, division: null },
+  // The press's yard.
+  { piece: "crate_big", x: 11.7, z: 3.2, turn: 0, scale: PROP_SCALE, division: null },
+  { piece: "handcart", x: 9.1, z: 3.4, turn: 3, scale: PROP_SCALE, division: null },
+  // The houses: a windmill, a fence, a tent at the edge of the fields.
+  { piece: "windmill", x: 12.2, z: -1.5, turn: 3, scale: BUILDING_SCALE, division: null },
+  { piece: "fence_stone", x: 8.4, z: -4.2, turn: 0, scale: BUILDING_SCALE, division: null },
+  { piece: "tent", x: -3.4, z: 4.4, turn: 1, scale: PROP_SCALE, division: null },
+  // Trees and rocks round the edges.
+  { piece: "trees_b_medium", x: -8.6, z: -6.3, turn: 0, scale: 1, division: null },
+  { piece: "tree_b", x: -2.3, z: -6.3, turn: 0, scale: 1.4, division: null },
+  { piece: "trees_b_medium", x: 7.4, z: -6.4, turn: 1, scale: 1, division: null },
+  { piece: "trees_b_large", x: -0.6, z: 5.9, turn: 0, scale: 1, division: null },
+  { piece: "tree_b", x: 5.4, z: 6.2, turn: 0, scale: 1.4, division: null },
+  { piece: "hills_trees", x: -8.6, z: 5.9, turn: 0, scale: 1, division: null },
+  { piece: "rock_c", x: 4.3, z: 4.2, turn: 0, scale: PROP_SCALE, division: null },
+  // The lake's lilies and reeds.
+  { piece: "lily_a", x: 1, z: -4.2, turn: 0, scale: 1.5, division: null, y: WATER_LEVEL },
+  { piece: "lily_b", x: 3.4, z: -5, turn: 1, scale: 1.5, division: null, y: WATER_LEVEL },
+  { piece: "lily_a", x: 4.8, z: -6, turn: 2, scale: 1.5, division: null, y: WATER_LEVEL },
+  { piece: "reeds_a", x: -0.9, z: -3.5, turn: 0, scale: 1.5, division: null, y: WATER_LEVEL },
+  { piece: "reeds_b", x: 5.8, z: -3.6, turn: 0, scale: 1.5, division: null, y: WATER_LEVEL },
+];
 
 /** Every building, prop and tree, in the order they are placed. */
 export const PLACEMENTS: readonly Placement[] = [
@@ -92,7 +145,7 @@ export const PLACEMENTS: readonly Placement[] = [
   { piece: "sack", x: 11.6, z: 1.2, turn: 0, scale: 2, division: null },
   { piece: "trees_large", x: -10.5, z: -6, turn: 0, scale: 1, division: null },
   { piece: "trees_medium", x: -6.5, z: -6.2, turn: 1, scale: 1, division: null },
-  { piece: "trees_medium", x: 12, z: -6, turn: 2, scale: 1, division: null },
+  { piece: "mountain", x: 12, z: -6.2, turn: 2, scale: 1, division: null },
   { piece: "trees_small", x: 12.4, z: 5.6, turn: 0, scale: 1, division: null },
   { piece: "trees_large", x: 10, z: 6, turn: 1, scale: 1, division: null },
   { piece: "trees_small", x: 1.2, z: 6, turn: 0, scale: 1, division: null },
@@ -100,6 +153,7 @@ export const PLACEMENTS: readonly Placement[] = [
   { piece: "rock", x: -7, z: 5.4, turn: 0, scale: 2, division: null },
   { piece: "tree", x: -5.6, z: 3.8, turn: 0, scale: 1.4, division: null },
   { piece: "trees_medium", x: -10.6, z: 6, turn: 0, scale: 1, division: null },
+  ...DRESSING,
 ];
 
 /** The buildings a reader can press, and the division each opens. */

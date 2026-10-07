@@ -27,25 +27,30 @@ may lag the data by one walk; the words beside it never lag.
 
 ## Visual language
 
-| In the scene                          | Token                                                    | Why                                                      |
-| ------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
-| Ground and roads                      | Bone `#efe9d9`, Page `#f7f3e7`                           | The board the book lies on                               |
-| Outlines of every model               | Ink `#16150f`                                            | Rules, never shadows                                     |
-| The lit tones of a face               | The surface's token, then stepped down toward two thirds | One raking light, stepped and not graded                 |
-| Everything else on a model            | The neutral nearest its own lightness, Leaf to Ink       | A model keeps its drawing and loses its colour           |
-| A building's roof                     | Its division's hue                                       | The Wheel Rule: the hue names the division, and opens it |
-| Characters                            | Neutrals only                                            | A character is not a division and wears no hue           |
-| Water                                 | Teal lifted toward Bone                                  | The lake is the Raw lake's ground                        |
-| Errata slip (failed, refused, lapsed) | Vermilion rules on Slip ground                           | The Vermilion Rule: only the slip                        |
+| In the scene                          | Ink                                                    | Why                                                       |
+| ------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------- |
+| Every surface of every model          | The step of a design-system ramp nearest it, by family | The models keep KayKit's drawing in the system's own inks |
+| Fields and trees                      | Grass steps                                            | A green is printed in Grass                               |
+| Timber, leather, skin, sand           | Sienna steps                                           | An earth is printed in Sienna                             |
+| Stone and grey cloth                  | Bone and Ink steps                                     | A grey is printed in the stock and the ink                |
+| Water                                 | Teal steps, lifted                                     | The lake is the Raw lake's ground                         |
+| Roads                                 | Page `#f7f3e7`                                         | The paths are the page showing through                    |
+| Outlines of every model               | Ink `#16150f`, finer on a character                    | Rules, never shadows                                      |
+| The lit tones of a face               | Four steps from one raking light                       | Stepped, not graded                                       |
+| A building's roof and flag            | Its division's canonical hue, and only there           | The Wheel Rule: the hue names the division, and opens it  |
+| Errata slip (failed, refused, lapsed) | Vermilion rules on Slip ground                         | The Vermilion Rule: only the slip                         |
 
 There are no cast shadows, no fog, no bloom and no depth of field. The camera is orthographic and
 fixed, looking from the south: it does not orbit or zoom.
 
 How the repaint works: the asset script replaces each vertex's UV with the atlas cell KayKit
-painted it from (`_CELL`) and records each cell's mean colour (`atlas.json`). The browser
-repaints each cell with a token read off `index.css` (`lib/village/palette.ts`), so the tokens
-keep one owner. `village.test.ts` holds that no character cell can take a hue, and that only a
-building's team cells take its roof's hue.
+painted it from (`_CELL`) and how far down that cell's gradient (`_SHADE`), and records the
+colours at each cell's two ends (`atlas.json`). The browser reads each vertex's source colour off
+that gradient, finds its family by hue (a grey, a green, a blue, an earth…) and paints it the
+step of that family's ramp nearest its lightness (`lib/village/palette.ts`). The ramps are the
+design system's own, and `village.test.ts` holds them equal to `design.json`, holds that every
+vertex is printed in one of them, never in vermilion or a division's canonical hue, and that
+only a building's team cells take its roof's hue.
 
 ## Layout
 
@@ -102,7 +107,9 @@ for the copies (`raw.records`), as the cover's film already draws the split (ADR
 
 ## The cast
 
-Every character is one of the five free KayKit Adventurers, in neutrals. Several runs at once
+Every character is one of the five free KayKit Adventurers, printed in the ramps like
+everything else: the ranger's cloak in Grass, the mage's robe in Violet, the knight's plate in
+Bone and Ink. Several runs at once
 means several figures. The platform allows one running run per source and verb, so two couriers
 can be on two roads at once, but never two on one road.
 
@@ -172,10 +179,11 @@ There is no push channel (ADR 0021).
 
 - `three` and its glTF loader are in the village's chunk only. Nothing else in the app imports
   them.
-- The models are about 1 MB together, meshopt-compressed (`set.glb` 0.3 MB, `folk.glb` 0.55 MB,
-  `clips.glb` 0.2 MB), and are fetched only when the view opens.
+- The models are about 1.3 MB together, meshopt-compressed (`set.glb` 0.5 MB, `folk.glb`
+  0.59 MB, `clips.glb` 0.2 MB), and are fetched only when the view opens.
 - The scene draws at most 10 times a second, never while the tab is hidden or the canvas is off
-  screen, at a device pixel ratio of 2 or less. A character is about 7,500 triangles, so a busy
+  screen. It renders at twice the screen's pixels or more (at most three times) and is
+  downscaled, which keeps the outlines and faces crisp at the diorama's size. A character is about 7,500 triangles, so a busy
   morning of nine figures and the board is about 100,000, drawn twice for the outline.
 - The renderer and every geometry are disposed when the view closes.
 

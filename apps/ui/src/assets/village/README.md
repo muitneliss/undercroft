@@ -18,7 +18,8 @@ taken in its free tier from itch.io:
   - `Sit_Floor_Idle` and `Waving` from `Rig_Medium_Simulation`.
   - `Hammering`, `Working_A` and `Holding_A` from `Rig_Medium_Tools`.
 - [KayKit Medieval Hexagon Pack](https://kaylousberg.itch.io/kaykit-medieval-hexagon), version
-  1.0 FREE: the tiles, buildings, props and trees named in `scripts/village/assets.ts`.
+  1.0 FREE: the tiles, buildings, props, trees and water plants named in
+  `scripts/village/assets.ts`.
 
 ## Licence
 
@@ -32,9 +33,10 @@ here anyway.
 The packs themselves are not in the repository. The script makes four changes:
 
 - **Paint.** The textures are dropped. Each vertex's UV is replaced by `_CELL`, the atlas cell it
-  was painted from. `atlas.json` records each cell's mean colour, plus which cells are a
-  building's team colour and which are water. The browser repaints every cell with a token from
-  `index.css` (`lib/village/palette.ts`), so no colour from the packs is shown.
+  was painted from, and `_SHADE`, how far down that cell's gradient. `atlas.json` records the
+  colours at each cell's two ends, plus which cells are a building's team colour and which are
+  water. The browser prints every vertex in the nearest step of the design system's tonal ramps
+  (`lib/village/palette.ts`), so no colour from the packs is shown.
 - **Variants.** Buildings are taken in their blue variant only. The red variant is read only to
   tell which cells are the team colour.
 - **Motion.** Each clip is re-keyed at ten frames a second with STEP interpolation. That is the

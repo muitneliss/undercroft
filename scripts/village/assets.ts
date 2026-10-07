@@ -13,8 +13,9 @@
  *             never shows those colours: it repaints each atlas cell with a token from
  *             `index.css` at run time (`lib/village/palette.ts`), so the tokens keep one owner
  *             and a token changed there changes the village. What survives is which cell each
- *             vertex was painted from (`_CELL`, in place of its UV), and `atlas.json`, which says what each
- *             cell looked like: its mean colour, which cells are a building's team colour (the
+ *             vertex was painted from (`_CELL`) and how far down that cell's gradient (`_SHADE`), in
+ *             place of its UV, and `atlas.json`, which says what each cell looked like: the colours
+ *             at its gradient's two ends, which cells are a building's team colour (the
  *             one a roof wears, so it can wear its division's hue) and which are water.
  *   buildings the blue variant only. The four variants differ only in the team cells, which the
  *             run time repaints anyway; the red variant is read just to find those cells.
@@ -42,7 +43,7 @@ import {
   ATLAS_COLUMNS,
   ATLAS_ROWS,
   bundle,
-  cellMeans,
+  cellGradients,
   cellsUsed,
   holdOnFrames,
   keepClips,
@@ -81,6 +82,27 @@ const SET = {
   tree: "decoration/nature/tree_single_A.gltf",
   rock: "decoration/nature/rock_single_A.gltf",
   hill: "decoration/nature/hill_single_A.gltf",
+  crate_big: "decoration/props/crate_A_big.gltf",
+  crate_long: "decoration/props/crate_long_A.gltf",
+  lumber: "decoration/props/resource_lumber.gltf",
+  stone: "decoration/props/resource_stone.gltf",
+  bucket: "decoration/props/bucket_water.gltf",
+  tent: "decoration/props/tent.gltf",
+  ladder: "decoration/props/ladder.gltf",
+  grain: "buildings/neutral/building_grain.gltf",
+  windmill: "buildings/blue/building_windmill_blue.gltf",
+  fence_stone: "buildings/neutral/fence_stone_straight.gltf",
+  trees_b_large: "decoration/nature/trees_B_large.gltf",
+  trees_b_medium: "decoration/nature/trees_B_medium.gltf",
+  tree_b: "decoration/nature/tree_single_B.gltf",
+  rock_c: "decoration/nature/rock_single_C.gltf",
+  rock_e: "decoration/nature/rock_single_E.gltf",
+  mountain: "decoration/nature/mountain_A_grass_trees.gltf",
+  hills_trees: "decoration/nature/hills_A_trees.gltf",
+  lily_a: "decoration/nature/waterlily_A.gltf",
+  lily_b: "decoration/nature/waterlily_B.gltf",
+  reeds_a: "decoration/nature/waterplant_A.gltf",
+  reeds_b: "decoration/nature/waterplant_B.gltf",
 } as const;
 
 /** Read only to tell the team cells from the rest: they are what changes between variants. */
@@ -199,15 +221,11 @@ await buildClips();
 const atlas = {
   columns: ATLAS_COLUMNS,
   rows: ATLAS_ROWS,
-  set: { cells: cellMeans(need(join(hexagonDir, "Textures/hexagons_medieval.png"))), team, water },
+  set: { ...cellGradients(need(join(hexagonDir, "Textures/hexagons_medieval.png"))), team, water },
   folk: Object.fromEntries(
     FOLK.map((name) => [
       name,
-      {
-        cells: cellMeans(
-          need(join(adventurersDir, "Textures", `${name.toLowerCase()}_texture.png`)),
-        ),
-      },
+      cellGradients(need(join(adventurersDir, "Textures", `${name.toLowerCase()}_texture.png`))),
     ]),
   ),
 };

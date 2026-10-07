@@ -92,7 +92,7 @@ function boardOf(painter: Painter, pieces: ReadonlyMap<string, Object3D>): Group
   }
   for (const spot of PLACEMENTS) {
     const made = pieceOf(painter, pieces, spot.piece, spot.division);
-    made.position.set(spot.x, 0, spot.z);
+    made.position.set(spot.x, spot.y ?? 0, spot.z);
     made.rotation.y = (spot.turn * Math.PI) / 2;
     made.scale.setScalar(spot.scale);
     root.add(made);
@@ -117,7 +117,7 @@ export async function loadStage(tokens: Tokens): Promise<Stage> {
   root.add(bell);
   const models = childrenByName(folk);
   for (const [name, model] of models) {
-    painter.paint(model, ATLAS.folk[name] ?? { cells: [] }, null);
+    painter.paintFigure(model, ATLAS.folk[name] ?? { top: [], bottom: [] });
   }
   const texture = slipTexture(painter);
   const roads = new Map<number, Object3D>();

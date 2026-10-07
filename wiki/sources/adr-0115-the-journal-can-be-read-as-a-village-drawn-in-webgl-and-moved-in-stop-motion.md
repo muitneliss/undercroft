@@ -7,7 +7,7 @@ date: 2026-10-07
 tags: []
 source: docs/adr/0115-the-journal-can-be-read-as-a-village.md
 source_path: docs/adr/0115-the-journal-can-be-read-as-a-village.md
-source_hash: 1d14b05b98b4d3bf2dd273373cb70875f8175b2b1213ce8056d308d0296c00ae
+source_hash: d4e42f808cf301a459681dfa06047274b886fe4a34541e162624e12bb471f4cc
 ingested: 2026-10-07
 ---
 
@@ -19,9 +19,14 @@ Decision.
 
 * One customer, live, reading only `runs.list`, `runs.get` and `runs.events` with the reader's own session.
 * Nothing moves without a run behind it: each character's action is a pure derivation from run status, events and steps, tested outside WebGL. A character at rest claims nothing.
-* Stop-motion on a stepped 10 fps clock, with nothing interpolated.
+* Stop-motion on a stepped 10 fps clock.
 * `three`, exact-pinned, only in the village's lazy chunk, with an imperative runtime outside React state, as the vault's is.
-* A printed diorama in the book's tokens: Bone ground, Ink outlines, three-step toon shading from one raking light, no shadows. Roofs wear their division's hue and open that division. Characters wear neutrals only. Vermilion is only on errata slips.
+* A printed diorama in the design system's own inks:
+  * Every colour is a step of one of the tonal ramps in `.impeccable/design.json`, chosen by hue family (Grass, Sienna, Bone/Ink, Teal, Ultramarine, Violet, Oxide, Chrome) and lightness, so KayKit's gradients survive as steps.
+  * Roads are Page. Ink outlines are finer on characters.
+  * Four-step toon shading from one raking light, and no shadows.
+  * A division's canonical hue is worn only by the roof and flag of its building, which opens it (the Wheel Rule read literally).
+  * Vermilion appears only on errata slips.
 * A KayKit CC0 subset is vendored with its licence and provenance, imported through Vite, and repainted by a task-run script.
 * A fixed orthographic camera.
 * The canvas is `aria-hidden` and wordless. A work list and a list of buildings carry the words. Pointing in the picture lights a row, and pressing goes where the row goes.
