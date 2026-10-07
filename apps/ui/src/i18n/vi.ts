@@ -89,6 +89,8 @@ export const vi = {
   },
 
   common: {
+    drawingFailed:
+      "Không vẽ được hình này trên trình duyệt này. Những chữ bên cạnh vẫn nói đủ mọi điều nó vẽ.",
     loading: "Đang tải",
     notLoaded: "Không tải được",
     nothingToShow: "Không có gì để hiển thị.",
@@ -1615,6 +1617,58 @@ export const vi = {
       chainedFrom: "Nối từ lần đồng bộ {{source}}",
       chainedTo: "Nối sang việc dựng mô hình",
     },
+
+    /** The village: the same runs as people at work (ADR 0116). Words only; the canvas has none. */
+    village: {
+      viewsLabel: "Cách xem nhật ký",
+      viewLedger: "Sổ",
+      viewVillage: "Làng",
+      lead: "Mỗi lần chạy của {{tenantId}} là một người đang làm việc trong làng. Bấm vào một người để mở lần chạy của họ, bấm vào một ngôi nhà để mở mục của nó.",
+      failed:
+        "Không vẽ được làng trên trình duyệt này. Danh sách bên dưới vẫn cho biết ai đang làm gì.",
+      notLoaded: "Không tải được các lần chạy của {{tenantId}}.",
+      workCaption: "Ai đang làm gì",
+      colWho: "Ai",
+      colFor: "Cho",
+      colDoing: "Đang làm",
+      colSince: "Bắt đầu",
+      placesCaption: "Các ngôi nhà và mục mà mỗi nhà mở",
+      colBuilding: "Ngôi nhà",
+      colOpens: "Mở",
+      role: {
+        courier: "Người vận chuyển",
+        keeper: "Người giữ kho",
+        scribe: "Người chép sổ",
+        artisan: "Thợ",
+        inspector: "Người kiểm định",
+        carter: "Người kéo xe",
+      },
+      doing: {
+        resting: "Đang nghỉ",
+        waiting: "Đang chờ ở cổng",
+        fetching: "Đang mang dữ liệu về kho",
+        barred: "Gặp một danh sách chưa được cấp quyền",
+        sealing: "Đang cất vào kho",
+        reading: "Đang đọc tài liệu",
+        building: "Đang dựng mô hình",
+        inspecting: "Đã kiểm tra lần dựng gần nhất",
+        inspectingFailed: "Có kiểm thử không đạt ở lần dựng gần nhất",
+        handing: "Đang trao bản sao cho việc dựng mô hình",
+        delivering: "Đang chở dữ liệu từ bên ngoài vào kho",
+        failed: "Lần chạy gần nhất thất bại",
+      },
+      place: {
+        gate: "Cổng làng",
+        sign: "Biển làng",
+        hall: "Toà thị chính",
+        vault: "Kho đá",
+        archive: "Nhà lưu trữ",
+        reading: "Phòng đọc",
+        workshop: "Xưởng",
+        press: "Nhà in",
+        houses: "Nhà dân",
+      },
+    },
   },
 
   models: {
@@ -1724,7 +1778,7 @@ export const vi = {
     notLoaded: "Không tải được dòng dữ liệu của {{tenantId}}.",
     empty:
       "Dòng dữ liệu được vẽ từ các mô hình. Khi đã có mô hình, mỗi quan hệ nó khai báo sẽ hiện ở đây.",
-    lead: "Chỉ vẽ quan hệ đọc từ khai báo của chính các mô hình: ref() giữa hai mô hình, và bảng hồ thô được khai báo làm nguồn dbt bằng source(), kể cả qua macro, nên tài khoản nguồn và báo cáo không có ở đây. Chọn một nút để tô chuỗi thượng nguồn và hạ nguồn của nó và xem chi tiết; kéo thẻ để sắp lại, cuộn để phóng to.",
+    lead: "Chỉ vẽ quan hệ đọc từ khai báo của chính các mô hình: ref() giữa hai mô hình, và bảng hồ thô được khai báo làm nguồn dbt bằng source(), kể cả qua macro, nên tài khoản nguồn và báo cáo không có ở đây. Mỗi mô hình là một ngôi nhà và mỗi quan hệ là một con đường. Chọn một ngôi nhà để tô chuỗi thượng nguồn và hạ nguồn của nó, có xe chở hàng chạy trên đó, và xem chi tiết; bấm vào bãi trống để bỏ chọn.",
     pickLabel: "Tìm mô hình hoặc bảng hồ thô",
     pickNone: "Không chọn",
     pick: "Xem dòng dữ liệu",
@@ -1749,16 +1803,10 @@ export const vi = {
     levelsHead: "Mọi nút theo tầng",
     declaredSource: "▭ Nguồn dbt đã khai báo",
     undeclaredMark: "? Thượng nguồn chưa khai báo",
-    resetLayout: "Sắp lại như ban đầu",
     /** When the layout engine could not place the board; the text beneath still holds. */
     notArranged: "Không sắp được sơ đồ. Tên và đường dẫn bên dưới vẫn cho biết mỗi mô hình đọc gì.",
     fullscreen: "Toàn màn hình",
     exitFullscreen: "Thoát toàn màn hình",
-    controls: "Điều khiển sơ đồ",
-    zoomIn: "Phóng to",
-    zoomOut: "Thu nhỏ",
-    fitView: "Vừa khung",
-    minimap: "Bản đồ thu nhỏ",
     model: "Mô hình",
     rawTable: "Bảng hồ thô",
     missing: "Phụ thuộc bị thiếu",

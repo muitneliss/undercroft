@@ -18,9 +18,14 @@
  * It polls while a run is in progress and only then -- the one state on this page that
  * changes without anybody pressing anything -- so pressing Run now on the Sources leaf and
  * switching here shows the mark flip when the run ends.
+ *
+ * The division's second view is the village (`?view=village`, ADR 0116): the same runs drawn as
+ * people at work. A view of the Journal and not an eighth division, because the wheel is full
+ * (ADR 0019), the way the lineage is a view of Models. The ledger stays the default; the village
+ * is its own chunk, so `three` and the models are fetched only by a reader who opens it.
  */
 
-import { Fragment, useId } from "react";
+import { Fragment, lazy, Suspense, useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -48,7 +53,66 @@ const COLUMNS = 8;
 /** How many connections a tenant holds before the ledger offers a choice between them. */
 const ACCOUNTS_TO_CHOOSE = 2;
 
+const VIEW_PARAM = "view";
+const VILLAGE_VIEW = "village";
+
+const Village = lazy(() =>
+  import("@/components/Village.tsx").then((module) => ({ default: module.Village })),
+);
+
 export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
+  const { t } = useTranslation();
+  const [search] = useSearchParams();
+  if (search.get(VIEW_PARAM) !== VILLAGE_VIEW) {
+    return <Ledger tenantId={tenantId} />;
+  }
+  return (
+    <div className="sheet">
+      <div className="head head--division">{t("nav.journal")}</div>
+      <div className="body stack">
+        <h1>{t("journal.title")}</h1>
+        <p className="prose prose--lead">{t("journal.village.lead", { tenantId })}</p>
+        <JournalViews tenantId={tenantId} village={true} />
+        <Suspense fallback={<Skeleton rows={6} />}>
+          <Village tenantId={tenantId} />
+        </Suspense>
+      </div>
+    </div>
+  );
+}
+
+/** The two ways to read the division: the ledger, and the same runs as a village. */
+function JournalViews({
+  tenantId,
+  village,
+}: {
+  tenantId: string;
+  village: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const base = divisionPath("journal", tenantId);
+  return (
+    <nav aria-label={t("journal.village.viewsLabel")} className="langset">
+      <Link
+        className="plate plate--small"
+        to={base}
+        {...(village ? {} : { "aria-current": "page" as const })}
+      >
+        {t("journal.village.viewLedger")}
+      </Link>
+      <Link
+        className="plate plate--small"
+        to={`${base}?${new URLSearchParams({ [VIEW_PARAM]: VILLAGE_VIEW }).toString()}`}
+        {...(village ? { "aria-current": "page" as const } : {})}
+      >
+        {t("journal.village.viewVillage")}
+      </Link>
+    </nav>
+  );
+}
+
+/** The ledger: every run, newest first, the open one hinged beneath its row. */
+function Ledger({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const params = useParams();
   const openId = params.runId ?? null;
@@ -94,6 +158,7 @@ export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
       <div className="body stack">
         <h1>{t("journal.title")}</h1>
         <p className="prose prose--lead">{t("journal.lead", { tenantId })}</p>
+        <JournalViews tenantId={tenantId} village={false} />
 
         <LedgerFilter
           tenantId={tenantId}

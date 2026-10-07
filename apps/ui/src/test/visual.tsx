@@ -35,6 +35,14 @@ import { trpc } from "@/trpc.ts";
 export const VISUAL_NOW = "2026-09-29T09:30:00Z";
 
 /**
+ * How long a screen with a village on it may take (ADR 0116). The tier draws WebGL in software
+ * inside the Playwright image, emulated on an Apple-silicon Mac, and a lit, shadowed, occluded
+ * scene takes several seconds where a page of text takes one; the default would fail it on time,
+ * not on a pixel.
+ */
+export const WEBGL_TIMEOUT = 60_000;
+
+/**
  * What a procedure answers: its output; a `Response` for a refusal the test means to show; or a
  * function of the input the page sent, for a procedure one screen asks more than once (each
  * dashboard tile reads its own answer). A tRPC output is JSON and is never a function, so the
@@ -52,8 +60,13 @@ const SHELL: Answers = {
   "config.signIn": { methods: ["email-otp"] },
 };
 
-/** How long a screen may take to settle: well inside the test's own 15 s, far past a chunk load. */
-const SETTLE_MS = 10_000;
+/**
+ * How long a screen may take to settle: far past a chunk load, and past a village's models
+ * loading and its first frame drawn in software, which on a shared CI runner took over ten
+ * seconds. A screen with no village still fails on its own 15 s test limit first; one that
+ * settles sooner moves on at once.
+ */
+const SETTLE_MS = 45_000;
 
 /** A mounted screen, and the one thing a visual test does with it. */
 export interface Screen {

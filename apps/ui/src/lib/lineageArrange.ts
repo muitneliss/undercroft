@@ -33,7 +33,10 @@ import { useSyncExternalStore } from "react";
 import type { ModelLineage } from "@/api/types.ts";
 import { layout } from "@/lib/lineageLayout.ts";
 
-/** A card's box. `.lineage-card` in `index.css` is the same size; the two are one number. */
+/**
+ * A card's box, as ELK lays it out: the room each node is given. The village scales it into
+ * world units (`lib/village/graph.ts`).
+ */
 export const CARD_W = 248;
 export const CARD_H = 96;
 

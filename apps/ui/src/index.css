@@ -49,22 +49,11 @@
  * borders and more globally, and most of this app's components are hand-tuned against the
  * browser's own defaults, not Tailwind's -- importing it would regress every one of them on day
  * one, not just the ones a shadcn/Radix primitive touches. Declaring the full layer order up
- * front keeps `undercroft` (declared last, unchanged below) outranking both Tailwind layers and
- * `xyflow`, same precedent as the comment two lines down. https://tailwindcss.com/docs/preflight */
-@layer theme, utilities, xyflow, undercroft;
+ * front keeps `undercroft` (declared last, unchanged below) outranking both Tailwind layers.
+ * https://tailwindcss.com/docs/preflight */
+@layer theme, utilities, undercroft;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
-
-/* `@xyflow/react`'s own base stylesheet: the positioning, panning and clipping rules
- * the run's-shape canvas needs underneath it (`position: absolute` on a node,
- * `overflow: hidden` on the pane) that this file only ever overrides, never supplies
- * from scratch. Named and layered below `undercroft` (declared after it, so it wins
- * the cascade layer order) rather than left unlayered, where an import would beat
- * every rule in this file regardless of specificity. Kept here, immediately after the
- * Tailwind imports above: every `@import` in this file must precede every other rule
- * (CSS spec exempts only `@charset` and `@layer`), so `@theme` below -- a real rule, not
- * one of those two -- cannot sit between imports. */
-@import "@xyflow/react/dist/style.css" layer(xyflow);
 
 /* Maps shadcn/Radix's semantic tokens onto this file's own tokens (defined in `:root` below), so
  * a vendored primitive under `@/components/ui` reads the same board/ink/leaf system as everything
@@ -2566,42 +2555,14 @@
     display: block;
   }
 
-  /* -- the run's own shape, drawn -------------------------------------------------
+  /* -- the run's own shape, drawn as a village ------------------------------------
    *
-   * One plate per stage, left to right in the order they happen, with the work
-   * flowing along the connection between them while the run is still going.
-   *
-   * THREE PLATES, NOT ONE REPEATED. A stage of work is a leaf lying on the board.
-   * The run's own verdict is the stamp that closes the ledger, so it is inked --
-   * the one solid object in the row. A stage that stopped is an errata slip, in the
-   * same vermilion-ruled language a correction wears everywhere else here. That is
-   * what keeps a row of plates from being the grid of equal cards DESIGN.md bans:
-   * these are three different objects, not one card recoloured three ways.
-   *
-   * THE CONNECTION IS ALIVE WHILE THE RUN IS. An edge out of a settled stage is a
-   * still rule; an edge out of a stage still working flows. It is the one honest
-   * live signal the drawing has, and the thing that tells an operator mid-call that
-   * something IS happening without them reading a figure. That flow and the lineage
-   * board's (ADR 0100) are the only `linear` animations in this sheet -- everything
-   * else steps, and a dash crawling in six visible jumps reads as a rendering fault
-   * rather than as movement.
-   *
-   * `--station-h` is the same number `runFlowLayout.ts` gives the nodes;
-   * `runFlowLayout.test.ts` reads this block and fails if the two ever disagree.
-   *
-   * The canvas carries a GROUND: page stock inside one keyline, printed with a
-   * registration grid. It was transparent, and plates lying on the reading field with
-   * nothing under them read as a row of objects rather than as a drawing. The grid is
-   * this sheet's, not @xyflow/react's `<Background>`, which is still unused.
-   *
-   * Of @xyflow/react's own look nothing survives but what it is genuinely good at:
-   * node placement, edge paths, markers and the flow animation. The canvas is
-   * `aria-hidden` (see RunFlow.tsx).
-   */
-
-  .run-map {
-    /* Pinned against `runFlowLayout.ts` by its own test -- see the note above. */
-    --station-h: 96px;
+   * A building per stage, left to right in the order they happen, a road between each and the
+   * next, and a courier carrying the work along the road out of a stage still working (ADR 0116,
+   * `RunFlow.tsx`). The frame is a strip: a run is a short street, wider than it is deep. */
+  .village--strip {
+    aspect-ratio: 16 / 5;
+    min-height: 11rem;
   }
 
   /* -- the chain: another run, either side of this one --------------------------- */
@@ -2635,303 +2596,6 @@
   }
 
   /* -- the canvas ---------------------------------------------------------------- */
-
-  /* Tall enough for the plate plus the ply shadow beneath it, which would otherwise
-   be clipped by the scroll container and leave the row looking pasted on -- plus the
-   margin the drawing needs to sit IN its field rather than butt the keyline. */
-  .run-map__canvas {
-    width: 100%;
-    height: calc(var(--station-h) + 44px);
-    overflow-x: auto;
-    overflow-y: hidden;
-
-    /* THE DRAWING HAS A GROUND NOW. It used to be transparent, which left the plates
-     floating on the reading field with nothing under them: a row of objects rather
-     than a drawing OF something, and the reason the whole figure read as flat however
-     well each plate was cut.
-     *
-     * The ground is the page stock inside its own keyline -- the same one ply every
-     * other bounded field in this sheet declares, so nothing gains a shadow -- carrying
-     * a registration grid. Registration marks are what a press prints to align a sheet,
-     * which is this system's own object for "a surface something is drawn on", and the
-     * pitch is read as texture rather than counted. `--rule` at 1px is the faintest dot
-     * that survives a non-retina screen; anything lighter dithered away entirely. */
-    background-color: var(--page);
-    background-image: radial-gradient(circle at 1px 1px, var(--rule) 1px, transparent 0);
-    background-size: 18px 18px;
-    border: var(--hair) solid var(--rule);
-    border-radius: var(--r-leaf);
-  }
-
-  .run-map__canvas .react-flow {
-    background: transparent;
-  }
-
-  .run-map__canvas .react-flow__pane {
-    cursor: default;
-  }
-
-  /* -- the connection ------------------------------------------------------------ */
-
-  .run-map__canvas .react-flow__edge.run-link .react-flow__edge-path {
-    stroke: var(--ink-2);
-    stroke-width: 2px;
-    fill: none;
-  }
-
-  .run-map__canvas .react-flow__edge.run-link .react-flow__arrowhead polyline,
-  .run-map__canvas .react-flow__edge.run-link .react-flow__arrowhead path {
-    stroke: var(--ink-2);
-    fill: var(--ink-2);
-  }
-
-  /* A run that stopped never travelled the rest of the line, so what is left of it
-   is drawn as the hairline of something that did not happen. */
-  .run-map__canvas .react-flow__edge.run-link--lapsed .react-flow__edge-path {
-    stroke: var(--rule-strong);
-    stroke-width: 1px;
-    stroke-dasharray: 3 4;
-  }
-
-  /* The live one, and the one authored moment in the whole drawing. @xyflow/react marks
-   an animated edge with `.animated` and animates the dash itself; this restates it so
-   the dash, the pace and the direction are this sheet's decision rather than the
-   library's default.
-   *
-   * IT STAYS `linear`, AND THAT EXCEPTION IS ALREADY ARGUED at the top of this block:
-   * a travelling dash stepped at a legible frame count reads as a rendering fault, not
-   * as movement, which is the one place stepping this sheet's motion makes it say
-   * something false. Do not "fix" it to `steps()` to match `DESIGN.md`; that was tried.
-   *
-   * What changed is only its WEIGHT. At 2px in Ink 2 the live edge was the same line as
-   * the settled one wearing a dash, so the single honest live signal in the drawing was
-   * the thing hardest to find in it. Full ink at 2.5px against the settled rule's 2px in
-   * Ink 2 makes "something is happening" legible across a desk, which is the distance an
-   * operator mid-call actually reads this from. `butt` caps so each dash keeps the length
-   * the dasharray gives it -- round caps bled the gaps closed at this weight and the line
-   * stopped reading as travelling at all. */
-  .run-map__canvas .react-flow__edge.animated .react-flow__edge-path {
-    stroke: var(--ink);
-    stroke-width: 2.5px;
-    stroke-dasharray: 9 7;
-    stroke-linecap: butt;
-    animation: run-link-flow 620ms linear infinite;
-  }
-
-  @keyframes run-link-flow {
-    to {
-      stroke-dashoffset: -16;
-    }
-  }
-
-  /* -- a plate -------------------------------------------------------------------- */
-
-  .run-plate {
-    position: relative;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: var(--s-1);
-    width: 100%;
-    height: 100%;
-    padding: var(--s-3) var(--s-4);
-    border-radius: var(--r-leaf);
-  }
-
-  /* A stage of work: a leaf lying on the board. Depth is declared ONCE and each of the
-   three plates declares it as a keyline, so none of them carries a shadow too. */
-  .run-plate--work {
-    background: var(--leaf);
-    border: var(--hair) solid var(--rule-strong);
-  }
-
-  /* The verdict: the stamp that closes the ledger, and the one inked object in the
-   row. Only where the run actually succeeded -- a failed verdict is an errata slip
-   below, and a run still going has no verdict to stamp yet. */
-  .run-plate--stamp {
-    background: var(--ink);
-    border: var(--hair) solid var(--ink);
-  }
-
-  .run-plate--stamp .run-plate__name,
-  .run-plate--stamp .run-plate__datum,
-  /* Granted green is a tone for paper. On the inked stamp it measured 2.2:1 and the
-   word under the figure was effectively unreadable; the mark's GEOMETRY still carries
-   the state, which is the whole reason hue is the third carrier and not the first. */
-  .run-plate--stamp .mark {
-    color: var(--leaf);
-  }
-
-  /* A run that stopped, wearing the correction language: vermilion rules top and
-   bottom on slip ground, cut at 1px like every other errata in this interface. */
-  .run-plate--errata {
-    background: var(--errata-ground);
-    border: var(--hair) solid var(--errata);
-    border-top-width: 2px;
-    border-bottom-width: 2px;
-    border-radius: 1px;
-  }
-
-  /* Still working: the board's own hue washed under the leaf, so the plate the run is
-   on reads as the live one at a glance across the whole row. */
-  .run-plate--pending {
-    background: color-mix(in srgb, var(--board) 16%, var(--leaf));
-    border-style: dashed;
-  }
-
-  /* THE PLATE HAS A HEAD AND A BODY. The three lines used to be one flat stack of
-   equal weight, so the eye had to read the plate to find out what it was -- across a
-   row of them that is the "grid of equal cards" this system spends its whole vocabulary
-   avoiding, arrived at from the inside.
-   *
-   * A hairline under the name cuts it into a head, which is what every other bounded
-   * block in this sheet does at its top edge, and it gives the figure below something
-   * to sit under instead of floating between two neighbours. The rule is the plate's
-   * own keyline colour at half strength: present enough to divide, quiet enough that
-   * the datum stays the loudest thing on the plate. */
-  .run-plate__name {
-    font-family: var(--face-display);
-    font-size: var(--t-micro);
-    font-weight: 700;
-    font-variation-settings: "wdth" 84;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
-    color: var(--ink-2);
-    padding-bottom: var(--s-2);
-    border-bottom: var(--hair) solid var(--rule);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* On the inked stamp the paper rule disappears into the ink, so it is restated in the
-   leaf tone it letters with -- at a low alpha, because a full-strength rule on ink reads
-   as a second object rather than a division. */
-  .run-plate--stamp .run-plate__name {
-    border-bottom-color: rgba(251, 248, 240, 0.28);
-  }
-
-  /* The correction keeps its own language down to the division inside it. */
-  .run-plate--errata .run-plate__name {
-    border-bottom-color: color-mix(in srgb, var(--errata) 34%, transparent);
-  }
-
-  /* The loudest line on the plate. "Did my data come in, and how much" is the
-   question this leaf exists to answer, so the figure is set at reading size in the
-   machine face with tabular figures, not tucked under the mark as a footnote. */
-  .run-plate__datum {
-    font-family: var(--face-mono);
-    font-size: var(--t-body);
-    font-feature-settings: "tnum";
-    line-height: 1.2;
-    color: var(--ink);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .run-plate .mark {
-    min-width: 0;
-  }
-
-  /* HOW FAR, along the plate's own foot.
-   *
-   * The drawing says which stage the run is on and the figure says the count; between the
-   * two there was no way to see how much work was left without reading two numbers and
-   * dividing them. This is that division, drawn -- a rule inked as far as the work has
-   * gone, the same object `.gathering` is below the canvas, cut into the plate's foot so
-   * the plate reads as a thing filling up rather than a thing with a bar stuck on it.
-   *
-   * It sits inside the keyline, takes the plate's own bottom radius, and is absolutely
-   * positioned: a reading arrives every second, and anything in flow would move the handle
-   * positions `RemeasurePlates` measured at mount. 3px, because 2px read as a heavier
-   * keyline and 4px read as a control. */
-  .run-plate__gathered {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 3px;
-    overflow: hidden;
-    border-bottom-left-radius: inherit;
-    border-bottom-right-radius: inherit;
-    background: var(--rule);
-  }
-
-  .run-plate__gathered-ink {
-    display: block;
-    height: 100%;
-    width: 100%;
-    background: var(--ink);
-    /* Scaled from the left rather than animating width, which would relayout the rule on
-     every reading. Stepped like everything else that moves in this sheet. */
-    transform-origin: left center;
-    transition: transform var(--hinge);
-  }
-
-  /* -- the connectors -------------------------------------------------------------- */
-
-  /* The punched hole the hinge and the tab strip already use, on the edges where
-   something is actually wired. Both ends used to show one anyway, connected to
-   nothing, which is the tell that a canvas was dropped in rather than drawn.
-   *
-   * `top` is a real offset, NOT `50%` with a `translateY(-50%)` over it:
-   * @xyflow/react measures a handle's LAID-OUT box to place the edge endpoint and
-   * never sees the transform, so a hole centred by transform sat 4.5px below where
-   * its own edge arrived and every connection left the plate with a small kink. */
-  .run-map__canvas .react-flow__handle.run-plate__in,
-  .run-map__canvas .react-flow__handle.run-plate__out {
-    top: calc(50% - 4.5px);
-    width: 9px;
-    height: 9px;
-    min-width: 0;
-    min-height: 0;
-    border: var(--hair) solid var(--ink);
-    border-radius: 50%;
-    background: var(--page);
-    box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4);
-    transform: none;
-  }
-
-  .run-map__canvas .react-flow__handle.run-plate__out {
-    right: -4.5px;
-  }
-
-  /* Only the LEAVING side is punched. The arriving side is where the arrowhead lands, and
-   an arrow into a hole is two marks saying "the connection ends here" stacked on each
-   other. The handle still has to exist for @xyflow/react to anchor the edge to it, so it
-   stays as a point with nothing drawn. */
-  .run-map__canvas .react-flow__handle.run-plate__in {
-    left: 0;
-    top: calc(50% - 0.5px);
-    width: 1px;
-    height: 1px;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  /* `visibility: hidden`, NEVER `display: none`. @xyflow/react's own troubleshooting says
-   it outright -- "avoid using display: none to hide handles; use opacity: 0 or
-   visibility: hidden instead" -- because a display:none handle has no box to measure, and
-   the library measures every handle on a node to place that node's edge endpoints. Measured
-   here, the hidden one reported its top as -79.5px against a 96px plate, which is the
-   garbage that was being fed back into the endpoint arithmetic. `visibility` keeps the box
-   and the layout, and draws nothing. */
-  .run-plate--last .run-plate__out,
-  .run-plate--only .run-plate__out {
-    visibility: hidden;
-  }
-
-  /* The flow is the only thing moving here, and it is the thing a reader who asked
-   not to have motion most wants stilled. The dash stays, so a live edge still reads
-   as different from a settled one without anything travelling. */
-  @media (prefers-reduced-motion: reduce) {
-    .run-map__canvas .react-flow__edge.animated .react-flow__edge-path {
-      animation: none;
-    }
-  }
 
   /* -- the dials, while they are still moving -------------------------------------
    *
@@ -3848,262 +3512,20 @@
     max-height: var(--lineage-h);
   }
 
-  /* The ground is the page stock inside one keyline, as the run map's is; here the dots are
-   * `@xyflow/react`'s own <Background>, because on a board that pans the grid must pan too. */
+  /* The lineage's village fills the bench's height beside its details, and its frame is the
+   * village's own: one keyline round the page stock (ADR 0116). */
   .lineage-board {
     position: relative;
-    height: var(--lineage-h);
+    display: grid;
+    gap: var(--s-3);
+    align-content: start;
     min-width: 0;
     margin: 0;
-    overflow: hidden;
-    background: var(--page);
-    border: var(--hair) solid var(--rule);
-    border-radius: var(--r-leaf);
-
-    --xy-background-pattern-color: var(--rule-strong);
-    --xy-controls-button-background-color: var(--leaf);
-    --xy-controls-button-background-color-hover: var(--page);
-    --xy-controls-button-color: var(--ink);
-    --xy-controls-button-color-hover: var(--ink);
-    --xy-controls-button-border-color: var(--rule);
-    --xy-controls-box-shadow: none;
-    --xy-minimap-background-color: var(--leaf);
-    --xy-minimap-mask-background-color: rgba(22, 21, 15, 0.08);
-    --xy-minimap-mask-stroke-color: var(--rule-strong);
-    --xy-minimap-mask-stroke-width: 1;
   }
 
-  .lineage-board .react-flow {
-    background: transparent;
-  }
-
-  .lineage-board .react-flow__controls,
-  .lineage-board .react-flow__minimap {
-    border: var(--hair) solid var(--rule-strong);
-    border-radius: var(--r-plate);
-  }
-
-  .lineage-board .react-flow__node-card {
-    cursor: grab;
-  }
-
-  .lineage-board .react-flow__node-card.dragging {
-    cursor: grabbing;
-  }
-
-  /* A column's heading: how far it stands from the raw lake, ruled like a table head. */
-  .lineage-head {
-    display: block;
-    padding-bottom: var(--s-2);
-    border-bottom: var(--hair) solid var(--rule-strong);
-    font-family: var(--face-display);
-    font-size: var(--t-micro);
-    font-weight: 700;
-    font-variation-settings: "wdth" 84;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--ink-2);
-    white-space: nowrap;
-  }
-
-  /* A card is a slip of leaf, `CARD_W` x `CARD_H` in `LineageCanvas.tsx`: the numbers are one,
-   * and the edges end where the slip does. Head, name, foot -- read in that order, like the
-   * header, the table name and the first row of a schema diagram. */
-  .lineage-card {
-    width: 248px;
-    height: 96px;
-  }
-
-  .lineage-card__face {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: var(--s-1);
-    width: 100%;
-    height: 100%;
-    padding: var(--s-2) var(--s-3);
-    border: var(--hair) solid var(--rule-strong);
-    border-radius: var(--r-plate);
-    background: var(--leaf);
-    color: var(--ink);
-    font: inherit;
-    text-align: left;
-    cursor: inherit;
-  }
-
-  .lineage-card__face:hover {
-    background: color-mix(in srgb, var(--board) 8%, var(--leaf));
-  }
-
-  .lineage-card__face:focus-visible {
-    outline: 2px solid var(--ink);
-    outline-offset: 2px;
-  }
-
-  .lineage-card--raw .lineage-card__face {
-    border-style: double;
-    border-width: 3px;
-  }
-
-  .lineage-card--missing .lineage-card__face {
-    border-style: dashed;
-    background: transparent;
-  }
-
-  .lineage-card--chain .lineage-card__face,
-  .lineage-card--downstream .lineage-card__face {
-    border-color: var(--ink);
-  }
-
-  .lineage-card--downstream .lineage-card__face {
-    border-style: dotted;
-    border-width: 2px;
-  }
-
-  .lineage-card--selected .lineage-card__face {
-    border: 2px solid var(--ink);
-    background: color-mix(in srgb, var(--ink) 7%, var(--leaf));
-  }
-
-  /* Its upstream cannot be read, so its left edge is ruled twice: no edge above it is drawn,
-   * and the card says why in words on its last line. */
-  .lineage-card--undeclared .lineage-card__face {
-    border-left: 4px double var(--ink-2);
-  }
-
-  /* Dimmed, not faded out: it is still a card a reader may press, so every line on it keeps
-   * 4.5:1. Opacity could not promise that -- at 0.62 the name held but the 11px kind and note
-   * in Ink 2 fell to 2.99:1 -- so the card steps each ink down one tone instead (Ink 2 runs
-   * 7.4:1 on the leaf, Ink 3 5.6:1) and lays its face on the page rather than the leaf. */
-  .lineage-card--dim {
-    --ink: var(--ink-2);
-    --ink-2: var(--ink-3);
-  }
-
-  .lineage-card--dim .lineage-card__face {
-    border-color: var(--rule);
-    background: var(--page);
-  }
-
-  .lineage-card__head,
-  .lineage-card__foot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--s-2);
-    min-width: 0;
-  }
-
-  .lineage-card__kind,
-  .lineage-card__where,
-  .lineage-card__note {
-    overflow: hidden;
-    font-family: var(--face-display);
-    font-size: var(--t-micro);
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-    white-space: nowrap;
-    color: var(--ink-2);
-  }
-
-  .lineage-card__where {
-    flex: none;
-    color: var(--ink);
-  }
-
-  .lineage-card__note--errata {
-    color: var(--errata-ink);
-  }
-
-  .lineage-card__name {
-    overflow: hidden;
-    font-family: var(--face-mono);
-    font-size: var(--t-small);
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .lineage-card .mark {
-    font-size: var(--t-micro);
-  }
-
-  /* Present for @xyflow/react to anchor an edge to, and never seen: nothing connects here.
-   * `visibility`, never `display: none`, for the reason the run map's handles give. */
-  .lineage-board .react-flow__handle.lineage-card__port {
-    visibility: hidden;
-  }
-
-  .lineage-wire {
-    stroke: var(--rule-strong);
-    stroke-width: 1.25px;
-  }
-
-  .lineage-wire--chain,
-  .lineage-wire--downstream {
-    stroke: var(--ink);
-    stroke-width: 2.5px;
-  }
-
-  .lineage-wire--downstream {
-    stroke-dasharray: 2 4;
-    stroke-linecap: round;
-  }
-
-  .lineage-wire--missing {
-    stroke-dasharray: 6 4;
-  }
-
-  .lineage-wire--dim {
-    opacity: 0.25;
-  }
-
-  /* The selection's chains flow toward the data's destination: round beads of ink, wider than
-   * the wire they ride, so the wire's own stroke shows between them (ADR 0100). `linear` for the
-   * reason the run map's live edge gives: a travelling bead stepped at a legible frame count
-   * reads as a rendering fault, not as movement. */
-  .lineage-wire__flow {
-    fill: none;
-    stroke: var(--ink);
-    stroke-width: 8px;
-    stroke-dasharray: 0.01 34;
-    stroke-linecap: round;
-    pointer-events: none;
-    animation: lineage-flow 900ms linear infinite;
-  }
-
-  @keyframes lineage-flow {
-    to {
-      stroke-dashoffset: -34.01;
-    }
-  }
-
-  /* Stilled beads would only be noise on the line; the wire's stroke and the cards' words
-   * already say which chain is which. */
-  @media (prefers-reduced-motion: reduce) {
-    .lineage-wire__flow {
-      display: none;
-    }
-  }
-
-  .lineage-mini {
-    fill: var(--rule-strong);
-  }
-
-  .lineage-mini--selected,
-  .lineage-mini--chain,
-  .lineage-mini--downstream {
-    fill: var(--ink);
-  }
-
-  .lineage-mini--dim {
-    fill: var(--rule);
-  }
-
-  .lineage-mini--head {
-    fill: transparent;
+  .lineage-board .village {
+    aspect-ratio: auto;
+    height: var(--lineage-h);
   }
 
   /* -- the details beside the board ---------------------------------------------- */
@@ -5904,6 +5326,47 @@
       grid-template-columns: minmax(0, 1fr);
       grid-template-areas: "identity" "account" "when" "actions";
     }
+  }
+
+  /* The Journal's village (ADR 0116): a printed diorama on the page, framed by a hairline like
+   any plate. The canvas is drawn by `lib/village/runtime.ts`, which marks the frame
+   `data-village="failed"` where there is no WebGL; the frame then shows its own sentence in
+   place of an empty box. A row or a link the pointer is over in the picture is lit with the
+   same wash a hovered row takes, so the words answer the picture. */
+  .village {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    background: var(--page);
+  }
+
+  .village__picture,
+  .village canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .village__failed {
+    display: none;
+    padding: var(--s-5);
+  }
+
+  .village[data-village="failed"] {
+    aspect-ratio: auto;
+  }
+
+  .village[data-village="failed"] .village__picture {
+    display: none;
+  }
+
+  .village[data-village="failed"] .village__failed {
+    display: block;
+  }
+
+  .table > tbody > tr[data-lit] > td {
+    background: color-mix(in srgb, var(--board) 8%, transparent);
   }
 
   /* A dashboard printed from the browser (its "Print / PDF" plate): the book's chrome --

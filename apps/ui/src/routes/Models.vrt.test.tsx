@@ -11,7 +11,7 @@
 import { describe, test as it } from "vitest";
 
 import { modelsAnswers, TENANT } from "@/test/modelsBook.ts";
-import { open } from "@/test/visual.tsx";
+import { open, WEBGL_TIMEOUT } from "@/test/visual.tsx";
 
 const MODELS = `/tenants/${TENANT}/models`;
 const LINEAGE = `${MODELS}?view=lineage&model=`;
@@ -27,14 +27,14 @@ describe("the models list, in English, read by an admin", () => {
 });
 
 describe("the lineage of customer_health_daily, in English", () => {
-  it("on the board at 1440 px", async () => {
+  it("on the board at 1440 px", { timeout: WEBGL_TIMEOUT }, async () => {
     await open(`${LINEAGE}customer_health_daily`, "en", modelsAnswers("admin")).matches(
       "lineage-en-1440",
       1440,
     );
   });
 
-  it("as names at 390 px", async () => {
+  it("as names at 390 px", { timeout: WEBGL_TIMEOUT }, async () => {
     await open(`${LINEAGE}customer_health_daily`, "en", modelsAnswers("admin")).matches(
       "lineage-en-390",
       390,
@@ -43,7 +43,7 @@ describe("the lineage of customer_health_daily, in English", () => {
 });
 
 describe("the lineage of churn_watch, which refs a deleted model, in English", () => {
-  it("as names and paths at 390 px", async () => {
+  it("as names and paths at 390 px", { timeout: WEBGL_TIMEOUT }, async () => {
     await open(`${LINEAGE}churn_watch`, "en", modelsAnswers("admin")).matches(
       "lineage-missing-en-390",
       390,

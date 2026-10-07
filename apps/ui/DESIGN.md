@@ -431,6 +431,33 @@ it shows a proof slip with its content address.
 - **Cover sizes:** a 4.5rem headline (3.75rem under 1100px, 2rem on a phone) and a 1.5rem lead.
   These are local to the cover, not steps of the operating type ramp.
 
+## The Journal's Village
+
+`/tenants/:id/journal?view=village` reads the same runs as the ledger, drawn as people at work in
+a small printed diorama (ADR 0116, `docs/design/village.md`). It is a view of the Journal, not a
+division, and the ledger stays the default.
+
+- **A model village on the desk.** It is photographed like a crafted miniature: a warm key light
+  from the north-west, soft shadows on the board and on the page beneath it, ambient occlusion
+  in every crease, a tilt-shift band of focus, and the page's grain over the frame. "Rules, never
+  shadows" holds for the book's sheets; the village is an object standing on the page, so it
+  casts one. The camera is fixed: it does not orbit or zoom.
+- **In the system's inks.** Every colour lies along one of the tonal ramps above
+  (`.impeccable/design.json`): fields and trees on Grass, the lake on Teal, timber and skin on
+  Sienna, stone on Bone and Ink, a blue cloak on Ultramarine. Every model is outlined in Ink.
+- **The wheel, read literally.** A division's canonical hue is worn only by the roof of the
+  building that stands for that division, and pressing the building opens it; there the hue
+  names the division, as a tab's does. Everything else takes a ramp's other steps. Vermilion is
+  the errata slip's, here too: a failed run, a refused record set aside, a lapsed road.
+- **Stop-motion.** The world moves ten frames a second and holds between them: ADR 0014's
+  stepped motion in three dimensions. Under reduced motion each poll paints one settled frame.
+- **Every graph is a village.** A run's map and the models' lineage are drawn the same way: a
+  building per node, a road per edge, traffic on the roads that flow (ADR 0116). There is no
+  node-and-edge drawing in the interface that is not one.
+- **Words beside the picture.** The canvas is `aria-hidden` and draws no letter. The work list
+  and the buildings list beneath it are the content; pointing at a figure or a building lights its
+  row with the hovered row's wash.
+
 ## The Title Page's Sky
 
 The sign-in leaf lies on a board printed in the reader's weather (ADR 0115). The leaf never

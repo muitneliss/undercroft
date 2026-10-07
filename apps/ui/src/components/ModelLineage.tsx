@@ -73,6 +73,7 @@ function LineageView({ graph, tenantId }: { graph: Graph; tenantId: string }): R
     [list.data],
   );
   const benchRef = useRef<HTMLDivElement>(null);
+  const wordsRef = useRef<HTMLDivElement>(null);
   const asked = params.get(MODEL_PARAM);
   const selected = selectedNode(graph, params);
   const related = isRelatedScope(params) && selected !== null;
@@ -88,7 +89,7 @@ function LineageView({ graph, tenantId }: { graph: Graph; tenantId: string }): R
   );
 
   return (
-    <div className="stack">
+    <div className="stack" ref={wordsRef}>
       <p className="prose">{t("lineage.lead")}</p>
       <Picker graph={graph} related={related} selected={selected} tenantId={tenantId} />
       {asked !== null && selected === null ? (
@@ -103,6 +104,7 @@ function LineageView({ graph, tenantId }: { graph: Graph; tenantId: string }): R
           focus={focus}
           graph={graph}
           select={select}
+          words={wordsRef}
         />
         <LineageDetail
           builds={builds}
