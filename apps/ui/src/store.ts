@@ -22,10 +22,11 @@
  * beside `locale`, read by nothing, and a remembered selection that disagrees with the
  * address bar is exactly the drift this store exists to prevent.
  *
- * ## Why `persist`, and why only over `locale`
+ * ## Why `persist`, and why only over `locale` and `filmHeld`
  *
  * A language chosen on one visit and forgotten by the next is not a chosen language. So the
- * locale is written to `localStorage` and read back at startup. The drafts below are not:
+ * locale is written to `localStorage` and read back at startup, and so is a reader's request
+ * that the cover's film stand still, for the same reason. The drafts below are not:
  * a half-made choice restored days later, after the thing it referred to may have changed,
  * is worse than an empty form.
  */
@@ -330,6 +331,16 @@ interface UiState {
    */
   assistantOpen: boolean;
   toggleAssistant: () => void;
+  /**
+   * Whether the reader stopped the cover's film.
+   *
+   * WCAG 2.2.2: motion that starts by itself and runs past five seconds beside text needs a
+   * way to stop it, and `prefers-reduced-motion` is a setting most readers never find. Persisted
+   * with the locale, because a reader who asked once for the vault to stand still should not
+   * have to ask again on the next visit.
+   */
+  filmHeld: boolean;
+  toggleFilm: () => void;
   /**
    * The question being typed, before it is sent.
    *
@@ -939,6 +950,14 @@ function assistantSlice(
   };
 }
 
+/** The cover's film, stopped or running. See `filmHeld`. */
+function filmSlice(set: Setter): Pick<UiState, "filmHeld" | "toggleFilm"> {
+  return {
+    filmHeld: false,
+    toggleFilm: (): unknown => set((state) => ({ filmHeld: !state.filmHeld })),
+  };
+}
+
 /** A custom schedule being written. See `cronDraft`. */
 function cronSlice(set: Setter): Pick<UiState, "cronDraft" | "setCronDraft" | "dropCronDraft"> {
   return {
@@ -989,10 +1008,11 @@ export const useUiStore = create<UiState>()(
       ...questionSlice(set),
       ...dashboardSlice(set),
       ...assistantSlice(set),
+      ...filmSlice(set),
     }),
     {
       name: "undercroft.ui",
-      partialize: (state) => ({ locale: state.locale }),
+      partialize: (state) => ({ locale: state.locale, filmHeld: state.filmHeld }),
     },
   ),
 );

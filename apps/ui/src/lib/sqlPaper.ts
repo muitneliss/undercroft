@@ -53,9 +53,10 @@ export const paper = EditorView.theme({
   ".cm-scroller": {
     fontFamily: "var(--face-mono)",
     lineHeight: "1.7",
+    // No `scrollbarWidth` / `scrollbarColor` here: either one makes Chrome drop the sheet's
+    // `::-webkit-scrollbar` for this scroller and hand back macOS's overlay bar, which is the
+    // long line that reads as cut off. `scripts/scrollbars.test.ts` keeps them out.
     overflow: "auto",
-    scrollbarWidth: "thin",
-    scrollbarColor: "var(--rule-strong) transparent",
   },
   ".cm-content": { padding: "var(--s-3) 0", caretColor: "var(--ink)" },
   ".cm-line": { padding: "0 var(--s-4)" },
@@ -69,12 +70,16 @@ export const paper = EditorView.theme({
   ".cm-lineNumbers .cm-gutterElement": { padding: "0 var(--s-2) 0 var(--s-3)" },
   ".cm-activeLine": { backgroundColor: "rgba(22, 21, 15, 0.035)" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--ink)", borderLeftWidth: "2px" },
+  // The selection is the page's own (`::selection` in the sheet): the open division's board
+  // mixed toward the leaf. It was People's ultramarine and Sources' chrome on every division,
+  // which is a wheel hue printed inside a page that is not its own. A match and a bracket are
+  // quieter than the selection, in ink, so the three still read apart.
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-    backgroundColor: "rgba(35, 76, 158, 0.18)",
+    backgroundColor: "color-mix(in srgb, var(--board) 32%, var(--leaf))",
   },
-  ".cm-selectionMatch": { backgroundColor: "rgba(237, 166, 0, 0.28)" },
+  ".cm-selectionMatch": { backgroundColor: "rgba(22, 21, 15, 0.09)" },
   ".cm-matchingBracket, &.cm-focused .cm-matchingBracket": {
-    backgroundColor: "rgba(237, 166, 0, 0.32)",
+    backgroundColor: "rgba(22, 21, 15, 0.14)",
     outline: "none",
   },
   // The completion list is a leaf lying over the page: a hairline and the board stock, the

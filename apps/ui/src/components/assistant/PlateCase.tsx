@@ -85,32 +85,36 @@ function TablePlate({ output }: { output: unknown }): React.JSX.Element | null {
   const columns = Object.keys(first).slice(0, 6);
 
   return (
-    <table className="table">
-      {/* The count goes through i18next's own plural and number formatting rather than through
+    // In a scroller like every other table in the book: six columns of a lake row are wider
+    // than the interleaf, and `.book` clips rather than scrolls.
+    <div className="table-scroll">
+      <table className="table">
+        {/* The count goes through i18next's own plural and number formatting rather than through
           `formatCount`: this is a COUNT and follows the reader's language, which is exactly the
           distinction `.claude/rules/i18n.md` draws against an amount. */}
-      <caption className="label">{t("assistant.figureRows", { count: rows.length })}</caption>
-      <thead>
-        <tr>
-          {columns.map((name) => (
-            <th key={name}>{name}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.slice(0, 20).map((row, index) => (
-          // The row's own id when it has one: these lists arrive whole rather than streaming,
-          // so an index is stable here in a way it is not for a growing transcript.
-          <tr key={cell(row.id ?? row.lakeKey ?? index)}>
+        <caption className="label">{t("assistant.figureRows", { count: rows.length })}</caption>
+        <thead>
+          <tr>
             {columns.map((name) => (
-              <td className="datum" key={name}>
-                {cell(row[name])}
-              </td>
+              <th key={name}>{name}</th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.slice(0, 20).map((row, index) => (
+            // The row's own id when it has one: these lists arrive whole rather than streaming,
+            // so an index is stable here in a way it is not for a growing transcript.
+            <tr key={cell(row.id ?? row.lakeKey ?? index)}>
+              {columns.map((name) => (
+                <td className="datum" key={name}>
+                  {cell(row[name])}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

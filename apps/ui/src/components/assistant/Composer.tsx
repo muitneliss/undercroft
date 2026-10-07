@@ -16,6 +16,7 @@
  * technology, rather than a div that happens to be clickable.
  */
 
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useUiStore } from "@/store.ts";
@@ -34,6 +35,15 @@ export function Composer({
   const setDraft = useUiStore((state) => state.setAssistantDraft);
 
   const ready = draft.trim() !== "" && !answering;
+
+  // The reader just opened the interleaf to ask something, so the caret goes where they type.
+  // Without it a keyboard reader lands back on the fist and has to walk the whole leaf to reach
+  // a panel the DOM sets after it. A ref and an effect rather than `autoFocus`, which also fires
+  // on every remount the reader did not ask for.
+  const boxRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    boxRef.current?.focus();
+  }, []);
 
   return (
     <form
@@ -56,6 +66,7 @@ export function Composer({
       <label className="field">
         <span className="label">{t("assistant.askLabel")}</span>
         <input
+          ref={boxRef}
           className="input"
           type="text"
           value={draft}

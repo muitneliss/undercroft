@@ -14,6 +14,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { Errata } from "@/components/Errata.tsx";
+import { StatusLine } from "@/components/StatusLine.tsx";
 
 export function OneTimeSecret({
   token,
@@ -55,11 +56,7 @@ export function OneTimeSecret({
           {t("secret.done")}
         </button>
       </div>
-      {copy.isSuccess ? (
-        <p className="note" role="status">
-          {t("secret.copied")}
-        </p>
-      ) : null}
+      <StatusLine className="note" text={copy.isSuccess ? t("secret.copied") : null} />
       {copy.isError ? (
         <Errata heading={t("secret.notCopied")} live={true} error={copy.error} />
       ) : null}

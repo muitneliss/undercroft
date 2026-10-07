@@ -76,7 +76,9 @@ export function Customer({ tenantId }: { tenantId: string }): React.JSX.Element 
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("nav.customers")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("nav.customers")}
+      </div>
       <div className="body stack">
         <h1>{name}</h1>
         <p className="prose prose--lead">{t("tenants.aboutLead")}</p>
@@ -99,7 +101,7 @@ export function Customer({ tenantId }: { tenantId: string }): React.JSX.Element 
 
       <div className="band-rule" />
 
-      <div className="head">{t("tenants.insideHead")}</div>
+      <h2 className="head">{t("tenants.insideHead")}</h2>
       <div className="body">
         <Directory tenantId={tenantId} />
       </div>

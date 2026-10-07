@@ -208,7 +208,9 @@ function DashboardLeaf({
 
   return (
     <div className="sheet sheet--dashboard">
-      <div className="head head--division">{t("reports.head")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("reports.head")}
+      </div>
 
       <DashboardHead
         tenantId={tenantId}
@@ -224,8 +226,6 @@ function DashboardLeaf({
 
       {edit ? (
         <>
-          <div className="band-rule" />
-          <div className="head">{t("dashboard.filtersEditHead")}</div>
           <FilterEditor filters={draft.filters} valid={valid} />
           <ReadingOrder layout={draft.layout} questions={questions} locale={locale} />
         </>
@@ -234,7 +234,7 @@ function DashboardLeaf({
       {draft.filters.length > 0 && valid ? (
         <>
           <div className="band-rule" />
-          <div className="head">{t("dashboard.filtersHead")}</div>
+          <h2 className="head">{t("dashboard.filtersHead")}</h2>
           <div className="body stack">
             <DashboardFilters filters={draft.filters} search={search} onApply={setSearch} />
           </div>

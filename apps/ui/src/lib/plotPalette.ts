@@ -5,29 +5,35 @@
  * bar in chrome would read as "sources" and a line in violet as "models". And the wheel's
  * own values are the wrong weight for a mark on the leaf -- chrome `#eda600` sits under
  * 2:1 against `#fbf8f0`, invisible as a thin line. So charts get a categorical set of their
- * own: the wheel's hue FAMILIES, restepped darker until every slot clears 3:1 on the leaf
- * (the WCAG 2.1 floor for a graphical object), with vermilion held out exactly as the
- * wheel holds it out, for the errata slip alone.
+ * own: the wheel's hue FAMILIES, restepped in OKLCH lightness off the board values (the
+ * deep hues lighter, the middle ones darker, so the set also spreads in lightness for a
+ * reader who cannot tell the hues apart) until no slot is a board hue and every slot
+ * clears 3:1 on the leaf (the WCAG 2.1 floor for a graphical object), with vermilion held
+ * out exactly as the wheel holds it out, for the errata slip alone.
+ *
+ * The set once carried six of the seven board hexes verbatim under this same paragraph, so a
+ * one-series chart in Reports was drawn in People's board. `plotPalette.test.ts` now fails
+ * if any slot or ramp step is a division's board.
  *
  * The dataviz validator the design method asks for was not available in this checkout, so
  * the contrast floor is pinned the other way: `plotPalette.test.ts` computes every slot's
  * ratio against the leaf with `lib/acetate`'s WCAG maths and fails below 3:1. The ordering
  * is by hue distance from its neighbours, so the first three series read apart.
  *
- * Sequential is the ultramarine family light to dark; diverging runs oxide through the leaf
+ * Sequential is the ultramarine family light to dark; diverging runs sienna through the leaf
  * to ultramarine. Status tones are the four marks' own colours, so a chart of run outcomes
  * says what the journal says.
  */
 
 /** Categorical slots, in the order series take them. Past seven, series fold to "Other". */
 export const CATEGORICAL: readonly string[] = [
-  "#234c9e", // ultramarine (people's family)
-  "#b24b1a", // sienna (customers')
-  "#3e782b", // green (journal's)
-  "#634cb0", // violet (models')
-  "#0f7673", // teal (lake's)
-  "#7f4023", // oxide (reports')
-  "#7a5a00", // chrome, restepped from #eda600 to clear the floor (sources')
+  "#3e6abf", // ultramarine family, lifted from #234c9e (people's board)
+  "#ca6133", // oxide family, lifted from #b24b1a (customers')
+  "#215b06", // grass family, deepened from #3e782b (journal's)
+  "#7f6ad1", // violet family, lifted from #634cb0 (models')
+  "#005957", // teal family, deepened from #0f7673 (lake's)
+  "#602403", // sienna family, deepened from #7f4023 (reports')
+  "#7a5a00", // chrome family, deepened from #eda600 to clear the floor (sources')
 ];
 
 /** The colour "Other" takes when series past the seventh are folded: the quiet ink. */
@@ -47,12 +53,12 @@ const SEQUENTIAL: readonly string[] = [
   "#98abd6",
   "#6a86bf",
   "#3f66ab",
-  "#234c9e",
+  "#1f4590",
   "#173570",
 ];
 
-/** Oxide through the leaf to ultramarine. */
-const DIVERGING: readonly string[] = ["#7f4023", "#b98a74", "#e8d9cf", "#98abd6", "#234c9e"];
+/** Sienna through the leaf to ultramarine. */
+const DIVERGING: readonly string[] = ["#692d0e", "#b98a74", "#e8d9cf", "#98abd6", "#1f4590"];
 
 /** The colour for the `index`th series, cycling past the end. */
 export function colourFor(index: number): string {

@@ -286,7 +286,9 @@ function QuestionLeaf({
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("reports.head")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("reports.head")}
+      </div>
 
       <QuestionHead
         tenantId={tenantId}
@@ -301,7 +303,7 @@ function QuestionLeaf({
       {edit ? (
         <>
           <Separator className="band-rule" />
-          <div className="head">{t("bi.workbenchHead")}</div>
+          <h2 className="head">{t("bi.workbenchHead")}</h2>
           <div className="body workbench">
             <DefinitionLeaf tenantId={tenantId} draft={draft} schema={schema} {...compiled} />
             <ResultLeaf draft={draft} reading={reading} locale={locale} busy={busy} />

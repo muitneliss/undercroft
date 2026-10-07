@@ -10,6 +10,7 @@ import { usePageLamp } from "@/components/usePageLamp.ts";
 import { useVaultFilm, type VaultRefs } from "@/components/useVaultFilm.ts";
 import { STAGES, STEPS, type StepId } from "@/lib/vault/model.ts";
 import type { VaultWords } from "@/lib/vault/runtime.ts";
+import { useUiStore } from "@/store.ts";
 
 import "@/styles/landing-agent.css";
 import "@/styles/landing-workflow.css";
@@ -95,6 +96,26 @@ function McpWorkflow(): React.JSX.Element {
   );
 }
 
+/**
+ * The reader's stop for the film. Its label stays put and `aria-pressed` says whether it is
+ * held, so a screen reader hears one control with a state rather than two controls by turns.
+ */
+function StillPlate(): React.JSX.Element {
+  const { t } = useTranslation();
+  const held = useUiStore((state) => state.filmHeld);
+  const toggleFilm = useUiStore((state) => state.toggleFilm);
+  return (
+    <button
+      className="plate plate--small landing__still"
+      type="button"
+      aria-pressed={held}
+      onClick={toggleFilm}
+    >
+      {t("landing.stillFilm")}
+    </button>
+  );
+}
+
 export function Landing(): React.JSX.Element {
   const { t } = useTranslation();
   const contentId = useId();
@@ -127,6 +148,9 @@ export function Landing(): React.JSX.Element {
   usePageLamp(pageRef);
   return (
     <div className="landing" ref={pageRef}>
+      {/* By night the cover is Ink, so the browser's own chrome is too; React hoists this into
+          the head and takes it out again when the reader signs in to the bone book. */}
+      <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#16150f" />
       <div className="landing__vault" aria-hidden="true">
         <canvas ref={canvasRef} />
       </div>
@@ -141,6 +165,7 @@ export function Landing(): React.JSX.Element {
         <nav className="landing__nav" aria-label={t("nav.sections")}>
           <a href={DOCUMENTATION}>{t("landing.docs")}</a>
           <Link to="/sign-in">{t("signIn.signIn")}</Link>
+          <StillPlate />
           <LanguageSwitcher />
         </nav>
       </header>

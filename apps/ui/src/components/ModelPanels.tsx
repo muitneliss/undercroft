@@ -84,6 +84,7 @@ export function TestsForm({
 }): React.JSX.Element {
   const modelTestColumnId = useId();
   const modelColumnsId = useId();
+  const columnHintId = useId();
   const { t } = useTranslation();
   const addColumn = useUiStore((state) => state.addModelTestColumn);
   const columnFieldRef = useRef<HTMLInputElement>(null);
@@ -119,8 +120,9 @@ export function TestsForm({
             <input
               autoComplete="off"
               className="input"
+              aria-describedby={columnHintId}
               id={modelTestColumnId}
-              list="model-columns"
+              list={modelColumnsId}
               maxLength={63}
               name="column"
               pattern="[a-z][a-z0-9_]*"
@@ -134,7 +136,9 @@ export function TestsForm({
                 <option key={column} value={column} />
               ))}
             </datalist>
-            <p className="field__hint">{t("models.addColumnHint")}</p>
+            <p className="field__hint" id={columnHintId}>
+              {t("models.addColumnHint")}
+            </p>
           </div>
           <div className="row">
             <button className="plate" type="submit">
@@ -206,54 +210,60 @@ function TestsTable({
   const removeColumn = useUiStore((state) => state.removeModelTestColumn);
 
   return (
-    <table className="table">
-      <thead>
-        <tr>
-          <th scope="col">{t("models.colColumn")}</th>
-          {TEST_KINDS.map((kind) => (
-            <th key={kind} scope="col">
-              {t(TEST_HEAD[kind])}
-            </th>
-          ))}
-          <th scope="col">{canEdit ? t("models.removeColumn") : ""}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map(([column, kinds]) => (
-          <tr key={column}>
-            <td className="datum">{column}</td>
+    <div className="table-scroll">
+      <table className="table">
+        <thead>
+          <tr>
+            <th scope="col">{t("models.colColumn")}</th>
             {TEST_KINDS.map((kind) => (
-              <td key={kind}>
-                <label className="punch">
-                  <input
-                    checked={kinds.includes(kind)}
-                    disabled={!canEdit}
-                    type="checkbox"
-                    onChange={(event): void => {
-                      setModelTest(column, kind, event.currentTarget.checked);
-                    }}
-                  />
-                  <span className="punch__box" />
-                  <span className="datum datum--quiet">{t(TEST_HEAD[kind])}</span>
-                </label>
-              </td>
+              <th key={kind} scope="col">
+                {t(TEST_HEAD[kind])}
+              </th>
             ))}
-            <td>
-              {canEdit ? (
-                <button
-                  className="plate plate--small"
-                  type="button"
-                  onClick={(): void => {
-                    removeColumn(column);
-                  }}
-                >
-                  {t("models.removeColumn")}
-                </button>
-              ) : null}
-            </td>
+            <th scope="col">{canEdit ? t("models.removeColumn") : ""}</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map(([column, kinds]) => (
+            <tr key={column}>
+              <td className="datum">{column}</td>
+              {TEST_KINDS.map((kind) => (
+                <td key={kind}>
+                  <label className="punch">
+                    {/* Named for its row as well as its column: every row has the same two
+                        ticks, and a list of controls all called "Unique" says nothing. */}
+                    <input
+                      aria-label={t("models.testOn", { test: t(TEST_HEAD[kind]), column })}
+                      checked={kinds.includes(kind)}
+                      disabled={!canEdit}
+                      type="checkbox"
+                      onChange={(event): void => {
+                        setModelTest(column, kind, event.currentTarget.checked);
+                      }}
+                    />
+                    <span className="punch__box" />
+                    <span className="datum datum--quiet">{t(TEST_HEAD[kind])}</span>
+                  </label>
+                </td>
+              ))}
+              <td>
+                {canEdit ? (
+                  <button
+                    aria-label={t("models.removeColumnNamed", { column })}
+                    className="plate plate--small"
+                    type="button"
+                    onClick={(): void => {
+                      removeColumn(column);
+                    }}
+                  >
+                    {t("models.removeColumn")}
+                  </button>
+                ) : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

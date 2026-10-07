@@ -12,7 +12,7 @@
  */
 
 import { useId, useRef } from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 
 import { type IngestKey, isSource, SOURCE_LABEL, SOURCES } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
@@ -119,61 +119,63 @@ function KeyTable({
   const locale = useUiStore((state) => state.locale);
 
   return (
-    <Table>
-      <TableCaption>{t("keys.caption", { count: keys.length })}</TableCaption>
-      <TableHeader>
-        <TableRow>
-          <TableHead scope="col">{t("keys.colLabel")}</TableHead>
-          <TableHead scope="col">{t("keys.colSources")}</TableHead>
-          <TableHead scope="col">{t("keys.colCreated")}</TableHead>
-          <TableHead scope="col">{t("keys.colLastUsed")}</TableHead>
-          <TableHead scope="col">{t("keys.colExpires")}</TableHead>
-          <TableHead scope="col">{t("keys.colRevoke")}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {keys.map((key) => (
-          <TableRow key={key.id}>
-            <TableCell>
-              <span className="datum">{key.label}</span>
-              <span className="datum datum--quiet journal__trigger">{key.id}</span>
-            </TableCell>
-            <TableCell className="datum datum--quiet">
-              {key.allowedSources.length === 0
-                ? t("keys.allSources")
-                : key.allowedSources
-                    .map((source) => (isSource(source) ? SOURCE_LABEL[source] : source))
-                    .join(", ")}
-            </TableCell>
-            <TableCell className="datum datum--quiet">
-              {formatDate(key.createdAt, locale)}
-            </TableCell>
-            <TableCell className="datum datum--quiet">
-              {lastUsedNote(t, locale, key.lastUsedAt)}
-            </TableCell>
-            <TableCell className="datum datum--quiet">
-              {key.expiresAt === null ? t("keys.noExpiry") : formatDate(key.expiresAt, locale)}
-            </TableCell>
-            <TableCell>
-              {key.revokedAt === null ? (
-                <button
-                  className="plate plate--small"
-                  type="button"
-                  disabled={revoking !== null}
-                  onClick={(): void => {
-                    onRevoke(key.id);
-                  }}
-                >
-                  {revoking === key.id ? t("keys.revoking") : t("keys.revoke")}
-                </button>
-              ) : (
-                <span className="datum datum--quiet">{t("keys.revoked")}</span>
-              )}
-            </TableCell>
+    <div className="table-scroll">
+      <Table>
+        <TableCaption>{t("keys.caption", { count: keys.length })}</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col">{t("keys.colLabel")}</TableHead>
+            <TableHead scope="col">{t("keys.colSources")}</TableHead>
+            <TableHead scope="col">{t("keys.colCreated")}</TableHead>
+            <TableHead scope="col">{t("keys.colLastUsed")}</TableHead>
+            <TableHead scope="col">{t("keys.colExpires")}</TableHead>
+            <TableHead scope="col">{t("keys.colRevoke")}</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {keys.map((key) => (
+            <TableRow key={key.id}>
+              <TableCell>
+                <span className="datum">{key.label}</span>
+                <span className="datum datum--quiet journal__trigger">{key.id}</span>
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {key.allowedSources.length === 0
+                  ? t("keys.allSources")
+                  : key.allowedSources
+                      .map((source) => (isSource(source) ? SOURCE_LABEL[source] : source))
+                      .join(", ")}
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {formatDate(key.createdAt, locale)}
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {lastUsedNote(t, locale, key.lastUsedAt)}
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {key.expiresAt === null ? t("keys.noExpiry") : formatDate(key.expiresAt, locale)}
+              </TableCell>
+              <TableCell>
+                {key.revokedAt === null ? (
+                  <button
+                    className="plate plate--small"
+                    type="button"
+                    disabled={revoking !== null}
+                    onClick={(): void => {
+                      onRevoke(key.id);
+                    }}
+                  >
+                    {revoking === key.id ? t("keys.revoking") : t("keys.revoke")}
+                  </button>
+                ) : (
+                  <span className="datum datum--quiet">{t("keys.revoked")}</span>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
@@ -196,6 +198,7 @@ function MintForm({
   const { t } = useTranslation();
   const keyExpiresId = useId();
   const keyLabelId = useId();
+  const sourcesHintId = useId();
 
   return (
     <form
@@ -237,8 +240,16 @@ function MintForm({
         />
       </div>
 
-      <fieldset className="field">
-        <legend className="label">{t("keys.sourcesLabel")}</legend>
+      {/* The one part of the form that may be left as it is, and the legend says so: choosing
+          no source is a choice, every source, which the hint beneath spells out. */}
+      <fieldset aria-describedby={sourcesHintId} className="field">
+        <legend className="label">
+          <Trans
+            i18nKey="common.optionalLabel"
+            values={{ label: t("keys.sourcesLabel") }}
+            components={{ small: <span className="datum--quiet" /> }}
+          />
+        </legend>
         <div className="row">
           {SOURCES.map((source) => (
             <label key={source} className="punch">
@@ -248,7 +259,9 @@ function MintForm({
             </label>
           ))}
         </div>
-        <p className="field__hint">{t("keys.sourcesHint")}</p>
+        <p className="field__hint" id={sourcesHintId}>
+          {t("keys.sourcesHint")}
+        </p>
       </fieldset>
 
       <div className="field">

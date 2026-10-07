@@ -25,7 +25,7 @@
  * than narrated.
  */
 
-import { lazy, type ReactNode, Suspense, useEffect } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -62,17 +62,32 @@ const Interleaf = lazy(async () => ({
  * assistant follows the reader rather than being somewhere they go. It is a mark and carries no
  * words, so the button's accessible name comes from the catalogue.
  */
-function FistPlate(): React.JSX.Element {
+function FistPlate({ controls }: { controls: string }): React.JSX.Element {
   const { t } = useTranslation();
   const open = useUiStore((state) => state.assistantOpen);
   const toggleAssistant = useUiStore((state) => state.toggleAssistant);
+  const plateRef = useRef<HTMLButtonElement>(null);
+  const wasOpenRef = useRef(open);
+
+  // Closing the interleaf from inside it unmounts the button the reader just pressed, and the
+  // browser drops their focus on the body -- the top of the document, a leaf away from where
+  // they were. It comes back to the fist that opened the panel, and only when it was lost: a
+  // reader who closed it with this plate is already here.
+  useEffect(() => {
+    if (wasOpenRef.current && !open && document.activeElement === document.body) {
+      plateRef.current?.focus();
+    }
+    wasOpenRef.current = open;
+  }, [open]);
 
   return (
     <button
+      ref={plateRef}
       className="plate plate--small"
       type="button"
       onClick={toggleAssistant}
       aria-expanded={open}
+      aria-controls={open ? controls : undefined}
       aria-label={open ? t("assistant.close") : t("assistant.open")}
     >
       <span aria-hidden="true">{FIST}</span>
@@ -88,9 +103,11 @@ function FistPlate(): React.JSX.Element {
 function ReaderPlates({
   signedInAs,
   assisted,
+  interleafId,
 }: {
   signedInAs: string;
   assisted: boolean;
+  interleafId: string;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const signOut = trpc.session.signOut.useMutation({
@@ -115,7 +132,7 @@ function ReaderPlates({
           is something a reader does in their first seconds, before they know where
           anything else is. */}
       <LanguageSwitcher />
-      {assisted ? <FistPlate /> : null}
+      {assisted ? <FistPlate controls={interleafId} /> : null}
       <button
         className="plate plate--small"
         type="button"
@@ -125,6 +142,32 @@ function ReaderPlates({
         {signingOut ? t("app.signingOut") : t("app.signOut")}
       </button>
     </div>
+  );
+}
+
+/**
+ * The tab's own name: the division, then whose book it is. An operator holds several customers
+ * open in several tabs, and every one of them used to be called "Undercroft" -- in the tab strip,
+ * in the window list and to a screen reader arriving on the page. React hoists the `title` into
+ * the head and replaces it as the division or the book changes.
+ */
+function TabName({
+  current,
+  tenantId,
+  displayName,
+}: {
+  current: DivisionId;
+  tenantId: string | undefined;
+  displayName: string | undefined;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const page = t(division(current).labelKey);
+  return (
+    <title>
+      {tenantId === undefined
+        ? t("app.documentTitle", { page })
+        : t("app.documentTitleInBook", { page, book: displayName ?? tenantId })}
+    </title>
   );
 }
 
@@ -190,6 +233,8 @@ export function Book({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const board = division(current).hue;
+  const pageId = useId();
+  const interleafId = useId();
 
   useEffect(() => {
     applyBoard(document.documentElement, board);
@@ -236,6 +281,12 @@ export function Book({
         .filter((name) => name !== "")
         .join(" ")}
     >
+      <TabName current={current} tenantId={tenantId} displayName={tenant.data?.displayName} />
+      {/* First in the document, before the strip: past the seven tabs and the running head's
+          plates to the page, in one key, on every division. */}
+      <a className="book__skip" href={`#${pageId}`}>
+        {t("app.skip")}
+      </a>
       <TabRail tenantId={tenantId} current={current} />
 
       {/*
@@ -283,22 +334,27 @@ export function Book({
             </span>
           ) : null}
 
-          <ReaderPlates signedInAs={signedInAs} assisted={assisted} />
+          <ReaderPlates signedInAs={signedInAs} assisted={assisted} interleafId={interleafId} />
         </header>
 
         {/* Inside the keyed leaf, so a page a deploy took away is answered here with the chrome
             still around it, and the answer is dropped when the reader turns to another page.
             A deactivated customer's notice stands in for the division here, chrome and all:
             every procedure the division would ask refuses until it is reactivated (ADR 0110). */}
-        <StaleChunkBoundary>
-          {leafPage({
-            tenantId,
-            pending: tenant.isPending,
-            role: tenant.data?.role ?? "",
-            deactivatedAt,
-            children,
-          })}
-        </StaleChunkBoundary>
+        {/* The page is the document's one `main`: the landmark a screen reader jumps to, and the
+            skip link's target. `tabIndex={-1}` so following the link moves focus here and not
+            only the scroll, or the next Tab would start again from the strip. */}
+        <main className="leaf__page" id={pageId} tabIndex={-1}>
+          <StaleChunkBoundary>
+            {leafPage({
+              tenantId,
+              pending: tenant.isPending,
+              role: tenant.data?.role ?? "",
+              deactivatedAt,
+              children,
+            })}
+          </StaleChunkBoundary>
+        </main>
 
         {/* Last on the leaf, and last in the DOM: the page is what the reader came for,
             and the printing it came from is the footnote to it. */}
@@ -323,7 +379,7 @@ export function Book({
               </div>
             }
           >
-            <Interleaf tenantId={tenantId} />
+            <Interleaf id={interleafId} tenantId={tenantId} />
           </Suspense>
         </StaleChunkBoundary>
       ) : null}

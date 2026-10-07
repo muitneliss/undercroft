@@ -158,7 +158,7 @@ function InviteBand({
   return (
     <>
       <div className="band-rule" />
-      <div className="head">{t("people.invitationsHead")}</div>
+      <h2 className="head">{t("people.invitationsHead")}</h2>
       <div className="body stack">
         <InvitePanel
           isAdmin={isAdmin}
@@ -216,7 +216,9 @@ export function People({
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("nav.people")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("nav.people")}
+      </div>
       <div className="body stack">
         <h1>{t("people.title")}</h1>
         <p className="prose prose--lead">{t("people.lead", { tenantId })}</p>

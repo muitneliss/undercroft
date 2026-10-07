@@ -31,6 +31,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import type { RunWrites } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { StatusLine } from "@/components/StatusLine.tsx";
 import {
   Table,
   TableBody,
@@ -130,16 +131,12 @@ function PayloadFold({ payload }: { payload: string }): React.JSX.Element {
           >
             {t("lake.copyPayload")}
           </button>
-          {copy.isSuccess ? (
-            <p className="note" role="status">
-              {t("lake.payloadCopied")}
-            </p>
-          ) : null}
-          {copy.isError ? (
-            <p className="note" role="status">
-              {t("lake.copyBlocked")}
-            </p>
-          ) : null}
+          <StatusLine
+            className="note"
+            text={
+              copy.isSuccess ? t("lake.payloadCopied") : copy.isError ? t("lake.copyBlocked") : null
+            }
+          />
         </div>
       </div>
     </details>

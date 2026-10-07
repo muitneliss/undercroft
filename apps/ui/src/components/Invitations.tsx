@@ -13,6 +13,7 @@ import { Trans, useTranslation } from "react-i18next";
 
 import { Address } from "@/components/Address.tsx";
 import { Errata } from "@/components/Errata.tsx";
+import { StatusLine } from "@/components/StatusLine.tsx";
 import { byAddress, isRole, ROLES, type Role } from "@/lib/roles.ts";
 import { formatDate } from "@/lib/when.ts";
 import type { trpc } from "@/trpc.ts";
@@ -81,38 +82,40 @@ export function OpenInvitations({
       {open.length === 0 ? <p className="note">{t("people.noneWaiting")}</p> : null}
       {open.length > 0 && rows.length === 0 ? <p className="prose">{t("people.noMatch")}</p> : null}
       {rows.length === 0 ? null : (
-        <table className="table">
-          <caption>
-            {search.trim() === ""
-              ? t("people.waitingCaption", { count: open.length })
-              : t("people.waitingCaptionFiltered", { shown: rows.length, count: open.length })}
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("people.colAddress")}</th>
-              <th scope="col">{t("people.colInvitedAs")}</th>
-              <th scope="col">{t("people.colExpires")}</th>
-              {isAdmin ? <th scope="col">{t("people.colWithdraw")}</th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((invitation) => (
-              <tr key={invitation.id}>
-                <td className="datum datum--quiet">
-                  <Address email={invitation.email} />
-                </td>
-                <td>{invitation.role}</td>
-                {/* Through `formatDate`, not `toISOString().slice(0, 10)`: that rendered
-                  the date in UTC while every other date on the schedule is in Singapore
-                  time, so an invitation expiring at 07:00 SGT showed the previous day. */}
-                <td className="datum datum--quiet">{formatDate(invitation.expiresAt, locale)}</td>
-                {isAdmin ? (
-                  <WithdrawCell invitation={invitation} revoke={revoke} tenantId={tenantId} />
-                ) : null}
+        <div className="table-scroll">
+          <table className="table">
+            <caption>
+              {search.trim() === ""
+                ? t("people.waitingCaption", { count: open.length })
+                : t("people.waitingCaptionFiltered", { shown: rows.length, count: open.length })}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("people.colAddress")}</th>
+                <th scope="col">{t("people.colInvitedAs")}</th>
+                <th scope="col">{t("people.colExpires")}</th>
+                {isAdmin ? <th scope="col">{t("people.colWithdraw")}</th> : null}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((invitation) => (
+                <tr key={invitation.id}>
+                  <td className="datum datum--quiet">
+                    <Address email={invitation.email} />
+                  </td>
+                  <td>{invitation.role}</td>
+                  {/* Through `formatDate`, not `toISOString().slice(0, 10)`: that rendered
+                    the date in UTC while every other date on the schedule is in Singapore
+                    time, so an invitation expiring at 07:00 SGT showed the previous day. */}
+                  <td className="datum datum--quiet">{formatDate(invitation.expiresAt, locale)}</td>
+                  {isAdmin ? (
+                    <WithdrawCell invitation={invitation} revoke={revoke} tenantId={tenantId} />
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {revoke.isError ? (
@@ -149,16 +152,18 @@ function InviteOutcome({
        * invitation is still valid and still works — but somebody has to tell the
        * person, and an admin who was not told that will wait for nothing.
        */}
-      {invite.isSuccess ? (
-        invite.data.notified ? (
-          <p className="note" role="status">
-            {t("people.invitedAndEmailed", { email: invite.data.email })}
-          </p>
-        ) : (
-          <Errata heading={t("people.invitedNotEmailedHeading")}>
-            {t("people.invitedNotEmailed", { email: invite.data.email })}
-          </Errata>
-        )
+      <StatusLine
+        className="note"
+        text={
+          invite.isSuccess && invite.data.notified
+            ? t("people.invitedAndEmailed", { email: invite.data.email })
+            : null
+        }
+      />
+      {invite.isSuccess && !invite.data.notified ? (
+        <Errata heading={t("people.invitedNotEmailedHeading")}>
+          {t("people.invitedNotEmailed", { email: invite.data.email })}
+        </Errata>
       ) : null}
     </>
   );
@@ -216,6 +221,7 @@ export function InvitePanel({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const emailId = useId();
+  const emailHintId = useId();
   const roleId = useId();
   const roleFieldRef = useRef<HTMLSelectElement>(null);
   return (
@@ -240,6 +246,9 @@ export function InvitePanel({
             <input
               className="input"
               id={emailId}
+              aria-describedby={emailHintId}
+              // A conflict is this address already holding access: the slip below names it.
+              aria-invalid={invite.error?.data?.code === "CONFLICT"}
               name="email"
               type="email"
               autoComplete="off"
@@ -248,7 +257,9 @@ export function InvitePanel({
               ref={emailFieldRef}
               disabled={invite.isPending}
             />
-            <p className="field__hint">{t("people.inviteHint")}</p>
+            <p className="field__hint" id={emailHintId}>
+              {t("people.inviteHint")}
+            </p>
           </div>
 
           <div className="field">

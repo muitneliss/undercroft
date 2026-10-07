@@ -150,7 +150,7 @@ export function ReadingBand({
   return (
     <>
       <Separator className="band-rule" />
-      <div className="head">{t("bi.resultHead")}</div>
+      <h2 className="head">{t("bi.resultHead")}</h2>
       <div className="body stack">
         <nav aria-label={t("bi.panesLabel")} className="plateset">
           {QUESTION_PANES.map((candidate) => (

@@ -29,6 +29,7 @@ import { ModelDependencies } from "@/components/ModelDependencies.tsx";
 import { ModelFacts } from "@/components/ModelFacts.tsx";
 import { BuildPanel, Reference, TestsForm } from "@/components/ModelPanels.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { StatusLine } from "@/components/StatusLine.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { lineagePath } from "@/lib/lineage.ts";
 import { draftFrom, isDirty, type ModelDraft, testsFor } from "@/lib/modelDraft.ts";
@@ -155,7 +156,9 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("models.head")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("models.head")}
+      </div>
 
       <EditorBand
         tenantId={tenantId}
@@ -168,20 +171,20 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
       />
 
       <div className="band-rule" />
-      <div className="head">{t("models.dependenciesHead")}</div>
+      <h2 className="head">{t("models.dependenciesHead")}</h2>
       <div className="body stack">
         <ModelDependencies tenantId={tenantId} name={name} />
       </div>
 
       <div className="band-rule" />
-      <div className="head">{t("models.testsHead")}</div>
+      <h2 className="head">{t("models.testsHead")}</h2>
       <div className="body stack">
         <p className="prose">{t("models.testsLead")}</p>
         <TestsForm draft={held} columns={model.data.lastBuild?.columns ?? []} canEdit={isAdmin} />
       </div>
 
       <div className="band-rule" />
-      <div className="head">{t("models.referenceHead")}</div>
+      <h2 className="head">{t("models.referenceHead")}</h2>
       <div className="body stack">
         <Reference tenantId={tenantId} />
       </div>
@@ -321,7 +324,7 @@ function DeleteBand({
   return (
     <>
       <div className="band-rule" />
-      <div className="head">{t("models.deleteHead")}</div>
+      <h2 className="head">{t("models.deleteHead")}</h2>
       <div className="body stack">
         <p className="prose">{t("models.deleteLead", { name })}</p>
         <details className="tokenform">
@@ -402,13 +405,12 @@ function ModelVerbs({
             {t("models.discard")}
           </button>
         ) : null}
-        {dirty ? (
-          <span className="datum datum--quiet">{t("models.unsaved")}</span>
-        ) : save.isSuccess ? (
-          <span className="datum datum--quiet" role="status">
-            {t("models.savedNote")}
-          </span>
-        ) : null}
+        {dirty ? <span className="datum datum--quiet">{t("models.unsaved")}</span> : null}
+        <StatusLine
+          as="span"
+          className="datum datum--quiet"
+          text={!dirty && save.isSuccess ? t("models.savedNote") : null}
+        />
       </div>
       {dirty ? <p className="note">{t("models.buildHint")}</p> : null}
     </>

@@ -26,6 +26,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { READ_SCOPE, WRITE_SCOPE } from "@undercroft/control-plane/surface";
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 
@@ -105,13 +106,27 @@ function GrantOption({
   label: string;
   hint: string;
 }): React.JSX.Element {
+  const labelId = useId();
+  const hintId = useId();
+  // Named by the word and described by the sentence: the label wraps both, and without the two
+  // references the whole sentence would be the radio's name.
   return (
     <label className="punch">
-      <input type="radio" name="grant" value={value} defaultChecked={checked} disabled={disabled} />
+      <input
+        aria-describedby={hintId}
+        aria-labelledby={labelId}
+        type="radio"
+        name="grant"
+        value={value}
+        defaultChecked={checked}
+        disabled={disabled}
+      />
       <span className="punch__box" />
       <span className="stack stack--tight">
-        <span>{label}</span>
-        <span className="field__hint">{hint}</span>
+        <span id={labelId}>{label}</span>
+        <span className="field__hint" id={hintId}>
+          {hint}
+        </span>
       </span>
     </label>
   );

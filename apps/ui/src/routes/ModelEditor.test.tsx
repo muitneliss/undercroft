@@ -131,9 +131,9 @@ describe("an unsaved draft", () => {
   });
 });
 
-/** The dependencies band's list under one of its two heads. */
+/** The dependencies band's list under one of its two heads, a level below the band's own. */
 function namesUnder(head: string): string[] {
-  const section = screen.getByText(head, { selector: "h2" }).closest("section") as HTMLElement;
+  const section = screen.getByText(head, { selector: "h3" }).closest("section") as HTMLElement;
   return within(section)
     .queryAllByRole("listitem")
     .map((item) => item.textContent ?? "");

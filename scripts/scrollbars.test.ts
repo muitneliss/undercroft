@@ -98,6 +98,26 @@ describe("the sheet draws its own scrollbars", () => {
   });
 });
 
+describe("no script sets them on a scroller either", () => {
+  // The sheet is not the only place a style is written. CodeMirror's theme set
+  // `scrollbarWidth: "thin"` on the SQL editor's scroller, which no scan of `index.css`
+  // could see, and long lines of a query lost their bar exactly as the grid had.
+  const SOURCE = join(import.meta.dirname, "..", "apps", "ui", "src");
+
+  it("finds no camel-cased standard property in the UI's source", () => {
+    const found: string[] = [];
+    for (const file of new Bun.Glob("**/*.{ts,tsx}").scanSync(SOURCE)) {
+      if (file.includes(".test.")) {
+        continue;
+      }
+      if (/scrollbar(?:Width|Color)\s*:/u.test(readFileSync(join(SOURCE, file), "utf8"))) {
+        found.push(file);
+      }
+    }
+    expect(found).toEqual([]);
+  });
+});
+
 describe("the reading of a sheet is itself pinned", () => {
   // A check that cannot fail is not a check. These two are the same declaration in the two
   // places it can be written, so "the sheet is clean" is evidence rather than an artefact of
