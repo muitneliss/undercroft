@@ -318,3 +318,5 @@
 ## [2026-10-06] ingest | Runbook Sign-In Setup
 ## [2026-10-06] ingest | Runbook: Onboarding a new person
 ## [2026-10-06] ingest | What an ingest run counts
+## [2026-10-07] ingest | ADR 0114 The Model Builder Finds Out What Is Needed Before It Builds Anything
+## [2026-10-07] ingest | Runbook: Agent skills

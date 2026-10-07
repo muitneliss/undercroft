@@ -88,8 +88,11 @@ door with this rule.
 
 Each workflow is its own skill. Follow it when the person's request matches.
 
-- `undercroft-model-builder`: turn a query into a dbt model, or design and build a new model,
-  by interviewing the person first and checking the model before it is saved.
+- `undercroft-model-builder`: for a person who wants a model, a report or a dashboard, or
+  wants to know what their data can answer. It first finds out what the tenant already has
+  and what the person needs, and whether the right outcome is a look at the data, a report
+  over existing models, a change to an existing model or macro, or a new model -- then gets
+  a plan approved before any write, and checks a model before it is saved.
 
 ## Things only the person can do
 

@@ -8,7 +8,8 @@ how to find one to reuse, when to propose a new one, and what a definition must 
 ## Find one before you write one
 
 - `macros.list` gives the customer's own macros, each with what it is for and its
-  parameters. Read it at the start of the workflow, beside `models.list`.
+  parameters. Read it at the start of the workflow, beside `models.list`, and put every
+  macro the plan relies on in its reuse map (`references/discovery.md`).
 - `macros.get` gives one macro's whole definition. Read it before you call a macro whose
   description leaves you unsure what it returns.
 - `models.reference` gives the platform's macros and the customer's, with their text.

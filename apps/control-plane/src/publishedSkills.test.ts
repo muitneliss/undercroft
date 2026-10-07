@@ -29,6 +29,28 @@ import type { Skill } from "./handlers/mcpSkills.ts";
 import { readSkills, SKILLS_ROOT } from "./skills.ts";
 
 const ENTRY = "undercroft";
+const BUILDER = "undercroft-model-builder";
+
+/**
+ * What the model builder must read before it may propose a write: the raw lake, and every
+ * layer that might already answer the request -- models and how they depend on each other,
+ * macros, saved questions and dashboards. A builder that skips one of them cannot tell a new
+ * component from a second copy of one the tenant already has (ADR 0114).
+ */
+const DISCOVERY_READS = [
+  "lake.summary",
+  "lake.records",
+  "models.list",
+  "models.get",
+  "models.reference",
+  "models.lineage",
+  "macros.list",
+  "macros.get",
+  "bi.questions.list",
+  "bi.questions.get",
+  "bi.dashboards.list",
+  "bi.dashboards.get",
+];
 
 /** The CLI's spelling of a path segment -- `apps/cli/src/manifest.ts`, whose suite pins it. */
 function kebab(segment: string): string {
@@ -254,6 +276,16 @@ describe("the published skills", () => {
     for (const skill of skills.filter((s) => s.name !== ENTRY)) {
       expect(text).toContain(`\`${skill.name}\``);
     }
+  });
+
+  it("the model builder names every read it needs to find what the tenant already has", () => {
+    const builder = skills.find((skill) => skill.name === BUILDER);
+    const named = new Set(
+      builder === undefined
+        ? []
+        : textsOf(builder).flatMap(([, text]) => referencesIn(text).map(([, meant]) => meant)),
+    );
+    expect(DISCOVERY_READS.filter((path) => !named.has(path))).toEqual([]);
   });
 
   it("name only procedures the router has, and offers over MCP", () => {

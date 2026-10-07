@@ -7,10 +7,10 @@ agent carries them out through one of the two doors, the MCP tools at `/mcp` or 
 
 ## The skills
 
-| Skill                      | What it is for                                                                                                                                                                   |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `undercroft`               | The entry. It says which door to use, how an operation is spelled on each, what a refusal means, what only the person can do, and how to report a defect. Read before any other. |
-| `undercroft-model-builder` | Saving a query as a dbt model, or building a new one. Interviews the person first, reads the lake, runs `models.check`, and asks before it saves and again before it builds.     |
+| Skill                      | What it is for                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `undercroft`               | The entry. It says which door to use, how an operation is spelled on each, what a refusal means, what only the person can do, and how to report a defect. Read before any other.                                                                                                                                                                                                                                         |
+| `undercroft-model-builder` | Turning data into an answer, a report or a model. Inventories what the tenant already has, finds out what the person needs, and picks the smallest change: a look at the data, a question or dashboard over existing models, a change to a model or macro, or a new model. Nothing is written before the plan is approved; a model is checked with `models.check`, and saved and built on two separate yeses (ADR 0114). |
 
 They live in `skills/` at the repository root, and that is the only copy.
 
@@ -88,7 +88,9 @@ A workflow is named for what a person wants, not for a tool: `undercroft-model-b
    - a procedure, a CLI command or an MCP tool the router does not have;
    - a link to a file the skill does not hold;
    - a workflow the entry skill does not name;
-   - an `sql` example `models.check` finds anything in.
+   - an `sql` example `models.check` finds anything in;
+   - a model builder that no longer names one of the reads it needs to find what the tenant
+     already has: the lake, models, lineage, macros, questions and dashboards.
 5. Run `task ci:skill-check` (it needs the network) to see `npx skills` list it. It fails
    on a skill it lists that is not under `skills/`, too.
 
@@ -103,9 +105,10 @@ that installed it to something that is not there.
 
 ## When it goes wrong
 
-| What you see                                                        | Why, and what to do                                                                                                             |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `npx skills add` lists nothing                                      | A `SKILL.md` frontmatter is not valid YAML, or its `name` differs from its directory. `task ci:verify` names which.             |
-| the agent says it has no door                                       | Neither `undercroft` MCP tools nor a shell were available. Connect MCP, or run the agent where it can run commands.             |
-| `skills/list` is refused as an unknown method                       | The control plane serves no skills: the log line `mcp_skills_unloaded` at boot says why. Tools are unaffected.                  |
-| the model builder stops at `WRITES_DISABLED` or `PERMISSION_DENIED` | By design. Saving and building a model need the `admin` role and a write grant (MCP) or a profile that allows writes (the CLI). |
+| What you see                                                        | Why, and what to do                                                                                                                                                                     |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npx skills add` lists nothing                                      | A `SKILL.md` frontmatter is not valid YAML, or its `name` differs from its directory. `task ci:verify` names which.                                                                     |
+| the agent says it has no door                                       | Neither `undercroft` MCP tools nor a shell were available. Connect MCP, or run the agent where it can run commands.                                                                     |
+| `skills/list` is refused as an unknown method                       | The control plane serves no skills: the log line `mcp_skills_unloaded` at boot says why. Tools are unaffected.                                                                          |
+| the model builder stops at `WRITES_DISABLED` or `PERMISSION_DENIED` | By design. Saving and building a model need the `admin` role, saving a question or dashboard the `member` role, and each a write grant (MCP) or a profile that allows writes (the CLI). |
+| the model builder ends without building a model                     | Often by design: it found that a question over an existing model, a change to one, or a look at the data answered the request.                                                          |
