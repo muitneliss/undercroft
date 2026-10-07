@@ -60,8 +60,13 @@ const SHELL: Answers = {
   "config.signIn": { methods: ["email-otp"] },
 };
 
-/** How long a screen may take to settle: well inside the test's own 15 s, far past a chunk load. */
-const SETTLE_MS = 10_000;
+/**
+ * How long a screen may take to settle: far past a chunk load, and past a village's models
+ * loading and its first frame drawn in software, which on a shared CI runner took over ten
+ * seconds. A screen with no village still fails on its own 15 s test limit first; one that
+ * settles sooner moves on at once.
+ */
+const SETTLE_MS = 45_000;
 
 /** A mounted screen, and the one thing a visual test does with it. */
 export interface Screen {
