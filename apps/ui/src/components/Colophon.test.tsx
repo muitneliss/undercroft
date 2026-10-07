@@ -48,3 +48,10 @@ it("labels the tag, so a version number is not read out attached to nothing", ()
   // accessible name: a bare "v1.4.0" at the foot of a page names nothing.
   expect(screen.getByText("Phiên bản")).toBeDefined();
 });
+
+it("offers the contact address as a link that opens a mail to it", () => {
+  render(<Colophon />);
+
+  const link = screen.getByRole("link", { name: "contact@multnelis.org" });
+  expect(link.getAttribute("href")).toBe("mailto:contact@multnelis.org");
+});
