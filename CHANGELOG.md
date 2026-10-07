@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.71.0](https://github.com/muitneliss/undercroft/compare/v1.70.0...v1.71.0) (2026-10-07)
+
+
+### Features
+
+* **ui:** the colophon prints the contact address on every page ([#414](https://github.com/muitneliss/undercroft/issues/414)) ([f8789dd](https://github.com/muitneliss/undercroft/commit/f8789ddf5fa086ad954229019afe536d8570d420))
+* **ui:** the Journal can be read as a village, and every graph is one (ADR 0116) ([#412](https://github.com/muitneliss/undercroft/issues/412)) ([82df1e7](https://github.com/muitneliss/undercroft/commit/82df1e764deb28bd43f5907af186b56dacb14ad4))
+* **ui:** the sign-in board is printed in the reader's weather (ADR 0115) ([#416](https://github.com/muitneliss/undercroft/issues/416)) ([a4233b8](https://github.com/muitneliss/undercroft/commit/a4233b8c105bc3de504e0ed098cbd8ab8aefce4e))
+
+
+### Bug Fixes
+
+* **ui:** close the accessibility, responsive and theming gaps an audit found ([#413](https://github.com/muitneliss/undercroft/issues/413)) ([4684979](https://github.com/muitneliss/undercroft/commit/46849790f3c4f3731eaa1bb93ba2ba194033bc4a))
+
 ## [1.70.0](https://github.com/muitneliss/undercroft/compare/v1.69.0...v1.70.0) (2026-10-07)
 
 
