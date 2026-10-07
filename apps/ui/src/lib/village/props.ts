@@ -1,0 +1,171 @@
+/**
+ * The village's made things, the ones KayKit has no model for: the roads, the errata slip, the
+ * bell, and the props a run leaves behind (the vault's pile, the crates set aside, the finished
+ * pieces, a lapsed road's barrier).
+ *
+ * The slip is the page's own errata slip in miniature: Slip ground, Vermilion rules top and
+ * bottom, and lines standing for the sentence it would carry. No word: the canvas draws none.
+ */
+
+import {
+  BoxGeometry,
+  CanvasTexture,
+  CylinderGeometry,
+  DoubleSide,
+  Group,
+  LatheGeometry,
+  Mesh,
+  MeshBasicMaterial,
+  NearestFilter,
+  type Object3D,
+  PlaneGeometry,
+  Vector2,
+} from "three";
+
+import { BELL, type Point, SET_ASIDE, VAULT_STACK, WORKSHOP_PIECES } from "@/lib/village/layout.ts";
+import type { Painter } from "@/lib/village/paint.ts";
+import { mix } from "@/lib/village/palette.ts";
+import { barrierAt } from "@/lib/village/roads.ts";
+import type { VillageScene } from "@/lib/village/script.ts";
+
+const ROAD_WIDTH = 0.55;
+const ROAD_RIM = 0.12;
+const PILE_SPACING = 0.32;
+const CRATE_SCALE = 2.4;
+/** A bell's profile, turned about its axis: lip, waist, shoulder, crown. */
+const BELL_PROFILE: readonly (readonly [number, number])[] = [
+  [0.02, 0],
+  [0.3, 0],
+  [0.28, 0.06],
+  [0.2, 0.2],
+  [0.17, 0.4],
+  [0.1, 0.5],
+  [0.02, 0.52],
+];
+
+/** A strip of road between two points: a Page band over a slightly wider rim, drawn flat. */
+export function roadSegment(painter: Painter, from: Point, to: Point): Group {
+  const { tokens } = painter;
+  const length = Math.hypot(to.x - from.x, to.z - from.z);
+  const segment = new Group();
+  segment.add(
+    new Mesh(
+      new BoxGeometry(length + ROAD_WIDTH + ROAD_RIM, 0.02, ROAD_WIDTH + ROAD_RIM),
+      painter.flat(mix(tokens.bone, tokens.ink, 0.3), false),
+    ),
+    new Mesh(
+      new BoxGeometry(length + ROAD_WIDTH, 0.04, ROAD_WIDTH),
+      painter.flat(tokens.page, false),
+    ),
+  );
+  segment.position.set((from.x + to.x) / 2, 0.01, (from.z + to.z) / 2);
+  segment.rotation.y = -Math.atan2(to.z - from.z, to.x - from.x);
+  return segment;
+}
+
+export function slipTexture(painter: Painter): CanvasTexture {
+  const { tokens } = painter;
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 44;
+  const context = canvas.getContext("2d");
+  if (context !== null) {
+    context.fillStyle = tokens.slip;
+    context.fillRect(0, 0, 64, 44);
+    context.fillStyle = tokens.errata;
+    context.fillRect(0, 2, 64, 5);
+    context.fillRect(0, 37, 64, 5);
+    context.fillStyle = mix(tokens.slip, tokens.errata, 0.5);
+    for (let line = 0; line < 3; line += 1) {
+      context.fillRect(8, 14 + line * 7, line === 2 ? 30 : 48, 2);
+    }
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.magFilter = NearestFilter;
+  return texture;
+}
+
+/** An errata slip on its post. Its card is named, so a figure can tip it in. */
+export function makeSlip(painter: Painter, texture: CanvasTexture): Object3D {
+  const holder = new Group();
+  const post = new Mesh(
+    new CylinderGeometry(0.02, 0.02, 0.5, 6),
+    painter.flat(painter.tokens.ink2),
+  );
+  post.position.y = 0.25;
+  const card = new Mesh(
+    new PlaneGeometry(0.5, 0.34),
+    new MeshBasicMaterial({ map: texture, side: DoubleSide }),
+  );
+  card.position.y = 0.62;
+  card.name = "card";
+  holder.add(post, card);
+  return holder;
+}
+
+/** A bell from a turned profile, hung in a frame of two posts and a beam. Its swing is named. */
+export function makeBell(painter: Painter): Object3D {
+  const frame = new Group();
+  const wood = painter.flat(painter.tokens.ink2);
+  for (const side of [-0.45, 0.45]) {
+    const post = new Mesh(new BoxGeometry(0.08, 1.3, 0.08), wood);
+    post.position.set(side, 0.65, 0);
+    frame.add(post);
+  }
+  const beam = new Mesh(new BoxGeometry(1.06, 0.08, 0.1), wood);
+  beam.position.y = 1.3;
+  const bell = new Mesh(
+    new LatheGeometry(
+      BELL_PROFILE.map(([x, y]) => new Vector2(x, y)),
+      12,
+    ),
+    painter.flat(painter.tokens.bone),
+  );
+  bell.position.y = -0.55;
+  const swing = new Group();
+  swing.name = "swing";
+  swing.position.y = 1.26;
+  swing.add(bell);
+  frame.add(beam, swing);
+  frame.position.set(BELL.x, 0, BELL.z);
+  return frame;
+}
+
+export interface PropMakers {
+  readonly piece: (name: string) => Object3D;
+  readonly slip: () => Object3D;
+}
+
+function placed(made: Object3D, at: Point, y: number, scale: number): Object3D {
+  made.position.set(at.x, y, at.z);
+  made.scale.setScalar(scale);
+  return made;
+}
+
+/**
+ * What the runs left behind, rebuilt from the scene: the vault's pile, one crate set aside per
+ * source that refused, the workshop's finished pieces, and a barrier across each lapsed road.
+ * All of them gauges or marks, never counts (`script.ts`).
+ */
+export function placeProps(group: Group, make: PropMakers, scene: VillageScene): void {
+  group.clear();
+  for (let at = 0; at < scene.vaultLevel; at += 1) {
+    const spot = { x: VAULT_STACK.x + (at % 3) * PILE_SPACING, z: VAULT_STACK.z };
+    group.add(placed(make.piece("crate"), spot, Math.floor(at / 3) * 0.34, CRATE_SCALE));
+  }
+  for (let at = 0; at < scene.setAside; at += 1) {
+    const spot = { x: SET_ASIDE.x - at * PILE_SPACING * 1.4, z: SET_ASIDE.z };
+    group.add(placed(make.piece("crate"), spot, 0, CRATE_SCALE));
+    group.add(placed(make.slip(), { x: spot.x, z: spot.z + 0.2 }, 0.1, 0.7));
+  }
+  for (let at = 0; at < scene.workshopLevel; at += 1) {
+    const spot = { x: WORKSHOP_PIECES.x + at * PILE_SPACING * 1.3, z: WORKSHOP_PIECES.z };
+    group.add(placed(make.piece("crate_open"), spot, 0, 2));
+  }
+  for (const road of scene.roads.filter((candidate) => candidate.lapsed)) {
+    const at = barrierAt(road.slot);
+    const fence = placed(make.piece("fence"), at, 0, 1.5);
+    fence.rotation.y = Math.PI / 2;
+    group.add(fence, placed(make.slip(), { x: at.x + 0.3, z: at.z + 0.6 }, 0, 1));
+  }
+}

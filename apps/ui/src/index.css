@@ -5321,6 +5321,47 @@
     }
   }
 
+  /* The Journal's village (ADR 0115): a printed diorama on the page, framed by a hairline like
+   any plate. The canvas is drawn by `lib/village/runtime.ts`, which marks the frame
+   `data-village="failed"` where there is no WebGL; the frame then shows its own sentence in
+   place of an empty box. A row or a link the pointer is over in the picture is lit with the
+   same wash a hovered row takes, so the words answer the picture. */
+  .village {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    background: var(--page);
+  }
+
+  .village__picture,
+  .village canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .village__failed {
+    display: none;
+    padding: var(--s-5);
+  }
+
+  .village[data-village="failed"] {
+    aspect-ratio: auto;
+  }
+
+  .village[data-village="failed"] .village__picture {
+    display: none;
+  }
+
+  .village[data-village="failed"] .village__failed {
+    display: block;
+  }
+
+  .table > tbody > tr[data-lit] > td {
+    background: color-mix(in srgb, var(--board) 8%, transparent);
+  }
+
   /* A dashboard printed from the browser (its "Print / PDF" plate): the book's chrome --
    the tab strip, the spine, the running head's controls, the interleaf and the colophon --
    is not what was asked for. Scoped to the book holding a dashboard, so printing any other

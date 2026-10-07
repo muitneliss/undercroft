@@ -57,6 +57,20 @@ tasks:
     cmds:
       - bun run geo:build
 
+  village-assets:
+    desc: >-
+      Rebuild the Journal village's models (apps/ui/src/assets/village/) from the free KayKit
+      Adventurers, Character Animations and Medieval Hexagon packs, unzipped under KAYKIT_DIR
+      (outside the repo). Usage: task build:village-assets KAYKIT_DIR=~/kaykit. ADR 0115.
+    requires:
+      vars: [KAYKIT_DIR]
+    env:
+      KAYKIT_DIR: "{{.KAYKIT_DIR}}"
+    cmds:
+      - bun run village:assets
+      # atlas.json is written as one line; the formatter lays it out as the gate expects.
+      - task: ci:format
+
   worker-image:
     desc: Build the worker's Docker image locally, for testing the Dockerfile (tag undercroft-worker:local).
     cmds:
