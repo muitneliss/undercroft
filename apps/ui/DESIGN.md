@@ -431,6 +431,35 @@ it shows a proof slip with its content address.
 - **Cover sizes:** a 4.5rem headline (3.75rem under 1100px, 2rem on a phone) and a 1.5rem lead.
   These are local to the cover, not steps of the operating type ramp.
 
+## The Title Page's Sky
+
+The sign-in leaf lies on a board printed in the reader's weather (ADR 0115). The leaf never
+changes; the board does, by three dials the page sets as attributes: the **light** from the
+reader's clock (night, dawn, day, dusk), the **sky** from an opt-in reading (clear, cloud, fog,
+drizzle, rain, storm, snow), and the **chill** from a measured temperature at or below 15 °C.
+The ground is mixed from them rather than listed per combination: the light's stock (Bone by
+day, `#f2e1c4` at dawn, `#dfcaa6` at dusk, Ink at night), chilled toward Leaf, then wetted
+toward Ink 2.
+
+- **Marks are engravings used as masks**, filled with a token: Ink on a lit board, Bone at night,
+  Leaf for snow. Rain is slanted hatching, clouds and fog are banks of ruled hairlines, stars are
+  four-point marks, frost is six-armed crystals gathered in the corners.
+- **What is drawn is what is known.** On the clock alone the sun or moon is printed in outline,
+  rays standing still, on a dotted hairline course from dawn to nightfall, and no sky is drawn;
+  a clear reading inks the sun in Chrome with ticking rays, or the crescent in Bone. On a phone
+  the course runs in the strip above the leaf, which would otherwise cover it.
+- **Motion is a flip book**, never eased: rain drops a tile in four frames, snow steps down in
+  twelve with a sway, clouds move a step a second, the rays turn 5° a frame. Lightning is two
+  exposures every nine seconds. Reduced motion holds the first frame and keeps the `--pass`
+  ink-in.
+- **A calm where the leaf lies.** The sheet the layers move on is masked to about an eighth of
+  its strength around the centre, so the weather gathers at the board's edges.
+- **The almanac** hangs beneath the leaf, which stays centred on its own so the almanac never
+  moves it: a caps head that never wraps away from its reading, the reading as a datum, small
+  plates (offer or withdraw, and a retry after a refusal), and the consent in Garamond before
+  the browser is asked. At night it takes the cover's inversion, the book's tokens remapped onto
+  Ink.
+
 ## Do's and Don'ts
 
 ### Do:

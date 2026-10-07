@@ -34,6 +34,12 @@
  * The local method (`useLocalSignIn`) is shown because the server says it offers it, not because
  * the bundle is a development build: a desktop install runs the production bundle (ADR 0094).
  * Offered alone, there is nothing to ask, and the page signs the owner in by itself.
+ *
+ * ## The board is printed in the reader's weather
+ *
+ * The board the leaf lies on follows the reader's clock always, and their sky only once they
+ * ask (`Weather.tsx`, `@/lib/weather`). The leaf itself never changes with it: a form someone
+ * has to read to get in is not the place for an effect.
  */
 
 import { useMutation } from "@tanstack/react-query";
@@ -51,6 +57,8 @@ import { Errata } from "@/components/Errata.tsx";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
 import { useLocalSignIn } from "@/components/useLocalSignIn.ts";
+import { useTitleWeather } from "@/components/useTitleWeather.ts";
+import { Almanac, WeatherBoard } from "@/components/Weather.tsx";
 import { DIVISIONS } from "@/lib/divisions.ts";
 
 /** The full wheel: seven hues, every one of them a division's, in the order they are bound. */
@@ -59,9 +67,19 @@ const WHEEL = DIVISIONS.map((d) => d.hue);
 export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX.Element {
   const { t } = useTranslation();
   const local = useLocalSignIn();
+  const weather = useTitleWeather();
+  const { light, sky, cold } = weather.scene;
 
   return (
-    <main className="titlepage">
+    // The board answers the reader's sky (`Weather.tsx`); the leaf lying on it does not change,
+    // so every word on it reads exactly as it does on a plain board.
+    <main
+      className="titlepage titlepage--sky"
+      data-light={light}
+      data-sky={sky ?? "unread"}
+      data-cold={cold}
+    >
+      <WeatherBoard scene={weather.scene} now={weather.now} />
       <div className="titlepage__leaf stack">
         <div className="titlepage__wheel" aria-hidden="true">
           {WHEEL.map((hue) => (
@@ -117,6 +135,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
             needs to name a build is the one who cannot get past this screen. */}
         <Colophon />
       </div>
+      <Almanac weather={weather} />
     </main>
   );
 }

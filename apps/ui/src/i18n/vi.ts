@@ -162,6 +162,37 @@ export const vi = {
     /** A desktop install signing its owner in without a click (ADR 0094); see `OwnerSignIn`. */
     signingInOwner: "Đang đăng nhập vào bản cài đặt trên máy này…",
     retry: "Thử lại",
+    /** The board the title page lies on answers the reader's sky; see `@/lib/weather`. */
+    weather: {
+      head: "Ngoài trời",
+      /** No weather was asked for: the light comes from the reader's own clock, and says so. */
+      byClock: "{{light}}, theo đồng hồ máy bạn",
+      reading: "{{temperature}}°C · {{sky}} · {{light}}",
+      readingCold: "{{temperature}}°C · {{sky}} · {{light}} · trời rét",
+      offer: "Đọc thời tiết nơi bạn",
+      /** Said BEFORE the browser asks (product principle 5), not after. */
+      consent:
+        "Trình duyệt sẽ hỏi vị trí của bạn. Vị trí được làm tròn tới khoảng mười cây số, chỉ gửi tới Open-Meteo để lấy thời tiết, và không được lưu lại.",
+      locating: "Đang đọc thời tiết…",
+      denied: "Trình duyệt không cho biết vị trí, nên trang chỉ theo đồng hồ của bạn.",
+      unavailable: "Chưa đọc được thời tiết, nên trang chỉ theo đồng hồ của bạn.",
+      off: "Thôi đọc thời tiết",
+      light: {
+        night: "Đêm",
+        dawn: "Bình minh",
+        day: "Ban ngày",
+        dusk: "Hoàng hôn",
+      },
+      sky: {
+        clear: "Trời quang",
+        cloud: "Nhiều mây",
+        fog: "Sương mù",
+        drizzle: "Mưa phùn",
+        rain: "Mưa",
+        storm: "Dông",
+        snow: "Tuyết",
+      },
+    },
   },
 
   landing: {
