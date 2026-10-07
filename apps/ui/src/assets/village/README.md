@@ -1,6 +1,6 @@
 # The village's models
 
-The Journal's village view (ADR 0115, `docs/design/village.md`) draws from the files beside
+The Journal's village view (ADR 0116, `docs/design/village.md`) draws from the files beside
 this note. They are imported through Vite, so each is served from this origin under a hashed,
 immutable name. Nothing is fetched from anyone else to draw the village.
 

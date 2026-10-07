@@ -54,7 +54,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
   ".woff": "font/woff",
   ".map": "application/json",
-  // The Journal's village models (ADR 0115), imported through Vite and so hashed into `assets/`.
+  // The Journal's village models (ADR 0116), imported through Vite and so hashed into `assets/`.
   ".glb": "model/gltf-binary",
 };
 

@@ -1,5 +1,5 @@
 /**
- * The run's own shape, drawn as a village (ADR 0115): a building per stage, left to right in the
+ * The run's own shape, drawn as a village (ADR 0116): a building per stage, left to right in the
  * order they happen, a road between each and the next, and a courier carrying the work along the
  * road out of a stage still working (`lib/village/graph.ts`, `runMapGraph`).
  *

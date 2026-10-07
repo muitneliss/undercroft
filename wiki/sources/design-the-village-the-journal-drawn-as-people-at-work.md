@@ -5,13 +5,13 @@ date: 2026-10-07
 tags: []
 source: docs/design/village.md
 source_path: docs/design/village.md
-source_hash: d47ae8e5b9a766bef60c7e88b4e3905c734a13d8377a49527aa20fa5e31b56d3
+source_hash: 0dea6d76a145fb3e191f689355e59012809da9cc5c14d8392abcb997f73891dd
 ingested: 2026-10-07
 ---
 
 # Design: The Village, the Journal Drawn as People at Work
 
-The concept document for the village ([[ADR 0115 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion]]): the Journal's town, and the node-and-edge drawings drawn the same way.
+The concept document for the village ([[ADR 0116 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion]]): the Journal's town, and the node-and-edge drawings drawn the same way.
 
 * **Direction.** A reader who does not know the words watches data arrive, be kept and be made into something. Stop-motion at 10 fps. Nothing moves without a run.
 * **Visual language.** Surfaces lie along the design-system tonal ramps by family (Grass, Sienna, Bone/Ink, Teal, Ultramarine, Violet, Oxide, Chrome). Roads are Page. Ink outlines; four stepped tones; canonical division hues only on roofs; vermilion only on slips. The scene is photographed as a miniature: a warm key light, soft shadows, ambient occlusion, tilt-shift, page grain. Ambience (clouds, windmill, watermill, flags) claims nothing.

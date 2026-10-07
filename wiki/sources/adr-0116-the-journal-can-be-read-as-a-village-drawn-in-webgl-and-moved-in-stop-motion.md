@@ -1,17 +1,17 @@
 ---
 title: >-
-  ADR 0115 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in
+  ADR 0116 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in
   Stop-Motion
 type: source
 date: 2026-10-07
 tags: []
-source: docs/adr/0115-the-journal-can-be-read-as-a-village.md
-source_path: docs/adr/0115-the-journal-can-be-read-as-a-village.md
-source_hash: 7486f526b3d59088c7b04e99ae32ae8fec0e9f1be06cfa9131aaf5d72a43e55c
+source: docs/adr/0116-the-journal-can-be-read-as-a-village.md
+source_path: docs/adr/0116-the-journal-can-be-read-as-a-village.md
+source_hash: 520457e91fa0a56f625b3c2eb78389da01e694c3e17a95080fac50bd5c07659e
 ingested: 2026-10-07
 ---
 
-# ADR 0115 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion
+# ADR 0116 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion
 
 Adds a village view to the Journal at `/tenants/:id/journal?view=village`, beside the ledger, and makes every node-and-edge drawing in the interface a village. Supersedes, for the village only, two rejections in [[ADR 0063 The Public Cover Moves Continuously]] ("a motion library or WebGL" and "extending the exception to the app"). Supersedes [[ADR 0097 Lineage Is Drawn on a Board the Reader Arranges]]'s pannable, zoomable, draggable board, and ADR 0100's linear beads on the selected chains. ADR 0097's columns, selection, chains and text list stand, and so does [[ADR 0103 The Lineage Board Is Laid Out by ELK]]. ADR 0014's stepped rule is applied in three dimensions.
 

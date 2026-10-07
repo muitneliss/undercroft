@@ -1,5 +1,5 @@
 /**
- * The village's models (ADR 0115): a subset of three KayKit packs (CC0), reduced to the shapes and
+ * The village's models (ADR 0116): a subset of three KayKit packs (CC0), reduced to the shapes and
  * the motion the Journal's village draws, and written into `apps/ui/src/assets/village/`.
  *
  * WHY THE PACKS ARE NOT IN THE REPO. They are distributed only through itch.io, they are 60 MB

@@ -1,5 +1,5 @@
 /**
- * What colour each part of the village is painted: the design system's own inks (ADR 0115).
+ * What colour each part of the village is painted: the design system's own inks (ADR 0116).
  *
  * KayKit paints every model from a gradient atlas. The village keeps KayKit's drawing and none of
  * its colours: every vertex is repainted along one of the design system's tonal ramps

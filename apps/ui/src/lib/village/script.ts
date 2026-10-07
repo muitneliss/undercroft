@@ -1,6 +1,6 @@
 /**
  * What the village shows for one customer's runs: who is out, what each is doing, and what
- * the last runs left behind (`docs/design/village.md`, ADR 0115).
+ * the last runs left behind (`docs/design/village.md`, ADR 0116).
  *
  * NOTHING MOVES WITHOUT A RUN BEHIND IT. Every character's `doing` is derived from a run's
  * status, its events or its steps, and a character with no run is `resting`, which claims

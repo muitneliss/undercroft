@@ -1,4 +1,4 @@
-# 115. The Journal can be read as a village, drawn in WebGL and moved in stop-motion
+# 116. The Journal can be read as a village, drawn in WebGL and moved in stop-motion
 
 - Status: Accepted
 - Date: 2026-10-07

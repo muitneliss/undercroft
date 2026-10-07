@@ -1,5 +1,5 @@
 /**
- * A node-and-edge drawing as a village (ADR 0115): a run's map, or the models' lineage. Every
+ * A node-and-edge drawing as a village (ADR 0116): a run's map, or the models' lineage. Every
  * node is a building, every edge a road, every flowing edge carries traffic (`lib/village/graph.ts`).
  *
  * Loaded on its own (`React.lazy` at each caller), so `three` and the models come with the first

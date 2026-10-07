@@ -331,3 +331,9 @@
 ## [2026-10-07] ingest | Design: Operator and reader paths
 ## [2026-10-07] ingest | ADR 0115 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion
 ## [2026-10-07] ingest | Design: The Village, the Journal Drawn as People at Work
+## [2026-10-07] ingest | ADR 0115 The Title Page Is Printed In The Reader's Weather
+## [2026-10-07] ingest | ADR 0115 The Title Page Is Printed In The Reader's Weather
+## [2026-10-07] rename | ADR 0115 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion → ADR 0116 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion
+## [2026-10-07] ingest | Design: The Village, the Journal Drawn as People at Work
+## [2026-10-07] ingest | Design: Operator and reader paths
+## [2026-10-07] ingest | ADR 0116 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion

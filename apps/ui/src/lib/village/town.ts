@@ -1,6 +1,6 @@
 /**
  * The Journal's village as a world for the film (`film.ts`): the board and its buildings, the
- * cast at work, what the runs left behind, the bell, and the weather (ADR 0115,
+ * cast at work, what the runs left behind, the bell, and the weather (ADR 0116,
  * `docs/design/village.md`).
  *
  * The board owns what does not move. The figures (`folk.ts`) own the cast; the props

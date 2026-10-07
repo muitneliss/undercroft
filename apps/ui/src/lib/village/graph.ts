@@ -1,5 +1,5 @@
 /**
- * A node-and-edge drawing as a village (ADR 0115): every node one building, every edge one road,
+ * A node-and-edge drawing as a village (ADR 0116): every node one building, every edge one road,
  * and a road carrying traffic exactly when its edge flows.
  *
  * The interface draws two graphs: a run's stages (`runFlow.ts`) and the models' lineage

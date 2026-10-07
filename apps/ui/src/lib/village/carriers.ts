@@ -1,6 +1,6 @@
 /**
  * The traffic on a graph's roads: something carried along every edge that flows, and along no
- * other (ADR 0115, `graph.ts`). A courier with a crate walks a run's road out of a stage still
+ * other (ADR 0116, `graph.ts`). A courier with a crate walks a run's road out of a stage still
  * working; a handcart with a crate rolls along each road of the selected model's chains.
  *
  * A carrier moves a fixed stride a frame from just past the source building to just short of the

@@ -1,5 +1,5 @@
 /**
- * What the village promises (ADR 0115): nothing moves without a run behind it, a slip hangs only
+ * What the village promises (ADR 0116): nothing moves without a run behind it, a slip hangs only
  * over a failure, and a hue is worn only by a roof, never by a character.
  */
 

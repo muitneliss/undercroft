@@ -1,7 +1,7 @@
 /**
  * A node-and-edge drawing as a world for the film (`film.ts`): a run's map or the models'
  * lineage, built from a `VillageGraph` (`graph.ts`). Every node is one building, every edge one
- * road, and every flowing edge carries traffic (ADR 0115).
+ * road, and every flowing edge carries traffic (ADR 0116).
  *
  * The world is rebuilt only when what it draws changes: the nodes, where they stand, how each is
  * marked, the edges and which of them flow. A run's map is re-read every second while the run

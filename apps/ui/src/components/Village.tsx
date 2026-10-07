@@ -1,5 +1,5 @@
 /**
- * The Journal read as a village (ADR 0115, `docs/design/village.md`): the same runs as the
+ * The Journal read as a village (ADR 0116, `docs/design/village.md`): the same runs as the
  * ledger, drawn as people at work, with the words beside the picture.
  *
  * The words are the content and the canvas is their picture, as the cover's film is its lists'

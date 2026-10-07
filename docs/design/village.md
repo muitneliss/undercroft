@@ -5,7 +5,7 @@ The village is a second way of reading one customer's Journal, opened at
 as a character doing a job in a small village, and each building in it stands for a division of
 the book. The ledger stays the Journal's content and its default view; the village is the
 ledger's picture. The decision and its boundary are in
-[ADR 0115](../adr/0115-the-journal-can-be-read-as-a-village.md). This document owns the cast,
+[ADR 0116](../adr/0116-the-journal-can-be-read-as-a-village.md). This document owns the cast,
 the layout, the visual language, and what each run makes a character do.
 
 ## Direction contract
@@ -17,7 +17,7 @@ aside rather than lost.
 OWN-WORLD: The book's own stock, inks and wheel, printed onto a diorama. No new palette, font or
 easing is introduced. The models are KayKit (CC0), repainted to the tokens.
 
-MOTION: Stop-motion at 10 frames per second (ADR 0014, ADR 0115). Everything that moves is
+MOTION: Stop-motion at 10 frames per second (ADR 0014, ADR 0116). Everything that moves is
 sampled on the frame and held between frames, and the clips are keyed that way when they are
 built. Nothing interpolates between frames. Under reduced motion each poll paints one settled
 frame.
@@ -160,7 +160,7 @@ the village opened are not replayed; only their traces stand.
 
 ## Node-and-edge drawings
 
-The same village draws the interface's two graphs (ADR 0115): a run's stages, in the run's own
+The same village draws the interface's two graphs (ADR 0116): a run's stages, in the run's own
 leaf in the Journal, and the models' lineage, in Models → Lineage. `lib/village/graph.ts` turns
 either into buildings, roads and traffic, `graphWorld.ts` builds it, and the film is the town's.
 

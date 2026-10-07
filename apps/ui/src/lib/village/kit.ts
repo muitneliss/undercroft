@@ -1,5 +1,5 @@
 /**
- * Everything a village is built from, loaded and painted once (ADR 0115): the set's pieces, the
+ * Everything a village is built from, loaded and painted once (ADR 0116): the set's pieces, the
  * cast and its clips, the errata slip, and roads drawn along any line.
  *
  * A kit belongs to one film: the Journal's town, a run's map or the lineage each load their own,

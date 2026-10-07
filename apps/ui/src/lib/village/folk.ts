@@ -29,7 +29,7 @@ import { NODES, route } from "@/lib/village/roads.ts";
 import type { Actor, Doing, Role } from "@/lib/village/script.ts";
 import type { Cast } from "@/lib/village/kit.ts";
 
-/** Seconds per frame: the village's ten frames a second (ADR 0115). */
+/** Seconds per frame: the village's ten frames a second (ADR 0116). */
 export const FRAME_SECONDS = 0.1;
 /** How far a figure walks in one frame. */
 const STRIDE = 0.17;

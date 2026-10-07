@@ -1,5 +1,5 @@
 /**
- * The lineage drawn as a village (ADR 0115): a building per node where ELK placed its card, a
+ * The lineage drawn as a village (ADR 0116): a building per node where ELK placed its card, a
  * road per declared edge along the line ELK routed, the selected node's upstream chain inked and
  * its downstream chain dashed, carts rolling along both, and everything else faded
  * (`lib/village/graph.ts`, `lineageGraph`). It replaces the pannable board of ADR 0097: the camera

@@ -61,7 +61,7 @@ tasks:
     desc: >-
       Rebuild the Journal village's models (apps/ui/src/assets/village/) from the free KayKit
       Adventurers, Character Animations and Medieval Hexagon packs, unzipped under KAYKIT_DIR
-      (outside the repo). Usage: task build:village-assets KAYKIT_DIR=~/kaykit. ADR 0115.
+      (outside the repo). Usage: task build:village-assets KAYKIT_DIR=~/kaykit. ADR 0116.
     requires:
       vars: [KAYKIT_DIR]
     env:

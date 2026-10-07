@@ -1,6 +1,6 @@
 /**
  * How the village is photographed: a model village on a desk, under a warm lamp, shot with a
- * tilt-shift lens (ADR 0115).
+ * tilt-shift lens (ADR 0116).
  *
  * In order:
  *

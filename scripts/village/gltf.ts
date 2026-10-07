@@ -21,7 +21,7 @@ import { PNG } from "pngjs";
 export const ATLAS_COLUMNS = 8;
 export const ATLAS_ROWS = 4;
 
-/** The village's frame rate (ADR 0115): a clip is sampled on these frames and held between. */
+/** The village's frame rate (ADR 0116): a clip is sampled on these frames and held between. */
 const FRAMES_PER_SECOND = 10;
 /** Float slack when a key's time is compared with a frame's. */
 const EPSILON = 1e-6;

@@ -19,7 +19,7 @@
  * changes without anybody pressing anything -- so pressing Run now on the Sources leaf and
  * switching here shows the mark flip when the run ends.
  *
- * The division's second view is the village (`?view=village`, ADR 0115): the same runs drawn as
+ * The division's second view is the village (`?view=village`, ADR 0116): the same runs drawn as
  * people at work. A view of the Journal and not an eighth division, because the wheel is full
  * (ADR 0019), the way the lineage is a view of Models. The ledger stays the default; the village
  * is its own chunk, so `three` and the models are fetched only by a reader who opens it.

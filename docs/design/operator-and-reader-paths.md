@@ -124,7 +124,7 @@ The wheel is full at seven (ADR 0019), so lineage is a view of the Models divisi
 - A macro's own declarations count for the model that calls it. The shipped `gmail_letters()`
   reads `source('undercroft', 'records')`, so a model that calls it has the raw records as an
   upstream; a tenant's macro (ADR 0086) is read the same way from its saved definition.
-- It is drawn as a village (ADR 0115): a building per node, placed by a layout engine that
+- It is drawn as a village (ADR 0116): a building per node, placed by a layout engine that
   keeps each column, and a road per edge along the route it gives, never over a building
   (ADR 0103). The camera is fixed and fits the whole lineage. Selecting any node inks its whole
   upstream chain, dashes its downstream chain, sends carts along both, and fades every node on
