@@ -21,26 +21,28 @@ export function Account({ signedInAs }: { signedInAs: string }): React.JSX.Eleme
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("account.title")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("account.title")}
+      </div>
       <div className="body stack">
         <h1>{t("account.title")}</h1>
         <p className="prose prose--lead">{t("account.lead", { email: signedInAs })}</p>
       </div>
 
       <div className="band-rule" />
-      <div className="head">{t("tokens.head")}</div>
+      <h2 className="head">{t("tokens.head")}</h2>
       <div className="body stack">
         <PersonalTokens />
       </div>
 
       <div className="band-rule" />
-      <div className="head">{t("apps.head")}</div>
+      <h2 className="head">{t("apps.head")}</h2>
       <div className="body stack">
         <ConnectedApps />
       </div>
 
       <div className="band-rule" />
-      <div className="head">{t("activity.head")}</div>
+      <h2 className="head">{t("activity.head")}</h2>
       <div className="body stack">
         <AccountActivity />
       </div>

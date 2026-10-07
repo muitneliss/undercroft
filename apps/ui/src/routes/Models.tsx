@@ -85,7 +85,9 @@ export function Models({ tenantId }: { tenantId: string }): React.JSX.Element {
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("models.head")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("models.head")}
+      </div>
       <div className="body stack">
         <h1>{t("models.title")}</h1>
         <p className="prose prose--lead">{t("models.lead", { tenantId })}</p>
@@ -116,7 +118,7 @@ export function Models({ tenantId }: { tenantId: string }): React.JSX.Element {
       {isAdmin && !lineage ? (
         <>
           <div className="band-rule" />
-          <div className="head">{t("models.newHead")}</div>
+          <h2 className="head">{t("models.newHead")}</h2>
           <div className="body stack">
             <NewModelForm tenantId={tenantId} />
           </div>
@@ -377,6 +379,7 @@ function ModelList({
 
 function NewModelForm({ tenantId }: { tenantId: string }): React.JSX.Element {
   const modelNameId = useId();
+  const nameHintId = useId();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const utils = trpc.useUtils();
@@ -415,6 +418,9 @@ function NewModelForm({ tenantId }: { tenantId: string }): React.JSX.Element {
           {t("models.nameLabel")}
         </label>
         <input
+          aria-describedby={nameHintId}
+          // A conflict is the name already taken, which is what the slip below says.
+          aria-invalid={create.error?.data?.code === "CONFLICT"}
           autoComplete="off"
           className="input"
           disabled={create.isPending}
@@ -428,7 +434,9 @@ function NewModelForm({ tenantId }: { tenantId: string }): React.JSX.Element {
           title={t("models.nameInvalid")}
           type="text"
         />
-        <p className="field__hint">{t("models.nameHint")}</p>
+        <p className="field__hint" id={nameHintId}>
+          {t("models.nameHint")}
+        </p>
       </div>
       {create.isError ? (
         <Errata heading={t("models.notCreated")} live={true} error={create.error} />

@@ -268,6 +268,10 @@
      heavier rule that closes a block. */
     --rule: rgba(22, 21, 15, 0.16);
     --rule-strong: rgba(22, 21, 15, 0.44);
+    /* The edge of a field. A box of leaf on the page is 1.04:1 against it, so its hairline is
+     the only thing saying "type here", and WCAG 1.4.11 holds that edge to 3:1. Rule strong
+     manages 2.86:1 on the leaf; this is 3.99:1 on the leaf and 3.93:1 on the page. */
+    --rule-field: rgba(22, 21, 15, 0.55);
     --hair: 1px;
 
     /* The section wheel. Seven hues divide the book and are taken in order; all
@@ -285,11 +289,17 @@
     /* Held out of the wheel. Errata only, nowhere else, ever. */
     --errata: #cf2f16;
     --errata-ink: #8c1c09;
+    /* The slip's ground, which the errata slip and a run plate in the correction language share. */
+    --errata-ground: #fdf0eb;
+
+    /* The two status tones that are neither ink nor vermilion: a granted mark and a pending one. */
+    --mark-granted: #1c5c33;
+    --mark-pending: #6b4a00;
 
     /* The current division's board, set per route on the app root. These are the
      SOURCES defaults so nothing flashes before the route resolves. */
     --board: var(--hue-chrome);
-    --board-ink: #4a3300;
+    --board-ink: #16150f;
 
     /* The page stock: acetate over bone, constant across divisions. The reading
      field does not change colour when you turn to another section -- only the
@@ -424,8 +434,11 @@
     box-sizing: border-box;
   }
 
+  /* The reader's own default, not a pinned 16px: a pinned root size is what silences a browser
+   set to a larger font, and every rem in this sheet is meant to grow with it. "Fixed in rem"
+   means a size does not follow the viewport, not that it ignores the reader. */
   html {
-    font-size: 16px;
+    font-size: 100%;
   }
 
   body {
@@ -440,8 +453,11 @@
     text-rendering: optimizeLegibility;
   }
 
+  /* A selection is a punch through the open division's board, not Sources' chrome on every
+   leaf: a wheel hue printed inside another division's page reads as that division. Mixed
+   toward the leaf so Ink keeps its contrast on the deepest board. */
   ::selection {
-    background: var(--hue-chrome);
+    background: color-mix(in srgb, var(--board) 32%, var(--leaf));
     color: var(--ink);
   }
 
@@ -651,8 +667,39 @@
   /* Block behaviour, restored. The rest of this layout was written against a block
    leaf, and without this a sheet taller than the viewport is COMPRESSED by the
    flex container instead of overflowing it into a scroll. */
-  .leaf > * {
+  .leaf > *,
+  .leaf__page > * {
     flex: none;
+  }
+
+  /* The page between the running head and the colophon: the document's `main`. It sets its
+   own children exactly as the leaf sets its three, so wrapping the page in a landmark moved
+   nothing on it. Focus lands here from the skip link; the page itself is not a control, so
+   it draws no ring -- the next Tab draws one on the first thing on the page. */
+  .leaf__page {
+    display: flex;
+    flex-direction: column;
+    row-gap: var(--s-6);
+    min-width: 0;
+  }
+
+  .leaf__page:focus {
+    outline: none;
+  }
+
+  /* The way past the strip and the running head, shown only to the keyboard that reaches it. */
+  .book__skip {
+    position: absolute;
+    top: var(--s-2);
+    left: var(--s-4);
+    z-index: 10;
+    padding: var(--s-3);
+    background: var(--leaf);
+    transform: translateY(-200%);
+  }
+
+  .book__skip:focus {
+    transform: none;
   }
 
   /* THE LEAF BOUND TO THE WINDOW, for the one page that divides a screenful.
@@ -684,7 +731,13 @@
 
   /* The one child that takes what the running head and the colophon leave. It undoes
    `.leaf > *` above deliberately: this page is the exception that rule was written for. */
-  .leaf--fill > .workbench {
+  .leaf--fill > .leaf__page {
+    flex: 1 1 auto;
+    min-height: 0;
+    row-gap: var(--s-4);
+  }
+
+  .leaf--fill > .leaf__page > .workbench {
     flex: 1 1 auto;
     min-height: 0;
   }
@@ -783,7 +836,9 @@
     /* The rule goes on the edge that meets the leaf, as it did on the fore edge. */
     border-bottom: var(--hair) solid var(--rule-strong);
     border-radius: var(--r-leaf) var(--r-leaf) 0 0;
-    color: #fff;
+    /* Never what a tab is lettered in: an open tab takes `letteringOn` per hue inline, and a
+     face-down one its own hatch ink below. This is only what shows before either applies. */
+    color: var(--leaf);
     font-family: var(--face-display);
     font-size: var(--t-micro);
     font-weight: 700;
@@ -890,6 +945,8 @@
     font-weight: 700;
     font-variation-settings: "wdth" 80;
     letter-spacing: 0.17em;
+    /* A head may be an h2 for the outline; it still sets on the line of the text beside it. */
+    line-height: inherit;
     text-transform: uppercase;
     color: var(--ink-2);
   }
@@ -1104,6 +1161,16 @@
     font-size: var(--t-micro);
   }
 
+  /* Pushed to the far end of the rule, so the one link at the foot does not sit between
+   the label and the tag it names; on a narrow leaf it wraps to its own line. */
+  .colophon__contact {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    margin-left: auto;
+    font-size: var(--t-micro);
+  }
+
   /* -- prose ------------------------------------------------------------------- */
 
   /*
@@ -1271,6 +1338,22 @@
     font-size: 10px;
   }
 
+  /* A finger is not a cursor. The plate's printed size is a desk's -- 35px, a small one 27px --
+   and that is right where a pointer aims. A coarse pointer gets the 44px a thumb needs, by the
+   pointer it has rather than by the width of the screen, so a tablet with a trackpad keeps the
+   desk's density and a phone held in the hand does not. The grip's reach doubles for the
+   same reason. */
+  @media (pointer: coarse) {
+    :root {
+      --grip-reach: 1rem;
+    }
+
+    .plate {
+      min-height: 2.75rem;
+      justify-content: center;
+    }
+  }
+
   /* -- the grip: a pane's whole edge -------------------------------------------- */
 
   /*
@@ -1425,7 +1508,7 @@
 
   .field__hint {
     font-family: var(--face-prose);
-    font-size: 1rem;
+    font-size: var(--t-prose);
     line-height: 1.45;
     color: var(--ink-2);
     max-width: 62ch;
@@ -1437,7 +1520,7 @@
     padding: 0.5rem 0.65rem;
     background: var(--leaf);
     color: var(--ink);
-    border: var(--hair) solid var(--rule-strong);
+    border: var(--hair) solid var(--rule-field);
     border-radius: var(--r-plate);
     caret-color: var(--ink);
     transition: border-color var(--hinge);
@@ -1499,6 +1582,18 @@
   .punch input:checked + .punch__box {
     background: var(--board);
     box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.45);
+  }
+
+  /* The hole shows a centre. Hue alone cannot carry "checked": chrome is 1.97:1 against the
+   unchecked leaf, under WCAG 1.4.11's 3:1, while every other board clears 5:1. A dot in the
+   board's own lettering ink is dark on chrome and light on the deep hues, so the checked box
+   reads by shape on every board and in greyscale. */
+  .punch input:checked + .punch__box::after {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: var(--board-ink);
   }
 
   .punch input:focus-visible + .punch__box {
@@ -1952,7 +2047,7 @@
   .errata {
     border-top: 2px solid var(--errata);
     border-bottom: 2px solid var(--errata);
-    background: #fdf0eb;
+    background: var(--errata-ground);
     padding: var(--s-4) var(--s-5);
     margin: var(--s-4) 0;
     display: flex;
@@ -2109,10 +2204,10 @@
   }
 
   .mark--granted {
-    color: #1c5c33;
+    color: var(--mark-granted);
   }
   .mark--pending {
-    color: #6b4a00;
+    color: var(--mark-pending);
   }
   .mark--lapsed {
     color: var(--errata-ink);
@@ -2671,8 +2766,7 @@
   /* A run that stopped, wearing the correction language: vermilion rules top and
    bottom on slip ground, cut at 1px like every other errata in this interface. */
   .run-plate--errata {
-    /* The literal `.errata` uses: the slip ground has never been a token in this sheet. */
-    background: #fdf0eb;
+    background: var(--errata-ground);
     border: var(--hair) solid var(--errata);
     border-top-width: 2px;
     border-bottom-width: 2px;
@@ -2728,7 +2822,7 @@
    machine face with tabular figures, not tucked under the mark as a footnote. */
   .run-plate__datum {
     font-family: var(--face-mono);
-    font-size: 0.9375rem;
+    font-size: var(--t-body);
     font-feature-settings: "tnum";
     line-height: 1.2;
     color: var(--ink);
@@ -2887,7 +2981,7 @@
   /* The loudest line on the band, and the same size the plate above sets its figure at,
    so the two read as one object seen twice rather than as two readings. */
   .gauge__figure {
-    font-size: 0.9375rem;
+    font-size: var(--t-body);
     color: var(--ink);
   }
 
@@ -3037,7 +3131,7 @@
    * legible and the sentence keeps 10:1. */
   .feed__line--warn .feed__mark {
     /* `.mark--pending`'s own umber and `.mark--lapsed`'s own vermilion ink. */
-    color: #6b4a00;
+    color: var(--mark-pending);
   }
 
   .feed__line--error .feed__mark {
@@ -3877,10 +3971,18 @@
     border-left: 4px double var(--ink-2);
   }
 
-  /* Dimmed, not faded out: at 0.62 a dimmed name still clears 4.5:1 on the page, because
-   * it is still a card a reader may press. */
+  /* Dimmed, not faded out: it is still a card a reader may press, so every line on it keeps
+   * 4.5:1. Opacity could not promise that -- at 0.62 the name held but the 11px kind and note
+   * in Ink 2 fell to 2.99:1 -- so the card steps each ink down one tone instead (Ink 2 runs
+   * 7.4:1 on the leaf, Ink 3 5.6:1) and lays its face on the page rather than the leaf. */
   .lineage-card--dim {
-    opacity: 0.62;
+    --ink: var(--ink-2);
+    --ink-2: var(--ink-3);
+  }
+
+  .lineage-card--dim .lineage-card__face {
+    border-color: var(--rule);
+    background: var(--page);
   }
 
   .lineage-card__head,
@@ -5310,7 +5412,8 @@
    *
    * IT IS NOT A MODAL AND NOT A PORTAL. `.book` is already a grid with named areas, so the
    * interleaf becomes a third one beside the leaf: the leaf narrows, and `.sheet`'s existing
-   * 1100px two-column rule absorbs the narrowing without being told. The page behind stays in
+   * 1100px two-column rule absorbs the narrowing without being told. Under 1100px there is no
+   * longer room for both, and the interleaf takes the leaf's place. The page behind stays in
    * the document, in the tab order, and on screen -- the same decision `.hinge` records for a
    * scope panel, taken at the scale of the whole book.
    *
@@ -5559,6 +5662,27 @@
     .sheet {
       grid-template-columns: var(--head-col) repeat(2, minmax(0, 1fr));
     }
+    /* The interleaf takes the whole leaf area, and the leaf steps aside rather than being
+     squeezed into a column nobody can read. A fixed 24rem conversation beside a leaf that
+     still hangs its 9.5rem margin column left 148px of page at 800px -- a four-column table
+     needs 343 -- so below the width where the sheet already folds to two columns there is
+     room for one of them, and it is the one the reader just opened. */
+    .book--interleaved {
+      grid-template-areas: "rail" "interleaf";
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .book--interleaved > .leaf {
+      display: none;
+    }
+
+    .interleaf {
+      border-left: none;
+    }
+
+    .interleaf__punch {
+      display: none;
+    }
     .grant__head {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       grid-template-areas:
@@ -5583,24 +5707,10 @@
   }
 
   @media (max-width: 760px) {
-    /* The interleaf takes the whole leaf area, and the leaf steps aside rather than being
-     squeezed into a column nobody can read. The strip is already at the foot at this width,
-     so navigation stays where the reader's thumb is. */
+    /* The strip is at the foot at this width, so the interleaf that took the leaf's place
+     above 760px sits over it, and navigation stays where the reader's thumb is. */
     .book--interleaved {
       grid-template-areas: "interleaf" "rail";
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .book--interleaved > .leaf {
-      display: none;
-    }
-
-    .interleaf {
-      border-left: none;
-    }
-
-    .interleaf__punch {
-      display: none;
     }
     /* The board needs a desk's width to say anything; the lineage's details and its text list
      name every node of the selected chains and wrap, so they are the view on a phone. */
@@ -5800,6 +5910,30 @@
    the tab strip, the spine, the running head's controls, the interleaf and the colophon --
    is not what was asked for. Scoped to the book holding a dashboard, so printing any other
    leaf is untouched. What goes inside the dashboard's leaf is `styles/reports.css`'s. */
+  /* Windows high contrast replaces every colour with a system one, and three states in this
+   book are carried by a fill or an inset shadow it erases: a checked punch, a focused field,
+   and the chosen face of a plate pair. Each is redrawn here in system colours. */
+  @media (forced-colors: active) {
+    .punch input:checked + .punch__box::after {
+      forced-color-adjust: none;
+      background: CanvasText;
+    }
+
+    .input:focus {
+      outline: 2px solid Highlight;
+      outline-offset: 0;
+    }
+
+    .langset .plate[aria-pressed="true"],
+    .langset .plate[aria-current="page"],
+    .langset .plate[aria-current="step"],
+    .rail__tab[aria-current="page"] {
+      forced-color-adjust: none;
+      background: Highlight;
+      color: HighlightText;
+    }
+  }
+
   @media print {
     .book:has(.sheet--dashboard) .rail,
     .book:has(.sheet--dashboard) .colophon,

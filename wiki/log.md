@@ -321,3 +321,4 @@
 ## [2026-10-07] ingest | ADR 0114 The Model Builder Finds Out What Is Needed Before It Builds Anything
 ## [2026-10-07] ingest | Runbook: Agent skills
 ## [2026-10-07] ingest | ADR 0115 The Title Page Is Printed In The Reader's Weather
+## [2026-10-07] ingest | ADR 0115 The Title Page Is Printed In The Reader's Weather

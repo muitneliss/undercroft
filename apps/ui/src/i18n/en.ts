@@ -13,9 +13,15 @@ export const en = {
   app: {
     name: "Undercroft",
     caption: "Undercroft · control plane",
+    skip: "Skip to the page",
+    /** The browser tab's name on a division outside any book: Customers. */
+    documentTitle: "{{page}} · Undercroft",
+    /** The browser tab's name inside a customer's book: the division, then whose book it is. */
+    documentTitleInBook: "{{page}} · {{book}} · Undercroft",
     signOut: "Sign out",
     signingOut: "Signing out…",
     release: "Version",
+    contact: "Contact",
     releaseLive: "Version {{release}} is now live. Reload the page to use it.",
     reload: "Reload",
     staleChunk: "This page belongs to a newer release",
@@ -49,6 +55,8 @@ export const en = {
     loading: "Loading",
     notLoaded: "Not loaded",
     nothingToShow: "Nothing to show.",
+    optionalLabel: "{{label}} <small>(optional)</small>",
+    newTab: "(opens in a new tab)",
   },
 
   errata: {
@@ -128,6 +136,7 @@ export const en = {
     skip: "Skip to main content",
     docs: "Documentation",
     readDocs: "Read the docs",
+    stillFilm: "Stop motion",
     title: "Keep the original data.",
     titleEnd: "Define your own answers.",
     lead: "From your accounts to an immutable raw lake, SQL models and reports.",
@@ -1403,6 +1412,8 @@ export const en = {
     colNotNull: "Not null",
     colUnique: "Unique",
     removeColumn: "Remove",
+    removeColumnNamed: "Remove column {{column}}",
+    testOn: "{{test}}: column {{column}}",
     addColumnLabel: "Add a column",
     addColumnHint: "The column's name as in the SELECT. Suggestions come from the last build.",
     addColumn: "Add",
@@ -1650,6 +1661,7 @@ export const en = {
     columnsHead: "Columns",
     countAll: "Count rows",
     aggNone: "Value",
+    aggregateFor: "Aggregate for {{column}}",
     aggCount: "Count",
     aggSum: "Sum",
     aggAvg: "Average",
@@ -1830,6 +1842,7 @@ export const en = {
     stop: "Stop",
     clear: "Clear the conversation",
     working: "The assistant is answering",
+    answered: "The assistant has answered",
     figure: "FIG. {{number}}",
     foundNothing: "Nothing found",
     figureRows_one: "{{count, number}} row",

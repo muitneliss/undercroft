@@ -93,7 +93,9 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("nav.sources")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("nav.sources")}
+      </div>
 
       <SourcesBand
         tenantId={tenantId}
@@ -107,7 +109,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
       {isAdmin ? (
         <>
           <div className="band-rule" />
-          <div className="head">{t("keys.head")}</div>
+          <h2 className="head">{t("keys.head")}</h2>
           <div className="body stack">
             <IngestKeys tenantId={tenantId} />
           </div>
@@ -116,7 +118,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
 
       <div className="band-rule" />
 
-      <div className="head">{t("tenants.renameHead")}</div>
+      <h2 className="head">{t("tenants.renameHead")}</h2>
       <div className="body stack">
         <DisplayNameForm
           canEdit={isAdmin}
@@ -130,7 +132,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
           instead of this page, and that is where the way back is (ADR 0110). */}
       <div className="band-rule" />
 
-      <div className="head">{t("tenants.deactivateHead")}</div>
+      <h2 className="head">{t("tenants.deactivateHead")}</h2>
       <div className="body stack">
         <DeactivateTenant
           canEdit={isAdmin}
@@ -211,7 +213,7 @@ function SourcesBand({
 
       <div className="band-rule" />
 
-      <div className="head">{t("sources.grantsHead")}</div>
+      <h2 className="head">{t("sources.grantsHead")}</h2>
       <div className="body stack">
         {list.length === 0 ? (
           <p className="note">{t("common.nothingToShow")}</p>

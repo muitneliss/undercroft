@@ -34,7 +34,7 @@ export function FilterEditor({
   return (
     <>
       <Separator className="band-rule" />
-      <div className="head">{t("dashboard.filtersEditHead")}</div>
+      <h2 className="head">{t("dashboard.filtersEditHead")}</h2>
       <div className="body stack">
         <p className="prose">
           {t("dashboard.filtersEditLead", {

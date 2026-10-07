@@ -61,7 +61,7 @@ export function ModelDependencies({
     <>
       <p className="prose">{t("models.dependenciesLead")}</p>
       <section className="stack stack--tight">
-        <h2 className="label">{t("lineage.readsHead")}</h2>
+        <h3 className="label">{t("lineage.readsHead")}</h3>
         <Neighbours
           byId={byId}
           edges={parentsOf(graph, node.id)}
@@ -83,7 +83,7 @@ export function ModelDependencies({
         ) : null}
       </section>
       <section className="stack stack--tight">
-        <h2 className="label">{t("lineage.readByHead")}</h2>
+        <h3 className="label">{t("lineage.readByHead")}</h3>
         <Neighbours
           byId={byId}
           edges={childrenOf(graph, node.id)}

@@ -132,57 +132,95 @@ function TokenTable({
   const locale = useUiStore((state) => state.locale);
 
   return (
-    <Table>
-      <TableCaption>{t("tokens.caption", { count: tokens.length })}</TableCaption>
-      <TableHeader>
-        <TableRow>
-          <TableHead scope="col">{t("tokens.colLabel")}</TableHead>
-          <TableHead scope="col">{t("tokens.colGrant")}</TableHead>
-          <TableHead scope="col">{t("tokens.colCreated")}</TableHead>
-          <TableHead scope="col">{t("tokens.colLastUsed")}</TableHead>
-          <TableHead scope="col">{t("tokens.colExpires")}</TableHead>
-          <TableHead scope="col">{t("tokens.colRevoke")}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {tokens.map((token) => (
-          <TableRow key={token.id}>
-            <TableCell>
-              <span className="datum">{token.label}</span>
-              <span className="datum datum--quiet journal__trigger">{token.id}</span>
-            </TableCell>
-            <TableCell className="datum datum--quiet">
-              {token.grant === "write" ? t("tokens.grantWrite") : t("tokens.grantRead")}
-            </TableCell>
-            <TableCell className="datum datum--quiet">
-              {formatDate(token.createdAt, locale)}
-            </TableCell>
-            <TableCell className="datum datum--quiet">
-              {lastUsedNote(t, locale, token.lastUsedAt)}
-            </TableCell>
-            <TableCell className="datum datum--quiet">
-              {formatDate(token.expiresAt, locale)}
-            </TableCell>
-            <TableCell>
-              {token.revokedAt === null ? (
-                <button
-                  className="plate plate--small"
-                  type="button"
-                  disabled={revoking !== null}
-                  onClick={(): void => {
-                    onRevoke(token.id);
-                  }}
-                >
-                  {revoking === token.id ? t("tokens.revoking") : t("tokens.revoke")}
-                </button>
-              ) : (
-                <span className="datum datum--quiet">{t("tokens.revoked")}</span>
-              )}
-            </TableCell>
+    <div className="table-scroll">
+      <Table>
+        <TableCaption>{t("tokens.caption", { count: tokens.length })}</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col">{t("tokens.colLabel")}</TableHead>
+            <TableHead scope="col">{t("tokens.colGrant")}</TableHead>
+            <TableHead scope="col">{t("tokens.colCreated")}</TableHead>
+            <TableHead scope="col">{t("tokens.colLastUsed")}</TableHead>
+            <TableHead scope="col">{t("tokens.colExpires")}</TableHead>
+            <TableHead scope="col">{t("tokens.colRevoke")}</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {tokens.map((token) => (
+            <TableRow key={token.id}>
+              <TableCell>
+                <span className="datum">{token.label}</span>
+                <span className="datum datum--quiet journal__trigger">{token.id}</span>
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {token.grant === "write" ? t("tokens.grantWrite") : t("tokens.grantRead")}
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {formatDate(token.createdAt, locale)}
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {lastUsedNote(t, locale, token.lastUsedAt)}
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {formatDate(token.expiresAt, locale)}
+              </TableCell>
+              <TableCell>
+                {token.revokedAt === null ? (
+                  <button
+                    className="plate plate--small"
+                    type="button"
+                    disabled={revoking !== null}
+                    onClick={(): void => {
+                      onRevoke(token.id);
+                    }}
+                  >
+                    {revoking === token.id ? t("tokens.revoking") : t("tokens.revoke")}
+                  </button>
+                ) : (
+                  <span className="datum datum--quiet">{t("tokens.revoked")}</span>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+/**
+ * One grant, named by its word and described by the sentence under it. The label wraps both,
+ * so without the two references the whole sentence would be the radio's name.
+ */
+function GrantRadio({
+  grant,
+  disabled,
+}: {
+  grant: (typeof GRANTS)[number];
+  disabled: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const nameId = useId();
+  const hintId = useId();
+  return (
+    <label className="punch">
+      <input
+        aria-describedby={hintId}
+        aria-labelledby={nameId}
+        type="radio"
+        name="grant"
+        value={grant.value}
+        defaultChecked={grant.value === "read"}
+        disabled={disabled}
+      />
+      <span className="punch__box" />
+      <span className="stack stack--tight">
+        <span id={nameId}>{t(grant.key)}</span>
+        <span className="field__hint" id={hintId}>
+          {t(grant.hint)}
+        </span>
+      </span>
+    </label>
   );
 }
 
@@ -244,20 +282,7 @@ function MintForm({
       <fieldset className="field">
         <legend className="label">{t("tokens.grantLabel")}</legend>
         {GRANTS.map((grant) => (
-          <label key={grant.value} className="punch">
-            <input
-              type="radio"
-              name="grant"
-              value={grant.value}
-              defaultChecked={grant.value === "read"}
-              disabled={mint.isPending}
-            />
-            <span className="punch__box" />
-            <span className="stack stack--tight">
-              <span>{t(grant.key)}</span>
-              <span className="field__hint">{t(grant.hint)}</span>
-            </span>
-          </label>
+          <GrantRadio key={grant.value} grant={grant} disabled={mint.isPending} />
         ))}
       </fieldset>
 

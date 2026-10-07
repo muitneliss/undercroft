@@ -5,7 +5,8 @@
 - Relates to: [ADR 0014](0014-frames-are-size-motion-is-stepped.md), whose stepped motion this keeps rather than
   excepts; [ADR 0063](0063-the-public-cover-moves-continuously.md), the one surface that is
   excepted, which this does not join; [ADR 0009](0009-ui-state-in-zustand-no-usestate.md), whose
-  store gains its second persisted field. None is superseded.
+  store gains a persisted field beside the locale and the cover's `filmHeld`. None is
+  superseded.
 
 ## Context
 

@@ -49,7 +49,7 @@ import { getMutationKey } from "@trpc/react-query";
 import type { SchemaResponse } from "@undercroft/contracts";
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -100,6 +100,7 @@ function SchemaRail({ schema }: { schema: SchemaResponse | undefined }): React.J
   const { t } = useTranslation();
   const folded = useUiStore((state) => state.lakeRailFolded);
   const toggleRail = useUiStore((state) => state.toggleLakeRail);
+  const tablesId = useId();
 
   if (schema === undefined || schema.tables.length === 0) {
     // Not an error state worth a slip: the console works without the reference, and a worker
@@ -109,11 +110,19 @@ function SchemaRail({ schema }: { schema: SchemaResponse | undefined }): React.J
 
   return (
     <aside className={folded ? "rail-ref rail-ref--folded" : "rail-ref"}>
-      <button className="rail-ref__fold" type="button" aria-expanded={!folded} onClick={toggleRail}>
+      {/* Points at the tables only while they are there: folded, they are not rendered, and an
+          `aria-controls` naming an id the document lacks is a reference to nothing. */}
+      <button
+        className="rail-ref__fold"
+        type="button"
+        aria-expanded={!folded}
+        {...(folded ? {} : { "aria-controls": tablesId })}
+        onClick={toggleRail}
+      >
         <span className="label">{t("lake.consoleTables")}</span>
         {folded ? <ArrowRight /> : <ArrowLeft />}
       </button>
-      {folded ? null : <SchemaTables schema={schema} />}
+      {folded ? null : <SchemaTables id={tablesId} schema={schema} />}
       {/* The rail's own edge, on the same condition as its tables: folded, the two states
           are a spine and the width the reader last chose, and there is nothing in between
           for a drag to reach. */}
@@ -123,9 +132,9 @@ function SchemaRail({ schema }: { schema: SchemaResponse | undefined }): React.J
 }
 
 /** The tables themselves. Its own component so the rail above stays the fold and nothing else. */
-function SchemaTables({ schema }: { schema: SchemaResponse }): React.JSX.Element {
+function SchemaTables({ id, schema }: { id: string; schema: SchemaResponse }): React.JSX.Element {
   return (
-    <div className="rail-ref__tables">
+    <div className="rail-ref__tables" id={id}>
       {schema.tables.map((table) => (
         // A disclosure, so the list stays scannable at rest and a reader opens the one they
         // are writing against. Native `<details>`: which one is open is not application state.

@@ -13,6 +13,30 @@
  * film drives (a stage lit, a step reached) so they move at the film's pace. Every surface
  * behind sign-in stays stepped (ADR 0014).
  */
+
+/* The lamp's three values do not inherit. `@/lib/vault/lamp.ts` writes them onto `.landing` on
+   every frame the light travels, and an inherited custom property set there restyles every
+   element on the page each frame -- for a value one pseudo-element reads. Registered as
+   non-inheriting, a frame restyles `.landing` and its `::before`, which takes them by an
+   explicit `inherit` below. */
+@property --lamp-x {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 50%;
+}
+
+@property --lamp-y {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --lamp-strength {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
 @layer undercroft {
   /* Captured here, before a child remaps --ink, so the night ground keeps the page's ink. The
      lamp's colour is darkened toward Ink by day, where Chrome on the page stock would letter
@@ -35,6 +59,10 @@
      `@/lib/vault/lamp.ts`. It sits under every section, the cover included -- the film is drawn
      on a transparent canvas -- so the whole home is one ground under one light (ADR 0066). */
   .landing::before {
+    --lamp-x: inherit;
+    --lamp-y: inherit;
+    --lamp-strength: inherit;
+
     content: "";
     position: absolute;
     inset: 0;
@@ -79,6 +107,42 @@
 
     .landing .plate--primary:hover:not(:disabled) {
       background: var(--ink);
+    }
+
+    /* The document around the cover is the cover's ground too, or iOS's overscroll and the
+       page's own scrollbar show the book's bone around a page that is Ink. Scoped by `:has`,
+       so the book behind sign-in keeps its bone whatever the reader's scheme. */
+    html:has(.landing) {
+      color-scheme: dark;
+    }
+
+    body:has(.landing) {
+      background: var(--ink);
+    }
+
+    html:has(.landing)::-webkit-scrollbar-track,
+    html:has(.landing) ::-webkit-scrollbar-track {
+      background: var(--ink);
+    }
+
+    html:has(.landing)::-webkit-scrollbar-thumb,
+    html:has(.landing) ::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--bone) 42%, transparent);
+      border-color: var(--ink);
+    }
+  }
+
+  /* The reader's own stop for the film (WCAG 2.2.2): the plate is inked while the film is held,
+     the way the language pair inks the face that is chosen. Under reduced motion the film
+     already stands, so the control would do nothing and is not printed. */
+  .landing__still[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--leaf);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .landing__still {
+      display: none;
     }
   }
 

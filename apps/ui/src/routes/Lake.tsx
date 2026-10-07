@@ -66,7 +66,9 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("lake.head")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("lake.head")}
+      </div>
       <div className="body stack">
         <LakeSummary
           tenantId={tenantId}
@@ -92,7 +94,7 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
       </div>
 
       <div className="band-rule" />
-      <div className="head">{t("lake.kindsHead")}</div>
+      <h2 className="head">{t("lake.kindsHead")}</h2>
       <div className="body stack">
         <p className="prose">{t("lake.kindsLead", { tenantId })}</p>
         {/* A door, as the console's is: the catalogue is a page of this division, and every
@@ -108,7 +110,7 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
       {isAdmin && streams.length > 0 ? (
         <>
           <div className="band-rule" />
-          <div className="head">{t("lake.browserHead")}</div>
+          <h2 className="head">{t("lake.browserHead")}</h2>
           <div className="body stack">
             <Suspense fallback={<Skeleton rows={4} />}>
               <LakeBrowser tenantId={tenantId} />
@@ -116,7 +118,7 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
           </div>
 
           <div className="band-rule" />
-          <div className="head">{t("lake.searchHead")}</div>
+          <h2 className="head">{t("lake.searchHead")}</h2>
           <div className="body stack">
             <Suspense fallback={<Skeleton rows={3} />}>
               <LakeSearch tenantId={tenantId} />
@@ -124,7 +126,7 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
           </div>
 
           <div className="band-rule" />
-          <div className="head">{t("lake.consoleHead")}</div>
+          <h2 className="head">{t("lake.consoleHead")}</h2>
           <div className="body stack">
             <p className="prose">{t("lake.consoleLead")}</p>
             {/* A DOOR, NOT A WORKSPACE. The console used to be this band, and a band is as

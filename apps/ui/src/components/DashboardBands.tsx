@@ -21,6 +21,7 @@ import { CopyLink } from "@/components/CopyLink.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { QuestionCard } from "@/components/QuestionCard.tsx";
+import { StatusLine } from "@/components/StatusLine.tsx";
 import { Separator } from "@/components/ui/separator.tsx";
 import type { DashboardDraft } from "@/lib/dashboardDraft.ts";
 import { isDashboardDirty } from "@/lib/dashboardDraft.ts";
@@ -211,14 +212,19 @@ function DraftNote({
   save: Save;
 }): React.JSX.Element | null {
   const { t } = useTranslation();
-  if (isDashboardDirty(draft)) {
-    return <span className="datum datum--quiet">{t("bi.unsaved")}</span>;
-  }
-  return save.isSuccess ? (
-    <span className="datum datum--quiet" role="status">
-      {t("bi.savedNote")}
-    </span>
-  ) : null;
+  const dirty = isDashboardDirty(draft);
+  // The saved note's region stays mounted while the draft is clean, so "Saved" is announced
+  // when the save answers rather than mounted unheard beside the text it carries.
+  return (
+    <>
+      {dirty ? <span className="datum datum--quiet">{t("bi.unsaved")}</span> : null}
+      <StatusLine
+        as="span"
+        className="datum datum--quiet"
+        text={!dirty && save.isSuccess ? t("bi.savedNote") : null}
+      />
+    </>
+  );
 }
 
 /** The grid itself, and -- while editing -- the one question that can be added to it. */
@@ -249,7 +255,7 @@ export function TilesBand({
   return (
     <>
       <Separator className="band-rule" />
-      <div className="head">{t("dashboard.tilesHead")}</div>
+      <h2 className="head">{t("dashboard.tilesHead")}</h2>
       <div className="body stack">
         {tiles.length === 0 ? (
           <EmptyState
@@ -313,7 +319,7 @@ export function DeleteBand({
   return (
     <>
       <Separator className="band-rule print-omit" />
-      <div className="head print-omit">{t("dashboard.deleteHead")}</div>
+      <h2 className="head print-omit">{t("dashboard.deleteHead")}</h2>
       <div className="body stack print-omit">
         <p className="prose">{t("dashboard.deleteLead", { name: draft.name })}</p>
         <details className="tokenform">

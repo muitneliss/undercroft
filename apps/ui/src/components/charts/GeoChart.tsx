@@ -29,7 +29,7 @@ import { Skeleton } from "@/components/Skeleton.tsx";
 import { toSeries } from "@/lib/chartData.ts";
 import { joinRegions, type Region, type RegionRow } from "@/lib/geoJoin.ts";
 import { formatDecimal, MISSING } from "@/lib/money.ts";
-import { sequential } from "@/lib/plotPalette.ts";
+import { OTHER, sequential } from "@/lib/plotPalette.ts";
 
 ChartJS.register(ChoroplethController, GeoFeature, ColorScale, ProjectionScale);
 
@@ -85,7 +85,7 @@ function nameOf(item: Feature<Geometry>): string {
 const RAMP = sequential(6);
 function interpolate(normalized: number): string {
   const at = Math.round(Math.min(1, Math.max(0, normalized)) * (RAMP.length - 1));
-  return RAMP[at] ?? RAMP[0] ?? "#234c9e";
+  return RAMP[at] ?? RAMP[0] ?? OTHER;
 }
 
 const NAMED_UNMATCHED = 8;

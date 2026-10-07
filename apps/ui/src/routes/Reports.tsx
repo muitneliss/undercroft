@@ -62,7 +62,9 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
 
   return (
     <div className="sheet">
-      <div className="head head--division">{t("reports.head")}</div>
+      <div className="head head--division" aria-hidden="true">
+        {t("reports.head")}
+      </div>
       {/* The search and the views sit in the division's own body, under the lead: a second
           body beside the first has no gap above it, and set the field hard against the lead. */}
       <div className="body stack">
@@ -264,31 +266,33 @@ function DashboardTable({
   const locale = useUiStore((state) => state.locale);
 
   return (
-    <table className="table">
-      <caption>{t("bi.dashboardsCaption", { count: items.length })}</caption>
-      <thead>
-        <tr>
-          <th scope="col">{t("bi.colName")}</th>
-          <th scope="col" className="num">
-            {t("bi.colTiles")}
-          </th>
-          <th scope="col">{t("bi.colSaved")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((dashboard) => (
-          <tr key={dashboard.id}>
-            <td>
-              <Link className="journal__what" to={`${base}/dashboards/${dashboard.id}`}>
-                {dashboard.name}
-              </Link>
-            </td>
-            <td className="num datum">{formatCount(dashboard.layout.tiles.length, locale)}</td>
-            <td className="datum datum--quiet">{relativeTime(dashboard.updatedAt, locale)}</td>
+    <div className="table-scroll">
+      <table className="table">
+        <caption>{t("bi.dashboardsCaption", { count: items.length })}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{t("bi.colName")}</th>
+            <th scope="col" className="num">
+              {t("bi.colTiles")}
+            </th>
+            <th scope="col">{t("bi.colSaved")}</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((dashboard) => (
+            <tr key={dashboard.id}>
+              <td>
+                <Link className="journal__what" to={`${base}/dashboards/${dashboard.id}`}>
+                  {dashboard.name}
+                </Link>
+              </td>
+              <td className="num datum">{formatCount(dashboard.layout.tiles.length, locale)}</td>
+              <td className="datum datum--quiet">{relativeTime(dashboard.updatedAt, locale)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -304,35 +308,37 @@ function QuestionTable({
   const locale = useUiStore((state) => state.locale);
 
   return (
-    <table className="table">
-      <caption>{t("bi.questionsCaption", { count: items.length })}</caption>
-      <thead>
-        <tr>
-          <th scope="col">{t("bi.colName")}</th>
-          <th scope="col">{t("bi.colKind")}</th>
-          <th scope="col">{t("bi.colChart")}</th>
-          <th scope="col">{t("bi.colSaved")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((question) => (
-          <tr key={question.id}>
-            <td>
-              <Link className="journal__what" to={`${base}/questions/${question.id}`}>
-                {question.name}
-              </Link>
-            </td>
-            <td className="datum datum--quiet">
-              {question.definition.kind === "visual" ? t("bi.kindVisual") : t("bi.kindSql")}
-            </td>
-            <td className="datum datum--quiet">
-              <ChartGlyph type={question.chart.type} />
-            </td>
-            <td className="datum datum--quiet">{relativeTime(question.updatedAt, locale)}</td>
+    <div className="table-scroll">
+      <table className="table">
+        <caption>{t("bi.questionsCaption", { count: items.length })}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{t("bi.colName")}</th>
+            <th scope="col">{t("bi.colKind")}</th>
+            <th scope="col">{t("bi.colChart")}</th>
+            <th scope="col">{t("bi.colSaved")}</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((question) => (
+            <tr key={question.id}>
+              <td>
+                <Link className="journal__what" to={`${base}/questions/${question.id}`}>
+                  {question.name}
+                </Link>
+              </td>
+              <td className="datum datum--quiet">
+                {question.definition.kind === "visual" ? t("bi.kindVisual") : t("bi.kindSql")}
+              </td>
+              <td className="datum datum--quiet">
+                <ChartGlyph type={question.chart.type} />
+              </td>
+              <td className="datum datum--quiet">{relativeTime(question.updatedAt, locale)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -354,7 +360,7 @@ function DashboardBand({
   return (
     <>
       <div className="band-rule" />
-      <div className="head">{t("bi.dashboardsHead")}</div>
+      <h2 className="head">{t("bi.dashboardsHead")}</h2>
       <div className="body stack">
         {items.length === 0 ? (
           <p className="note">
@@ -395,7 +401,7 @@ function QuestionBand({
   return (
     <>
       <div className="band-rule" />
-      <div className="head">{t("bi.questionsHead")}</div>
+      <h2 className="head">{t("bi.questionsHead")}</h2>
       <div className="body stack">
         {items.length === 0 ? (
           <p className="note">{filtered ? t("reports.noQuestionMatches") : t("bi.noQuestions")}</p>

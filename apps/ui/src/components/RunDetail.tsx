@@ -242,55 +242,57 @@ function RunCounts({
   return (
     <>
       {detail.entityCounts.length > 0 ? (
-        <table className="table">
-          <caption>{t("journal.entitiesHead")}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("journal.colEntity")}</th>
-              <th scope="col" className="num">
-                {t("journal.colLanded")}
-              </th>
-              <th scope="col" className="num">
-                {t("journal.colCreated")}
-              </th>
-              <th scope="col" className="num">
-                {t("journal.colChanged")}
-              </th>
-              <th scope="col" className="num">
-                {t("journal.colUnchanged")}
-              </th>
-              <th scope="col" className="num">
-                {t("journal.colRefused")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {detail.entityCounts.map((row) => (
-              <tr key={row.entity}>
-                <td className="datum">{row.entity}</td>
-                <td className="num">{formatCount(row.landed, locale)}</td>
-                <td className="num">
-                  <CountDoor
-                    count={row.created}
-                    href={hrefFor?.(row.entity) ?? null}
-                    title={t("journal.openWritten", { entity: row.entity })}
-                    locale={locale}
-                  />
-                </td>
-                <td className="num">
-                  <CountDoor
-                    count={row.changed}
-                    href={hrefFor?.(row.entity) ?? null}
-                    title={t("journal.openWritten", { entity: row.entity })}
-                    locale={locale}
-                  />
-                </td>
-                <td className="num">{formatCount(row.unchanged, locale)}</td>
-                <td className="num">{formatCount(row.refused, locale)}</td>
+        <div className="table-scroll">
+          <table className="table">
+            <caption>{t("journal.entitiesHead")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("journal.colEntity")}</th>
+                <th scope="col" className="num">
+                  {t("journal.colLanded")}
+                </th>
+                <th scope="col" className="num">
+                  {t("journal.colCreated")}
+                </th>
+                <th scope="col" className="num">
+                  {t("journal.colChanged")}
+                </th>
+                <th scope="col" className="num">
+                  {t("journal.colUnchanged")}
+                </th>
+                <th scope="col" className="num">
+                  {t("journal.colRefused")}
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {detail.entityCounts.map((row) => (
+                <tr key={row.entity}>
+                  <td className="datum">{row.entity}</td>
+                  <td className="num">{formatCount(row.landed, locale)}</td>
+                  <td className="num">
+                    <CountDoor
+                      count={row.created}
+                      href={hrefFor?.(row.entity) ?? null}
+                      title={t("journal.openWritten", { entity: row.entity })}
+                      locale={locale}
+                    />
+                  </td>
+                  <td className="num">
+                    <CountDoor
+                      count={row.changed}
+                      href={hrefFor?.(row.entity) ?? null}
+                      title={t("journal.openWritten", { entity: row.entity })}
+                      locale={locale}
+                    />
+                  </td>
+                  <td className="num">{formatCount(row.unchanged, locale)}</td>
+                  <td className="num">{formatCount(row.refused, locale)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
 
       {/* Grouped, because 245 rows of "image-too-small-to-read" is not a list anybody reads
@@ -306,27 +308,29 @@ function RunCounts({
       ) : null}
 
       {detail.reasonCounts.length === 0 && detail.refusals.length > 0 ? (
-        <table className="table">
-          <caption>{t("journal.refusalsHead")}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("journal.colEntity")}</th>
-              <th scope="col">{t("journal.colRecordId")}</th>
-              <th scope="col">{t("journal.colReason")}</th>
-              <th scope="col">{t("journal.colAt")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {detail.refusals.map((refusal) => (
-              <tr key={`${refusal.entity}/${refusal.sourceRecordId}/${refusal.at}`}>
-                <td className="datum">{refusal.entity}</td>
-                <td className="datum datum--quiet">{orMissing(refusal.sourceRecordId)}</td>
-                <td>{refusal.reason}</td>
-                <td className="datum datum--quiet">{formatDateTime(refusal.at, locale)}</td>
+        <div className="table-scroll">
+          <table className="table">
+            <caption>{t("journal.refusalsHead")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("journal.colEntity")}</th>
+                <th scope="col">{t("journal.colRecordId")}</th>
+                <th scope="col">{t("journal.colReason")}</th>
+                <th scope="col">{t("journal.colAt")}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {detail.refusals.map((refusal) => (
+                <tr key={`${refusal.entity}/${refusal.sourceRecordId}/${refusal.at}`}>
+                  <td className="datum">{refusal.entity}</td>
+                  <td className="datum datum--quiet">{orMissing(refusal.sourceRecordId)}</td>
+                  <td>{refusal.reason}</td>
+                  <td className="datum datum--quiet">{formatDateTime(refusal.at, locale)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
     </>
   );

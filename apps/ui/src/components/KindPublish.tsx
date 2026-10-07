@@ -15,6 +15,7 @@
 import { useTranslation } from "react-i18next";
 
 import { Errata } from "@/components/Errata.tsx";
+import { StatusLine } from "@/components/StatusLine.tsx";
 import { useUiStore } from "@/store.ts";
 import type { trpc } from "@/trpc.ts";
 
@@ -71,11 +72,10 @@ export function KindPublish({
       ) : (
         <p className="note">{t("kinds.publishNothing")}</p>
       )}
-      {publish.isSuccess ? (
-        <p className="note" role="status">
-          {t("kinds.publishedNow", { version: publish.data.version })}
-        </p>
-      ) : null}
+      <StatusLine
+        className="note"
+        text={publish.isSuccess ? t("kinds.publishedNow", { version: publish.data.version }) : null}
+      />
       {publish.isError ? (
         <Errata heading={t("kinds.notPublished")} live={true} error={publish.error} />
       ) : null}

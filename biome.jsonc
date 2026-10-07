@@ -530,9 +530,10 @@
     {
       "includes": [
         "apps/ui/src/main.tsx",
-        // `App.tsx` was here until the route table moved to `routeTable.tsx`, which took
-        // `lazy` and `Suspense` with it. The shell imports nothing from react now, so the
-        // rule is back on for it.
+        // `App.tsx` left when the route table moved to `routeTable.tsx`, and came back when the
+        // public cover was split from the entry chunk: a signed-in reader no longer downloads
+        // the vault film.
+        "apps/ui/src/App.tsx",
         "apps/ui/src/routeTable.tsx",
         // Joined when the assistant's interleaf arrived: `Book.tsx` now takes `lazy` and
         // `Suspense` to load it only when a reader opens it, which is measured -- eager, the
@@ -927,9 +928,15 @@
     // `<fieldset>`, which conveys EXACTLY the same thing to assistive technology as the role
     // already does -- so the accessibility outcome is identical, and the change would be a
     // swap of element plus the three UA-style resets (`border`, `margin`, `min-inline-size`)
-    // a fieldset needs before `display: inline-flex` lays out as it does today.
+    // a fieldset needs before `display: inline-flex` lays out as it does today. The question
+    // builder's filter list is the same case: a `<div role="group">` named by its label and
+    // described by the hint on parameters, where a fieldset would set its legend outside the
+    // `.stack` gap the list is spaced by.
     {
-      "includes": ["apps/ui/src/components/LanguageSwitcher.tsx"],
+      "includes": [
+        "apps/ui/src/components/LanguageSwitcher.tsx",
+        "apps/ui/src/components/QuestionFilters.tsx"
+      ],
       "linter": { "rules": { "a11y": { "useSemanticElements": "off" } } }
     },
 
