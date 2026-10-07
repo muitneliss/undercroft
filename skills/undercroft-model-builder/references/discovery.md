@@ -77,6 +77,28 @@ request already says one, write it back rather than ask it again.
   about what you found. Never ask the person what a read can tell you, and never guess what
   only they can.
 
+### How to ask
+
+Every decision the person makes in this workflow -- the next interview question, the route,
+the approach, the plan, each save and each build -- is asked the same way.
+
+- **Through the host's question tool, when it has one.** Claude Code's `AskUserQuestion`,
+  for one, shows the choices as options the person picks, and always leaves them a box to
+  answer in their own words. Use it rather than a numbered list at the end of a long
+  message, where the question is easy to miss and has to be answered by typing.
+- **The evidence in the message, the decision in the tool.** Write the inventory, the
+  findings, the plan or the SQL as text first. The tool carries only the question and short
+  options, each with a line on what it means; it is not a place for tables or code.
+- **One question per call**, though a tool may take several. The next question depends on
+  this answer.
+- **Two to four options, drawn from what you read**, the one you recommend first and marked
+  as recommended. Do not add an "other" option: the person can always write their own.
+- **A gate is an explicit choice.** For the plan, a save or a build, the options name the
+  act -- "Approve this plan", "Save `stg_xero_contacts`", "Build it now" -- beside one to
+  change something and one to stop. A dismissed or unanswered question is not a yes.
+- **Without such a tool** -- over MCP in a chat host, say, or when the tool is refused --
+  ask the same single question in text, with the options numbered, and wait for the answer.
+
 ## 3. Read the evidence
 
 Never guess the data. That covers source and entity names, payload keys, workbook headers,
@@ -134,7 +156,9 @@ not assumed to be ignorable, and two clients' workbooks are not assumed to share
 ## 4. Classify the need
 
 Once the evidence and the answers allow, name the route. Include only the stages the
-request actually needs.
+request actually needs. Say the route and why out loud, so the person can overrule it, and
+when a later finding shows the route was too small -- a report that turns out to need a
+definition no model owns -- stop, say so, and show the changed plan.
 
 - **Explore.** The person is still learning the data or testing an idea: "what do we have
   for customer profitability?", "can Xero contacts be matched to HubSpot companies?", "why

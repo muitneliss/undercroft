@@ -76,6 +76,11 @@ These hold for the whole workflow. None of them bends because the person is in a
 12. **Success is the platform's answer.** The model exists when `models.build` says `ok` with
     its tests passed; a question exists when `bi.questions.save` returned its id. Until then,
     say what happened, not what you hoped.
+13. **Ask one decision at a time, through the host's question tool when it has one** --
+    Claude Code's `AskUserQuestion`, for example -- and otherwise as numbered options in
+    text. The evidence, the plan or the SQL goes in the message; the tool carries the
+    question and two to four options, yours first. A dismissed question is not a yes.
+    `references/discovery.md`, "How to ask", has the detail.
 
 ## Who can do what
 
@@ -124,7 +129,7 @@ it builds. It lists only what the models declare, and says so where it cannot re
 ### 3. Interview and read the evidence
 
 Start from the outcome the person wants, who uses it and what they decide with it, not from
-tables. Ask one question at a time, offering choices the inventory shows. Answer every
+tables. Ask one question at a time (guardrail 13), offering choices the inventory shows. Answer every
 factual question about the data with the smallest read that can, and ask the person only
 what the data cannot say. When a count or a distribution is needed, ask the person before
 running `lake.query`, and say it runs SQL against the raw lake. Keep such queries small,

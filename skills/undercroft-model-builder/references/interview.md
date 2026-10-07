@@ -6,8 +6,9 @@ the result and what they decide with it are already in the shared understanding,
 reuse analysis has said why no existing model owns this. Do not ask those again; carry them
 into the brief's `For:` line and work from them to the grain and the columns.
 
-Get the rest from the person, in their words, before any SQL. Ask one question at a time and
-offer choices the data already shows. When they do not know, say what you would choose and
+Get the rest from the person, in their words, before any SQL. Ask one question at a time, the
+way `references/discovery.md` says under "How to ask", and offer choices the data already
+shows. When they do not know, say what you would choose and
 why, and let them decide.
 
 ## The questions
