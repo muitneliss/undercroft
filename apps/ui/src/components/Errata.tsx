@@ -90,6 +90,9 @@ function FailedRequest({ error }: { error: ServerError }): React.JSX.Element {
           <code>{traceId}</code>
           <a href={bugReportUrl(traceId)} rel="noreferrer" target="_blank">
             {t("errata.report")}
+            {/* No space before it: `visually-hidden` is absolutely positioned, so it is a block to the
+                name computation and is read as a word of its own. */}
+            <span className="visually-hidden">{t("common.newTab")}</span>
           </a>
         </p>
       )}

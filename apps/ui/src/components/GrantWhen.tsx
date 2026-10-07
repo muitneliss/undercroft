@@ -28,6 +28,7 @@ import { useTranslation } from "react-i18next";
 
 import type { Connection } from "@/api/types.ts";
 import { type ScheduleEdit, ScheduleControl } from "@/components/ScheduleControl.tsx";
+import { StatusLine } from "@/components/StatusLine.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import { type CadenceChoice, describeCadence, describeResync } from "@/lib/cadence.ts";
 import { formatCount } from "@/lib/money.ts";
@@ -82,11 +83,11 @@ export function GrantWhen({
           busy={busy}
           saving={saving}
         />
-        {saving ? (
-          <span className="datum datum--quiet" role="status">
-            {t("grant.cadenceSaving")}
-          </span>
-        ) : null}
+        <StatusLine
+          as="span"
+          className="datum datum--quiet"
+          text={saving ? t("grant.cadenceSaving") : null}
+        />
       </div>
 
       <div className="grant__fact">
@@ -213,11 +214,11 @@ function Resync({
           busy={busy}
           saving={saving}
         />
-        {saving ? (
-          <span className="datum datum--quiet" role="status">
-            {t("grant.resyncSaving")}
-          </span>
-        ) : null}
+        <StatusLine
+          as="span"
+          className="datum datum--quiet"
+          text={saving ? t("grant.resyncSaving") : null}
+        />
         <span className="datum datum--quiet">
           {resync.lastWholeReadAt === null
             ? t("grant.resyncNever")

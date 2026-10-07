@@ -230,8 +230,9 @@ export function solveLeaf(
  * Solve for a board hue and publish the answer as custom properties.
  *
  * The stylesheet consumes `--leaf-alpha` (for the genuinely translucent hinged
- * leaf) and `--leaf-ground` (its opaque equivalent, for content inside the leaf
- * that should not pay for compositing). Called whenever the division changes;
+ * leaf), `--leaf-ground` (its opaque equivalent, for content inside the leaf
+ * that should not pay for compositing) and `--board-ink` (the house colour that
+ * letters the board, for a mark drawn on it). Called whenever the division changes;
  * cheap enough to call on every render, but it is called on change.
  *
  * Reads the leaf and ink colours off the element rather than hardcoding them, so
@@ -251,5 +252,6 @@ export function applyBoard(element: HTMLElement, boardHex: string): Solution | n
   element.style.setProperty("--board", boardHex);
   element.style.setProperty("--leaf-alpha", String(solution.alpha));
   element.style.setProperty("--leaf-ground", solution.ground);
+  element.style.setProperty("--board-ink", letteringOn(boardHex));
   return solution;
 }

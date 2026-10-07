@@ -13,12 +13,13 @@
  * It stops when the tab is hidden, and under
  * `prefers-reduced-motion` it never loops: it paints one settled frame and repaints it when the
  * pointer moves, so the lamp and the proof slips still answer the hand while nothing travels
- * (ADR 0063).
+ * (ADR 0063). `hold` is the same stillness asked for on the page instead (WCAG 2.2.2).
  */
 
 import { type Lamp, type Palette, type Pixel, paletteFor, type Rect } from "@/lib/vault/frame.ts";
+import { clampUnit, relative } from "@/lib/vault/geometry.ts";
 import { createVault, type StageId, STEP_STAGE, stageAt, type Vault } from "@/lib/vault/model.ts";
-import { vaultAim } from "@/lib/vault/lamp.ts";
+import { steerLamp, vaultAim } from "@/lib/vault/lamp.ts";
 import { markPath, tintStages } from "@/lib/vault/marks.ts";
 import { advance, trigger } from "@/lib/vault/reader.ts";
 import { paint } from "@/lib/vault/scene.ts";
@@ -45,8 +46,6 @@ export interface VaultWords {
 const SEED = 20_260_926;
 /** How long a still pointer keeps the lamp before the reader walks by itself again. */
 const HOLD_MS = 4000;
-const LAMP_FOLLOW = 9;
-const TILT_FOLLOW = 4;
 const LONGEST_FRAME = 0.05;
 const SETTLED_FRAMES = 420;
 /** The film opens mid-reel, with a lake already laid, the reader still at the door. */
@@ -54,13 +53,10 @@ const PRE_ROLL_FRAMES = 270;
 const DRIFT_RATE = 0.05;
 const INTERACTIVE = "a, button, input, select, textarea";
 
-function relative(element: Element, to: DOMRect): Rect {
-  const rect = element.getBoundingClientRect();
-  return { x: rect.left - to.left, y: rect.top - to.top, w: rect.width, h: rect.height };
-}
-
-function clampUnit(value: number): number {
-  return Math.min(1, Math.max(0, value));
+/** A running film, as the page holds it: stop it for good, or hold it still and let it go. */
+export interface Reel {
+  readonly stop: () => void;
+  readonly hold: (held: boolean) => void;
 }
 
 export class VaultFilm {
@@ -74,6 +70,7 @@ export class VaultFilm {
   private band: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private track: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private drift = 0;
+  private paused = false;
   private frame = 0;
   private last = 0;
   private readonly elements: VaultElements;
@@ -87,16 +84,27 @@ export class VaultFilm {
   }
 
   /** Starts the film, or returns null where there is no 2D canvas (the page is whole without it). */
-  static start(elements: VaultElements, words: VaultWords): (() => void) | null {
+  static start(elements: VaultElements, words: VaultWords, held: boolean): Reel | null {
     const ctx = elements.canvas.getContext("2d");
     if (ctx === null) {
       return null;
     }
     const film = new VaultFilm(elements, ctx, words);
+    film.paused = held;
     for (let at = 0; at < PRE_ROLL_FRAMES; at += 1) {
       advance(film.vault, 1 / 30, 0);
     }
-    return film.run();
+    return { stop: film.run(), hold: (next): void => film.hold(next) };
+  }
+
+  private hold(paused: boolean): void {
+    this.paused = paused;
+    this.resume();
+  }
+
+  /** Reduced motion, or a reader who held the film: either way nothing travels. */
+  private stilled(): boolean {
+    return this.paused || this.still.matches;
   }
 
   private run(): () => void {
@@ -144,7 +152,7 @@ export class VaultFilm {
   /** Loops while the tab is shown and motion is welcome; otherwise paints one still frame. */
   private resume(): void {
     this.halt();
-    if (this.still.matches) {
+    if (this.stilled()) {
       this.settle();
     } else if (!document.hidden) {
       this.last = 0;
@@ -217,23 +225,12 @@ export class VaultFilm {
 
   /** The lamp follows its target; the vault leans with it. */
   private aim(now: number, dt: number): void {
-    const { lamp, size } = this;
+    const { lamp, pointer, band, track, size } = this;
+    const { reader, time } = this.vault;
     lamp.held = this.held(now);
-    const { pointer, band, track, vault } = this;
-    const { x: aimX, y: aimY } = vaultAim({
-      held: lamp.held ? pointer : null,
-      band,
-      track,
-      readerU: vault.reader.u,
-      time: vault.time,
-      view: size,
-    });
-    const follow = 1 - Math.exp(-dt * LAMP_FOLLOW);
-    lamp.x += (aimX - lamp.x) * follow;
-    lamp.y += (aimY - lamp.y) * follow;
-    const lean = 1 - Math.exp(-dt * TILT_FOLLOW);
-    lamp.tiltX += ((lamp.x / Math.max(1, size.width) - 0.5) * 2 - lamp.tiltX) * lean;
-    lamp.tiltY += ((lamp.y / Math.max(1, size.height) - 0.5) * 2 - lamp.tiltY) * lean;
+    const held = lamp.held ? pointer : null;
+    const target = vaultAim({ held, band, track, readerU: reader.u, time, view: size });
+    steerLamp(lamp, target, size, dt);
   }
 
   private tick(now: number): void {
@@ -263,7 +260,7 @@ export class VaultFilm {
       refusedWord: this.words.refused,
       echoWord: this.words.echo,
       walk: this.drift,
-      still: this.still.matches,
+      still: this.stilled(),
       trails: this.trails,
     });
     markPath(this.elements.stages, this.elements.steps, lit, this.vault.reader);
@@ -279,7 +276,7 @@ export class VaultFilm {
     pointer.y = event.clientY - box.top;
     pointer.over = true;
     pointer.movedAt = performance.now();
-    if (this.still.matches) {
+    if (this.stilled()) {
       lamp.x = pointer.x;
       lamp.y = pointer.y;
       lamp.held = true;
@@ -290,7 +287,7 @@ export class VaultFilm {
   private leave(): void {
     this.pointer.over = false;
     this.lamp.held = false;
-    if (this.still.matches) {
+    if (this.stilled()) {
       this.draw(performance.now());
     }
   }
@@ -306,7 +303,7 @@ export class VaultFilm {
     const { y } = this.pointer;
     if (y >= this.band.y - 24 && y <= this.track.y + this.track.h) {
       trigger(this.vault, "run");
-      if (this.still.matches) {
+      if (this.stilled()) {
         this.draw(performance.now());
       }
     }

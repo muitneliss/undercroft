@@ -384,6 +384,7 @@ function CodeForm({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const signinCodeId = useId();
+  const codeHintId = useId();
   const codeFieldRef = useRef<HTMLInputElement>(null);
 
   const signIn = useMutation({
@@ -416,6 +417,9 @@ function CodeForm({
         <input
           className="input"
           id={signinCodeId}
+          aria-describedby={codeHintId}
+          // A refused sign-in is a refused code: the one field this step has.
+          aria-invalid={signIn.isError}
           name="otp"
           type="text"
           inputMode="numeric"
@@ -431,7 +435,9 @@ function CodeForm({
          * because that would make this form a list of who does -- so this cannot
          * promise that a code actually went out.
          */}
-        <p className="field__hint">{t("signIn.codeHint", { email: sentTo })}</p>
+        <p className="field__hint" id={codeHintId}>
+          {t("signIn.codeHint", { email: sentTo })}
+        </p>
       </div>
 
       {signIn.isError ? (

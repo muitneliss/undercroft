@@ -34,7 +34,8 @@ it("signs a failed request with its trace id and a report link that carries it",
   );
 
   expect(screen.getByText(TRACE_ID).tagName).toBe("CODE");
-  const report = screen.getByRole("link", { name: "Báo lỗi" });
+  // It opens a new tab, and its name says so rather than leaving the jump to surprise.
+  const report = screen.getByRole("link", { name: /^Báo lỗi\s*\(mở trong thẻ mới\)$/u });
   const url = new URL(report.getAttribute("href") ?? "");
   expect(url.searchParams.get("trace-id")).toBe(TRACE_ID);
   expect(url.searchParams.get("template")).toBe("bug_report.yml");

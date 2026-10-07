@@ -39,7 +39,7 @@
     },
     "apps/cli": {
       "name": "@undercroft/cli",
-      "version": "1.62.0",
+      "version": "1.70.0",
       "dependencies": {
         "@clack/core": "1.5.1",
         "@clack/prompts": "1.8.1",
@@ -87,7 +87,7 @@
     },
     "apps/desktop": {
       "name": "@undercroft/desktop",
-      "version": "1.62.0",
+      "version": "1.70.0",
       "dependencies": {
         "@undercroft/core": "workspace:*",
         "@undercroft/setup": "workspace:*",
@@ -104,7 +104,7 @@
     },
     "apps/installer-cli": {
       "name": "@undercroft/installer-cli",
-      "version": "1.62.0",
+      "version": "1.70.0",
       "dependencies": {
         "@clack/prompts": "1.8.1",
         "@undercroft/core": "workspace:*",

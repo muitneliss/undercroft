@@ -2,7 +2,8 @@
 
 Three families, subset to latin / latin-ext / vietnamese by `unicode-range`, so a
 reader downloads only the subsets their text needs. Registered in
-`ui/src/index.css`; preloaded (latin only) in `ui/index.html`.
+`ui/src/index.css`; preloaded in `ui/index.html` (latin, plus Archivo's and
+Garamond's Vietnamese, since Vietnamese is the default language).
 
 | File prefix | Family | Role | Upstream |
 |---|---|---|---|

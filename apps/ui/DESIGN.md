@@ -10,6 +10,7 @@ colors:
   ink-3: "#6b6450"
   rule: "rgba(22, 21, 15, 0.16)"
   rule-strong: "rgba(22, 21, 15, 0.44)"
+  rule-field: "rgba(22, 21, 15, 0.55)"
   oxide: "#b24b1a"
   chrome: "#eda600"
   grass: "#3e782b"
@@ -176,8 +177,10 @@ page. The wheel is full, so an eighth division needs a decision (ADR 0019), not 
 
 ### Tertiary
 
-- **Vermilion** (#cf2f16) with **Vermilion ink** (#8c1c09) on **Slip ground** (#fdf0eb): the
-  errata slip and the lapsed status mark. Nowhere else, ever.
+- **Vermilion** (#cf2f16) with **Vermilion ink** (#8c1c09) on **Slip ground** (#fdf0eb): a
+  correction, and nothing else: the errata slip, the lapsed status mark, and the two places a
+  page records a failure in the slip's own language — the vermilion wash under an error line in
+  a run's feed, and the note on a lineage card whose model no longer exists.
 - **Granted green** (#1c5c33) and **Pending umber** (#6b4a00): the two status-mark tones that
   are neither ink nor vermilion.
 
@@ -189,13 +192,17 @@ page. The wheel is full, so an eighth division needs a decision (ADR 0019), not 
 - **Ink** (#16150f), **Ink 2** (#56513f), **Ink 3** (#6b6450): primary text, labels and quiet
   data, and the faintest tone that still letters a disabled control or a recorded absence.
 - **Rule** (rgba 22,21,15 at 0.16) and **Rule strong** (rgba 22,21,15 at 0.44): the hairline
-  that separates and the heavier rule that closes a block.
+  that separates and the heavier rule that closes a block. **Rule field** (rgba 22,21,15 at
+  0.55): the edge of an input, which is the only thing marking a leaf box on the page and so
+  has to clear WCAG 1.4.11's 3:1 (3.99:1 on the leaf).
 
 ### Named Rules
 
 **The Wheel Rule.** A hue in the wheel means _which division is open_ and paints only the
-board, the tabs, the punch holes and the hinged leaf. It is never used for emphasis, a badge,
-a chart series or a button inside a page.
+board, the tabs, the punch holes, the hinged leaf and a text selection (the board mixed 32%
+toward the leaf). It is never used for emphasis, a badge, a chart series or a button inside a
+page: charts take the wheel's hue families restepped off the board values
+(`lib/plotPalette.ts`), so no chart mark is ever a division's board.
 
 **The Vermilion Rule.** Vermilion is held out of the wheel so the errata slip can be the only
 thing wearing it. A destructive plate is an ordinary plate; the safety is the confirmation
@@ -244,8 +251,8 @@ language.
 ## Layout
 
 The book is a CSS grid with named areas: the tab strip across the head, then the leaf. When
-the assistant is open, a third area, the interleaf, sits beside the leaf; on a phone it takes
-the leaf's place. The
+the assistant is open, a third area, the interleaf, sits beside the leaf; under 1100px, where a
+24rem conversation would leave the page a sliver, it takes the leaf's place. The
 strip is first in the DOM at every width; a phone moves it to the foot with
 `grid-template-areas`, not with source order, so navigation precedes the page it navigates for
 a keyboard and a screen reader whether it is drawn above or below.
@@ -307,6 +314,8 @@ whole frames.
   whole travel a printed control has.
 - **Disabled:** Rule-strong keyline, Ink 3 label; a disabled primary sits on #ece7d6.
 - **Small:** padding 0.3rem × 0.6rem, 10px label — for a withdraw or sign-out in a row.
+- **Touch:** under a coarse pointer every plate is at least 2.75rem (44px) tall, and a grip's
+  reach doubles to 1rem; a fine pointer keeps the desk's density.
 
 ### Language pair
 
@@ -315,7 +324,7 @@ into one rule; the chosen face is inked (Ink ground, Leaf label) and `aria-press
 
 ### Inputs / Fields
 
-- **Style:** Leaf ground, Rule-strong hairline, 2px cut, mono text at 0.8125rem, padding
+- **Style:** Leaf ground, Rule-field hairline, 2px cut, mono text at 0.8125rem, padding
   0.5rem × 0.65rem; placeholder in Ink 3; a hint beneath in Garamond.
 - **Focus:** border to Ink plus a 1px inset ring in Ink; no glow.
 - **Disabled:** #e9e2d0 ground, Ink 3 text.
@@ -323,7 +332,9 @@ into one rule; the chosen face is inked (Ink ground, Leaf label) and `aria-press
 ### Punch (checkbox and radio)
 
 A 15px hole through the leaf: hairline circle in Ink on Leaf; checked fills with the current
-board hue and an inset shadow; focus is a 2px Ink outline offset 2px. Selection is shown the
+board hue and an inset shadow, with a 7px centre in the board's lettering ink, so checked reads
+by shape on chrome (1.97:1 against the leaf as a fill alone) and in greyscale; focus is a 2px
+Ink outline offset 2px. Selection is shown the
 same way everywhere: the open tab, a hinged leaf's edge, a chosen item.
 
 ### Cards / Containers (leaves)
@@ -414,6 +425,9 @@ it shows a proof slip with its content address.
   film drives (a stage lit, a step reached), and nowhere else.
 - **Reduced motion:** one settled frame, repainted as the pointer moves. The lamp and the proof
   slips still answer, nothing travels.
+- **Stop motion:** a small plate in the header holds the film the way reduced motion does, for
+  a reader who never set the preference (WCAG 2.2.2). It inks while held, is remembered across
+  visits, and is not printed under reduced motion, where it would do nothing.
 - **Cover sizes:** a 4.5rem headline (3.75rem under 1100px, 2rem on a phone) and a 1.5rem lead.
   These are local to the cover, not steps of the operating type ramp.
 

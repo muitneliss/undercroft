@@ -73,6 +73,8 @@ function EditingCell({
           required={true}
           ref={fieldRef}
           disabled={update.isPending}
+          // The refusal is printed under the table; the field it was about says so itself.
+          aria-invalid={update.isError && update.variables.kind === row.kind}
         />
       </div>
       <button
@@ -177,23 +179,25 @@ export function KindTable({
   const { t } = useTranslation();
   return (
     <>
-      <table className="table">
-        <caption>{t("kinds.caption", { count: kinds.length })}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{t("kinds.colKind")}</th>
-            <th scope="col">{t("kinds.colDescription")}</th>
-            <th scope="col">{t("kinds.colOrigin")}</th>
-            <th scope="col">{t("kinds.colShare")}</th>
-            {isAdmin ? <th scope="col">{t("kinds.colActions")}</th> : null}
-          </tr>
-        </thead>
-        <tbody>
-          {kinds.map((row) => (
-            <Row key={row.kind} row={row} tenantId={tenantId} isAdmin={isAdmin} writes={writes} />
-          ))}
-        </tbody>
-      </table>
+      <div className="table-scroll">
+        <table className="table">
+          <caption>{t("kinds.caption", { count: kinds.length })}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("kinds.colKind")}</th>
+              <th scope="col">{t("kinds.colDescription")}</th>
+              <th scope="col">{t("kinds.colOrigin")}</th>
+              <th scope="col">{t("kinds.colShare")}</th>
+              {isAdmin ? <th scope="col">{t("kinds.colActions")}</th> : null}
+            </tr>
+          </thead>
+          <tbody>
+            {kinds.map((row) => (
+              <Row key={row.kind} row={row} tenantId={tenantId} isAdmin={isAdmin} writes={writes} />
+            ))}
+          </tbody>
+        </table>
+      </div>
       {writes.update.isError ? (
         <Errata heading={t("kinds.notSaved")} live={true} error={writes.update.error} />
       ) : null}

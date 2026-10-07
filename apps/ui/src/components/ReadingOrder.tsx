@@ -49,70 +49,72 @@ export function ReadingOrder({
   return (
     <>
       <Separator className="band-rule" />
-      <div className="head">{t("dashboard.orderHead")}</div>
+      <h2 className="head">{t("dashboard.orderHead")}</h2>
       <div className="body stack">
         <p className="prose">{t("dashboard.orderLead")}</p>
-        <table className="table">
-          <caption>{t("dashboard.orderCaption", { count: tiles.length })}</caption>
-          <thead>
-            <tr>
-              <th scope="col" className="num">
-                {t("dashboard.orderPlace")}
-              </th>
-              <th scope="col">{t("bi.colName")}</th>
-              <th scope="col">
-                <span className="visually-hidden">{t("dashboard.edit")}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {tiles.map((tile, index) => {
-              const name = byId.get(tile.questionId) ?? t("dashboard.questionGone");
-              return (
-                <tr key={tile.questionId}>
-                  <td className="num datum">{place(index, locale)}</td>
-                  <td>{name}</td>
-                  <td>
-                    <div className="row">
-                      <button
-                        aria-label={t("dashboard.orderEarlierNamed", { name })}
-                        className="plate plate--small"
-                        disabled={index === 0}
-                        type="button"
-                        onClick={(): void => {
-                          setDashboardLayout(moveInReadingOrder(layout, tile.questionId, -1));
-                        }}
-                      >
-                        {t("dashboard.orderEarlier")}
-                      </button>
-                      <button
-                        aria-label={t("dashboard.orderLaterNamed", { name })}
-                        className="plate plate--small"
-                        disabled={index === tiles.length - 1}
-                        type="button"
-                        onClick={(): void => {
-                          setDashboardLayout(moveInReadingOrder(layout, tile.questionId, 1));
-                        }}
-                      >
-                        {t("dashboard.orderLater")}
-                      </button>
-                      <button
-                        aria-label={t("dashboard.orderRemoveNamed", { name })}
-                        className="plate plate--small"
-                        type="button"
-                        onClick={(): void => {
-                          setDashboardLayout(removeTile(layout, tile.questionId));
-                        }}
-                      >
-                        {t("dashboard.removeTile")}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table className="table">
+            <caption>{t("dashboard.orderCaption", { count: tiles.length })}</caption>
+            <thead>
+              <tr>
+                <th scope="col" className="num">
+                  {t("dashboard.orderPlace")}
+                </th>
+                <th scope="col">{t("bi.colName")}</th>
+                <th scope="col">
+                  <span className="visually-hidden">{t("dashboard.edit")}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {tiles.map((tile, index) => {
+                const name = byId.get(tile.questionId) ?? t("dashboard.questionGone");
+                return (
+                  <tr key={tile.questionId}>
+                    <td className="num datum">{place(index, locale)}</td>
+                    <td>{name}</td>
+                    <td>
+                      <div className="row">
+                        <button
+                          aria-label={t("dashboard.orderEarlierNamed", { name })}
+                          className="plate plate--small"
+                          disabled={index === 0}
+                          type="button"
+                          onClick={(): void => {
+                            setDashboardLayout(moveInReadingOrder(layout, tile.questionId, -1));
+                          }}
+                        >
+                          {t("dashboard.orderEarlier")}
+                        </button>
+                        <button
+                          aria-label={t("dashboard.orderLaterNamed", { name })}
+                          className="plate plate--small"
+                          disabled={index === tiles.length - 1}
+                          type="button"
+                          onClick={(): void => {
+                            setDashboardLayout(moveInReadingOrder(layout, tile.questionId, 1));
+                          }}
+                        >
+                          {t("dashboard.orderLater")}
+                        </button>
+                        <button
+                          aria-label={t("dashboard.orderRemoveNamed", { name })}
+                          className="plate plate--small"
+                          type="button"
+                          onClick={(): void => {
+                            setDashboardLayout(removeTile(layout, tile.questionId));
+                          }}
+                        >
+                          {t("dashboard.removeTile")}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );

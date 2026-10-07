@@ -201,7 +201,7 @@ describe("the public and signed-in home", () => {
     // Public content must remain usable when session.me cannot answer with a session.
     renderAt("/", {});
     const t = translatorFor("vi");
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+    expect((await screen.findByRole("heading", { level: 1 })).textContent).toBe(
       `${t("landing.title")}${t("landing.titleEnd")}`,
     );
     fireEvent.click(screen.getByRole("link", { name: t("landing.openWorkspace") }));

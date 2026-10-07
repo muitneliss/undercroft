@@ -107,28 +107,30 @@ export function ScopeReview({
         <Errata heading={t("common.notLoaded")} live={true} error={loadError} />
       )}
       <h2 id={reviewId}>{t("scopePicker.reviewHead")}</h2>
-      <table aria-labelledby={reviewId} className="table--words table">
-        <thead>
-          <tr>
-            <th scope="col">
-              <span className="visually-hidden">{t("scopePicker.colPart")}</span>
-            </th>
-            <th scope="col">{t("scopePicker.colSaved")}</th>
-            <th scope="col">{t("scopePicker.colWillApply")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {change.rows.map((row) => (
-            <tr key={row.row}>
-              <th scope="row">
-                {row.row === "reads" ? t("scopePicker.rowReads") : t("scopePicker.fileTypesHead")}
+      <div className="table-scroll">
+        <table aria-labelledby={reviewId} className="table--words table">
+          <thead>
+            <tr>
+              <th scope="col">
+                <span className="visually-hidden">{t("scopePicker.colPart")}</span>
               </th>
-              <td>{orMissing(row.saved)}</td>
-              <td>{orMissing(row.willApply)}</td>
+              <th scope="col">{t("scopePicker.colSaved")}</th>
+              <th scope="col">{t("scopePicker.colWillApply")}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {change.rows.map((row) => (
+              <tr key={row.row}>
+                <th scope="row">
+                  {row.row === "reads" ? t("scopePicker.rowReads") : t("scopePicker.fileTypesHead")}
+                </th>
+                <td>{orMissing(row.saved)}</td>
+                <td>{orMissing(row.willApply)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {held === undefined ? (
         leaving
@@ -136,9 +138,9 @@ export function ScopeReview({
         // Set apart on a leaf, as the mockup sets it: this is the one consequence of Save that
         // outlives the screen, and a note in the run of the page reads as one hint among many.
         <section aria-labelledby={heldId} className="unprinted unprinted--band stack stack--tight">
-          <h2 className="label" id={heldId}>
+          <h3 className="label" id={heldId}>
             {t("scopePicker.heldHead")}
-          </h2>
+          </h3>
           {leaving}
           {change.subfoldersDropped ? (
             <p className="note">{t("scopePicker.subfoldersDropped")}</p>

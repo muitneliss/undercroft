@@ -6,13 +6,15 @@
  *
  * It is a glow, not a picture. The page writes three custom properties (`--lamp-x`,
  * `--lamp-y`, `--lamp-strength`) onto `.landing`, and `landing-cover.css` draws the light from
- * them. Nothing here is React state: a pointer position sixty times a second would re-render the
+ * them -- registered there as non-inheriting, so a frame restyles the light and not the page. Nothing here is React state: a pointer position sixty times a second would re-render the
  * whole page for a value only the stylesheet reads (`state.md`).
  *
  * The loop runs only while the light is still travelling or fading, and stops once it has
  * settled on the pointer. Under reduced motion the light jumps to the pointer and does not
  * glide; like the cover's lamp it still answers the hand, it just does not travel.
  */
+
+import type { Lamp } from "@/lib/vault/frame.ts";
 
 export interface Glow {
   /** Where the light is centred, in pixels from the page's top left. */
@@ -34,6 +36,8 @@ export const DARK_GLOW: Glow = { x: 0, y: 0, strength: 0 };
 
 /** The cover's own lamp follows at this rate, so the two lights move as one. */
 const FOLLOW = 9;
+/** The vault leans after the lamp more slowly than the lamp follows the hand. */
+const TILT_FOLLOW = 4;
 const FADE = 6;
 const NEAR_PX = 0.5;
 const NEAR_STRENGTH = 0.01;
@@ -107,6 +111,24 @@ export function vaultAim(scene: VaultScene): Spot {
     x: view.width * (0.5 + Math.sin(time * 0.23) * 0.3),
     y: view.height * (0.45 + Math.sin(time * 0.31) * 0.25),
   };
+}
+
+/**
+ * One frame of the vault's lamp following its aim, and the vault leaning with it. Mutates the
+ * lamp in place: it is the film's own per-frame state, never React's (`runtime.ts`).
+ */
+export function steerLamp(
+  lamp: Lamp,
+  aim: Spot,
+  view: { readonly width: number; readonly height: number },
+  dt: number,
+): void {
+  const follow = 1 - Math.exp(-dt * FOLLOW);
+  lamp.x += (aim.x - lamp.x) * follow;
+  lamp.y += (aim.y - lamp.y) * follow;
+  const lean = 1 - Math.exp(-dt * TILT_FOLLOW);
+  lamp.tiltX += ((lamp.x / Math.max(1, view.width) - 0.5) * 2 - lamp.tiltX) * lean;
+  lamp.tiltY += ((lamp.y / Math.max(1, view.height) - 0.5) * 2 - lamp.tiltY) * lean;
 }
 
 /** Lights `page` from the pointer until the returned function is called. */

@@ -29,6 +29,11 @@ export const vi = {
   app: {
     name: "Undercroft",
     caption: "Undercroft · trang quản trị",
+    skip: "Đến nội dung trang",
+    /** The browser tab's name on a division outside any book: Customers. */
+    documentTitle: "{{page}} · Undercroft",
+    /** The browser tab's name inside a customer's book: the division, then whose book it is. */
+    documentTitleInBook: "{{page}} · {{book}} · Undercroft",
     signOut: "Đăng xuất",
     signingOut: "Đang đăng xuất…",
     /**
@@ -85,6 +90,14 @@ export const vi = {
     loading: "Đang tải",
     notLoaded: "Không tải được",
     nothingToShow: "Không có gì để hiển thị.",
+    /**
+     * A field that may be left empty, in a form where others may not (WCAG 3.3.2). One key for
+     * the whole label rather than a suffix pasted on, so each language places the mark itself.
+     * `<small>` is the mark's slot, rendered in the quiet ink rather than as the element.
+     */
+    optionalLabel: "{{label}} <small>(không bắt buộc)</small>",
+    /** Said, not shown, after a link that opens a new tab, so the jump is not a surprise. */
+    newTab: "(mở trong thẻ mới)",
   },
 
   /**
@@ -153,6 +166,7 @@ export const vi = {
     skip: "Đến nội dung chính",
     docs: "Tài liệu",
     readDocs: "Xem tài liệu",
+    stillFilm: "Dừng chuyển động",
     title: "Giữ nguyên dữ liệu.",
     titleEnd: "Tự định nghĩa câu trả lời.",
     lead: "Từ tài khoản của bạn đến kho dữ liệu gốc, mô hình SQL và báo cáo.",
@@ -1647,6 +1661,8 @@ export const vi = {
     colNotNull: "Không rỗng",
     colUnique: "Duy nhất",
     removeColumn: "Bỏ",
+    removeColumnNamed: "Bỏ cột {{column}}",
+    testOn: "{{test}}: cột {{column}}",
     addColumnLabel: "Thêm cột",
     addColumnHint: "Tên cột như trong câu SELECT. Gợi ý lấy từ lần dựng gần nhất.",
     addColumn: "Thêm",
@@ -1883,6 +1899,8 @@ export const vi = {
     columnsHead: "Cột",
     countAll: "Đếm dòng",
     aggNone: "Giá trị",
+    /** The select beside a ticked column: what is read from it, the value as it is or a sum. */
+    aggregateFor: "Cách tổng hợp cột {{column}}",
     aggCount: "Đếm",
     aggSum: "Tổng",
     aggAvg: "Trung bình",
@@ -2077,6 +2095,7 @@ export const vi = {
     clear: "Xoá cuộc trò chuyện",
     /** Read to a screen reader while the answer is still being set. */
     working: "Trợ lý đang trả lời",
+    answered: "Trợ lý đã trả lời",
     /**
      * A figure the assistant set, numbered as a printed manual numbers one.
      *

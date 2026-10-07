@@ -121,7 +121,36 @@ function Transcript({
   );
 }
 
-export function Interleaf({ tenantId }: { tenantId: string }): React.JSX.Element {
+/**
+ * What a screen reader is told about the answer: that one is coming, then that it came.
+ *
+ * One live region, mounted with the panel and only its words changing. A `role="status"`
+ * created together with its text is often not read at all, and the answer arriving -- the
+ * thing the reader is waiting for -- used to be announced by nothing.
+ */
+function Announcer({
+  answering,
+  answered,
+}: {
+  answering: boolean;
+  answered: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const words = answering ? t("assistant.working") : answered ? t("assistant.answered") : "";
+  return (
+    <span className="visually-hidden" role="status">
+      {words}
+    </span>
+  );
+}
+
+export function Interleaf({
+  id: sheetId,
+  tenantId,
+}: {
+  id: string;
+  tenantId: string;
+}): React.JSX.Element {
   const { t } = useTranslation();
   const toggleAssistant = useUiStore((state) => state.toggleAssistant);
   const navigate = useNavigate();
@@ -177,7 +206,8 @@ export function Interleaf({ tenantId }: { tenantId: string }): React.JSX.Element
   const answering = status === "submitted" || status === "streaming";
 
   return (
-    <aside className="interleaf" aria-label={t("assistant.title")}>
+    <aside className="interleaf" id={sheetId} aria-label={t("assistant.title")}>
+      <Announcer answering={answering} answered={turns.at(-1)?.role === "assistant"} />
       <span className="interleaf__punch interleaf__punch--a" aria-hidden="true" />
       <span className="interleaf__punch interleaf__punch--b" aria-hidden="true" />
 

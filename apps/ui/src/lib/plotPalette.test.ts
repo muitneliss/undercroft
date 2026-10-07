@@ -7,7 +7,8 @@
 import { describe, expect, test as it } from "bun:test";
 
 import { contrast, parseHex } from "./acetate.ts";
-import { CATEGORICAL, colourFor, OTHER, sequential } from "./plotPalette.ts";
+import { DIVISIONS } from "./divisions.ts";
+import { CATEGORICAL, colourFor, diverging, OTHER, sequential } from "./plotPalette.ts";
 
 const LEAF = "#fbf8f0";
 const ERRATA = "#cf2f16";
@@ -29,6 +30,12 @@ describe("plotPalette", () => {
       expect(ratio(hex)).toBeGreaterThanOrEqual(FLOOR);
       expect(hex.toLowerCase()).not.toBe(ERRATA);
     }
+  });
+
+  it("no slot or ramp step is a division's board, so a chart never reads as a division", () => {
+    const boards = new Set(DIVISIONS.map((d) => d.hue.toLowerCase()));
+    const inks = [...CATEGORICAL, OTHER, ...sequential(6), ...diverging(5)];
+    expect(inks.map((hex) => hex.toLowerCase()).filter((hex) => boards.has(hex))).toEqual([]);
   });
 
   it("the order is stable and cycles past the end", () => {

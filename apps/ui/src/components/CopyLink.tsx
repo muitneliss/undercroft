@@ -15,6 +15,8 @@
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
+import { StatusLine } from "@/components/StatusLine.tsx";
+
 export function CopyLink(): React.JSX.Element {
   const { t } = useTranslation();
   const copy = useMutation({
@@ -32,16 +34,11 @@ export function CopyLink(): React.JSX.Element {
       >
         {t("bi.copyLink")}
       </button>
-      {copy.isSuccess ? (
-        <span className="note" role="status">
-          {t("bi.linkCopied")}
-        </span>
-      ) : null}
-      {copy.isError ? (
-        <span className="note" role="status">
-          {t("bi.copyBlocked")}
-        </span>
-      ) : null}
+      <StatusLine
+        as="span"
+        className="note"
+        text={copy.isSuccess ? t("bi.linkCopied") : copy.isError ? t("bi.copyBlocked") : null}
+      />
     </>
   );
 }

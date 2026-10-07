@@ -11,8 +11,6 @@
  * pieces, and one `<p>` per delta would set a paragraph per syllable.
  */
 
-import { useTranslation } from "react-i18next";
-
 import { Figure } from "@/components/assistant/Figure.tsx";
 import { Proof, StruckProof } from "@/components/assistant/Proof.tsx";
 import type { AssistantPart, AssistantTurn } from "@/lib/assistantTurns.ts";
@@ -71,8 +69,6 @@ function Answered({
   firstFigureNumber: number;
   onAnswer: (approvalId: string, approved: boolean) => void;
 }): React.JSX.Element {
-  const { t } = useTranslation();
-
   return (
     <div className="turn">
       {/* The text comes FIRST even though the tools ran before it. The reader wants the answer,
@@ -90,14 +86,6 @@ function Answered({
           onAnswer={onAnswer}
         />
       ))}
-
-      {/* Announced, not drawn: the caret in the stylesheet says more is coming to a reader who
-          can see it, and this says it to one who cannot. */}
-      {streaming ? (
-        <span className="visually-hidden" role="status">
-          {t("assistant.working")}
-        </span>
-      ) : null}
     </div>
   );
 }
