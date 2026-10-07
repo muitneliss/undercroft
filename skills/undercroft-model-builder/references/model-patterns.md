@@ -215,7 +215,9 @@ present a partial ledger's totals as the whole. A workbook in
 
 ## Building on other models
 
-Join and aggregate models through `ref()`, never through their tables:
+When a model already reads the entity you need, build on it rather than reading the same
+raw entity a second time: two staging models of one entity are two definitions of it. Join
+and aggregate models through `ref()`, never through their tables:
 
 ```sql
 select
@@ -231,6 +233,11 @@ group by d.stage
 `coalesce(..., 0)`. A report can show that cell as missing; a zero would be a claim.
 
 ## Saving a query as a model
+
+A query is not a model because it was written. Discovery (`references/discovery.md`) decides
+whether it should persist at all: a query that one report needs over a model the tenant
+already has is a question, and a query written to look at the data stays a look. What follows
+is for a query the approved plan makes a model.
 
 ### A raw-lake query
 

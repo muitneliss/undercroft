@@ -1,17 +1,23 @@
-# The interview
+# The model interview
 
-The brief is what the model must be. Get it from the person, in their words, before any SQL.
-Ask a few questions at a time and offer choices the data already shows. When they do not
-know, say what you would choose and why, and let them decide.
+The brief is what the model must be. This interview runs only once discovery
+(`references/discovery.md`) has found that a model is needed: the person's goal, who reads
+the result and what they decide with it are already in the shared understanding, and the
+reuse analysis has said why no existing model owns this. Do not ask those again; carry them
+into the brief's `For:` line and work from them to the grain and the columns.
+
+Get the rest from the person, in their words, before any SQL. Ask one question at a time and
+offer choices the data already shows. When they do not know, say what you would choose and
+why, and let them decide.
 
 ## The questions
 
-**1. What is it for?**
+**1. Is it a new model, or a change to one?**
 
-- What will this table answer, or which report or dashboard will read it?
-- Who reads that report, and what do they decide with it?
-
-The answer names the grain and the columns better than any question about tables can.
+- When discovery chose to extend an existing model, the grain, the source and most columns
+  are that model's: read it with `models.get`, and ask only about what changes.
+- A column added to a model reaches every report on it after the next build. Name those
+  reports, from `models.lineage` and the questions that read it.
 
 **2. What is one row?**
 
@@ -23,8 +29,9 @@ The unique test on the key column is that sentence, checked.
 
 **3. Where does it come from?**
 
-- Which source and entity in the lake? Offer what `lake.summary` lists.
-- Or which existing models? Offer what `models.list` lists.
+- Which existing models? Offer what `models.list` lists first: a model over a staging model
+  the tenant already has beats a second read of the same raw entity.
+- Or which source and entity in the lake? Offer what `lake.summary` lists.
 - For a mailbox or Drive source with several accounts: all of them, or one? A further
   account lands as its own source, such as `gmail.3fa9c1d2e0ab`.
 
@@ -74,7 +81,7 @@ being built; it tells the person which rows break the rule.
 
 ## The brief
 
-Write it back and ask the person to agree:
+Write it back and ask the person to agree. It goes into the plan, as its model section:
 
 ```text
 Model:    stg_hubspot_deals
@@ -90,4 +97,5 @@ Rows:     live records only
 Tests:    deal_id unique, not_null
 ```
 
-Nothing is drafted until the person says the brief is right.
+Nothing is drafted until the person says the brief is right, and nothing is saved until
+they have approved the plan it belongs to.
