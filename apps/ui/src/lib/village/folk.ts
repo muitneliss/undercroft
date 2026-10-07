@@ -27,14 +27,14 @@ import type { Point } from "@/lib/village/layout.ts";
 import { FIGURE_TARGET } from "@/lib/village/pointer.ts";
 import { NODES, route } from "@/lib/village/roads.ts";
 import type { Actor, Doing, Role } from "@/lib/village/script.ts";
-import type { Cast } from "@/lib/village/stage.ts";
+import type { Cast } from "@/lib/village/kit.ts";
 
 /** Seconds per frame: the village's ten frames a second (ADR 0115). */
 export const FRAME_SECONDS = 0.1;
 /** How far a figure walks in one frame. */
 const STRIDE = 0.17;
 /** KayKit's characters stand about 2.3 units tall; the village's stand about one. */
-const FIGURE_SCALE = 0.5;
+export const FIGURE_SCALE = 0.5;
 
 /** Which KayKit character plays each role (`docs/design/village.md`). */
 const MODEL: Readonly<Record<Role, string>> = {
@@ -125,7 +125,7 @@ function boneOf(track: { readonly name: string }): string {
   return track.name.split(".")[0] ?? "";
 }
 
-function carryClip(clips: readonly AnimationClip[]): AnimationClip | null {
+export function carryClip(clips: readonly AnimationClip[]): AnimationClip | null {
   const walk = clips.find((clip) => clip.name === "Walking_A");
   const hold = clips.find((clip) => clip.name === "Holding_A");
   if (walk === undefined || hold === undefined) {

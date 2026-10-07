@@ -9,7 +9,12 @@ import { describe, expect, test as it } from "bun:test";
 
 import type { RunEventView, RunView } from "@/api/types.ts";
 import atlas from "@/assets/village/atlas.json" with { type: "json" };
+import type { ModelLineage } from "@/api/types.ts";
 import { DIVISIONS } from "@/lib/divisions.ts";
+import { focusOn } from "@/lib/lineage.ts";
+import { arrange } from "@/lib/lineageArrange.ts";
+import type { RunStage } from "@/lib/runFlowTypes.ts";
+import { lineageGraph, runMapGraph } from "@/lib/village/graph.ts";
 import { type AtlasFacts, RAMPS, vertexColour } from "@/lib/village/palette.ts";
 import { type Actor, deriveVillage, type VillageInput } from "@/lib/village/script.ts";
 import { run, runDetail } from "@/test/fixtures.ts";
@@ -229,5 +234,95 @@ describe("the paint", () => {
     for (const [family, ramp] of Object.entries(RAMPS)) {
       expect(ramp).toEqual(design.extensions.colorMeta[family]?.tonalRamp ?? []);
     }
+  });
+});
+
+describe("a graph drawn as a village", () => {
+  function model(name: string): ModelLineage["nodes"][number] {
+    return { kind: "model", id: `model:${name}`, name, undeclared: [] };
+  }
+
+  function stage(key: string, kind: RunStage["kind"], mark: RunStage["mark"]): RunStage {
+    return {
+      key,
+      kind,
+      label: key,
+      mark,
+      markLabel: mark,
+      detail: null,
+      gathered: null,
+      href: null,
+    };
+  }
+
+  it("builds a run's own stages, roads between them, and traffic out of the one still working", () => {
+    const stages = [
+      stage("link-parent", "link-parent", "granted"),
+      stage("entity:deals", "entity", "granted"),
+      stage("entity:contacts", "entity", "pending"),
+      stage("outcome", "outcome", "pending"),
+      stage("link-child", "link-child", "pending"),
+    ];
+
+    const graph = runMapGraph(stages);
+
+    expect(graph.nodes.map((node) => node.id)).toEqual([
+      "entity:deals",
+      "entity:contacts",
+      "outcome",
+    ]);
+    expect(graph.edges.map((edge) => [edge.id, edge.flowing])).toEqual([
+      ["entity:deals->entity:contacts", false],
+      ["entity:contacts->outcome", true],
+    ]);
+  });
+
+  it("builds every lineage node and declared edge, with traffic exactly on the selection's chains", async () => {
+    const lineage: ModelLineage = {
+      nodes: [
+        { kind: "raw", id: "raw:r", name: "r" },
+        model("a"),
+        model("b"),
+        model("c"),
+        model("side"),
+        { kind: "missing", id: "missing:gone", name: "gone" },
+      ],
+      edges: [
+        { from: "raw:r", to: "model:a", via: null },
+        { from: "model:a", to: "model:b", via: null },
+        { from: "model:b", to: "model:c", via: null },
+        { from: "raw:r", to: "model:side", via: null },
+        { from: "model:c", to: "model:c", via: null },
+        { from: "missing:gone", to: "model:side", via: null },
+      ],
+    };
+    const arrangement = await arrange(lineage, lineage);
+    if (arrangement === null) {
+      throw new Error("the lineage could not be arranged");
+    }
+    const selected = lineage.nodes.find((node) => node.id === "model:b") ?? null;
+
+    const graph = lineageGraph(lineage, focusOn(lineage, selected), arrangement, new Map());
+
+    expect(graph.nodes.map((node) => node.id)).toEqual(lineage.nodes.map((node) => node.id));
+    expect(graph.edges.map((edge) => edge.id).sort()).toEqual(
+      [
+        "raw:r|model:a",
+        "model:a|model:b",
+        "model:b|model:c",
+        "raw:r|model:side",
+        "missing:gone|model:side",
+      ].sort(),
+    );
+    expect(graph.edges.filter((edge) => edge.broken).map((edge) => edge.id)).toEqual([
+      "missing:gone|model:side",
+    ]);
+    expect(
+      graph.edges
+        .filter((edge) => edge.flowing)
+        .map((edge) => edge.id)
+        .sort(),
+    ).toEqual(["raw:r|model:a", "model:a|model:b", "model:b|model:c"].sort());
+    expect(graph.nodes.find((node) => node.id === "model:side")?.state).toBe("dim");
   });
 });

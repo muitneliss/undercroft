@@ -52,6 +52,8 @@ export const en = {
   },
 
   common: {
+    drawingFailed:
+      "This drawing cannot be shown in this browser. The words beside it still say everything it draws.",
     loading: "Loading",
     notLoaded: "Not loaded",
     nothingToShow: "Nothing to show.",
@@ -1464,7 +1466,7 @@ export const en = {
     notLoaded: "The lineage of {{tenantId}} could not be loaded.",
     empty:
       "Lineage is drawn from the models. Once there is one, every relation it declares shows here.",
-    lead: "Only relations read from the models' own declarations are drawn: a ref() between two models, and a raw lake table declared as a dbt source with source(), a macro's included, so source accounts and reports do not appear here. Select a node to highlight its upstream and downstream chains and see its details; drag a card to rearrange, scroll to zoom.",
+    lead: "Only relations read from the models' own declarations are drawn: a ref() between two models, and a raw lake table declared as a dbt source with source(), a macro's included, so source accounts and reports do not appear here. Each model is a building and each relation a road. Select a building to ink its upstream and downstream chains, with carts running along them, and see its details; press the bare ground to clear it.",
     pickLabel: "Find a model or raw lake table",
     pickNone: "None",
     pick: "Show lineage",
@@ -1488,16 +1490,10 @@ export const en = {
     levelsHead: "All nodes by level",
     declaredSource: "▭ Declared dbt source",
     undeclaredMark: "? Upstream not declared",
-    resetLayout: "Reset layout",
     notArranged:
       "The drawing could not be laid out. The names and paths below still say what each model reads.",
     fullscreen: "Full screen",
     exitFullscreen: "Exit full screen",
-    controls: "Drawing controls",
-    zoomIn: "Zoom in",
-    zoomOut: "Zoom out",
-    fitView: "Fit to view",
-    minimap: "Mini map",
     model: "Model",
     rawTable: "Raw lake table",
     missing: "Missing dependency",

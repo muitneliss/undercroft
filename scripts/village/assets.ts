@@ -107,6 +107,12 @@ const SET = {
   cloud_big: "decoration/nature/cloud_big.gltf",
   cloud_small: "decoration/nature/cloud_small.gltf",
   flag: "decoration/props/flag_blue.gltf",
+  ruin: "buildings/neutral/building_destroyed.gltf",
+  scaffold: "buildings/neutral/building_scaffolding.gltf",
+  tower: "buildings/blue/building_tower_base_blue.gltf",
+  barracks: "buildings/blue/building_barracks_blue.gltf",
+  tavern: "buildings/blue/building_tavern_blue.gltf",
+  lumbermill: "buildings/blue/building_lumbermill_blue.gltf",
 } as const;
 
 /** Read only to tell the team cells from the rest: they are what changes between variants. */

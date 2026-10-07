@@ -1,26 +1,25 @@
 /**
- * What the pointer is over in the village, and what the page says about it.
+ * What the pointer is over in a village, and what the page says about it.
  *
  * The canvas draws no word, so pointing at something in the picture answers in the words beside
- * it: the work-list row of the figure under the pointer, or the link of the building, takes
- * `data-lit`, the same wash a hovered row takes. Pressing goes where that row or link goes.
+ * it: the element marked for it -- `data-actor` for a figure, `data-place` for a building of the
+ * town, `data-node` for a building of a graph -- takes `data-lit`, the same wash a hovered row
+ * takes. Pressing goes where that element goes, through the film's hook.
+ *
+ * A target is `kind|id`: `actor|courier:hubspot`, `place|vault`, `node|model:orders`. The world
+ * says what is under a ray (`World.under`); this only turns events into rays and targets into
+ * lit words.
  */
 
-import { type Camera, type Object3D, Plane, Raycaster, Vector2, Vector3 } from "three";
+import { type Camera, Raycaster, Vector2 } from "three";
 
-import { PLACES } from "@/lib/village/layout.ts";
-
-export interface VillageHooks {
-  /** A figure was pressed: its key, as the scene names it. */
-  readonly onFigure: (key: string) => void;
-  /** A building was pressed: its place id from the layout. */
-  readonly onPlace: (id: string) => void;
-}
+/** Pressing a target: its kind and its id. */
+export type PickHook = (kind: string, id: string) => void;
 
 /** A figure's press target is named for the figure's key, behind this prefix. */
 export const FIGURE_TARGET = "figure:";
 
-/** Which of the page's elements answers a target: a row by actor, a link by place. */
+/** Which of the page's elements answers a target. */
 function wordsFor(words: HTMLElement, target: string | null): Element[] {
   if (target === null) {
     return [];
@@ -32,30 +31,29 @@ function wordsFor(words: HTMLElement, target: string | null): Element[] {
 export class VillagePointer {
   private readonly raycaster = new Raycaster();
   private readonly pointer = new Vector2();
-  private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
   private readonly canvas: HTMLCanvasElement;
   private readonly words: HTMLElement;
   private readonly camera: Camera;
-  private readonly figures: () => Object3D[];
-  private readonly hooks: VillageHooks;
+  private readonly under: (ray: Raycaster) => string | null;
+  private readonly onPick: PickHook;
   private lit: string | null = null;
 
   constructor(
     elements: { readonly canvas: HTMLCanvasElement; readonly words: HTMLElement },
     camera: Camera,
-    figures: () => Object3D[],
-    hooks: VillageHooks,
+    under: (ray: Raycaster) => string | null,
+    onPick: PickHook,
   ) {
     this.canvas = elements.canvas;
     this.words = elements.words;
     this.camera = camera;
-    this.figures = figures;
-    this.hooks = hooks;
+    this.under = under;
+    this.onPick = onPick;
   }
 
   readonly hover = (event: Event): void => {
     if (this.aim(event)) {
-      this.light(this.under());
+      this.light(this.under(this.raycaster));
     }
   };
 
@@ -67,11 +65,9 @@ export class VillagePointer {
     if (!this.aim(event)) {
       return;
     }
-    const [kind, id] = (this.under() ?? "").split("|");
-    if (kind === "actor" && id !== undefined) {
-      this.hooks.onFigure(id);
-    } else if (kind === "place" && id !== undefined) {
-      this.hooks.onPlace(id);
+    const [kind, id] = (this.under(this.raycaster) ?? "").split("|");
+    if (kind !== undefined && kind !== "" && id !== undefined) {
+      this.onPick(kind, id);
     }
   };
 
@@ -86,21 +82,6 @@ export class VillagePointer {
     );
     this.raycaster.setFromCamera(this.pointer, this.camera);
     return true;
-  }
-
-  /** What is under the pointer: a figure first, then the building whose ground it is over. */
-  private under(): string | null {
-    for (const hit of this.raycaster.intersectObjects(this.figures(), true)) {
-      if (hit.object.name.startsWith(FIGURE_TARGET)) {
-        return `actor|${hit.object.name.slice(FIGURE_TARGET.length)}`;
-      }
-    }
-    const spot = this.raycaster.ray.intersectPlane(this.ground, new Vector3());
-    if (spot === null) {
-      return null;
-    }
-    const place = PLACES.find((p) => Math.hypot(p.x - spot.x, p.z - spot.z) <= p.reach);
-    return place === undefined ? null : `place|${place.id}`;
   }
 
   private light(target: string | null): void {

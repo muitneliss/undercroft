@@ -7,6 +7,12 @@
   "extending the exception to the app". ADR 0063 stands as written for the public cover. ADR
   [0014](0014-frames-are-size-motion-is-stepped.md) is not superseded. This ADR applies its
   stepped rule to a third dimension, and that rule constrains this ADR.
+- Supersedes, by "Every node-and-edge drawing is a village" below:
+  [ADR 0097](0097-lineage-is-drawn-on-a-board-the-reader-arranges.md)'s board the reader pans,
+  zooms and rearranges, and [ADR 0100](0100-the-lineage-selection-flows.md)'s beads of ink on the
+  selected chains. ADR 0097's columns, its selection, its chains and its text list stand, and so
+  does [ADR 0103](0103-the-lineage-board-is-laid-out-by-elk.md)'s use of ELK to place the
+  nodes and route the edges.
 
 ## Context
 
@@ -91,6 +97,46 @@ relation as the cover's film to its two lists.
   opens. Pointing at a figure or a building in the picture lights its row; pressing it goes where
   the row goes. A keyboard reader uses the rows, so the canvas needs no focus of its own.
 
+## Every node-and-edge drawing is a village
+
+The interface drew two graphs on `@xyflow/react`: a run's stages, beside what the run said
+(`RunFlow`), and the models' lineage (`LineageCanvas`). Both are villages now, built by the same
+film as the Journal's town, and `@xyflow/react` is gone from the app.
+
+- **Exactly the graph.** Every node is one building, every edge one road, and a road carries
+  traffic exactly when the board animated its edge: a run's road out of a stage still working, a
+  lineage road on the selected node's upstream or downstream chain. `lib/village/graph.ts` is the
+  only place either graph becomes a village, and `village.test.ts` holds the buildings, roads and
+  traffic equal to the graph's nodes, edges and flowing edges.
+- **What each building is.** Its kind decides, and its roof wears its division's hue:
+  - a model is a house of Models, and its pick of house comes from its name;
+  - a raw lake table is a storehouse of the Raw lake;
+  - a missing dependency is a ruin;
+  - a run's entity read is a market stall of Sources, its verdict the town hall, a build the
+    workshop, a lake-API landing the vault.
+
+  A stage that stopped, or a model whose last build failed, stands under an errata slip.
+
+- **How a road is drawn.** A plain road for a declared edge. An inked one on the selected node's
+  upstream chain, dashed on its downstream chain, faint where the selection dims it. Broken into
+  pieces from a dependency that no longer exists, as the board dashed that wire. An arrowhead at
+  the target end. A building the selection does not reach is faded, as its card was dimmed.
+- **What moves on a road.** A courier carrying a crate on a run's road, a handcart on the
+  lineage's. It replaces ADR 0100's linear beads and ADR 0014's exception for the run map's live
+  edge. Traffic moves on the village's stepped clock like everything else, and holds still under
+  reduced motion.
+- **The lineage keeps ELK.** ELK still places every node in its column and routes every edge
+  (ADR 0103), scaled from pixels into the board's units. Each road runs from its source
+  building's middle along ELK's route to its target's.
+- **The camera is fixed and fits the whole graph**, however large. That is the owner's decision,
+  and it gives up ADR 0097's pan, zoom, drag, minimap and "Reset layout". Full screen stays, and
+  it fills the screen with the village and its details. A model too small to read in a large
+  lineage is reached by the picker, the details and the text list, as before. Each name of a
+  node in those words is marked with its id, so pointing at its building lights it.
+- **Pressing.** A building selects its node, as its card did. The bare ground clears the
+  selection, as the board's pane did. The chain links of a run stay slips of real text beside
+  its map.
+
 ## The boundary
 
 - The ledger remains the Journal's default. The village is opt-in, through the URL, so a
@@ -123,7 +169,8 @@ relation as the cover's film to its two lists.
 
 ## Consequences
 
-- `three` joins the UI's dependencies and is admitted only into the village chunk. The asset
+- `three` joins the UI's dependencies and is admitted only into the village chunk, which a reader
+  now also loads by opening a run or the lineage. `@xyflow/react` leaves them. The asset
   script's tools join the root's dev dependencies: `@gltf-transform/core`, `functions` and
   `extensions`, `meshoptimizer` and `pngjs`. All are exact-pinned.
 - The control plane's content-type allow-list learns `.glb`.

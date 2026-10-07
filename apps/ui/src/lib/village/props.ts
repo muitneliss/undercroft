@@ -25,11 +25,17 @@ import {
 import { BELL, type Point, SET_ASIDE, VAULT_STACK, WORKSHOP_PIECES } from "@/lib/village/layout.ts";
 import type { Painter } from "@/lib/village/paint.ts";
 import { mix } from "@/lib/village/palette.ts";
+import { ribbon } from "@/lib/village/ribbon.ts";
 import { barrierAt } from "@/lib/village/roads.ts";
 import type { VillageScene } from "@/lib/village/script.ts";
 
 const ROAD_WIDTH = 0.55;
 const ROAD_RIM = 0.12;
+/**
+ * How high a road lies over the board: clear of the ink outline drawn round every tile, which
+ * covers anything flatter than this from the camera's angle, and still flat to the eye.
+ */
+const ROAD_LEVEL = 0.07;
 const PILE_SPACING = 0.32;
 const CRATE_SCALE = 2.4;
 /** A bell's profile, turned about its axis: lip, waist, shoulder, crown. */
@@ -42,29 +48,6 @@ const BELL_PROFILE: readonly (readonly [number, number])[] = [
   [0.1, 0.5],
   [0.02, 0.52],
 ];
-
-/** A strip of road between two points: a Page band over a slightly wider rim, drawn flat. */
-export function roadSegment(painter: Painter, from: Point, to: Point): Group {
-  const { tokens } = painter;
-  const length = Math.hypot(to.x - from.x, to.z - from.z);
-  const segment = new Group();
-  segment.add(
-    new Mesh(
-      new BoxGeometry(length + ROAD_WIDTH + ROAD_RIM, 0.02, ROAD_WIDTH + ROAD_RIM),
-      painter.flat(mix(tokens.bone, tokens.ink, 0.3), false),
-    ),
-    new Mesh(
-      new BoxGeometry(length + ROAD_WIDTH, 0.04, ROAD_WIDTH),
-      painter.flat(tokens.page, false),
-    ),
-  );
-  for (const strip of segment.children) {
-    strip.receiveShadow = true;
-  }
-  segment.position.set((from.x + to.x) / 2, 0.01, (from.z + to.z) / 2);
-  segment.rotation.y = -Math.atan2(to.z - from.z, to.x - from.x);
-  return segment;
-}
 
 export function slipTexture(painter: Painter): CanvasTexture {
   const { tokens } = painter;
@@ -110,15 +93,24 @@ export function slipMaker(painter: Painter, texture: CanvasTexture): () => Objec
   };
 }
 
-/** A line of road segments, as one object. */
+/**
+ * A road along a line: a Page band over a slightly wider rim, each one strip (`ribbon.ts`), flat
+ * on the board and catching the shadows that fall across it.
+ */
 export function roadOf(painter: Painter, line: readonly Point[]): Group {
+  const { tokens } = painter;
   const road = new Group();
-  for (let at = 1; at < line.length; at += 1) {
-    const from = line[at - 1];
-    const to = line[at];
-    if (from !== undefined && to !== undefined) {
-      road.add(roadSegment(painter, from, to));
-    }
+  const rim = new Mesh(
+    ribbon(line, ROAD_WIDTH + ROAD_RIM, ROAD_LEVEL),
+    painter.flat(mix(tokens.bone, tokens.ink, 0.3), false),
+  );
+  const band = new Mesh(
+    ribbon(line, ROAD_WIDTH, ROAD_LEVEL + 0.02),
+    painter.flat(tokens.page, false),
+  );
+  for (const strip of [rim, band]) {
+    strip.receiveShadow = true;
+    road.add(strip);
   }
   return road;
 }

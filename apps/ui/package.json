@@ -25,7 +25,6 @@
     "@trpc/react-query": "11.0.0",
     "@undercroft/contracts": "workspace:*",
     "@undercroft/core": "workspace:*",
-    "@xyflow/react": "12.11.6",
     "ai": "7.0.107",
     "better-auth": "1.7.5",
     "big.js": "7.0.1",

@@ -7,32 +7,43 @@ date: 2026-10-07
 tags: []
 source: docs/adr/0115-the-journal-can-be-read-as-a-village.md
 source_path: docs/adr/0115-the-journal-can-be-read-as-a-village.md
-source_hash: c4987d292b605b549dab0acfbd5a6456940d53e15e2cb5f3c84ac0c40d65e163
+source_hash: 7486f526b3d59088c7b04e99ae32ae8fec0e9f1be06cfa9131aaf5d72a43e55c
 ingested: 2026-10-07
 ---
 
 # ADR 0115 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion
 
-Adds a village view to the Journal at `/tenants/:id/journal?view=village`, beside the ledger, which stays the default and the content. Supersedes two rejections in [[ADR 0063 The Public Cover Moves Continuously]], "a motion library or WebGL" and "extending the exception to the app", for this view only. ADR 0014's stepped rule is applied in three dimensions, not superseded.
+Adds a village view to the Journal at `/tenants/:id/journal?view=village`, beside the ledger, and makes every node-and-edge drawing in the interface a village. Supersedes, for the village only, two rejections in [[ADR 0063 The Public Cover Moves Continuously]] ("a motion library or WebGL" and "extending the exception to the app"). Supersedes [[ADR 0097 Lineage Is Drawn on a Board the Reader Arranges]]'s pannable, zoomable, draggable board, and ADR 0100's linear beads on the selected chains. ADR 0097's columns, selection, chains and text list stand, and so does [[ADR 0103 The Lineage Board Is Laid Out by ELK]]. ADR 0014's stepped rule is applied in three dimensions.
 
-Decision.
+Decision (the town).
 
-* One customer, live, reading only `runs.list`, `runs.get` and `runs.events` with the reader's own session.
-* Nothing moves without a run behind it: each character's action is a pure derivation from run status, events and steps, tested outside WebGL.
-* Stop-motion on a stepped 10 fps clock.
-* `three`, exact-pinned, only in the lazy village chunk, with an imperative runtime outside React state.
-* A model village on a desk, photographed like a crafted miniature (`look.ts`):
-  * every colour lies along a design-system tonal ramp by hue family and lightness, keeping KayKit's gradients, with paper grain;
-  * a warm key light, a sky-and-grass fill, and a room reflected in the lake;
-  * soft shadows on the board and onto the page beneath it, plus ambient occlusion;
-  * Ink outlines, a tilt-shift band of focus, and page grain with a corner falloff.
-* "Rules, never shadows" governs the book's sheets; the village is an object on the desk, so it casts one.
-* Weather and machinery (clouds, windmill, watermill, division flags) move on their own and claim nothing. Under reduced motion they hold still.
-* A division's canonical hue is worn only by its building's roof and flag, which opens it. Vermilion appears only on slips.
-* KayKit CC0 assets with provenance, repainted by a task-run script.
-* A fixed orthographic camera.
-* A wordless, `aria-hidden` canvas, with a work list and a buildings list carrying the words.
+* One customer, live, through the reader's session.
+* Nothing moves without a run: a pure derivation from run status, events and steps, tested outside WebGL.
+* Stop-motion at 10 fps.
+* `three` in a lazy chunk with an imperative runtime outside React state.
+* A model village on a desk in the design system's inks:
+  * colours along the tonal ramps by hue family and lightness, with paper grain;
+  * a warm key light, a fill and a room reflection;
+  * soft shadows on the board and the page, and ambient occlusion;
+  * Ink outlines, a tilt-shift focus band, and page grain with a vignette.
+* "Rules, never shadows" governs the book's sheets, not an object on the desk.
+* Weather and machinery move on their own and claim nothing.
+* Canonical division hues only on roofs; vermilion only on slips.
+* KayKit CC0 assets with provenance; a fixed orthographic camera.
+* A wordless, `aria-hidden` canvas, with words beside it.
 
-Rejected: `@react-three/fiber`, smooth 60 fps, an eighth division (ADR 0019), a cross-customer village (deferred), characters built from primitives, a push channel (ADR 0021).
+Every node-and-edge drawing is a village. The run map (`RunFlow`) and the lineage (`LineageCanvas`) are villages built by the same film; `@xyflow/react` is gone.
 
-Consequences: `three` and the asset tools are added, exact-pinned; `.glb` joins the content-type allow-list; every pass is deterministic, so the visual-regression tier keeps a settled frame including the canvas; `docs/design/village.md` owns the cast; DESIGN.md describes the village.
+* Exactly the graph: one building per node, one road per edge, and traffic exactly where the board animated an edge. `village.test.ts` holds this.
+* Buildings by kind, with division-hue roofs: model houses, raw-table storehouses, missing-dependency ruins, and run stages as a stall, the hall, the workshop or the vault. Slips mark a stopped stage or a failed build.
+* Roads: plain; inked upstream; dashed downstream; faint when dimmed; broken from a missing dependency; with arrowheads.
+* Traffic: a courier on a run's road, carts on the lineage's.
+* ELK still places the nodes and routes the roads.
+* The fixed camera fits the whole graph (the owner's decision), giving up pan, zoom, drag, the minimap and reset. Full screen stays.
+* Node names in the words carry `data-node`, so pointing lights them. A building press selects; a ground press clears.
+
+Boundary: opt-in for the town; loops only while visible; reduced motion paints one settled frame; failure shows a sentence; counts are never told by crates.
+
+Rejected: `@react-three/fiber`, smooth 60 fps, an eighth division, a cross-customer village, characters built from primitives, a push channel.
+
+Consequences: `three` is loaded by the town, a run or the lineage; `@xyflow/react` is removed; the asset tools are exact-pinned; `.glb` joins the allow-list; deterministic passes keep canvas baselines; `docs/design/village.md` owns the cast and the drawings; DESIGN.md describes them.

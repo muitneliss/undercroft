@@ -5,29 +5,20 @@ date: 2026-10-07
 tags: []
 source: docs/design/village.md
 source_path: docs/design/village.md
-source_hash: 3db436c7423fc5cadd4248d36ee665de162915616fd3f34f80a51d73bed39126
+source_hash: d47ae8e5b9a766bef60c7e88b4e3905c734a13d8377a49527aa20fa5e31b56d3
 ingested: 2026-10-07
 ---
 
 # Design: The Village, the Journal Drawn as People at Work
 
-The concept document for the Journal's village view ([[ADR 0115 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion]]). It owns the cast, the layout, the visual language and the mapping from runs to actions.
+The concept document for the village ([[ADR 0115 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion]]): the Journal's town, and the node-and-edge drawings drawn the same way.
 
-* **Direction contract.** A reader who does not know the words watches data arrive, be kept and be made into something. Stop-motion at 10 fps. Nothing moves without a run.
-* **Visual language.** Every surface lies along a design-system tonal ramp by family:
-
-  * Grass for fields and trees
-  * Sienna for timber and skin
-  * Bone and Ink for stone
-  * Teal for the glossy lake
-  * Page for the roads
-
-  Ink outlines, finer on characters. The scene is photographed like a miniature (`look.ts`): a warm key light, soft shadows on the board and the page, ambient occlusion, a tilt-shift focus band, page grain and a vignette. The repaint uses `_CELL`, `_SHADE` and the cell gradients; `village.test.ts` holds the ramps equal to `design.json` and every vertex along them.
-* **Ambience** (`ambience.ts`). Drifting cloud shadows, two small clouds, windmill sails, a watermill wheel and division flags. It claims nothing and holds still under reduced motion.
-* **Layout.** Buildings run left to right along the data path, one per division, with dressing (props, trees, lake plants), the watermill, and a flag per division. Roads follow the connections.
-* **Cast.** Courier, vault keeper, scribe, artisan, inspector, carter, and the bell, all printed in the ramps.
-* **Evidence table.** It maps each rule in `script.ts` to what the village shows. dbt reports steps only at the end.
-* **Access.** The canvas is `aria-hidden` and the frame `aria-busy` until loaded. A work list and a buildings list carry the words, and `data-lit` answers pointing.
-* **Live data.** `runs.list` every 5 or 15 s, `runs.events` every 1 s, `runs.get` once for the newest closed build, and `connections.list`.
-* **Budgets.** About 1.3 MB of models; at most 10 draws a second; 2 to 3 times supersampled; disposed on close.
-* **Visual regression.** Two settled-frame baselines.
+* **Direction.** A reader who does not know the words watches data arrive, be kept and be made into something. Stop-motion at 10 fps. Nothing moves without a run.
+* **Visual language.** Surfaces lie along the design-system tonal ramps by family (Grass, Sienna, Bone/Ink, Teal, Ultramarine, Violet, Oxide, Chrome). Roads are Page. Ink outlines; four stepped tones; canonical division hues only on roofs; vermilion only on slips. The scene is photographed as a miniature: a warm key light, soft shadows, ambient occlusion, tilt-shift, page grain. Ambience (clouds, windmill, watermill, flags) claims nothing.
+* **Town layout and cast.** One building per division along the data path, with dressing. Courier, keeper, scribe, artisan, inspector, carter and the bell, driven by the evidence table over `script.ts`.
+* **Node-and-edge drawings.**
+  * Run map: stalls, the hall, the workshop and the vault per stage; a road from each stage to the next; a courier out of a working stage.
+  * Lineage: model houses, raw storehouses and missing-dependency ruins; roads along ELK's routes, inked upstream, dashed downstream, faint when dimmed, broken from a missing dependency; carts on the selected chains.
+  * The camera is fixed and fits the whole graph; presses select or clear.
+* **Access.** `aria-hidden` canvas, `aria-busy` frame, words beside it, `data-lit` answering pointing.
+* **Live data, budgets, assets, visual regression.** As before: polling at the Journal's rates; about 1.3 MB of models; supersampled; disposed on close; settled-frame baselines.

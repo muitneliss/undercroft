@@ -35,6 +35,14 @@ import { trpc } from "@/trpc.ts";
 export const VISUAL_NOW = "2026-09-29T09:30:00Z";
 
 /**
+ * How long a screen with a village on it may take (ADR 0115). The tier draws WebGL in software
+ * inside the Playwright image, emulated on an Apple-silicon Mac, and a lit, shadowed, occluded
+ * scene takes several seconds where a page of text takes one; the default would fail it on time,
+ * not on a pixel.
+ */
+export const WEBGL_TIMEOUT = 60_000;
+
+/**
  * What a procedure answers: its output; a `Response` for a refusal the test means to show; or a
  * function of the input the page sent, for a procedure one screen asks more than once (each
  * dashboard tile reads its own answer). A tRPC output is JSON and is never a function, so the

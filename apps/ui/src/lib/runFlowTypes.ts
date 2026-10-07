@@ -25,9 +25,6 @@ export interface RunStage {
   readonly gathered: number | null;
   /** Set only for a link stage: where it goes. */
   readonly href: string | null;
-  // `@xyflow/react`'s Node<T> requires its data to be indexable; every declared field above
-  // is still exactly typed, this only admits the shape to that constraint.
-  readonly [key: string]: unknown;
 }
 
 /**

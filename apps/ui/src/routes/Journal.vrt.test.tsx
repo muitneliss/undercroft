@@ -12,7 +12,7 @@
 import { describe, test as it } from "vitest";
 
 import { CONNECTIONS, RUNS, TENANT, tenant, XERO_RUN, XERO_RUN_DETAIL } from "@/test/demoBook.ts";
-import { type Answers, open } from "@/test/visual.tsx";
+import { type Answers, open, WEBGL_TIMEOUT } from "@/test/visual.tsx";
 
 const ADDRESS = `/tenants/${TENANT}/journal/${XERO_RUN}`;
 const VILLAGE = `/tenants/${TENANT}/journal?view=village`;
@@ -27,11 +27,11 @@ const ANSWERS: Answers = {
 };
 
 describe("the journal with a run open", () => {
-  it("at 1440 px", async () => {
+  it("at 1440 px", { timeout: WEBGL_TIMEOUT }, async () => {
     await open(ADDRESS, "en", ANSWERS).matches("journal-run-en-1440", 1440);
   });
 
-  it("at 390 px", async () => {
+  it("at 390 px", { timeout: WEBGL_TIMEOUT }, async () => {
     await open(ADDRESS, "en", ANSWERS).matches("journal-run-en-390", 390);
   });
 });
@@ -73,11 +73,11 @@ const VILLAGE_ANSWERS: Answers = {
 };
 
 describe("the journal as a village", () => {
-  it("at 1440 px", async () => {
+  it("at 1440 px", { timeout: WEBGL_TIMEOUT }, async () => {
     await open(VILLAGE, "en", VILLAGE_ANSWERS).matches("journal-village-en-1440", 1440);
   });
 
-  it("at 390 px", async () => {
+  it("at 390 px", { timeout: WEBGL_TIMEOUT }, async () => {
     await open(VILLAGE, "vi", VILLAGE_ANSWERS).matches("journal-village-vi-390", 390);
   });
 });

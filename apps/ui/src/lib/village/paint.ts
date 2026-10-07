@@ -35,6 +35,8 @@ const ROUGHNESS = 0.82;
 const WATER_ROUGHNESS = 0.08;
 const GRAIN_SIZE = 38;
 const GRAIN_STRENGTH = 0.07;
+/** How much of a building the selection does not reach still shows. */
+const FADED = 0.26;
 
 /** The book's tokens, off the stylesheet: the one place they are defined. */
 export function readTokens(element: Element): Tokens {
@@ -123,6 +125,7 @@ export class Painter {
   private readonly painted = new Map<string, BufferAttribute>();
   private readonly inks = new WeakMap<AtlasFacts, Map<string, Color>>();
   private readonly flats = new Map<string, MeshStandardMaterial>();
+  private readonly faint = new Map<Material, Material>();
 
   constructor(tokens: Tokens) {
     this.tokens = tokens;
@@ -202,6 +205,22 @@ export class Painter {
     mesh.material = material;
   }
 
+  /**
+   * The same material, faded: what a building the selection does not reach is drawn in, as the
+   * board dimmed its card. Its outline fades with it.
+   */
+  faded(material: Material): Material {
+    let made = this.faint.get(material);
+    if (made === undefined) {
+      made = material.clone();
+      made.transparent = true;
+      made.opacity = FADED;
+      made.userData = { outlineParameters: { alpha: FADED } };
+      this.faint.set(material, made);
+    }
+    return made;
+  }
+
   /** One vertex's ink, worked out once per cell, shade and roof. */
   private ink(atlas: AtlasFacts, cell: number, shade: number, hue: string | null): Color {
     let known = this.inks.get(atlas);
@@ -224,6 +243,9 @@ export class Painter {
     this.waterMaterial.dispose();
     for (const flat of this.flats.values()) {
       flat.dispose();
+    }
+    for (const faint of this.faint.values()) {
+      faint.dispose();
     }
   }
 }

@@ -16,13 +16,14 @@
  *
  * Loaded on its own (`Journal.tsx` lazy-loads it), so `three` and the models are fetched only by
  * a reader who opens the village. Nothing here is `useState`: the film holds its own values, and
- * what it tells the page it writes as `data-` attributes (`lib/village/runtime.ts`).
+ * what it tells the page it writes as `data-` attributes (`lib/village/film.ts`).
  */
 
 import type { TFunction } from "i18next";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
+import { Vector3 } from "three";
 
 import type { Connection, RunDetail, RunView } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
@@ -31,13 +32,16 @@ import { customerPagePath, division, divisionPath } from "@/lib/divisions.ts";
 import { MISSING } from "@/lib/money.ts";
 import { describeRun, journalPath, sourceLabel } from "@/lib/runs.ts";
 import { PLACES } from "@/lib/village/layout.ts";
-import { VillageFilm } from "@/lib/village/runtime.ts";
+import { Film } from "@/lib/village/film.ts";
 import { type Actor, deriveVillage, type VillageScene } from "@/lib/village/script.ts";
+import { Town } from "@/lib/village/town.ts";
 import { formatDateTime } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
 const PAGE = 50;
+/** The town seen from the south, raised and turned a little from the east; fitted to its roofs. */
+const TOWN_VIEW = { camera: new Vector3(5, 15, 17), fitHeight: 1.6 } as const;
 const RUNNING_POLL_MS = 5000;
 const IDLE_POLL_MS = 15_000;
 /** A running run's feed, at the ledger's own rate (`RunDetail`). */
@@ -131,7 +135,7 @@ function VillageBoard({
   const boardRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const filmRef = useRef<VillageFilm | null>(null);
+  const filmRef = useRef<Film<VillageScene> | null>(null);
   // The newest scene, for the film to start with and for a press to look a figure up in. A ref
   // and not state: nothing renders from it, and the film reads it outside React.
   const latestRef = useRef(scene);
@@ -146,17 +150,21 @@ function VillageBoard({
     if (elements === null) {
       return;
     }
-    void VillageFilm.start(elements, {
-      onFigure: (key) => {
-        const runId = latestRef.current.actors.find((actor) => actor.key === key)?.runId ?? null;
+    void Film.start(
+      elements,
+      (kit) => new Town(kit),
+      (kind, id) => {
+        if (kind === "place") {
+          void navigate(placePath(tenantId, id));
+          return;
+        }
+        const runId = latestRef.current.actors.find((actor) => actor.key === id)?.runId ?? null;
         if (runId !== null) {
           void navigate(journalPath(tenantId, { runId }));
         }
       },
-      onPlace: (id) => {
-        void navigate(placePath(tenantId, id));
-      },
-    }).then((started) => {
+      TOWN_VIEW,
+    ).then((started) => {
       if (!alive) {
         started?.dispose();
         return;

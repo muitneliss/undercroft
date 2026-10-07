@@ -158,6 +158,21 @@ dbt reports its steps when it finishes, not as it goes, so a running build shows
 work and its pieces and its inspection appear together when it closes. Runs that closed before
 the village opened are not replayed; only their traces stand.
 
+## Node-and-edge drawings
+
+The same village draws the interface's two graphs (ADR 0115): a run's stages, in the run's own
+leaf in the Journal, and the models' lineage, in Models → Lineage. `lib/village/graph.ts` turns
+either into buildings, roads and traffic, `graphWorld.ts` builds it, and the film is the town's.
+
+| Graph   | A node is                                                                                              | An edge is                                                                      | Traffic                                                |
+| ------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Run map | A market stall of Sources per entity read, the town hall for the verdict, the workshop, the vault      | A road from each stage to the next                                              | A courier with a crate, out of a stage still working   |
+| Lineage | A house of Models per model, a storehouse of the Raw lake per raw table, a ruin per missing dependency | A road along ELK's route; inked upstream, dashed downstream, faint where dimmed | A handcart on every road of the selected node's chains |
+
+A stage that stopped, or a model whose last build failed, stands under an errata slip. A building
+the selection does not reach is faded. The camera is fixed and fits the whole graph. Pressing a
+building selects its node; pressing the bare ground clears the selection.
+
 ## Words, focus and access
 
 - The canvas is `aria-hidden` and draws no letters. Its frame is `aria-busy` until the models

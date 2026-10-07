@@ -1,8 +1,11 @@
 /**
- * The village's set: the board, its roads and buildings, painted in the book's tokens, plus the
- * models and clips the cast is made from (ADR 0115).
+ * Everything a village is built from, loaded and painted once (ADR 0115): the set's pieces, the
+ * cast and its clips, the errata slip, and roads drawn along any line.
  *
- * The stage owns what does not move. The runtime owns the clock, and `folk.ts` owns the cast.
+ * A kit belongs to one film: the Journal's town, a run's map or the lineage each load their own,
+ * and dispose of it with themselves. The models are fetched once by the browser and cached; what
+ * a kit owns is the painted copies and the materials, which are cheap to make and must not be
+ * shared between films that are disposed at different times.
  */
 
 import { type AnimationClip, Group, Mesh, type Object3D } from "three";
@@ -13,11 +16,11 @@ import atlasFacts from "@/assets/village/atlas.json" with { type: "json" };
 import clipsUrl from "@/assets/village/clips.glb?url";
 import folkUrl from "@/assets/village/folk.glb?url";
 import setUrl from "@/assets/village/set.glb?url";
-import { boardTiles, PLACEMENTS } from "@/lib/village/layout.ts";
+import type { DivisionId } from "@/lib/divisions.ts";
+import type { Point } from "@/lib/village/layout.ts";
 import { Painter } from "@/lib/village/paint.ts";
 import type { AtlasFacts, Tokens } from "@/lib/village/palette.ts";
-import { makeBell, roadOf, slipMaker, slipTexture } from "@/lib/village/props.ts";
-import { roadLines, sourceRoadLine } from "@/lib/village/roads.ts";
+import { roadOf, slipMaker, slipTexture } from "@/lib/village/props.ts";
 
 export interface Cast {
   /** The five models, by KayKit name, each a rigged group to clone. */
@@ -25,17 +28,15 @@ export interface Cast {
   readonly clips: readonly AnimationClip[];
 }
 
-export interface Stage {
-  readonly root: Group;
+export interface Kit {
+  readonly painter: Painter;
   readonly cast: Cast;
-  /** A piece from the set, repainted, ready to place: a crate, a handcart, a fence. */
-  readonly piece: (name: string) => Object3D;
+  /** A piece from the set, repainted; its roof in a division's hue if it stands for one. */
+  readonly piece: (name: string, roof?: DivisionId | null) => Object3D;
   /** An errata slip on its post. */
   readonly slip: () => Object3D;
-  /** A source's road by slot, built once and given back each time. */
-  readonly sourceRoad: (slot: number) => Object3D;
-  /** The bell, which the runtime swings. */
-  readonly bell: Object3D;
+  /** A road along a line, owned by the kit and disposed with it. */
+  readonly road: (line: readonly Point[]) => Object3D;
   readonly dispose: () => void;
 }
 
@@ -67,40 +68,7 @@ function childrenByName(gltf: GLTF): Map<string, Object3D> {
   return new Map(gltf.scene.children.map((child) => [child.name, child]));
 }
 
-/** A piece from the set, cloned and repainted; under a roof's division if it stands for one. */
-function pieceOf(
-  painter: Painter,
-  pieces: ReadonlyMap<string, Object3D>,
-  name: string,
-  roof: Parameters<Painter["paint"]>[2] = null,
-): Object3D {
-  const source = pieces.get(name);
-  const made = source === undefined ? new Group() : source.clone();
-  painter.paint(made, ATLAS.set, roof);
-  return made;
-}
-
-function boardOf(painter: Painter, pieces: ReadonlyMap<string, Object3D>): Group {
-  const root = new Group();
-  for (const tile of boardTiles()) {
-    const ground = pieceOf(painter, pieces, tile.water ? "hex_water" : "hex_grass");
-    ground.position.set(tile.x, 0, tile.z);
-    root.add(ground);
-  }
-  for (const line of roadLines()) {
-    root.add(roadOf(painter, line));
-  }
-  for (const spot of PLACEMENTS) {
-    const made = pieceOf(painter, pieces, spot.piece, spot.division);
-    made.position.set(spot.x, spot.y ?? 0, spot.z);
-    made.rotation.y = (spot.turn * Math.PI) / 2;
-    made.scale.setScalar(spot.scale);
-    root.add(made);
-  }
-  return root;
-}
-
-export async function loadStage(tokens: Tokens): Promise<Stage> {
+export async function loadKit(tokens: Tokens): Promise<Kit> {
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   const [set, folk, clips] = await Promise.all([
@@ -112,29 +80,29 @@ export async function loadStage(tokens: Tokens): Promise<Stage> {
   unsuffix(clips);
   const painter = new Painter(tokens);
   const pieces = childrenByName(set);
-  const root = boardOf(painter, pieces);
-  const bell = makeBell(painter);
-  root.add(bell);
   const models = childrenByName(folk);
   for (const [name, model] of models) {
     painter.paintFigure(model, ATLAS.folk[name] ?? { top: [], bottom: [] });
   }
   const texture = slipTexture(painter);
-  const roads = new Map<number, Object3D>();
-
+  const owned: Object3D[] = [];
   return {
-    root,
+    painter,
     cast: { models, clips: clips.animations },
-    piece: (name): Object3D => pieceOf(painter, pieces, name),
-    slip: slipMaker(painter, texture),
-    sourceRoad: (slot): Object3D => {
-      const known = roads.get(slot) ?? roadOf(painter, sourceRoadLine(slot));
-      roads.set(slot, known);
-      return known;
+    piece: (name, roof = null): Object3D => {
+      const source = pieces.get(name);
+      const made = source === undefined ? new Group() : source.clone();
+      painter.paint(made, ATLAS.set, roof);
+      return made;
     },
-    bell,
+    slip: slipMaker(painter, texture),
+    road: (line): Object3D => {
+      const made = roadOf(painter, line);
+      owned.push(made);
+      return made;
+    },
     dispose: (): void => {
-      for (const object of [root, ...roads.values()]) {
+      for (const object of owned) {
         object.traverse((child) => {
           if (child instanceof Mesh) {
             child.geometry.dispose();

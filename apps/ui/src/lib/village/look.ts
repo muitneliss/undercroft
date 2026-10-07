@@ -20,6 +20,7 @@
  */
 
 import {
+  type Box3,
   type Camera,
   Color,
   DirectionalLight,
@@ -33,6 +34,7 @@ import {
   type Scene,
   ShadowMaterial,
   Vector2,
+  Vector3,
   type WebGLRenderer,
   WebGLRenderTarget,
 } from "three";
@@ -53,7 +55,9 @@ const KEY_AT = { x: -11, y: 19, z: 7 } as const;
 const KEY_STRENGTH = 2.4;
 const FILL_STRENGTH = 1.15;
 const ROOM_STRENGTH = 0.32;
-const SHADOW_MAP = 4096;
+const SHADOW_MAP = 2048;
+/** Samples per pixel of ambient occlusion: past eight the creases look no different. */
+const OCCLUSION_SAMPLES = 8;
 /** How soft a shadow's edge is, in shadow-map texels. */
 const SHADOW_SOFTNESS = 3;
 /** Half the width of the square the key light's shadows are drawn over: the whole board. */
@@ -146,6 +150,7 @@ export class Look {
   private readonly print: ShaderPass;
   private readonly room: WebGLRenderTarget;
   private readonly desk: Mesh;
+  private readonly key: DirectionalLight;
   private readonly deskShadow: ShadowMaterial;
 
   constructor(renderer: WebGLRenderer, scene: Scene, camera: Camera, tokens: Tokens) {
@@ -159,6 +164,7 @@ export class Look {
     this.deskShadow = new ShadowMaterial({ color: new Color(tokens.ink), opacity: DESK_SHADOW });
     this.desk = deskUnder(this.deskShadow);
     const key = keyLight();
+    this.key = key;
     const fill = new HemisphereLight(
       new Color(tokens.leaf),
       new Color(RAMPS.grass[5] ?? tokens.bone),
@@ -177,6 +183,7 @@ export class Look {
       distanceFallOff: 1,
       thickness: 1,
       scale: 1.2,
+      samples: OCCLUSION_SAMPLES,
     });
     this.occlusion.blendIntensity = 0.85;
     this.tiltAcross = new ShaderPass(HorizontalTiltShiftShader);
@@ -217,6 +224,27 @@ export class Look {
       downFocus.value = TILT_FOCUS;
     }
     this.print.uniforms.size?.value.set(width * ratio, height * ratio);
+  }
+
+  /**
+   * Fits the light to the world in view: the key stands off the world's middle at its bearing,
+   * and its shadows are drawn over the whole of it, whether a run's short street or a lineage of
+   * hundreds of buildings.
+   */
+  frame(box: Box3): void {
+    const middle = box.getCenter(new Vector3());
+    const reach = Math.max(SHADOW_REACH, box.getSize(new Vector3()).length() / 2 + 2);
+    this.key.position.set(middle.x + KEY_AT.x, KEY_AT.y, middle.z + KEY_AT.z);
+    this.key.target.position.set(middle.x, 0, middle.z);
+    this.key.target.updateMatrixWorld();
+    const shadow = this.key.shadow.camera;
+    shadow.left = -reach;
+    shadow.right = reach;
+    shadow.top = reach;
+    shadow.bottom = -reach;
+    shadow.far = reach * 4;
+    shadow.updateProjectionMatrix();
+    this.desk.position.set(middle.x, DESK_LEVEL, middle.z);
   }
 
   render(): void {

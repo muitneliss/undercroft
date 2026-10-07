@@ -89,6 +89,8 @@ export const vi = {
   },
 
   common: {
+    drawingFailed:
+      "Không vẽ được hình này trên trình duyệt này. Những chữ bên cạnh vẫn nói đủ mọi điều nó vẽ.",
     loading: "Đang tải",
     notLoaded: "Không tải được",
     nothingToShow: "Không có gì để hiển thị.",
@@ -1745,7 +1747,7 @@ export const vi = {
     notLoaded: "Không tải được dòng dữ liệu của {{tenantId}}.",
     empty:
       "Dòng dữ liệu được vẽ từ các mô hình. Khi đã có mô hình, mỗi quan hệ nó khai báo sẽ hiện ở đây.",
-    lead: "Chỉ vẽ quan hệ đọc từ khai báo của chính các mô hình: ref() giữa hai mô hình, và bảng hồ thô được khai báo làm nguồn dbt bằng source(), kể cả qua macro, nên tài khoản nguồn và báo cáo không có ở đây. Chọn một nút để tô chuỗi thượng nguồn và hạ nguồn của nó và xem chi tiết; kéo thẻ để sắp lại, cuộn để phóng to.",
+    lead: "Chỉ vẽ quan hệ đọc từ khai báo của chính các mô hình: ref() giữa hai mô hình, và bảng hồ thô được khai báo làm nguồn dbt bằng source(), kể cả qua macro, nên tài khoản nguồn và báo cáo không có ở đây. Mỗi mô hình là một ngôi nhà và mỗi quan hệ là một con đường. Chọn một ngôi nhà để tô chuỗi thượng nguồn và hạ nguồn của nó, có xe chở hàng chạy trên đó, và xem chi tiết; bấm vào bãi trống để bỏ chọn.",
     pickLabel: "Tìm mô hình hoặc bảng hồ thô",
     pickNone: "Không chọn",
     pick: "Xem dòng dữ liệu",
@@ -1770,16 +1772,10 @@ export const vi = {
     levelsHead: "Mọi nút theo tầng",
     declaredSource: "▭ Nguồn dbt đã khai báo",
     undeclaredMark: "? Thượng nguồn chưa khai báo",
-    resetLayout: "Sắp lại như ban đầu",
     /** When the layout engine could not place the board; the text beneath still holds. */
     notArranged: "Không sắp được sơ đồ. Tên và đường dẫn bên dưới vẫn cho biết mỗi mô hình đọc gì.",
     fullscreen: "Toàn màn hình",
     exitFullscreen: "Thoát toàn màn hình",
-    controls: "Điều khiển sơ đồ",
-    zoomIn: "Phóng to",
-    zoomOut: "Thu nhỏ",
-    fitView: "Vừa khung",
-    minimap: "Bản đồ thu nhỏ",
     model: "Mô hình",
     rawTable: "Bảng hồ thô",
     missing: "Phụ thuộc bị thiếu",

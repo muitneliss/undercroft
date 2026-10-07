@@ -451,6 +451,9 @@ division, and the ledger stays the default.
   the errata slip's, here too: a failed run, a refused record set aside, a lapsed road.
 - **Stop-motion.** The world moves ten frames a second and holds between them: ADR 0014's
   stepped motion in three dimensions. Under reduced motion each poll paints one settled frame.
+- **Every graph is a village.** A run's map and the models' lineage are drawn the same way: a
+  building per node, a road per edge, traffic on the roads that flow (ADR 0115). There is no
+  node-and-edge drawing in the interface that is not one.
 - **Words beside the picture.** The canvas is `aria-hidden` and draws no letter. The work list
   and the buildings list beneath it are the content; pointing at a figure or a building lights its
   row with the hovered row's wash.
