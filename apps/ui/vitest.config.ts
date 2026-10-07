@@ -52,6 +52,11 @@ export default mergeConfig(
     },
     test: {
       include: ["src/**/*.vrt.test.tsx"],
+      // One file at a time. A screen with a village draws WebGL in software (ADR 0116), and
+      // three such screens at once starved every other file on a shared CI runner: pages with
+      // no village timed out, and a chart was captured before it had laid itself out. Run alone,
+      // each screen gets the whole machine, and a picture is of the page and not of the load.
+      fileParallelism: false,
       setupFiles: ["src/test/visual.setup.ts"],
       // Diffs and the actual capture of a failed or missing baseline land here; CI uploads it.
       attachmentsDir: ".vitest-attachments",
