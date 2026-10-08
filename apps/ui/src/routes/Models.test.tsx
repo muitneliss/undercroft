@@ -236,6 +236,18 @@ describe("a row's last build", () => {
   });
 });
 
+/**
+ * The name of every card on the board, as the board states it to a screen reader. A card is
+ * the board's one pressable button -- the zoom plates and "reset layout" are plain ones.
+ */
+function cards(): string[] {
+  const board = within(screen.getByRole("figure"));
+  return [
+    ...board.queryAllByRole("button", { pressed: false }),
+    ...board.queryAllByRole("button", { pressed: true }),
+  ].map((card) => card.getAttribute("aria-label") ?? "");
+}
+
 describe("the lineage view", () => {
   it("traces the selected model's whole upstream chain and every path to it, and not the rest", async () => {
     mount(`/tenants/${TENANT}/models?view=lineage&model=mart_pipeline`);
@@ -258,6 +270,11 @@ describe("the lineage view", () => {
       "raw.documentsstg_filesmart_pipeline",
       "raw.records(qua macro gmail_letters)stg_dealsmart_pipeline",
     ]);
+    // The board says it in words too: a card on the chain, and one off it.
+    await waitFor(() => {
+      expect(cards()).toContain("stg_deals · Thượng nguồn · Dựng thành công");
+    });
+    expect(cards()).toContain("stg_notes · Chưa dựng");
   });
 
   it("marks an undeclared upstream and a deleted ref in words, with every model listed", async () => {
@@ -265,15 +282,18 @@ describe("the lineage view", () => {
     const all = await screen.findByRole("region", { name: "Mỗi mô hình và những gì nó đọc" });
     expect(within(all).getByText(/không phải chuỗi cố định/u)).toBeDefined();
     expect(within(all).getByText(/Đọc: raw\.records, stg_gone/u)).toBeDefined();
+    await waitFor(() => {
+      expect(cards()).toContain("stg_gone · Phụ thuộc bị thiếu");
+    });
+    expect(cards().some((card) => card.startsWith("stg_legacy · Thượng nguồn chưa khai báo"))).toBe(
+      true,
+    );
   });
 
-  it("selects a raw lake table through the picker, and names everything downstream of it", async () => {
+  it("selects a raw lake table by its card, and names everything downstream of it", async () => {
     const router = mount(`/tenants/${TENANT}/models?view=lineage`);
     await screen.findByRole("region", { name: "Mỗi mô hình và những gì nó đọc" });
-    fireEvent.change(screen.getByRole("combobox", { name: "Tìm mô hình hoặc bảng hồ thô" }), {
-      target: { value: "raw.records" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Xem dòng dữ liệu" }));
+    fireEvent.click(await within(screen.getByRole("figure")).findByTitle("raw.records"));
     expect(router.state.location.search).toBe("?view=lineage&model=raw.records");
 
     const trace = await screen.findByRole("region", { name: /Thượng nguồn của raw\.records/u });
@@ -310,14 +330,20 @@ describe("the lineage view", () => {
     expect(raw?.textContent).not.toContain("Ref tới mô hình không còn");
   });
 
-  it("narrows to what is related to the selection, and offers every node back", async () => {
-    const router = mount(`/tenants/${TENANT}/models?view=lineage&model=stg_files&scope=related`);
+  it("narrows the board to what is related to the selection, and back", async () => {
+    mount(`/tenants/${TENANT}/models?view=lineage&model=stg_files&scope=related`);
     await screen.findByRole("region", { name: /Thượng nguồn của stg_files/u });
+    await waitFor(() => {
+      expect(
+        cards()
+          .map((card) => card.split(" · ")[0] ?? "")
+          .sort((a, b) => a.localeCompare(b)),
+      ).toEqual(["mart_pipeline", "raw.documents", "stg_files"]);
+    });
 
     fireEvent.click(screen.getByRole("link", { name: "Hiện mọi nút" }));
-
     await waitFor(() => {
-      expect(router.state.location.search).toBe("?view=lineage&model=stg_files");
+      expect(cards()).toHaveLength(LINEAGE.nodes.length);
     });
   });
 });

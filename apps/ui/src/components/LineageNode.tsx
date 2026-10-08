@@ -11,9 +11,8 @@ import { lineagePath } from "@/lib/lineage.ts";
 
 /**
  * A node as a door to itself: every node -- a model, a raw lake table, a missing dependency --
- * selects itself, as its building in the village does, and the details beside the village say
- * where else it leads (ADR 0097). Marked with the node's id, so pointing at its building lights
- * every place the words name it (ADR 0116).
+ * selects itself, as its card on the board does, and the details beside the board say where
+ * else it leads (ADR 0097).
  */
 export function NodeLink({
   node,
@@ -31,7 +30,6 @@ export function NodeLink({
   return (
     <Link
       className={className}
-      data-node={node.id}
       to={lineagePath(tenantId, node.name)}
       {...(current ? { "aria-current": "true" as const } : {})}
     >

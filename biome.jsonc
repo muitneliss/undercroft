@@ -548,10 +548,6 @@
         "apps/ui/src/components/ResultReading.tsx",
         "apps/ui/src/components/QuestionCard.tsx",
         "apps/ui/src/components/charts/ChartFrame.tsx",
-        // The two node-and-edge drawings load the village (`three` and its models) only when a
-        // reader opens one (ADR 0116).
-        "apps/ui/src/components/RunFlow.tsx",
-        "apps/ui/src/components/LineageCanvas.tsx",
         "apps/ui/src/routes/Journal.tsx",
         "apps/ui/src/routes/Lake.tsx",
         "apps/ui/src/routes/ModelEditor.tsx",

@@ -2,13 +2,12 @@
  * What the pointer is over in a village, and what the page says about it.
  *
  * The canvas draws no word, so pointing at something in the picture answers in the words beside
- * it: the element marked for it -- `data-actor` for a figure, `data-place` for a building of the
- * town, `data-node` for a building of a graph -- takes `data-lit`, the same wash a hovered row
- * takes. Pressing goes where that element goes, through the film's hook.
+ * it: the element marked for it -- `data-actor` for a figure, `data-place` for a building --
+ * takes `data-lit`, the same wash a hovered row takes. Pressing goes where that element goes,
+ * through the film's hook.
  *
- * A target is `kind|id`: `actor|courier:hubspot`, `place|vault`, `node|model:orders`. The world
- * says what is under a ray (`World.under`); this only turns events into rays and targets into
- * lit words.
+ * A target is `kind|id`: `actor|courier:hubspot`, `place|vault`. The world says what is under a
+ * ray (`World.under`); this only turns events into rays and targets into lit words.
  */
 
 import { type Camera, Raycaster, Vector2 } from "three";

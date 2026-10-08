@@ -2,9 +2,8 @@
  * Runs a village: one renderer, one fixed camera that fits the whole world in the frame, the
  * look it is photographed with, and a clock that moves the world ten frames a second (ADR 0116).
  *
- * Every village is one of these: the Journal's town (`town.ts`), and every node-and-edge drawing,
- * a run's map and the models' lineage (`graphWorld.ts`). The film owns what they share; a
- * `World` owns what it shows, what one frame moves, and what lies under the pointer.
+ * The film is the camera, the light and the clock; a `World` -- the Journal's town (`town.ts`) --
+ * owns what it shows, what one frame moves, and what lies under the pointer.
  *
  * NOTHING HERE IS REACT STATE (`.claude/rules/state.md`), for the vault's reason
  * (`lib/vault/runtime.ts`): a frame loop that rendered through React would re-render the page

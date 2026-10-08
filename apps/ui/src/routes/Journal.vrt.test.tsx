@@ -27,11 +27,11 @@ const ANSWERS: Answers = {
 };
 
 describe("the journal with a run open", () => {
-  it("at 1440 px", { timeout: WEBGL_TIMEOUT }, async () => {
+  it("at 1440 px", async () => {
     await open(ADDRESS, "en", ANSWERS).matches("journal-run-en-1440", 1440);
   });
 
-  it("at 390 px", { timeout: WEBGL_TIMEOUT }, async () => {
+  it("at 390 px", async () => {
     await open(ADDRESS, "en", ANSWERS).matches("journal-run-en-390", 390);
   });
 });

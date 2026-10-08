@@ -7,7 +7,7 @@
 import { describe, expect, test as it } from "bun:test";
 
 import type { ModelLineage } from "@/api/types.ts";
-import { drawnGraph, focusOn, upstreamOf, upstreamPaths } from "./lineage.ts";
+import { upstreamOf, upstreamPaths } from "./lineage.ts";
 import { arrange, CARD_H, CARD_W, type Point, type Route } from "./lineageArrange.ts";
 import { layout } from "./lineageLayout.ts";
 
@@ -150,34 +150,5 @@ describe("arrange", () => {
     const arranged = await arrange(cyclic, cyclic);
     expect([...(arranged?.cards.keys() ?? [])].sort()).toEqual(["model:x", "model:y"]);
     expect(arranged?.routes.size).toBe(2);
-  });
-});
-
-describe("drawnGraph", () => {
-  it("narrowed, keeps only the selection's two chains and the edges between them", () => {
-    const selected = GRAPH.nodes.find((node) => node.id === "model:b") ?? null;
-    const drawn = drawnGraph(GRAPH, focusOn(GRAPH, selected), true);
-
-    expect(drawn.nodes.map((node) => node.id)).toEqual([
-      "raw:raw.records",
-      "model:a",
-      "model:b",
-      "model:c",
-      "model:downstream",
-    ]);
-    expect(drawn.edges).toEqual(GRAPH.edges);
-  });
-
-  it("narrowed around a node off a branch, drops the branch", () => {
-    const branched: ModelLineage = {
-      nodes: [...GRAPH.nodes, model("side")],
-      edges: [...GRAPH.edges, edge("raw:raw.records", "model:side")],
-    };
-    const selected = branched.nodes.find((node) => node.id === "model:c") ?? null;
-
-    const drawn = drawnGraph(branched, focusOn(branched, selected), true);
-
-    expect(drawn.nodes.map((node) => node.id)).not.toContain("model:side");
-    expect(drawn.edges.map((e) => e.to)).not.toContain("model:side");
   });
 });

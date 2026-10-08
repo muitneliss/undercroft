@@ -1,17 +1,12 @@
 /**
  * A road's surface: one flat strip of triangles along a line, mitred at every corner, so a road
- * of any length is one mesh. A lineage of a few hundred routed edges, each sampled into dozens of
- * points, would otherwise be tens of thousands of boxes.
- *
- * `dashes` cuts a line into the pieces a dotted road is drawn along.
+ * of any length is one mesh rather than a box per stretch of it.
  */
 
 import { BufferAttribute, BufferGeometry } from "three";
 
 import type { Point } from "@/lib/village/layout.ts";
 
-const DASH = 0.42;
-const GAP = 0.28;
 /** How far a corner's mitre may reach before it is cut back, as a multiple of the half-width. */
 const MITRE_LIMIT = 2.5;
 
@@ -61,44 +56,4 @@ export function ribbon(line: readonly Point[], width: number, y: number): Buffer
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
-}
-
-/** How far along a line each of its points stands. */
-function distances(line: readonly Point[]): number[] {
-  const along = [0];
-  for (let at = 1; at < line.length; at += 1) {
-    const a = line[at - 1];
-    const b = line[at];
-    const before = along[at - 1] ?? 0;
-    along.push(
-      before + (a === undefined || b === undefined ? 0 : Math.hypot(b.x - a.x, b.z - a.z)),
-    );
-  }
-  return along;
-}
-
-/** The point a given distance along a line. */
-function pointAlong(line: readonly Point[], along: readonly number[], distance: number): Point {
-  const at = Math.max(
-    1,
-    along.findIndex((reached) => reached >= distance),
-  );
-  const a = line[at - 1] ?? { x: 0, z: 0 };
-  const b = line[at] ?? a;
-  const start = along[at - 1] ?? 0;
-  const share = (distance - start) / ((along[at] ?? start) - start || 1) || 0;
-  return { x: a.x + (b.x - a.x) * share, z: a.z + (b.z - a.z) * share };
-}
-
-/** A line cut into dashes: each dash its start, the line's own corners within it, and its end. */
-export function dashes(line: readonly Point[]): Point[][] {
-  const along = distances(line);
-  const total = along.at(-1) ?? 0;
-  const pieces: Point[][] = [];
-  for (let start = 0; start < total; start += DASH + GAP) {
-    const end = Math.min(total, start + DASH);
-    const corners = line.filter((_, at) => (along[at] ?? 0) > start && (along[at] ?? 0) < end);
-    pieces.push([pointAlong(line, along, start), ...corners, pointAlong(line, along, end)]);
-  }
-  return pieces;
 }

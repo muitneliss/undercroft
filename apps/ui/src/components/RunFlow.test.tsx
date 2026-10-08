@@ -7,7 +7,7 @@
  */
 
 import { afterEach, describe, expect, test as it } from "bun:test";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { DEFAULT_LOCALE } from "@undercroft/core/locale";
 import { MemoryRouter } from "react-router-dom";
 
@@ -91,7 +91,7 @@ describe("a run chained on both sides", () => {
 });
 
 describe("the drawn canvas", () => {
-  it("is hidden from assistive tech: the chain links above carry the same facts in words", async () => {
+  it("is hidden from assistive tech: the chain links above carry the same facts in words", () => {
     const { container } = render(
       <MemoryRouter>
         <RunFlow
@@ -103,14 +103,7 @@ describe("the drawn canvas", () => {
       </MemoryRouter>,
     );
 
-    // The village loads on its own (`React.lazy`); the picture is there once it has.
-    const picture = await waitFor(() => {
-      const found = container.querySelector(".village__picture");
-      if (found === null) {
-        throw new Error("the village has not loaded");
-      }
-      return found;
-    });
-    expect(picture.getAttribute("aria-hidden")).toBe("true");
+    const canvas = container.querySelector(".run-map__canvas");
+    expect(canvas?.getAttribute("aria-hidden")).toBe("true");
   });
 });

@@ -5,8 +5,10 @@ The village is a second way of reading one customer's Journal, opened at
 as a character doing a job in a small village, and each building in it stands for a division of
 the book. The ledger stays the Journal's content and its default view; the village is the
 ledger's picture. The decision and its boundary are in
-[ADR 0116](../adr/0116-the-journal-can-be-read-as-a-village.md). This document owns the cast,
-the layout, the visual language, and what each run makes a character do.
+[ADR 0116](../adr/0116-the-journal-can-be-read-as-a-village.md), and
+[ADR 0117](../adr/0117-the-village-is-an-overview-and-replaces-no-drawing.md) keeps it to that:
+an overview of the Journal, never a replacement for another drawing. This document owns the
+cast, the layout, the visual language, and what each run makes a character do.
 
 ## Direction contract
 
@@ -158,20 +160,13 @@ dbt reports its steps when it finishes, not as it goes, so a running build shows
 work and its pieces and its inspection appear together when it closes. Runs that closed before
 the village opened are not replayed; only their traces stand.
 
-## Node-and-edge drawings
+## What the village does not draw
 
-The same village draws the interface's two graphs (ADR 0116): a run's stages, in the run's own
-leaf in the Journal, and the models' lineage, in Models → Lineage. `lib/village/graph.ts` turns
-either into buildings, roads and traffic, `graphWorld.ts` builds it, and the film is the town's.
-
-| Graph   | A node is                                                                                              | An edge is                                                                      | Traffic                                                |
-| ------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Run map | A market stall of Sources per entity read, the town hall for the verdict, the workshop, the vault      | A road from each stage to the next                                              | A courier with a crate, out of a stage still working   |
-| Lineage | A house of Models per model, a storehouse of the Raw lake per raw table, a ruin per missing dependency | A road along ELK's route; inked upstream, dashed downstream, faint where dimmed | A handcart on every road of the selected node's chains |
-
-A stage that stopped, or a model whose last build failed, stands under an errata slip. A building
-the selection does not reach is faded. The camera is fixed and fits the whole graph. Pressing a
-building selects its node; pressing the bare ground clears the selection.
+The village is a glanceable overview of one customer's Journal, and nothing else (ADR 0117). A
+run's stage map, in the run's own leaf, and the models' lineage, in Models → Lineage, are
+node-and-edge drawings a reader works with: they pan, zoom, drag, keep a minimap and are read
+precisely. They stay on React Flow (ADR 0097, ADR 0100), and no village replaces them or any
+other view.
 
 ## Words, focus and access
 

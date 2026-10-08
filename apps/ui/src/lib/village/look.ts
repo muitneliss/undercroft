@@ -228,8 +228,7 @@ export class Look {
 
   /**
    * Fits the light to the world in view: the key stands off the world's middle at its bearing,
-   * and its shadows are drawn over the whole of it, whether a run's short street or a lineage of
-   * hundreds of buildings.
+   * and its shadows are drawn over the whole of it, however far the town spreads.
    */
   frame(box: Box3): void {
     const middle = box.getCenter(new Vector3());

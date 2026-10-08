@@ -2,10 +2,10 @@
  * Everything a village is built from, loaded and painted once (ADR 0116): the set's pieces, the
  * cast and its clips, the errata slip, and roads drawn along any line.
  *
- * A kit belongs to one film: the Journal's town, a run's map or the lineage each load their own,
- * and dispose of it with themselves. The models are fetched once by the browser and cached; what
- * a kit owns is the painted copies and the materials, which are cheap to make and must not be
- * shared between films that are disposed at different times.
+ * A kit belongs to one film, which loads its own and disposes of it with itself. The models are
+ * fetched once by the browser and cached; what a kit owns is the painted copies and the
+ * materials, which are cheap to make and must not be shared between films that are disposed at
+ * different times.
  */
 
 import { type AnimationClip, Group, Mesh, type Object3D } from "three";
