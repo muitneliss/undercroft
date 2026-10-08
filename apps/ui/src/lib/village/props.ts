@@ -1,7 +1,7 @@
 /**
  * The village's made things, the ones KayKit has no model for: the roads, the errata slip, the
- * bell, and the props a run leaves behind (the vault's pile, the crates set aside, the finished
- * pieces, a lapsed road's barrier).
+ * bell, the copyist's lectern, and the props a run leaves behind (the vault's pile, the crates
+ * set aside, the finished pieces, a lapsed road's barrier).
  *
  * The slip is the page's own errata slip in miniature: Slip ground, Vermilion rules top and
  * bottom, and lines standing for the sentence it would carry. No word: the canvas draws none.
@@ -141,6 +141,49 @@ export function makeBell(painter: Painter): Object3D {
   frame.add(beam, swing);
   frame.position.set(BELL.x, 0, BELL.z);
   return frame;
+}
+
+/** The lectern's post, to the foot of its board: a figure stands about 0.9 tall. */
+const LECTERN_HEIGHT = 0.52;
+/** How far the board leans back, its low edge toward the reader. */
+const LECTERN_LEAN = 0.5;
+/** One page of the open book: across, thick, and up the board. */
+const PAGE: readonly [number, number, number] = [0.17, 0.012, 0.22];
+/** How far a page stands proud of the board, and the leaf proud of its page, so neither flickers. */
+const PAGE_LIFT = 0.006;
+
+/**
+ * A lectern with an open book on its slanted board, where the copyist copies the text out of a
+ * document. The board faces local +Z, its reader's side. The book is two pages of Page either side
+ * of the spine; the right one is a leaf hinged at the spine, a group named `leaf` that turns about
+ * the spine (its Z axis) so `works.ts` can turn it over. The timber is the bell's.
+ */
+export function makeLectern(painter: Painter): Object3D {
+  const { tokens } = painter;
+  const wood = painter.flat(tokens.ink2);
+  const paper = painter.flat(tokens.page);
+  const [across, thick, up] = PAGE;
+  const foot = new Mesh(new BoxGeometry(0.3, 0.04, 0.24), wood);
+  foot.position.y = 0.02;
+  const post = new Mesh(new BoxGeometry(0.06, LECTERN_HEIGHT, 0.06), wood);
+  post.position.y = LECTERN_HEIGHT / 2;
+  const board = new Mesh(new BoxGeometry(across * 2 + 0.06, 0.03, up + 0.06), wood);
+  const pageGeometry = new BoxGeometry(across, thick, up);
+  const page = new Mesh(pageGeometry, paper);
+  page.position.set(-across / 2, 0.015 + PAGE_LIFT + thick / 2, 0);
+  const sheet = new Mesh(pageGeometry, paper);
+  sheet.position.x = across / 2;
+  const leaf = new Group();
+  leaf.name = "leaf";
+  leaf.position.y = 0.015 + PAGE_LIFT * 2 + thick * 1.5;
+  leaf.add(sheet);
+  const top = new Group();
+  top.position.y = LECTERN_HEIGHT;
+  top.rotation.x = LECTERN_LEAN;
+  top.add(board, page, leaf);
+  const lectern = new Group();
+  lectern.add(foot, post, top);
+  return lectern;
 }
 
 export interface PropMakers {

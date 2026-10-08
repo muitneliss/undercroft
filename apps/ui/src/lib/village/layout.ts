@@ -94,15 +94,15 @@ const DRESSING: readonly Placement[] = [
   // The vault and the reading room, on the shore.
   { piece: "stone", x: -1.6, z: -2.9, turn: 0, scale: PROP_SCALE, division: null },
   { piece: "bucket", x: 1, z: -1.8, turn: 0, scale: PROP_SCALE, division: null },
-  { piece: "crate_long", x: 4.8, z: -1.5, turn: 1, scale: PROP_SCALE, division: null },
+  { piece: "crate_long", x: 5.7, z: -1.75, turn: 1, scale: PROP_SCALE, division: null },
   // The archive, across the road.
   { piece: "barrel", x: 0.7, z: 3.2, turn: 0, scale: PROP_SCALE, division: null },
   { piece: "crate", x: 3, z: 3.3, turn: 0, scale: PROP_SCALE, division: null },
-  // The workshop's timber, stone and ladder.
-  { piece: "lumber", x: 9.1, z: -2.8, turn: 1, scale: PROP_SCALE, division: null },
-  { piece: "stone", x: 9.3, z: -1.7, turn: 0, scale: PROP_SCALE, division: null },
+  // The workshop's ladder, and the timber waiting behind its lumbermill.
   { piece: "ladder", x: 8.8, z: -3.4, turn: 0, scale: PROP_SCALE, division: null },
-  // The press's yard.
+  { piece: "lumber", x: 9.5, z: -3.95, turn: 0, scale: PROP_SCALE, division: null },
+  // The press's yard, and the stone the lumbermill moved off the workshop's.
+  { piece: "stone", x: 12.1, z: 0.8, turn: 0, scale: PROP_SCALE, division: null },
   { piece: "crate_big", x: 11.7, z: 3.2, turn: 0, scale: PROP_SCALE, division: null },
   { piece: "handcart", x: 9.1, z: 3.4, turn: 3, scale: PROP_SCALE, division: null },
   // The houses: a windmill, a fence, a tent at the edge of the fields.
@@ -145,6 +145,10 @@ export const PLACEMENTS: readonly Placement[] = [
   { piece: "reading_room", x: 3.6, z: -2.1, turn: 0, scale: BUILDING_SCALE, division: "lake" },
   { piece: "archive", x: 1.8, z: 2.5, turn: 2, scale: BUILDING_SCALE, division: "lake" },
   { piece: "workshop", x: 7.8, z: -2.2, turn: 0, scale: BUILDING_SCALE, division: "models" },
+  // The workshop's lumbermill, whose saw turns while a build runs (`works.ts`). An eighth of a
+  // turn, because the saw sits under an eave: square to the board, the eave hides it from the
+  // camera.
+  { piece: "lumbermill", x: 10.2, z: -2.4, turn: 0.5, scale: 1.4, division: "models" },
   { piece: "press", x: 10.4, z: 2.3, turn: 2, scale: BUILDING_SCALE, division: "reports" },
   { piece: "house", x: 9, z: -5.4, turn: 0, scale: BUILDING_SCALE, division: "people" },
   { piece: "house", x: 11.4, z: -3.8, turn: 3, scale: BUILDING_SCALE, division: "people" },
@@ -174,7 +178,8 @@ export const PLACES: readonly Place[] = [
   { id: "vault", division: "lake", x: 0, z: -2.2, reach: 1.6 },
   { id: "archive", division: "lake", x: 1.8, z: 2.5, reach: 1.2 },
   { id: "reading", division: "lake", x: 3.6, z: -2.1, reach: 1.2 },
-  { id: "workshop", division: "models", x: 7.8, z: -2.2, reach: 1.6 },
+  // Between the workshop and its lumbermill, so a press on either opens the models.
+  { id: "workshop", division: "models", x: 9, z: -2.25, reach: 2.1 },
   { id: "press", division: "reports", x: 10.4, z: 2.3, reach: 1.6 },
   { id: "houses", division: "people", x: 10, z: -4.6, reach: 2.4 },
 ];
@@ -184,3 +189,5 @@ export const VAULT_STACK: Point = { x: 1.1, z: -1 };
 export const SET_ASIDE: Point = { x: -1.4, z: -1.6 };
 export const WORKSHOP_PIECES: Point = { x: 7.4, z: 1.2 };
 export const BELL: Point = { x: -2.5, z: -4.4 };
+/** The copyist's lectern, beside the reading room; it faces the `lectern` spot its reader stands at. */
+export const LECTERN: Point = { x: 4.95, z: -1.05 };

@@ -53,6 +53,13 @@ across the board, two small clouds at the back, the windmill's sails, the waterm
 the lake's east shore, and a flag in each division's hue beside its building. None of it is a
 character, and none of it claims anything about a run. Under reduced motion it holds still.
 
+Other machinery moves only with a run behind it, and is kept apart from the weather for that
+reason (`lib/village/works.ts`): the gatehouse's doors, the bell by the town hall, the copyist's
+lectern and the lumbermill's saw. A saw turning with nothing building would claim a build that is
+not happening, so these move only while the scene's characters are doing the work that drives
+them, and are read from the characters alone. Under reduced motion the doors are put straight
+where they end up and the rest holds still.
+
 How the repaint works: the asset script replaces each vertex's UV with the atlas cell KayKit
 painted it from (`_CELL`) and how far down that cell's gradient (`_SHADE`), and records the
 colours at each cell's two ends (`atlas.json`). The browser reads each vertex's source colour off
@@ -82,7 +89,7 @@ flowchart LR
   vault["Stone vault, the lake behind it · Raw lake · teal"]
   reading["Reading room · Raw lake · teal"]
   archive["Archive, across the road · Raw lake · teal"]
-  workshop["Workshop · Models · violet"]
+  workshop["Workshop and its lumbermill · Models · violet"]
   press["Printing house · Reports · sienna"]
   houses["Houses · People · ultramarine"]
   sign["Village sign · Customers · oxide"]
@@ -107,7 +114,7 @@ flowchart LR
 | Stone vault             | Raw lake (teal)      | `/lake`              |
 | Reading room            | Raw lake (teal)      | `/lake`              |
 | Archive                 | Raw lake (teal)      | `/lake`              |
-| Workshop                | Models (violet)      | `/models`            |
+| Workshop and lumbermill | Models (violet)      | `/models`            |
 | Printing house          | Reports (sienna)     | `/reports`           |
 | Houses                  | People (ultramarine) | `/people`            |
 
@@ -117,21 +124,21 @@ for the copies (`raw.records`), as the cover's film already draws the split (ADR
 
 ## The cast
 
-Every character is one of the five free KayKit Adventurers, printed in the ramps like
-everything else: the ranger's cloak in Grass, the mage's robe in Violet, the knight's plate in
-Bone and Ink. Several runs at once
-means several figures. The platform allows one running run per source and verb, so two couriers
-can be on two roads at once, but never two on one road.
+Every character is one of the free KayKit Adventurers, printed in the ramps like everything
+else: the ranger's cloak in Grass, the mage's robe in Violet, the knight's plate in Bone and Ink.
+Several runs at once means several figures. The platform allows one running run per source and
+verb, so two couriers can be on two roads at once, but never two on one road.
 
-| Character    | Model     | At home                    | Works for                                      |
-| ------------ | --------- | -------------------------- | ---------------------------------------------- |
-| Courier      | Ranger    | By the gate, one per road  | `ingest` runs of its road's source             |
-| Vault keeper | Rogue     | Beside the vault door      | Whatever a courier or a carter is bringing     |
-| Scribe       | Mage      | By the archive             | `extract`, `semantic` and `semantic-init` runs |
-| Artisan      | Barbarian | By the workshop            | `transform` and `build` runs                   |
-| Inspector    | Knight    | By the workshop            | The newest closed build's tests                |
-| Carter       | Ranger    | Comes up the lake-API road | `lake-api` runs, at most two at once           |
-| (the bell)   | made      | Beside the town hall       | Runs with `trigger = schedule`                 |
+| Character    | Model        | At home                                | Works for                                  |
+| ------------ | ------------ | -------------------------------------- | ------------------------------------------ |
+| Courier      | Ranger       | By the gate, one per road              | `ingest` runs of its road's source         |
+| Vault keeper | Rogue        | Beside the vault door                  | Whatever a courier or a carter is bringing |
+| Copyist      | Rogue_Hooded | Between the vault and the reading room | `extract` runs                             |
+| Scribe       | Mage         | By the archive                         | `semantic` and `semantic-init` runs        |
+| Artisan      | Barbarian    | By the workshop                        | `transform` and `build` runs               |
+| Inspector    | Knight       | Across the road from the workshop      | The newest closed build's tests            |
+| Carter       | Ranger       | Comes up the lake-API road             | `lake-api` runs, at most two at once       |
+| (the bell)   | made         | Beside the town hall                   | Runs with `trigger = schedule`             |
 
 ### What each run makes them do
 
@@ -144,10 +151,16 @@ can be on two roads at once, but never two on one road.
 | …and the last thing it said is `run_waiting`, `whole_read_waiting` or `whole_read_paused` | The courier sits by the gate                                                                    |
 | …and the last thing it said is `entity_not_granted`                                       | The courier walks to the road's barrier and back, again. No slip: nothing was refused           |
 | A courier is fetching or a carter is delivering                                           | The keeper lays what arrives, at the vault door                                                 |
+| A courier is fetching                                                                     | The gatehouse's doors swing open over three frames, and close over three once none is           |
 | The source's newest ingest failed                                                         | The courier stands at home under a slip, until a newer run of that source                       |
 | The source's newest ingest closed ok, and a running run names it as its parent            | The courier waves at the reading room: the hand-off to the build                                |
-| The newest extract or semantic run is running, or failed                                  | The scribe reads at the archive desk, or stands under a slip                                    |
-| The newest transform or build is running, or failed                                       | The artisan hammers at the workshop, or stands under a slip                                     |
+| The newest extract is running                                                             | The copyist fetches a document from the archive and copies it out at the lectern, again         |
+| …meanwhile                                                                                | The lectern's page turns over, then lies while the next is read                                 |
+| The newest semantic or semantic-init run is running                                       | The scribe casts over the archive's documents beside its tower, sorting them by kind            |
+| The newest transform or build is running                                                  | The artisan hammers at the workshop, then saws at the lumbermill, again                         |
+| …meanwhile                                                                                | The lumbermill's saw turns                                                                      |
+| The copyist's, scribe's or artisan's running run last said `run_waiting`                  | That worker sits at home, and its lectern or saw holds still: queued work has not begun         |
+| The newest extract, classification or build failed                                        | Its worker stands at home under a slip, until a newer run of that kind                          |
 | No build is running and the newest closed build had tests                                 | The inspector checks the bench, under a slip if a test failed                                   |
 | A lake-API run is running, or the newest one failed                                       | A carter carries crates up the lake-API road to the vault, or stands under a slip               |
 | A run with `trigger = schedule` opened in the last eight seconds                          | The bell swings two full swings                                                                 |
@@ -201,12 +214,12 @@ There is no push channel (ADR 0021).
 
 - `three` and its glTF loader are in the village's chunk only. Nothing else in the app imports
   them.
-- The models are about 1.3 MB together, meshopt-compressed (`set.glb` 0.5 MB, `folk.glb`
-  0.59 MB, `clips.glb` 0.2 MB), and are fetched only when the view opens.
+- The models are about 1.7 MB together, meshopt-compressed (`set.glb` 0.77 MB, `folk.glb`
+  0.66 MB, `clips.glb` 0.23 MB), and are fetched only when the view opens.
 - The scene draws at most 10 times a second, never while the tab is hidden or the canvas is off
   screen. It renders at twice the screen's pixels or more (at most three times) and is
   downscaled, which keeps the outlines and faces crisp at the diorama's size. A character is about 7,500 triangles, so a busy
-  morning of nine figures and the board is about 100,000, drawn twice for the outline.
+  morning of ten figures and the board is about 110,000, drawn twice for the outline.
 - The renderer and every geometry are disposed when the view closes.
 
 ## Assets

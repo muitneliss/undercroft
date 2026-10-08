@@ -18,12 +18,16 @@
 import type { Connection, RunDetail, RunEventView, RunView } from "@/api/types.ts";
 import { ROAD_SLOTS } from "@/lib/village/roads.ts";
 
-export type Role = "courier" | "keeper" | "scribe" | "artisan" | "inspector" | "carter";
+export type Role = "courier" | "keeper" | "copyist" | "scribe" | "artisan" | "inspector" | "carter";
 
 export type Doing =
   /** At home. No run, or nothing for this character in the runs there are. */
   | "resting"
-  /** Sitting by the gate: the run is waiting for a worker or for tomorrow's read budget. */
+  /**
+   * Sitting on the ground, waiting for a turn: the run is queued for a worker, or for tomorrow's
+   * read budget. A courier sits by the gate; the copyist, the scribe and the artisan sit at home,
+   * and nothing at their work moves.
+   */
   | "waiting"
   /** Walking a source's road and back, carrying crates to the vault. */
   | "fetching"
@@ -31,9 +35,14 @@ export type Doing =
   | "barred"
   /** At the vault door, laying what the couriers bring. */
   | "sealing"
-  /** At the archive desk, reading documents. */
-  | "reading"
-  /** At the workshop bench. */
+  /**
+   * Fetching a document from the archive and copying it out at the lectern by the reading room,
+   * whose page turns while the copying runs: the text is being read out of the documents.
+   */
+  | "copying"
+  /** Casting over the archive's documents, sorting each one by what kind of document it is. */
+  | "classifying"
+  /** Hammering at the workshop bench, then sawing at the lumbermill, whose saw turns meanwhile. */
   | "building"
   /** Checking the bench after a build with tests. */
   | "inspecting"
@@ -101,9 +110,21 @@ const WAITING: ReadonlySet<string> = new Set([
   "whole_read_paused",
 ]);
 const NOT_GRANTED = "entity_not_granted";
-const WORK_KINDS: Readonly<Record<"scribe" | "artisan", readonly RunView["kind"][]>> = {
-  scribe: ["extract", "semantic", "semantic-init"],
+
+/** The characters who work for one kind of run, with no road of their own. */
+type WorkerRole = "copyist" | "scribe" | "artisan";
+
+/** The kinds of run each worker works for: reading the text out, sorting by kind, building. */
+const WORK_KINDS: Readonly<Record<WorkerRole, readonly RunView["kind"][]>> = {
+  copyist: ["extract"],
+  scribe: ["semantic", "semantic-init"],
   artisan: ["transform", "build"],
+};
+/** What each worker is seen doing while its run runs and is not waiting for a turn. */
+const AT_WORK: Readonly<Record<WorkerRole, Doing>> = {
+  copyist: "copying",
+  scribe: "classifying",
+  artisan: "building",
 };
 
 /** A pile's height for a number of things: one step per power of ten, so it is never read as one. */
@@ -125,21 +146,30 @@ function roadsOf(connections: VillageInput["connections"]): Road[] {
 }
 
 /**
- * What an ingest still running is doing now, from the last thing it said that changes what
- * a courier would be doing. Nothing said yet is a run that has just set out.
+ * The last thing a running run said, by time: the one reading of a run's feed every figure's
+ * doing is decided from. `run_closed` is left out: it ends the feed rather than saying what the
+ * run is doing. Nothing said yet is `null`: a run that has just set out.
  */
-function ingestDoing(events: readonly RunEventView[]): "waiting" | "barred" | "fetching" {
-  const said = [...events]
+function lastSaid(events: readonly RunEventView[] | undefined): string | null {
+  const said = [...(events ?? [])]
     .sort((a, b) => a.at.localeCompare(b.at))
     .filter((event) => event.event !== "run_closed");
-  const last = said.at(-1);
-  if (last !== undefined && WAITING.has(last.event)) {
+  return said.at(-1)?.event ?? null;
+}
+
+/** Whether a running run is queued: waiting for a worker, or for tomorrow's read budget. */
+function waitsForATurn(events: readonly RunEventView[] | undefined): boolean {
+  return WAITING.has(lastSaid(events) ?? "");
+}
+
+/** What an ingest still running is doing now, from the last thing it said. */
+function ingestDoing(
+  events: readonly RunEventView[] | undefined,
+): "waiting" | "barred" | "fetching" {
+  if (waitsForATurn(events)) {
     return "waiting";
   }
-  if (last?.event === NOT_GRANTED) {
-    return "barred";
-  }
-  return "fetching";
+  return lastSaid(events) === NOT_GRANTED ? "barred" : "fetching";
 }
 
 function courier(road: Road, input: VillageInput): Actor {
@@ -154,7 +184,7 @@ function courier(road: Road, input: VillageInput): Actor {
     return { ...base, doing: "resting", runId: null, slip: false };
   }
   if (latest.status === "running") {
-    const doing = ingestDoing(input.events.get(latest.id) ?? []);
+    const doing = ingestDoing(input.events.get(latest.id));
     return { ...base, doing, runId: latest.id, slip: false };
   }
   if (latest.status === "failed") {
@@ -167,13 +197,16 @@ function courier(road: Road, input: VillageInput): Actor {
   return { ...base, doing: "resting", runId: null, slip: false };
 }
 
-/** The scribe and the artisan: at work while their kind of run runs, slipped if it failed. */
-function worker(role: "scribe" | "artisan", input: VillageInput): Actor {
-  const busy: Doing = role === "scribe" ? "reading" : "building";
+/**
+ * The copyist, the scribe and the artisan: at work while the newest run of their kind runs,
+ * sitting at home while it waits for a turn, and under a slip at home if it failed.
+ */
+function worker(role: WorkerRole, input: VillageInput): Actor {
   const latest = input.runs.find((run) => WORK_KINDS[role].includes(run.kind));
   const base = { key: role, role, slot: null, source: null };
   if (latest?.status === "running") {
-    return { ...base, doing: busy, runId: latest.id, slip: false };
+    const doing = waitsForATurn(input.events.get(latest.id)) ? "waiting" : AT_WORK[role];
+    return { ...base, doing, runId: latest.id, slip: false };
   }
   if (latest?.status === "failed") {
     return { ...base, doing: "failed", runId: latest.id, slip: true };
@@ -279,6 +312,7 @@ export function deriveVillage(input: VillageInput): VillageScene {
     actors: [
       ...couriers,
       keeper,
+      worker("copyist", input),
       worker("scribe", input),
       worker("artisan", input),
       inspector(input),

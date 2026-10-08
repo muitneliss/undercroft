@@ -32,6 +32,9 @@ Each is easy to break silently, because a wrong picture raises no error.
      steps. A character with no run is `resting`, which claims nothing.
    - Weather and machinery (`ambience.ts`) may move on their own only because a cloud claims
      nothing about the data.
+   - Machinery that does claim something (`works.ts`: the gate's doors, the bell, the lectern's
+     page, the lumbermill's saw) moves only while the scene says the work driving it is being
+     done, and reads that from the actors' doings and nothing else.
    - If you want a character to do something new, first find the run field that proves it.
      If no field proves it, the character does not do it.
 2. **Only the design system's inks.** The packs' colours are never shown.
@@ -61,18 +64,20 @@ Each is easy to break silently, because a wrong picture raises no error.
 
 The modules are in `apps/ui/src/lib/village/`, one owner each:
 
-| Module                                               | Owns                                                                                                                                                                                                                                               |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `script.ts`                                          | `deriveVillage(input) → VillageScene`. It turns runs, events, the last build and connections into actors (`role`, `doing`, `slip`), roads and gauges. It is a pure **state**, not a story; the runtime walks figures to it.                        |
-| `folk.ts`                                            | `Figure`: one rigged clone per actor. `choreography()` maps a `Doing` to legs (`walk to a NODES spot, hold a clip for N frames`). It also has `MODEL` (role → KayKit character), `homeOf`, `carryClip` (walk legs + hold arms) and `FIGURE_SCALE`. |
-| `layout.ts`                                          | Where things stand: the board's tiles (13×9 hexes, the lake behind the vault), `PLACEMENTS` (set piece, turn, scale, division), `PLACES` and the prop anchors. Pure data. A hex is 2 world units across, and +Y is up.                             |
-| `roads.ts`                                           | The named spots (`NODES`) figures walk between, the road graph, `route()` (shortest path), `roadLines()`, the source-road slots (`ROAD_SLOTS = 5`) and `barrierAt`.                                                                                |
-| `town.ts`                                            | `Town implements World<VillageScene>`: the board, the figures, the props rebuilt per scene, the bell and the ambience.                                                                                                                             |
-| `film.ts`                                            | `Film.start(elements, build, onPick, {camera, fitHeight})`. It owns the renderer, the fixed orthographic camera that fits the whole world, the 10 fps clock, visibility pausing, reduced motion and disposal.                                      |
-| `look.ts`, `inkPass.ts`                              | The photograph. A warm key light with soft PCF shadows, a hemisphere fill and a RoomEnvironment, then the composer: Ink outlines, GTAO, tilt-shift, then the print grain and vignette, with Neutral tone mapping. It is deterministic.             |
-| `paint.ts`, `palette.ts`                             | The `Painter` (paper `MeshStandardMaterial` with world-fixed grain, water, `figureMaterial` with a finer outline, `flat`, `faded`) and `vertexColour(atlas, cell, shade, roof)`.                                                                   |
-| `kit.ts`                                             | `loadKit(tokens)` loads and paints `set.glb`, `folk.glb` and `clips.glb` once per film. It provides `piece(name, division)`, `cast`, `slip()` and `road(line)`.                                                                                    |
-| `props.ts`, `ribbon.ts`, `ambience.ts`, `pointer.ts` | The made things (the slip, the bell, crates, barriers, roads as mitred strips), the weather and mills, and pointer-to-words lighting.                                                                                                              |
+| Module                                               | Owns                                                                                                                                                                                                                                         |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `script.ts`                                          | `deriveVillage(input) → VillageScene`. It turns runs, events, the last build and connections into actors (`role`, `doing`, `slip`), roads and gauges. It is a pure **state**, not a story; the runtime walks figures to it.                  |
+| `choreography.ts`                                    | What a doing looks like: `choreography()` maps a `Doing` to legs (`walk to a NODES spot, hold a clip for N frames`, a crate carried or set down), `MODEL` (role → KayKit character) and `homeOf`. Pure data.                                 |
+| `folk.ts`                                            | `Figure`: one rigged clone per actor, playing its doing's legs a stride or a clip frame at a time. It also has `carryClip` (walk legs + hold arms) and `FIGURE_SCALE`.                                                                       |
+| `layout.ts`                                          | Where things stand: the board's tiles (13×9 hexes, the lake behind the vault), `PLACEMENTS` (set piece, turn, scale, division), `PLACES` and the prop anchors. Pure data. A hex is 2 world units across, and +Y is up.                       |
+| `roads.ts`                                           | The named spots (`NODES`) figures walk between, the road graph, `route()` (shortest path), `roadLines()`, the source-road slots (`ROAD_SLOTS = 5`) and `barrierAt`.                                                                          |
+| `town.ts`                                            | `Town implements World<VillageScene>`: the board, the figures, the props rebuilt per scene, the works and the ambience.                                                                                                                      |
+| `works.ts`                                           | `Works`: the machinery a run drives (the gate's doors, the bell, the copyist's lectern, the lumbermill's saw). `set(scene, still)` reads what moves from the actors; `step()` moves each a stepped position a frame. It is not the ambience. |
+| `film.ts`                                            | `Film.start(elements, build, onPick, {camera, fitHeight})`. It owns the renderer, the fixed orthographic camera that fits the whole world, the 10 fps clock, visibility pausing, reduced motion and disposal.                                |
+| `look.ts`, `inkPass.ts`                              | The photograph. A warm key light with soft PCF shadows, a hemisphere fill and a RoomEnvironment, then the composer: Ink outlines, GTAO, tilt-shift, then the print grain and vignette, with Neutral tone mapping. It is deterministic.       |
+| `paint.ts`, `palette.ts`                             | The `Painter` (paper `MeshStandardMaterial` with world-fixed grain, water, `figureMaterial` with a finer outline, `flat`, `faded`) and `vertexColour(atlas, cell, shade, roof)`.                                                             |
+| `kit.ts`                                             | `loadKit(tokens)` loads and paints `set.glb`, `folk.glb` and `clips.glb` once per film. It provides `piece(name, division)`, `cast`, `slip()` and `road(line)`.                                                                              |
+| `props.ts`, `ribbon.ts`, `ambience.ts`, `pointer.ts` | The made things (the slip, the bell, the lectern, crates, barriers, roads as mitred strips), the weather and mills, and pointer-to-words lighting.                                                                                           |
 
 The React side is thin and holds no frame state (no `useState`; `.claude/rules/state.md`):
 
@@ -88,16 +93,22 @@ the app may import it.
 1. **`script.ts`.** Find the evidence: a status, an event name or a step. Add the `Doing` (with a
    doc comment saying what the reader sees) and derive it. A failure is the same doing at home
    with `slip: true`, not a new pose.
-2. **`folk.ts`.** Add its `choreography`: legs to `NODES` spots, using one of the clips in
+2. **`choreography.ts`.** Add its `choreography`: legs to `NODES` spots, using one of the clips in
    `clips.glb`, and pick its `still` leg. A new role needs `MODEL` and `homeOf`; the `never`
    check fails the typecheck until you add both.
 3. **`roads.ts`.** Add a spot or a road edge if the walk needs one. `route()` only walks the
-   road graph, so a spot nobody connects is unreachable.
-4. **The words.** Add the work-list wording to `apps/ui/src/i18n/vi.ts` and `en.ts` under
+   road graph, so a spot nobody connects is unreachable. A spot beside a building rather than at
+   its door goes in `UNPAVED`, or `roadLines()` paves a road to it. Check the spot is not hidden
+   behind a building from the camera, which looks from the south-east.
+4. **`works.ts`, if the work drives a machine.** A part that moves because of the doing (a door,
+   a page, a saw) is found in the board by its KayKit node name, or made in `props.ts`, and
+   `Works.set` derives whether it moves from the actors' doings. Give it a stepped table or a
+   fixed step a frame, and say what it does under `still`.
+5. **The words.** Add the work-list wording to `apps/ui/src/i18n/vi.ts` and `en.ts` under
    `journal.village`, and the `data-actor` key.
-5. **`docs/design/village.md`.** Add a row to "What each run makes them do", and to the cast
+6. **`docs/design/village.md`.** Add a row to "What each run makes them do", and to the cast
    table for a new role.
-6. **`village.test.ts`.** Add a test only if a reader could be misled. For example, "a courier
+7. **`village.test.ts`.** Add a test only if a reader could be misled. For example, "a courier
    whose ingest is waiting sits by the gate, not on the road". Do not add one for every doing.
 
 ### A new clip, character model or set piece

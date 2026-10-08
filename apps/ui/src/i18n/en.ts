@@ -1320,6 +1320,7 @@ export const en = {
       role: {
         courier: "Courier",
         keeper: "Vault keeper",
+        copyist: "Copyist",
         scribe: "Scribe",
         artisan: "Artisan",
         inspector: "Inspector",
@@ -1327,11 +1328,12 @@ export const en = {
       },
       doing: {
         resting: "At rest",
-        waiting: "Waiting at the gate",
+        waiting: "Waiting for a turn",
         fetching: "Carrying data to the vault",
         barred: "Found a list that is not granted",
         sealing: "Laying it in the vault",
-        reading: "Reading documents",
+        copying: "Copying the text out of documents",
+        classifying: "Sorting documents by kind",
         building: "Building the models",
         inspecting: "Checked the last build",
         inspectingFailed: "A test failed in the last build",

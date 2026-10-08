@@ -1605,6 +1605,7 @@ export const vi = {
       role: {
         courier: "Người vận chuyển",
         keeper: "Người giữ kho",
+        copyist: "Người chép tài liệu",
         scribe: "Người chép sổ",
         artisan: "Thợ",
         inspector: "Người kiểm định",
@@ -1612,11 +1613,12 @@ export const vi = {
       },
       doing: {
         resting: "Đang nghỉ",
-        waiting: "Đang chờ ở cổng",
+        waiting: "Đang chờ đến lượt",
         fetching: "Đang mang dữ liệu về kho",
         barred: "Gặp một danh sách chưa được cấp quyền",
         sealing: "Đang cất vào kho",
-        reading: "Đang đọc tài liệu",
+        copying: "Đang chép chữ từ tài liệu",
+        classifying: "Đang phân loại tài liệu",
         building: "Đang dựng mô hình",
         inspecting: "Đã kiểm tra lần dựng gần nhất",
         inspectingFailed: "Có kiểm thử không đạt ở lần dựng gần nhất",
