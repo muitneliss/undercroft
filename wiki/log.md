@@ -337,3 +337,7 @@
 ## [2026-10-07] ingest | Design: The Village, the Journal Drawn as People at Work
 ## [2026-10-07] ingest | Design: Operator and reader paths
 ## [2026-10-07] ingest | ADR 0116 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion
+## [2026-10-08] ingest | Design: Operator and reader paths
+## [2026-10-08] ingest | ADR 0117 The Village Is an Overview of the Journal, and Replaces No Drawing
+## [2026-10-08] ingest | Design: The Village, the Journal Drawn as People at Work
+## [2026-10-08] ingest | ADR 0117 The Village Is an Overview of the Journal, and Replaces No Drawing

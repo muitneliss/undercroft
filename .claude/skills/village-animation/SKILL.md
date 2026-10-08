@@ -1,6 +1,6 @@
 ---
 name: village-animation
-description: How to change the animated village in Undercroft's UI (ADR 0116). It covers the three.js stop-motion diorama of KayKit characters that draws the Journal's runs and replaces every node-and-edge drawing (a run's stage map and the models' lineage). Use this skill whenever you touch `apps/ui/src/lib/village/**`, `Village.tsx`, `VillageGraph.tsx`, `RunFlow.tsx`, `LineageCanvas.tsx`, `scripts/village/**` or `apps/ui/src/assets/village/**`. Also use it when someone asks to add or change a character, a role, a clip, a pose, a building, a prop, a road, the colours, the lighting, the outlines, the camera or the motion of the village. Use it as well when a run, lineage or stage drawing looks wrong, or when a village visual-regression baseline fails, even if they only say "the animation", "the characters", "the 3D view", "three.js" or "KayKit".
+description: How to change the animated village in Undercroft's UI (ADR 0116, ADR 0117). It covers the three.js stop-motion diorama of KayKit characters that draws one customer's runs as the Journal's high-level village view (`?view=village`); it does not draw or replace a run's stage map or the models' lineage, which stay on React Flow. Use this skill whenever you touch `apps/ui/src/lib/village/**`, `Village.tsx`, `scripts/village/**` or `apps/ui/src/assets/village/**`. Also use it when someone asks to add or change a character, a role, a clip, a pose, a building, a prop, a road, the colours, the lighting, the outlines, the camera or the motion of the village. Use it as well when the Journal's village looks wrong, or when a village visual-regression baseline fails, even if they only say "the animation", "the characters", "the 3D view", "three.js" or "KayKit".
 # For working on this repository, not for its users: the skills CLI hides an internal
 # skill from `npx skills add muitneliss/undercroft` (docs/runbook/agent-skills.md).
 metadata:
@@ -10,14 +10,17 @@ metadata:
 # The village: characters at work, drawn in stop-motion
 
 The village is a second way of reading one customer's Journal (`?view=village`). Every running
-operation is a KayKit character doing a job, and every division is a building. The same engine
-draws the interface's two graphs: a run's stages, and the models' lineage. React Flow is gone
-and nothing replaces it.
+operation is a KayKit character doing a job, and every division is a building. It is a
+high-level overview and replaces nothing: a run's stage map and the models' lineage are React
+Flow drawings (`RunFlow.tsx`, `LineageCanvas.tsx`) and are not the village's to draw. Do not
+turn another screen into a village; ADR 0117 makes that a new decision.
 
-The decision record is `docs/adr/0116-the-journal-can-be-read-as-a-village.md`. The design and
-the cast table are in `docs/design/village.md`, and the design system's own section is "The
-Journal's Village" in `apps/ui/DESIGN.md`. Read the design doc's table for the rule you are
-about to change before you change it: every row there is a promise a reader relies on.
+The decision records are `docs/adr/0116-the-journal-can-be-read-as-a-village.md` and
+`docs/adr/0117-the-village-is-an-overview-and-replaces-no-drawing.md`, which withdrew 0116's
+graph villages. The design and the cast table are in `docs/design/village.md`, and the design
+system's own section is "The Journal's Village" in `apps/ui/DESIGN.md`. Read the design doc's
+table for the rule you are about to change before you change it: every row there is a promise a
+reader relies on.
 
 ## The four promises a change must keep
 
@@ -48,13 +51,9 @@ Each is easy to break silently, because a wrong picture raises no error.
 4. **The canvas is a picture, and the words beside it carry the meaning.**
    - The canvas is `aria-hidden` and draws no letters. The work list and the place list name
      everything in DOM text, in Vietnamese first under `journal.village.*`.
-   - Pointing at a figure or a building lights its row through `data-actor`, `data-place` or
-     `data-node` and `data-lit`.
+   - Pointing at a figure or a building lights its row through `data-actor` or `data-place`,
+     and `data-lit`.
    - Without WebGL, the frame says so in a sentence (`data-village="failed"`).
-
-The graphs add a fifth promise, held by `village.test.ts`: **the village reflects the graph
-exactly.** The buildings are exactly the nodes, the roads exactly the edges, and the traffic
-exactly the flowing edges. `graph.ts` adds nothing and drops nothing.
 
 ## Map of the code
 
@@ -67,8 +66,6 @@ The modules are in `apps/ui/src/lib/village/`, one owner each:
 | `layout.ts`                                          | Where things stand: the board's tiles (13×9 hexes, the lake behind the vault), `PLACEMENTS` (set piece, turn, scale, division), `PLACES` and the prop anchors. Pure data. A hex is 2 world units across, and +Y is up.                             |
 | `roads.ts`                                           | The named spots (`NODES`) figures walk between, the road graph, `route()` (shortest path), `roadLines()`, the source-road slots (`ROAD_SLOTS = 5`) and `barrierAt`.                                                                                |
 | `town.ts`                                            | `Town implements World<VillageScene>`: the board, the figures, the props rebuilt per scene, the bell and the ambience.                                                                                                                             |
-| `graph.ts`                                           | `runMapGraph(stages)` and `lineageGraph(…)` return a `VillageGraph` (nodes, edges, `flowing`, `broken`, `state`). The lineage keeps ELK's arrangement, scaled by `PIXEL`.                                                                          |
-| `graphParts.ts`, `graphWorld.ts`, `carriers.ts`      | A building per node kind, merged ribbon roads per state, the ground under the graph, and a `Carrier` (a courier or a handcart) on every flowing edge. The world is rebuilt only when `shapeOf(graph)` changes.                                     |
 | `film.ts`                                            | `Film.start(elements, build, onPick, {camera, fitHeight})`. It owns the renderer, the fixed orthographic camera that fits the whole world, the 10 fps clock, visibility pausing, reduced motion and disposal.                                      |
 | `look.ts`, `inkPass.ts`                              | The photograph. A warm key light with soft PCF shadows, a hemisphere fill and a RoomEnvironment, then the composer: Ink outlines, GTAO, tilt-shift, then the print grain and vignette, with Neutral tone mapping. It is deterministic.             |
 | `paint.ts`, `palette.ts`                             | The `Painter` (paper `MeshStandardMaterial` with world-fixed grain, water, `figureMaterial` with a finer outline, `flat`, `faded`) and `vertexColour(atlas, cell, shade, roof)`.                                                                   |
@@ -78,8 +75,6 @@ The modules are in `apps/ui/src/lib/village/`, one owner each:
 The React side is thin and holds no frame state (no `useState`; `.claude/rules/state.md`):
 
 - `components/Village.tsx` polls, calls `deriveVillage` and hands the scene to `film.show()`.
-- `VillageGraph.tsx` does the same for a graph and is lazily loaded.
-- `RunFlow.tsx` and `LineageCanvas.tsx` build the graph and render `VillageGraph`.
 
 The film writes back only `data-` attributes. three.js stays in the lazy chunk; nothing else in
 the app may import it.
@@ -117,21 +112,13 @@ The models come only from the asset script; never hand-edit a `.glb`.
 4. Update the asset README's lists and the size budget in `docs/design/village.md` if the bytes
    moved noticeably.
 
-### A new kind of node in a graph
-
-`GraphNodeKind` is in `graph.ts`, and `buildingFor` in `graphParts.ts` picks the set piece and
-the roof's division. Keep the reflection exact: one building per node and one road per edge.
-Extend the `drawnGraph` or "a graph drawn as a village" tests when the mapping changes. If the
-node is pressable, it must answer `under()` as `node|<id>` and have a `data-node` word.
-
 ### The look: light, colour, outlines, framing
 
 - **Light and post-processing.** These are in `look.ts`. Light intensities are physical, and a
   value that looked right under the legacy model is out by π.
 - **Colour.** Change it in `palette.ts` or `paint.ts`, never per model.
-- **Camera.** Each view's bearing is its own `{ camera, fitHeight }`: `TOWN_VIEW` in
-  `Village.tsx`, `VIEW` in `VillageGraph.tsx`. The film fits the whole world itself; do not add
-  pan or zoom, because ADR 0116 fixed the camera.
+- **Camera.** The town's bearing is `TOWN_VIEW` (`{ camera, fitHeight }`) in `Village.tsx`. The
+  film fits the whole world itself; do not add pan or zoom, because ADR 0116 fixed the camera.
 - **After any look change.** Retake the village baselines (below), and look at them before
   committing.
 
@@ -140,14 +127,12 @@ node is pressable, it must answer `under()` as `node|<id>` and have a `data-node
 Green tests are not evidence that the picture is right, so look at it.
 
 - **Unit tests.** Run `task ci:test-one -- apps/ui/src/lib/village/village.test.ts` from the
-  repository root. Run the component tests the same way: `RunFlow.test.tsx`, `Models.test.tsx`
-  and `lineage.test.ts`. Run from the root, not from `apps/ui`: ELK fails there with "Worker is
-  not a constructor".
+  repository root, not from `apps/ui`.
 - **The gate.** Run `task ci:verify`. It includes `build:ui`, which catches a three.js import
   that leaks out of the lazy chunk.
-- **Visual regression.** Run `task ci:visual -- Journal` and `task ci:visual -- Models`. They
-  need Docker. After an intended change, run `task ci:visual-update -- Journal`, then open the
-  new PNGs and compare them with the design before committing. The tier forces reduced motion,
+- **Visual regression.** Run `task ci:visual -- Journal`. It needs Docker. After an intended
+  change, run `task ci:visual-update -- Journal`, then open the new PNGs and compare them with
+  the design before committing. The tier forces reduced motion,
   so a baseline is the settled frame, and software WebGL paints it the same way every time.
   WebGL cases use `{ timeout: WEBGL_TIMEOUT }` on each `it`; Biome rejects options on
   `describe`.
@@ -158,12 +143,12 @@ Green tests are not evidence that the picture is right, so look at it.
 ## Before you change something odd-looking
 
 Several constants exist because the obvious value failed: the road height, the winding, the
-scale factors, the unquantised tile geometry and the bone-name suffix. Read
+scale factors and the bone-name suffix. Read
 `references/pitfalls.md` before you "simplify" any of them.
 
 ## Finishing
 
 - Update `docs/design/village.md` when a reader-visible rule changes.
-- Write a new ADR, never an edit to 0116, if a decision it records is reversed.
+- Write a new ADR, never an edit to 0116 or 0117, if a decision either records is reversed.
 - Re-ingest the wiki for the changed docs.
 - Commit, push and open a PR, as the workspace rules require.
