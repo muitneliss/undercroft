@@ -22,12 +22,11 @@
  * beside `locale`, read by nothing, and a remembered selection that disagrees with the
  * address bar is exactly the drift this store exists to prevent.
  *
- * ## Why `persist`, and why only over `locale`, `filmHeld` and `weatherWanted`
+ * ## Why `persist`, and why only over `locale` and `filmHeld`
  *
  * A language chosen on one visit and forgotten by the next is not a chosen language. So the
- * locale is written to `localStorage` and read back at startup, and so are the two other
- * standing choices, for the same reason: a reader's request that the cover's film stand still,
- * and whether the title page may read the weather. The drafts below are not:
+ * locale is written to `localStorage` and read back at startup, and so is a reader's request
+ * that the cover's film stand still, for the same reason. The drafts below are not:
  * a half-made choice restored days later, after the thing it referred to may have changed,
  * is worse than an empty form.
  */
@@ -101,16 +100,6 @@ interface UiState {
   locale: Locale;
   /** Change language. The only writer; `@/i18n` follows this, never the other way round. */
   setLocale: (locale: Locale) => void;
-  /**
-   * Whether the reader asked the title page to read their weather (`@/lib/weather`).
-   *
-   * The consent, never the position: the browser keeps its own permission, and the rounded
-   * position is asked for again each visit and sent nowhere but the weather service. Persisted
-   * for the locale's reason -- a choice made on one visit and forgotten by the next was not
-   * made -- and false until the reader presses the plate that says what it will do.
-   */
-  weatherWanted: boolean;
-  setWeatherWanted: (wanted: boolean) => void;
   /**
    * The release the server now serves, once this tab has heard it is not the one it runs;
    * null until then. Written only by `@/lib/releaseWatch`, from what the release beacon
@@ -616,19 +605,11 @@ function propertyLists(
   };
 }
 
-/** The interface language, persisted beside the film's hold and the weather consent. */
+/** The interface language, persisted beside the film's hold. */
 function localeSlice(set: Setter): Pick<UiState, "locale" | "setLocale"> {
   return {
     locale: DEFAULT_LOCALE,
     setLocale: (locale): unknown => set({ locale }),
-  };
-}
-
-/** The title page's weather consent. See `weatherWanted`. */
-function weatherSlice(set: Setter): Pick<UiState, "weatherWanted" | "setWeatherWanted"> {
-  return {
-    weatherWanted: false,
-    setWeatherWanted: (weatherWanted): unknown => set({ weatherWanted }),
   };
 }
 
@@ -1017,7 +998,6 @@ export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
       ...localeSlice(set),
-      ...weatherSlice(set),
       ...releaseSlice(set),
       ...accountSlice(set),
       ...cronSlice(set),
@@ -1035,7 +1015,6 @@ export const useUiStore = create<UiState>()(
       partialize: (state) => ({
         locale: state.locale,
         filmHeld: state.filmHeld,
-        weatherWanted: state.weatherWanted,
       }),
     },
   ),

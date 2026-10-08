@@ -121,6 +121,7 @@
 - [ADR 0115 The Title Page Is Printed In The Reader's Weather](sources/adr-0115-the-title-page-is-printed-in-the-reader-s-weather.md)
 - [ADR 0116 The Journal Can Be Read as a Village, Drawn in WebGL and Moved in Stop-Motion](sources/adr-0116-the-journal-can-be-read-as-a-village-drawn-in-webgl-and-moved-in-stop-motion.md)
 - [ADR 0117 The Village Is an Overview of the Journal, and Replaces No Drawing](sources/adr-0117-the-village-is-an-overview-of-the-journal-and-replaces-no-drawing.md)
+- [ADR 0118 The Title Page Reads Only the Clock](sources/adr-0118-the-title-page-reads-only-the-clock.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)
