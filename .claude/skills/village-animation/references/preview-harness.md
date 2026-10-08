@@ -75,6 +75,7 @@ const runs = idle
         ...open,
       }),
       run({ id: "r4", kind: "extract", source: "drive", startedAt: ago(10), ...open }),
+      run({ id: "r8", kind: "semantic", source: "drive", startedAt: ago(8), ...open }),
       run({
         id: "r5",
         kind: "ingest",
@@ -186,6 +187,30 @@ Then read the PNG and look at it. If `data-village` is `failed`:
 
 - the browser has no WebGL, or a model failed to load;
 - `agent-browser console` shows which.
+
+To check motion frame by frame (a door that opens in three frames, a page that turns), a
+screenshot is too slow to catch consecutive frames of the live clock. Put the clock in the
+page's hands instead: at the top of `village-dev.ts`, before `Film.start`, replace
+`requestAnimationFrame` with one that only queues its callback, and expose a stepper that calls
+it with a time 100 ms later. Each call then draws exactly one frame:
+
+```ts
+let queued: FrameRequestCallback | null = null;
+let clock = 1000;
+globalThis.requestAnimationFrame = (cb: FrameRequestCallback): number => ((queued = cb), 1);
+globalThis.cancelAnimationFrame = (): void => void (queued = null);
+(window as unknown as { advance: (n: number) => void }).advance = (n) => {
+  for (let i = 0; i < n; i += 1) {
+    clock += 100;
+    const cb = queued;
+    queued = null;
+    cb?.(clock);
+  }
+};
+```
+
+Then `agent-browser eval "window.advance(1); 1"` between screenshots. `agent-browser set media
+light reduced-motion` shows the settled frame; `set media light` turns motion back on.
 
 When the user wants to review the motion themselves, give them the URL and leave the server
 running. Hot reload picks up edits under `lib/village/`.

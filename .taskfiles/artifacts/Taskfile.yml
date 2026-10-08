@@ -68,8 +68,9 @@ tasks:
       KAYKIT_DIR: "{{.KAYKIT_DIR}}"
     cmds:
       - bun run village:assets
-      # atlas.json is written as one line; the formatter lays it out as the gate expects.
-      - task: ci:format
+      # atlas.json is written as one line; the formatter lays it out as the gate expects. The
+      # leading colon names the root's ci:format: without it Task looks for build:ci:format.
+      - task: :ci:format
 
   worker-image:
     desc: Build the worker's Docker image locally, for testing the Dockerfile (tag undercroft-worker:local).

@@ -1,11 +1,11 @@
 /**
  * The cast: one figure per character in the scene, walking its routes in stop-motion.
  *
- * A figure is told what its character is doing (`script.ts`) and turns that into a choreography,
- * a short loop of legs: walk to a spot, then hold a clip there for a while. It moves only on the
- * runtime's frames, a fixed stride per frame along the route, and its clips are already keyed on
- * those frames (STEP, by the asset script). So a figure is never between two poses: that is the
- * whole of the stop-motion.
+ * A figure is told what its character is doing (`script.ts`) and plays that doing's choreography
+ * (`choreography.ts`), a short loop of legs: walk to a spot, then hold a clip there for a while.
+ * It moves only on the runtime's frames, a fixed stride per frame along the route, and its clips
+ * are already keyed on those frames (STEP, by the asset script). So a figure is never between two
+ * poses: that is the whole of the stop-motion.
  *
  * Under reduced motion a figure never walks. It is put straight where its work is and holds the
  * first frame of that work's clip.
@@ -24,10 +24,11 @@ import {
 } from "three";
 import { clone as cloneRig } from "three/addons/utils/SkeletonUtils.js";
 
+import { choreography, homeOf, inArms, type Leg, MODEL } from "@/lib/village/choreography.ts";
 import type { Point } from "@/lib/village/layout.ts";
 import { FIGURE_TARGET } from "@/lib/village/pointer.ts";
 import { NODES, route } from "@/lib/village/roads.ts";
-import type { Actor, Doing, Role } from "@/lib/village/script.ts";
+import type { Actor, Doing } from "@/lib/village/script.ts";
 import type { Cast } from "@/lib/village/kit.ts";
 
 /** Seconds per frame: the village's ten frames a second (ADR 0116). */
@@ -36,87 +37,6 @@ export const FRAME_SECONDS = 0.1;
 const STRIDE = 0.17;
 /** KayKit's characters stand about 2.3 units tall; the village's stand about one. */
 const FIGURE_SCALE = 0.5;
-
-/** Which KayKit character plays each role (`docs/design/village.md`). */
-const MODEL: Readonly<Record<Role, string>> = {
-  courier: "Ranger",
-  carter: "Ranger",
-  keeper: "Rogue",
-  scribe: "Mage",
-  artisan: "Barbarian",
-  inspector: "Knight",
-};
-
-/** Where each role is at home. A courier's home is by its own road's slot. */
-function homeOf(actor: Pick<Actor, "role" | "slot">): string {
-  switch (actor.role) {
-    case "courier":
-      return `courier${actor.slot ?? 0}Rest`;
-    case "carter":
-      return "apiEdge";
-    case "keeper":
-      return "keeperRest";
-    case "scribe":
-      return "scribeRest";
-    case "artisan":
-      return "artisanRest";
-    case "inspector":
-      return "inspectorRest";
-    default: {
-      const exhaustive: never = actor.role;
-      throw new Error(`unhandled role ${String(exhaustive)}`);
-    }
-  }
-}
-
-/** One leg of a choreography: walk to `to`, then hold `clip` for `hold` frames (forever if null). */
-interface Leg {
-  readonly to: string;
-  readonly clip: string;
-  readonly hold: number | null;
-  readonly carrying: boolean;
-}
-
-/**
- * What a doing looks like, as legs. A loop repeats; a last leg held forever is where the figure
- * stays. `still` is the leg reduced motion shows: where the work is.
- */
-function choreography(actor: Actor): { legs: readonly Leg[]; still: number } {
-  const home = homeOf(actor);
-  const slot = actor.slot ?? 0;
-  const plays: Readonly<Record<Doing, () => { legs: readonly Leg[]; still: number }>> = {
-    resting: () => ({ legs: [stay(home, "Idle_A")], still: 0 }),
-    failed: () => ({ legs: [stay(home, "Idle_A")], still: 0 }),
-    waiting: () => ({ legs: [stay("gateBench", "Sit_Floor_Idle")], still: 0 }),
-    fetching: () => ({
-      legs: [
-        { to: `road${slot}Edge`, clip: "PickUp", hold: 13, carrying: false },
-        { to: "vault", clip: "PickUp", hold: 13, carrying: true },
-      ],
-      still: 1,
-    }),
-    barred: () => ({
-      legs: [
-        { to: `road${slot}Bar`, clip: "Interact", hold: 13, carrying: false },
-        { to: `road${slot}Bend`, clip: "Idle_A", hold: 10, carrying: false },
-      ],
-      still: 0,
-    }),
-    sealing: () => ({ legs: [stay("keeperRest", "Use_Item")], still: 0 }),
-    reading: () => ({ legs: [stay("archive", "Working_A")], still: 0 }),
-    building: () => ({ legs: [stay("workshop", "Hammering")], still: 0 }),
-    inspecting: () => ({ legs: [stay("inspect", "Interact")], still: 0 }),
-    handing: () => ({ legs: [stay("reading", "Waving")], still: 0 }),
-    delivering: () => ({
-      legs: [
-        { to: "vault", clip: "PickUp", hold: 13, carrying: true },
-        { to: "apiEdge", clip: "Idle_A", hold: 5, carrying: false },
-      ],
-      still: 0,
-    }),
-  };
-  return plays[actor.doing]();
-}
 
 /** The bones a carried crate is held by: a carrying figure walks on the walk's legs and the hold's arms. */
 const ARM_BONES = /^(?:upperarm|lowerarm|wrist|hand|handslot|chest|spine|head)/u;
@@ -142,11 +62,6 @@ function carryClip(clips: readonly AnimationClip[]): AnimationClip | null {
 export interface FigureMakers {
   readonly crate: () => Object3D;
   readonly slip: () => Object3D;
-}
-
-/** A leg held forever at `to`: where a figure stays while it works or rests. */
-function stay(to: string, clip: string): Leg {
-  return { to, clip, hold: null, carrying: false };
 }
 
 /** How tall a figure stands, to the top of its head. */
@@ -220,7 +135,7 @@ export class Figure {
         this.leg = stillLeg;
         this.path = [];
         this.holder.position.set(spot.x, 0, spot.z);
-        this.crate.visible = leg.carrying;
+        this.crate.visible = inArms(leg, true);
         this.play(leg.clip);
         this.mixer.setTime(0);
       }
@@ -238,7 +153,7 @@ export class Figure {
     }
     const here = { x: this.holder.position.x, z: this.holder.position.z };
     this.path = [...route(here, leg.to)];
-    this.crate.visible = leg.carrying;
+    this.crate.visible = inArms(leg, false);
   }
 
   private play(name: string): void {
@@ -270,6 +185,7 @@ export class Figure {
     }
     const [next] = this.path;
     if (next === undefined) {
+      this.crate.visible = inArms(leg, true);
       this.play(leg.clip);
       this.held += 1;
       if (leg.hold !== null && this.held >= leg.hold) {

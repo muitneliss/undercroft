@@ -31,16 +31,21 @@ const FIXED_NODES: Record<string, Point> = {
   keeperRest: { x: -1.1, z: -0.9 },
   archiveRoad: { x: 1.8, z: 0 },
   archive: { x: 1.8, z: 1.1 },
+  /** Out from behind the archive's tower, where the camera sees the scribe sort its documents. */
+  sorting: { x: 3, z: 0.75 },
   scribeRest: { x: 2.8, z: 1.3 },
   readingRoad: { x: 3.6, z: 0 },
   reading: { x: 3.6, z: -0.8 },
+  lectern: { x: 4.5, z: -0.7 },
+  copyistRest: { x: 2.6, z: -0.8 },
   workshopRoad: { x: 7.8, z: 0 },
   workshop: { x: 7.8, z: -0.8 },
   inspect: { x: 8.9, z: -0.7 },
   artisanRest: { x: 6.8, z: -0.9 },
-  inspectorRest: { x: 9.6, z: -1.2 },
+  inspectorRest: { x: 9.75, z: 0.8 },
   pressRoad: { x: 10.4, z: 0 },
   press: { x: 10.4, z: 0.9 },
+  mill: { x: 9.75, z: -1.3 },
   apiEdge: { x: -2.6, z: 7.6 },
   apiShore: { x: -2.6, z: 1.2 },
 };
@@ -78,11 +83,15 @@ const BRANCHES: readonly (readonly [string, string])[] = [
   ["vault", "keeperRest"],
   ["archiveRoad", "archive"],
   ["archive", "scribeRest"],
+  ["archiveRoad", "sorting"],
   ["readingRoad", "reading"],
+  ["readingRoad", "lectern"],
+  ["readingRoad", "copyistRest"],
   ["workshopRoad", "workshop"],
   ["workshop", "inspect"],
   ["workshopRoad", "artisanRest"],
-  ["workshop", "inspectorRest"],
+  ["pressRoad", "inspectorRest"],
+  ["workshop", "mill"],
   ["pressRoad", "press"],
   ["gateEast", "gateBench"],
   ["apiEdge", "apiShore"],
@@ -203,11 +212,17 @@ function nodeAt(name: string): Point {
   return NODES[name] ?? { x: 0, z: 0 };
 }
 
+/**
+ * Spots a figure stands at beside a building rather than at its door: walked to, never paved. A
+ * resting spot (`…Rest`) is one too.
+ */
+const UNPAVED: ReadonlySet<string> = new Set(["inspect", "lectern", "mill", "sorting"]);
+
 /** The roads every village has: the main road, its branches, and the lake-API road. */
 export function roadLines(): readonly (readonly Point[])[] {
   return [
     [...MAIN_ROAD.map(nodeAt), { x: 11.6, z: 0 }],
-    ...BRANCHES.filter(([, to]) => !to.endsWith("Rest") && to !== "inspect").map(([from, to]) => [
+    ...BRANCHES.filter(([, to]) => !(to.endsWith("Rest") || UNPAVED.has(to))).map(([from, to]) => [
       nodeAt(from),
       nodeAt(to),
     ]),

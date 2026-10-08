@@ -19,7 +19,7 @@
  *             one a roof wears, so it can wear its division's hue) and which are water.
  *   buildings the blue variant only. The four variants differ only in the team cells, which the
  *             run time repaints anyway; the red variant is read just to find those cells.
- *   motion    nine clips out of 133, sampled at the village's ten frames a second and held
+ *   motion    twelve clips out of 133, sampled at the village's ten frames a second and held
  *             between them (STEP). That is the stop-motion itself, decided once here rather than
  *             at every frame, and it is most of what the clips weigh.
  *   bytes     meshopt-compressed (EXT_meshopt_compression). `three` ships the decoder with its
@@ -123,14 +123,25 @@ const TEAM_PROBES: readonly [string, string][] = [
 ];
 
 /** The cast (`docs/design/village.md`), by the model each role wears. */
-const FOLK = ["Ranger", "Rogue", "Mage", "Barbarian", "Knight"] as const;
+const FOLK = ["Ranger", "Rogue", "Rogue_Hooded", "Mage", "Barbarian", "Knight"] as const;
+
+/**
+ * The atlas a character is painted from, where it is not named after the character. The hooded
+ * rogue is the rogue's own drawing in a hood: the pack ships no `rogue_hooded_texture.png`, and
+ * `Rogue_Hooded.glb` embeds `rogue_texture.png` byte for byte. Named here rather than found by a
+ * fallback, so a character whose atlas is missing still stops the script.
+ */
+const FOLK_ATLAS: Readonly<Partial<Record<(typeof FOLK)[number], string>>> = {
+  Rogue_Hooded: "Rogue",
+};
 
 /** The clips the cast moves through, by the rig file that holds each. */
 const CLIPS: Record<string, readonly string[]> = {
   "Rig_Medium_General.glb": ["Idle_A", "Interact", "PickUp", "Use_Item"],
   "Rig_Medium_MovementBasic.glb": ["Walking_A"],
   "Rig_Medium_Simulation.glb": ["Sit_Floor_Idle", "Waving"],
-  "Rig_Medium_Tools.glb": ["Hammering", "Working_A", "Holding_A"],
+  "Rig_Medium_Tools.glb": ["Hammering", "Holding_A", "Sawing", "Working_B"],
+  "Rig_Medium_CombatRanged.glb": ["Ranged_Magic_Spellcasting"],
 };
 
 const root = process.env.KAYKIT_DIR ?? "";
@@ -235,7 +246,15 @@ const atlas = {
   folk: Object.fromEntries(
     FOLK.map((name) => [
       name,
-      cellGradients(need(join(adventurersDir, "Textures", `${name.toLowerCase()}_texture.png`))),
+      cellGradients(
+        need(
+          join(
+            adventurersDir,
+            "Textures",
+            `${(FOLK_ATLAS[name] ?? name).toLowerCase()}_texture.png`,
+          ),
+        ),
+      ),
     ]),
   ),
 };

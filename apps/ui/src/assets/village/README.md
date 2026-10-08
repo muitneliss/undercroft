@@ -10,13 +10,16 @@ All three packs are by Kay Lousberg, [kaylousberg.com](https://www.kaylousberg.c
 taken in its free tier from itch.io:
 
 - [KayKit Adventurers](https://kaylousberg.itch.io/kaykit-adventurers), version 2.0 FREE: the
-  five characters Knight, Barbarian, Mage, Ranger and Rogue.
+  six characters Knight, Barbarian, Mage, Ranger, Rogue and Rogue_Hooded. The hooded rogue is
+  painted from the rogue's atlas, `rogue_texture.png`, which its file embeds; the pack has no
+  atlas of its own for it.
 - [KayKit Character Animations](https://kaylousberg.itch.io/kaykit-character-animations),
-  version 1.1: nine clips for the medium rig.
+  version 1.1: twelve clips for the medium rig.
   - `Idle_A`, `Interact`, `PickUp` and `Use_Item` from `Rig_Medium_General`.
   - `Walking_A` from `Rig_Medium_MovementBasic`.
   - `Sit_Floor_Idle` and `Waving` from `Rig_Medium_Simulation`.
-  - `Hammering`, `Working_A` and `Holding_A` from `Rig_Medium_Tools`.
+  - `Hammering`, `Holding_A`, `Sawing` and `Working_B` from `Rig_Medium_Tools`.
+  - `Ranged_Magic_Spellcasting` from `Rig_Medium_CombatRanged`.
 - [KayKit Medieval Hexagon Pack](https://kaylousberg.itch.io/kaykit-medieval-hexagon), version
   1.0 FREE: the tiles, buildings, props, trees and water plants named in
   `scripts/village/assets.ts`.
@@ -47,5 +50,5 @@ The packs themselves are not in the repository. The script makes four changes:
 Bundled outputs:
 
 - `set.glb`: every set piece, as top-level nodes named by the layout's names.
-- `folk.glb`: the five characters, as top-level nodes named by KayKit's names.
-- `clips.glb`: the nine clips on the medium rig.
+- `folk.glb`: the six characters, as top-level nodes named by KayKit's names.
+- `clips.glb`: the twelve clips on the medium rig.

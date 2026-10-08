@@ -5,13 +5,22 @@
  * the ledger. Read by an admin, whose counts open the records they counted. ADR 0099.
  *
  * And the same book read as a village (ADR 0116) on a busy morning: HubSpot read again and still
- * running, the models building, and the support mailbox's last run failed. The tier forces
+ * running, so the gate stands open, the models building, the knowledge drive's text being copied
+ * out and its documents sorted by kind, and the support mailbox's last run failed. The tier forces
  * reduced motion, so the picture is the settled frame: everyone already where their work is.
  */
 
 import { describe, test as it } from "vitest";
 
-import { CONNECTIONS, RUNS, TENANT, tenant, XERO_RUN, XERO_RUN_DETAIL } from "@/test/demoBook.ts";
+import {
+  CONNECTIONS,
+  DRIVE_KNOWLEDGE,
+  RUNS,
+  TENANT,
+  tenant,
+  XERO_RUN,
+  XERO_RUN_DETAIL,
+} from "@/test/demoBook.ts";
 import { type Answers, open, WEBGL_TIMEOUT } from "@/test/visual.tsx";
 
 const ADDRESS = `/tenants/${TENANT}/journal/${XERO_RUN}`;
@@ -62,6 +71,30 @@ const VILLAGE_ANSWERS: Answers = {
               entities: ["deals"],
               status: "running" as const,
               startedAt: "2026-09-29T09:28:00Z",
+              endedAt: null,
+              counts: null,
+            },
+            {
+              ...LATEST,
+              id: "run-0110",
+              kind: "semantic" as const,
+              source: DRIVE_KNOWLEDGE,
+              entities: [],
+              trigger: "manual" as const,
+              status: "running" as const,
+              startedAt: "2026-09-29T09:27:00Z",
+              endedAt: null,
+              counts: null,
+            },
+            {
+              ...LATEST,
+              id: "run-0109",
+              kind: "extract" as const,
+              source: DRIVE_KNOWLEDGE,
+              entities: [],
+              trigger: "manual" as const,
+              status: "running" as const,
+              startedAt: "2026-09-29T09:26:00Z",
               endedAt: null,
               counts: null,
             },

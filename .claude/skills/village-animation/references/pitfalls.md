@@ -13,7 +13,7 @@ what to check before you change it. They are grouped by where they bite.
   keys alive. `keepClips` (`gltf.ts`) disposes of the samplers first. `bundle` then disposes of
   every accessor that only the root still points at, because `prune` leaves a bare accessor
   alone. Check the byte sizes after any clip change.
-- **Loading suffixed the bone names.** Five rigs in one file share bone names, so three's
+- **Loading suffixed the bone names.** The rigs in one file share bone names, so three's
   `GLTFLoader` makes them unique by suffix (`hips_2`), and the clips' rigs get the same
   treatment. A clip addresses a bone by name, so no track would bind. `kit.ts` strips
   `DUPLICATE_SUFFIX` from both the bones and the track names after loading. When a new clip does

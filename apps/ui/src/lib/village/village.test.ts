@@ -141,6 +141,29 @@ describe("the workshop", () => {
   });
 });
 
+describe("the documents", () => {
+  const extract: RunView = run({ id: "extract", kind: "extract", source: "drive", ...RUNNING });
+
+  it("an extract waiting for its turn sits the copyist at home, not copying", () => {
+    const scene = village({
+      runs: [extract],
+      events: new Map([
+        ["extract", [said("run_opened", "2026-10-07T08:58:00Z"), said("run_waiting")]],
+      ]),
+    });
+
+    expect(actor(scene, "copyist")).toMatchObject({ doing: "waiting", runId: "extract" });
+  });
+
+  it("an extract and a classification running at once are two figures at work", () => {
+    const semantic = run({ id: "semantic", kind: "semantic", source: "drive", ...RUNNING });
+    const scene = village({ runs: [semantic, extract] });
+
+    expect(actor(scene, "copyist")).toMatchObject({ doing: "copying", runId: "extract" });
+    expect(actor(scene, "scribe")).toMatchObject({ doing: "classifying", runId: "semantic" });
+  });
+});
+
 describe("the village around them", () => {
   it("rings the bell for a scheduled run that has just opened, and not for one a person started", () => {
     const opened = { ...RUNNING, startedAt: "2026-10-07T08:59:57Z" };

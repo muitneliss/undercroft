@@ -23,7 +23,7 @@ import type { AtlasFacts, Tokens } from "@/lib/village/palette.ts";
 import { roadOf, slipMaker, slipTexture } from "@/lib/village/props.ts";
 
 export interface Cast {
-  /** The five models, by KayKit name, each a rigged group to clone. */
+  /** The characters, by KayKit name, each a rigged group to clone. */
   readonly models: ReadonlyMap<string, Object3D>;
   readonly clips: readonly AnimationClip[];
 }
@@ -44,7 +44,7 @@ const ATLAS: { readonly set: AtlasFacts; readonly folk: Readonly<Record<string, 
   atlasFacts;
 
 /**
- * Five rigs merged into one file share one set of bone names, and the loader makes them unique
+ * The rigs merged into one file share one set of bone names, and the loader makes them unique
  * by suffix (`hips_2`); so do the clips' rigs. A clip addresses a bone by name, so each rig gets
  * its own names back, and each track the name of the bone it moves.
  */

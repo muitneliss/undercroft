@@ -1,10 +1,11 @@
 /**
  * The Journal's village as a world for the film (`film.ts`): the board and its buildings, the
- * cast at work, what the runs left behind, the bell, and the weather (ADR 0116,
- * `docs/design/village.md`).
+ * cast at work, what the runs left behind, the machinery the runs drive, and the weather
+ * (ADR 0116, `docs/design/village.md`).
  *
  * The board owns what does not move. The figures (`folk.ts`) own the cast; the props
- * (`props.ts`) are rebuilt from each scene; the ambience (`ambience.ts`) moves on its own.
+ * (`props.ts`) are rebuilt from each scene; the works (`works.ts`) move only while a run drives
+ * them; the ambience (`ambience.ts`) moves on its own.
  */
 
 import { Box3, Group, type Object3D, Plane, type Raycaster, Vector3 } from "three";
@@ -15,12 +16,10 @@ import { Figure } from "@/lib/village/folk.ts";
 import type { Kit } from "@/lib/village/kit.ts";
 import { boardTiles, PLACEMENTS, PLACES } from "@/lib/village/layout.ts";
 import { FIGURE_TARGET } from "@/lib/village/pointer.ts";
-import { makeBell, placeProps } from "@/lib/village/props.ts";
+import { placeProps } from "@/lib/village/props.ts";
 import { roadLines, sourceRoadLine } from "@/lib/village/roads.ts";
 import type { VillageScene } from "@/lib/village/script.ts";
-
-/** The bell's swing, one position a frame: two full swings when a scheduled run opens. */
-const BELL_SWING = [0.35, 0, -0.35, 0, 0.35, 0, -0.35, 0];
+import { Works } from "@/lib/village/works.ts";
 
 /**
  * The board, and the top of each building a reader can point at: the highest of what stands
@@ -61,20 +60,19 @@ export class Town implements World<VillageScene> {
   private readonly figures = new Map<string, Figure>();
   private readonly cast = new Group();
   private readonly props = new Group();
-  private readonly bell: Object3D;
+  private readonly works: Works;
   private readonly ambience: Ambience;
   private readonly roads = new Map<number, Object3D>();
   private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
   private readonly roofs: ReadonlyMap<string, Vector3>;
-  private bellFrame = 0;
 
   constructor(kit: Kit) {
     this.kit = kit;
     const board = boardOf(kit);
     this.root = board.root;
     this.roofs = board.roofs;
-    this.bell = makeBell(kit.painter);
-    this.root.add(this.bell);
+    this.works = new Works(this.root, kit.painter);
+    this.root.add(this.works.group);
     this.ambience = new Ambience(this.root, (name) => kit.piece(name));
     this.extras = [this.cast, this.props, this.ambience.group];
   }
@@ -99,9 +97,7 @@ export class Town implements World<VillageScene> {
       }
       figure.cast(actor, still);
     }
-    if (next.bellRinging && this.bellFrame === 0) {
-      this.bellFrame = 1;
-    }
+    this.works.set(next, still);
     placeProps(
       this.props,
       {
@@ -121,12 +117,8 @@ export class Town implements World<VillageScene> {
     for (const figure of this.figures.values()) {
       figure.step();
     }
+    this.works.step();
     this.ambience.step();
-    const swing = this.bell.getObjectByName("swing");
-    if (swing !== undefined && this.bellFrame !== 0) {
-      swing.rotation.x = BELL_SWING[this.bellFrame - 1] ?? 0;
-      this.bellFrame = this.bellFrame >= BELL_SWING.length ? 0 : this.bellFrame + 1;
-    }
   }
 
   /** A figure first, then the building whose ground the pointer is over. */
