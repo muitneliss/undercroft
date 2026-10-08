@@ -178,7 +178,11 @@ other view.
   in `Asia/Singapore`. A character with a run links to `/journal/:runId`.
 - Beneath that, the **buildings** list names each building and the division it opens, as links.
 - Pointing at a figure or a building in the picture lights its row, with the same wash a hovered
-  row takes (`data-lit`). Pressing it goes where the row goes. A keyboard reader uses the rows.
+  row takes (`data-lit`), and shows a card above it: the figure's role, what they are doing, for
+  whom and since when, or the building's name and the division it opens. The card is DOM text
+  over the canvas, never drawn into it; it follows a walking figure at ten frames a second, stays
+  inside the frame, and is `aria-hidden`, because it repeats the row. Pressing goes where the row
+  goes. A keyboard reader uses the rows.
 - Every name is a catalogue key, Vietnamese first, under `journal.village` in `apps/ui/src/i18n`.
 
 ## Live data

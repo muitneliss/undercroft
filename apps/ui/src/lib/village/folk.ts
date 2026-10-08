@@ -20,6 +20,7 @@ import {
   type Object3D,
   BoxGeometry,
   MeshBasicMaterial,
+  Vector3,
 } from "three";
 import { clone as cloneRig } from "three/addons/utils/SkeletonUtils.js";
 
@@ -148,8 +149,10 @@ function stay(to: string, clip: string): Leg {
   return { to, clip, hold: null, carrying: false };
 }
 
+/** How tall a figure stands, to the top of its head. */
+const FIGURE_HEIGHT = 0.9;
 /** What a press lands on, shared by every figure: the skinned meshes' own bounds lag their pose. */
-const HIT_BOX = new BoxGeometry(0.5, 0.9, 0.5);
+const HIT_BOX = new BoxGeometry(0.5, FIGURE_HEIGHT, 0.5);
 const HIT_MATERIAL = new MeshBasicMaterial();
 
 export class Figure {
@@ -188,12 +191,17 @@ export class Figure {
     this.crate.visible = false;
     this.body.getObjectByName("chest")?.add(this.crate);
     const hit = new Mesh(HIT_BOX, HIT_MATERIAL);
-    hit.position.y = 0.45;
+    hit.position.y = FIGURE_HEIGHT / 2;
     hit.visible = false;
     hit.name = `${FIGURE_TARGET}${actor.key}`;
     this.holder.add(hit);
     const home = NODES[homeOf(actor)] ?? { x: 0, z: 0 };
     this.holder.position.set(home.x, 0, home.z);
+  }
+
+  /** The top of the figure's head where it stands this frame, in the world. */
+  head(): Vector3 {
+    return new Vector3(this.holder.position.x, FIGURE_HEIGHT, this.holder.position.z);
   }
 
   /** What the character is doing now. A change of doing starts its choreography afresh. */
