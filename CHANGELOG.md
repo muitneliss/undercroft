@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.72.0](https://github.com/muitneliss/undercroft/compare/v1.71.1...v1.72.0) (2026-10-08)
+
+
+### Features
+
+* **ui:** pointing at a figure or a building in the village shows its card above it ([#420](https://github.com/muitneliss/undercroft/issues/420)) ([218cac1](https://github.com/muitneliss/undercroft/commit/218cac153180bd85cd421ad3a8c6ca1bd7f1aac6))
+* **ui:** the sign-in page reads only the clock; the weather almanac is gone (ADR 0118) ([#422](https://github.com/muitneliss/undercroft/issues/422)) ([7e72ee5](https://github.com/muitneliss/undercroft/commit/7e72ee5dc034b5e30341f6456ecfaf25cc84a6ce))
+
 ## [1.71.1](https://github.com/muitneliss/undercroft/compare/v1.71.0...v1.71.1) (2026-10-08)
 
 
