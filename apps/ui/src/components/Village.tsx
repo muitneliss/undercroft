@@ -5,8 +5,9 @@
  * The words are the content and the canvas is their picture, as the cover's film is its lists'
  * (ADR 0063): the canvas is `aria-hidden` and draws no letter, and the table beside it names every
  * character, what they are doing for whom, and since when, with a link to the run. Pointing at a
- * figure or a building in the picture lights its row here; pressing one opens its run or its
- * division.
+ * figure or a building in the picture lights its row here and shows the same words on a card
+ * above it; pressing one opens its run or its division. The cards are `aria-hidden` like the
+ * canvas: they repeat the lists for a pointer, and the lists stay the content.
  *
  * It reads only what the Journal reads, with the reader's own session: the newest page of runs,
  * what each running run has said, the newest closed build for its steps, and the connections for
@@ -190,6 +191,7 @@ function VillageBoard({
         <div className="village__picture" aria-hidden="true">
           <canvas ref={canvasRef} />
         </div>
+        <Cards actors={scene.actors} runs={runs} accounts={accounts} />
         <p className="prose village__failed">{t("journal.village.failed")}</p>
       </div>
       <WorkList tenantId={tenantId} actors={scene.actors} runs={runs} accounts={accounts} />
@@ -215,6 +217,54 @@ function forOf(
     return sourceLabel(actor.source, accounts);
   }
   return run === undefined ? MISSING : describeRun(t, run, accounts);
+}
+
+/**
+ * A card for every character and every building, each hidden until the pointer lights it over
+ * the picture (`lib/village/pointer.ts` sets it above its target). The same words as their rows.
+ */
+function Cards({
+  actors,
+  runs,
+  accounts,
+}: {
+  actors: readonly Actor[];
+  runs: readonly (RunView | RunDetail)[];
+  accounts: readonly Connection[];
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
+
+  return (
+    <div className="village__cards" aria-hidden="true">
+      {actors.map((actor) => {
+        const run = runs.find((candidate) => candidate.id === actor.runId);
+        return (
+          <div key={actor.key} className="village__card" data-card="" data-actor={actor.key}>
+            <p className="village__card-head">{t(`journal.village.role.${actor.role}`)}</p>
+            <p>{doingOf(t, actor)}</p>
+            <dl>
+              <dt>{t("journal.village.colFor")}</dt>
+              <dd>{forOf(t, actor, run, accounts)}</dd>
+              <dt>{t("journal.village.colSince")}</dt>
+              <dd className="datum">
+                {run === undefined ? MISSING : formatDateTime(run.startedAt, locale)}
+              </dd>
+            </dl>
+          </div>
+        );
+      })}
+      {PLACES.map((place) => (
+        <div key={place.id} className="village__card" data-card="" data-place={place.id}>
+          <p className="village__card-head">{t(`journal.village.place.${place.id}`)}</p>
+          <dl>
+            <dt>{t("journal.village.colOpens")}</dt>
+            <dd>{t(division(place.division).labelKey)}</dd>
+          </dl>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /** Every character, what they are doing for whom, and since when; the run one press away. */

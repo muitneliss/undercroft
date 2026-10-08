@@ -456,7 +456,9 @@ division, and the ledger stays the default.
   arranges (ADR 0117); no village stands in for them or for any other view.
 - **Words beside the picture.** The canvas is `aria-hidden` and draws no letter. The work list
   and the buildings list beneath it are the content; pointing at a figure or a building lights its
-  row with the hovered row's wash.
+  row with the hovered row's wash, and lays the row's words on a small leaf above it (Leaf ground,
+  Rule-strong hairline, 3px cut, inked in like a new row). That card repeats the row and is never
+  the only place its words are.
 
 ## The Title Page's Sky
 

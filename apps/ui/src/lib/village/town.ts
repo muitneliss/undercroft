@@ -7,7 +7,7 @@
  * (`props.ts`) are rebuilt from each scene; the ambience (`ambience.ts`) moves on its own.
  */
 
-import { Group, type Object3D, Plane, type Raycaster, Vector3 } from "three";
+import { Box3, Group, type Object3D, Plane, type Raycaster, Vector3 } from "three";
 
 import { Ambience } from "@/lib/village/ambience.ts";
 import type { World } from "@/lib/village/film.ts";
@@ -22,8 +22,13 @@ import type { VillageScene } from "@/lib/village/script.ts";
 /** The bell's swing, one position a frame: two full swings when a scheduled run opens. */
 const BELL_SWING = [0.35, 0, -0.35, 0, 0.35, 0, -0.35, 0];
 
-function boardOf(kit: Kit): Group {
+/**
+ * The board, and the top of each building a reader can point at: the highest of what stands
+ * within its reach, so a building's card clears its roof and its flag.
+ */
+function boardOf(kit: Kit): { root: Group; roofs: Map<string, Vector3> } {
   const root = new Group();
+  const roofs = new Map(PLACES.map((place) => [place.id, new Vector3(place.x, 0, place.z)]));
   for (const tile of boardTiles()) {
     const ground = kit.piece(tile.water ? "hex_water" : "hex_grass");
     ground.position.set(tile.x, 0, tile.z);
@@ -38,8 +43,15 @@ function boardOf(kit: Kit): Group {
     made.rotation.y = (spot.turn * Math.PI) / 2;
     made.scale.setScalar(spot.scale);
     root.add(made);
+    const top = new Box3().setFromObject(made).max.y;
+    for (const place of PLACES) {
+      const roof = roofs.get(place.id);
+      if (roof !== undefined && Math.hypot(place.x - spot.x, place.z - spot.z) <= place.reach) {
+        roof.y = Math.max(roof.y, top);
+      }
+    }
   }
-  return root;
+  return { root, roofs };
 }
 
 export class Town implements World<VillageScene> {
@@ -53,11 +65,14 @@ export class Town implements World<VillageScene> {
   private readonly ambience: Ambience;
   private readonly roads = new Map<number, Object3D>();
   private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
+  private readonly roofs: ReadonlyMap<string, Vector3>;
   private bellFrame = 0;
 
   constructor(kit: Kit) {
     this.kit = kit;
-    this.root = boardOf(kit);
+    const board = boardOf(kit);
+    this.root = board.root;
+    this.roofs = board.roofs;
     this.bell = makeBell(kit.painter);
     this.root.add(this.bell);
     this.ambience = new Ambience(this.root, (name) => kit.piece(name));
@@ -128,6 +143,15 @@ export class Town implements World<VillageScene> {
     }
     const place = PLACES.find((p) => Math.hypot(p.x - spot.x, p.z - spot.z) <= p.reach);
     return place === undefined ? null : `place|${place.id}`;
+  }
+
+  /** Above a figure's head, or above a building's roof. */
+  anchor(target: string): Vector3 | null {
+    const [kind = "", id = ""] = target.split("|");
+    if (kind === "actor") {
+      return this.figures.get(id)?.head() ?? null;
+    }
+    return kind === "place" ? (this.roofs.get(id)?.clone() ?? null) : null;
   }
 
   dispose(): void {

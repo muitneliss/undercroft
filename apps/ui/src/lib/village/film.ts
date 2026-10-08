@@ -8,10 +8,10 @@
  * NOTHING HERE IS REACT STATE (`.claude/rules/state.md`), for the vault's reason
  * (`lib/vault/runtime.ts`): a frame loop that rendered through React would re-render the page
  * ten times a second for values nothing else reads. React hands the film what to show (`show`),
- * and the film writes back only `data-` attributes on the page's own elements: `data-lit` on the
- * words the pointer is over (`pointer.ts`), and `data-village` on the frame, `failed` where there
- * is no WebGL or a model would not load, which shows the frame's own sentence instead of an
- * empty box. The frame is `aria-busy` until then.
+ * and the film writes back only to the page's own elements: `data-lit` on the words the pointer
+ * is over and the lit card's place over the picture (`pointer.ts`), and `data-village` on the
+ * frame, `failed` where there is no WebGL or a model would not load, which shows the frame's own
+ * sentence instead of an empty box. The frame is `aria-busy` until then.
  *
  * The loop runs only while the canvas is on screen and the tab is visible. Under
  * `prefers-reduced-motion` it never runs: each `show` paints one settled frame.
@@ -53,6 +53,8 @@ export interface World<T> {
   step: () => void;
   /** What a ray from the pointer lands on, as `kind|id`, or null. */
   under: (ray: Raycaster) => string | null;
+  /** Where a `kind|id` target's card stands in the world: above its head or its roof. */
+  anchor: (target: string) => Vector3 | null;
   dispose: () => void;
 }
 
@@ -102,6 +104,7 @@ export class Film<T> {
   private readonly world: World<T>;
   private readonly kit: Kit;
   private readonly options: FilmOptions;
+  private readonly pointer: VillagePointer;
   private readonly listeners: [EventTarget, string, (event: Event) => void][];
   private readonly resize = new ResizeObserver(() => this.measure());
   private readonly seen = new IntersectionObserver((entries) => {
@@ -128,9 +131,13 @@ export class Film<T> {
     const pointer = new VillagePointer(
       elements,
       this.camera,
-      (ray) => this.world.under(ray),
+      {
+        under: (ray): string | null => this.world.under(ray),
+        anchor: (target): Vector3 | null => this.world.anchor(target),
+      },
       parts.onPick,
     );
+    this.pointer = pointer;
     this.listeners = [
       [elements.canvas, "pointermove", pointer.hover],
       [elements.canvas, "pointerleave", pointer.leave],
@@ -250,6 +257,7 @@ export class Film<T> {
 
   private draw(): void {
     this.look.render();
+    this.pointer.follow();
   }
 
   dispose(): void {
