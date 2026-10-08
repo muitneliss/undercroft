@@ -341,3 +341,4 @@
 ## [2026-10-08] ingest | ADR 0117 The Village Is an Overview of the Journal, and Replaces No Drawing
 ## [2026-10-08] ingest | Design: The Village, the Journal Drawn as People at Work
 ## [2026-10-08] ingest | ADR 0117 The Village Is an Overview of the Journal, and Replaces No Drawing
+## [2026-10-08] ingest | ADR 0118 The Title Page Reads Only the Clock

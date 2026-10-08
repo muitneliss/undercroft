@@ -102,34 +102,6 @@ export const en = {
       "Local sign-in is off. Set UNDERCROFT_DEV_SIGN_IN_AS in deploy/compose/.env and restart task dev:run.",
     signingInOwner: "Signing you in to the copy installed on this computer…",
     retry: "Try again",
-    weather: {
-      head: "Outside",
-      byClock: "{{light}}, by your clock",
-      reading: "{{temperature}}°C · {{sky}} · {{light}}",
-      readingCold: "{{temperature}}°C · {{sky}} · {{light}} · cold",
-      offer: "Read the weather where you are",
-      consent:
-        "Your browser will ask for your location. It is rounded to about ten kilometres, sent only to Open-Meteo for the weather, and never stored.",
-      locating: "Reading the weather…",
-      denied: "Your browser kept your location to itself, so the page follows your clock alone.",
-      unavailable: "The weather could not be read, so the page follows your clock alone.",
-      off: "Stop reading the weather",
-      light: {
-        night: "Night",
-        dawn: "Dawn",
-        day: "Day",
-        dusk: "Dusk",
-      },
-      sky: {
-        clear: "Clear",
-        cloud: "Cloudy",
-        fog: "Fog",
-        drizzle: "Drizzle",
-        rain: "Rain",
-        storm: "Thunderstorm",
-        snow: "Snow",
-      },
-    },
   },
 
   landing: {
