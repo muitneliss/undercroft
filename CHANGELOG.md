@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.71.1](https://github.com/muitneliss/undercroft/compare/v1.71.0...v1.71.1) (2026-10-08)
+
+
+### Reverts
+
+* **ui:** the run map and the lineage are React Flow again; the village is the Journal's overview only (ADR 0117) ([#418](https://github.com/muitneliss/undercroft/issues/418)) ([5afd49d](https://github.com/muitneliss/undercroft/commit/5afd49dea28e80c4d568f7053e3e6a0014a8c557))
+
 ## [1.71.0](https://github.com/muitneliss/undercroft/compare/v1.70.0...v1.71.0) (2026-10-07)
 
 
