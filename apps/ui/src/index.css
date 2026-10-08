@@ -5584,6 +5584,66 @@
     background: color-mix(in srgb, var(--board) 8%, transparent);
   }
 
+  /* The card over the picture: the lit row's words again, on a small leaf above the figure's
+   head or the building's roof. Every card is in the page and only the lit one shows;
+   `lib/village/pointer.ts` sets it with `translate`, inside the frame. It takes no pointer, so
+   passing over it does not leave the canvas, and it inks in like a new row. */
+  .village__cards {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .village__card {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-width: 18rem;
+    padding: var(--s-2) var(--s-3);
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-leaf);
+    background: var(--leaf);
+    color: var(--ink);
+    font-size: var(--t-small);
+    line-height: 1.35;
+  }
+
+  .village__card[data-lit] {
+    display: block;
+    animation: ink-set var(--pass) both;
+  }
+
+  .village__card p {
+    margin: 0;
+  }
+
+  .village__card-head {
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 80;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+
+  .village__card dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0 var(--s-2);
+    margin: var(--s-1) 0 0;
+  }
+
+  .village__card dt {
+    color: var(--ink-2);
+  }
+
+  .village__card dd {
+    margin: 0;
+  }
+
   /* A dashboard printed from the browser (its "Print / PDF" plate): the book's chrome --
    the tab strip, the spine, the running head's controls, the interleaf and the colophon --
    is not what was asked for. Scoped to the book holding a dashboard, so printing any other

@@ -52,7 +52,9 @@ Each is easy to break silently, because a wrong picture raises no error.
    - The canvas is `aria-hidden` and draws no letters. The work list and the place list name
      everything in DOM text, in Vietnamese first under `journal.village.*`.
    - Pointing at a figure or a building lights its row through `data-actor` or `data-place`,
-     and `data-lit`.
+     and `data-lit`. The same attributes light its card (`data-card`, `Cards` in `Village.tsx`),
+     which `pointer.ts` sets above the target's `World.anchor` on every drawn frame. The card is
+     DOM and `aria-hidden`; it repeats the row and never replaces it.
    - Without WebGL, the frame says so in a sentence (`data-village="failed"`).
 
 ## Map of the code
