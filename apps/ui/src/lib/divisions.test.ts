@@ -5,7 +5,7 @@
 
 import { describe, expect, test as it } from "bun:test";
 
-import { DIVISIONS, divisionPath } from "./divisions.ts";
+import { closedTo, DIVISIONS, division, divisionPath } from "./divisions.ts";
 
 /** `--errata` in index.css. Held out of the wheel so the slip is the only thing wearing it. */
 const ERRATA = "#cf2f16";
@@ -40,5 +40,23 @@ describe("divisionPath", () => {
   it("with no customer chosen, every scoped division sends the reader to choose one", () => {
     expect(divisionPath("journal", undefined)).toBe("/tenants");
     expect(divisionPath("customers", undefined)).toBe("/tenants");
+  });
+});
+
+describe("closedTo", () => {
+  const people = division("people");
+
+  it("closes People to a member and a viewer of the open book, and to nobody else (ADR 0119)", () => {
+    const closed = (["viewer", "member", "admin"] as const).map((role) =>
+      closedTo(people, { tenantId: "CASE-0042", role }),
+    );
+    expect(closed).toEqual(["admin-only", "admin-only", null]);
+    expect(
+      DIVISIONS.filter((d) => closedTo(d, { tenantId: "CASE-0042", role: "viewer" }) !== null),
+    ).toEqual([people]);
+  });
+
+  it("closes nothing on a role it does not know yet, so an admin's tab never turns over on a guess", () => {
+    expect(closedTo(people, { tenantId: "CASE-0042", role: undefined })).toBeNull();
   });
 });

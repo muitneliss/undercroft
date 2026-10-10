@@ -49,6 +49,14 @@ export const en = {
     people: "People",
     lockedTitle: "Choose a customer first",
     lockedHint: " — choose a customer first",
+    adminOnlyTitle: "Only an admin of this customer can open this",
+    adminOnlyHint: " — only an admin of this customer can open this",
+    adminOnlyHead: "Only an admin can open {{division}}",
+    adminOnlyLead:
+      "This section is for the admins of {{tenantId}} alone. Your role here is {{role}}.",
+    adminOnlyOwn:
+      "What you have done yourself, in this customer and every other, is on your account page.",
+    adminOnlyOwnLink: "See your activity",
   },
 
   common: {
@@ -724,11 +732,11 @@ export const en = {
     roleLabel: "Role in this customer",
     rightsLabel: "What each role may do in {{tenantId}}",
     rightsViewer:
-      "Sees the connected sources, the run journal, the raw lake's summary, the models and macros, the document kinds, and who has access and who is invited; opens and runs saved questions and dashboards. Cannot write or save a question, or change anything else.",
+      "Sees the connected sources, the run journal, the raw lake's summary, the models and macros, and the document kinds; opens and runs saved questions and dashboards. Cannot write or save a question, or change anything else.",
     rightsMember:
-      "Everything a viewer may do, and also: writes and runs new questions, saves and deletes questions and dashboards. Does not connect accounts, read the raw lake's contents, save or build models, or invite or remove anyone.",
+      "Everything a viewer may do, and also: writes and runs new questions, saves and deletes questions and dashboards. Does not connect accounts, read the raw lake's contents, save or build models, see who has access, or invite or remove anyone.",
     rightsAdmin:
-      "Everything a member may do, and also: connects and disconnects accounts, chooses what they read and how often, starts a sync now; reads, searches and queries the raw lake's records and documents, and the rows a failed data-quality test stored; saves, deletes and builds models, saves and deletes macros; edits and publishes the document kinds; mints and revokes ingest keys; invites people, changes their role, removes them and withdraws invitations; renames the customer. Adding a new customer is for platform administrators only.",
+      "Everything a member may do, and also: connects and disconnects accounts, chooses what they read and how often, starts a sync now; reads, searches and queries the raw lake's records and documents, and the rows a failed data-quality test stored; saves, deletes and builds models, saves and deletes macros; edits and publishes the document kinds; mints and revokes ingest keys; sees who has access and who is invited, invites people, changes their role, removes them and withdraws invitations; reads everything done in the customer, by anyone; renames the customer. Adding a new customer is for platform administrators only.",
     notInvited: "Not invited",
     invitedAndEmailed: "Invited {{email}}. They have been emailed.",
     invitedNotEmailedHeading: "Invited, but not emailed",

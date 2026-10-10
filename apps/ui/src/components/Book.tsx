@@ -29,6 +29,7 @@ import { lazy, type ReactNode, Suspense, useEffect, useId, useRef } from "react"
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
+import { AdminOnlyNotice } from "@/components/AdminOnlyNotice.tsx";
 import { Colophon } from "@/components/Colophon.tsx";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
@@ -37,7 +38,8 @@ import { StaleChunkBoundary } from "@/components/StaleChunkBoundary.tsx";
 import { TabRail } from "@/components/TabRail.tsx";
 import { DeactivatedNotice } from "@/components/TenantDeactivation.tsx";
 import { applyBoard } from "@/lib/acetate.ts";
-import { type DivisionId, division } from "@/lib/divisions.ts";
+import { closedTo, type DivisionId, division } from "@/lib/divisions.ts";
+import type { Role } from "@/lib/roles.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -175,16 +177,20 @@ function TabName({
  * What the leaf prints: the division, or what stands in for it.
  *
  * A book's division waits for `tenants.get` before it renders, because until that answers
- * nobody knows whether the customer is deactivated (ADR 0110) -- and a division rendered in
- * the meantime would ask the server for everything it shows, be refused each time, and flash
- * those refusals before the notice replaced them. A refused `tenants.get` lets the division
- * render and say for itself what it could not load. The Customers division is in no book and
- * waits for nothing.
+ * nobody knows whether the customer is deactivated (ADR 0110) or whether the reader may open
+ * this division at all (ADR 0119) -- and a division rendered in the meantime would ask the
+ * server for everything it shows, be refused each time, and flash those refusals before the
+ * notice replaced them. A refused `tenants.get` lets the division render and say for itself
+ * what it could not load. The Customers division is in no book and waits for nothing.
+ *
+ * Deactivation is asked first: it closes every division to everyone, and its notice is the one
+ * that says how the book opens again.
  */
 function leafPage(page: {
   tenantId: string | undefined;
+  current: DivisionId;
   pending: boolean;
-  role: string;
+  role: Role | undefined;
   deactivatedAt: string | null;
   children: ReactNode;
 }): ReactNode {
@@ -198,10 +204,16 @@ function leafPage(page: {
     return (
       <DeactivatedNotice
         tenantId={page.tenantId}
-        role={page.role}
+        role={page.role ?? ""}
         deactivatedAt={page.deactivatedAt}
       />
     );
+  }
+  // The rule the tab strip reads, so the tab and the leaf cannot disagree. A known role is
+  // `closedTo`'s own condition for closing anything here; it is repeated so the notice is
+  // handed a role it can name.
+  if (page.role !== undefined && closedTo(division(page.current), page) !== null) {
+    return <AdminOnlyNotice tenantId={page.tenantId} current={page.current} role={page.role} />;
   }
   return page.children;
 }
@@ -287,7 +299,7 @@ export function Book({
       <a className="book__skip" href={`#${pageId}`}>
         {t("app.skip")}
       </a>
-      <TabRail tenantId={tenantId} current={current} />
+      <TabRail tenantId={tenantId} role={tenant.data?.role} current={current} />
 
       {/*
         Keyed to WHICH BOOK IS OPEN AT WHICH DIVISION, which is the same thing as
@@ -348,8 +360,9 @@ export function Book({
           <StaleChunkBoundary>
             {leafPage({
               tenantId,
+              current,
               pending: tenant.isPending,
-              role: tenant.data?.role ?? "",
+              role: tenant.data?.role,
               deactivatedAt,
               children,
             })}

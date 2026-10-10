@@ -293,11 +293,16 @@ SELECT email, accepted_at FROM app.invitation;
 
 Open the tenant → **People**. Enter an address, pick a role, send.
 
-| Role     | Can                                                                                                                          |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `viewer` | look                                                                                                                         |
-| `member` | look, and author questions and dashboards                                                                                    |
-| `admin`  | all of it, plus connect accounts, run a sync, edit and build models, browse and query the raw lake, invite and manage people |
+| Role     | Can                                                                                                                                              |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `viewer` | look                                                                                                                                             |
+| `member` | look, and author questions and dashboards                                                                                                        |
+| `admin`  | all of it, plus connect accounts, run a sync, edit and build models, browse and query the raw lake, see who has access, invite and manage people |
+
+The People page opens for an admin of the customer only, and the roster and the open invitations
+are refused to anyone else through every door, the CLI and MCP included (ADR 0119). A `member` or
+`viewer` who opens it finds a note in its place that points them at their own activity on the
+account page.
 
 Beside the form the page states what each role may do in that customer, worded from the same
 gates the server enforces. The page tells you whether the invitation was actually emailed. If
