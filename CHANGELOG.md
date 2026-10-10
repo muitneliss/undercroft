@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.75.0](https://github.com/muitneliss/undercroft/compare/v1.74.0...v1.75.0) (2026-10-10)
+
+
+### Features
+
+* **audit:** record every agent call and every sign-in event (ADR 0120) ([#431](https://github.com/muitneliss/undercroft/issues/431)) ([6bb345e](https://github.com/muitneliss/undercroft/commit/6bb345e09d51d498bb3476291b4431a39a190759))
+
 ## [1.74.0](https://github.com/muitneliss/undercroft/compare/v1.73.0...v1.74.0) (2026-10-10)
 
 
