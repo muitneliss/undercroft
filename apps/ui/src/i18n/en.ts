@@ -471,6 +471,26 @@ export const en = {
     clientFailed: "The app's details could not be read.",
   },
 
+  grantReach: {
+    label: "What this grant reaches",
+    ceiling:
+      "A grant here never reaches further than you can yourself: in each customer, it stops at the role you hold there.",
+    read: "Read only allows looking, and only within that role.",
+    write:
+      "Read and write allows whatever that role allows, and also changing your own account's preferences, such as the language you read, whatever your role.",
+    followsRole:
+      "When your role changes, what this grant reaches changes with it from the next call.",
+    rolesLabel: "Your role in each customer",
+    heldIn: "In {{customers}}.",
+    more_one: "{{count, number}} other customer",
+    more_other: "{{count, number}} other customers",
+    viewerEverywhere:
+      "You are a viewer in every customer you hold, so there Read and write adds nothing to Read only beyond changing your own account's preferences.",
+    none: "This grant reaches no customer's data yet: you hold a role in no active customer.",
+    notLoaded:
+      "Your roles in your customers could not be read. The grant still never reaches further than them.",
+  },
+
   lake: {
     head: "Raw lake",
     title: "Raw lake",

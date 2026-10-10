@@ -1,19 +1,19 @@
 ---
 title: 'Runbook: Connecting an agent over MCP'
 type: source
-date: 2026-10-06
+date: 2026-10-10
 tags: []
 source: docs/runbook/mcp-setup.md
 source_path: docs/runbook/mcp-setup.md
-source_hash: 353524821e4d1e2a6e121be874dffc39213cced973d9bf5e77f63b9a30122704
-ingested: 2026-10-06
+source_hash: fb88f6a04761ebb0a1862bf8378fd6e25cf6ece6338e91fcb9876319996bee1a
+ingested: 2026-10-10
 ---
 
 # Runbook: Connecting an agent over MCP
 
 How a person connects claude.ai, Claude Desktop, Claude Code or any MCP client to `/mcp` on the control plane, which offers every web-UI procedure as a tool under the browser's role gates ([[ADR 0060: An agent reaches Undercroft over MCP, with a credential a person holds]], [[ADR 0061: An MCP client signs its person in, and draws two widgets]]).
 
-**Two ways in.** By signing in (OAuth): the client needs only the URL, registers itself, opens Undercroft's own sign-in page (Google or emailed code, invite-only) and a consent page where the person picks read only or read and write; the client then holds an 8-hour access token ([[ADR 0062: A refused bearer is logged with its reason, and an access token lives eight hours]]) and a refresh token. Or with a personal access token (`upat_…`) minted on `/account` and pasted into a header. Both reach exactly what the person reaches, both carry a grant, both are revoked on the account page (Connected apps / Personal access tokens); revoking stops the client at its next call.
+**Two ways in.** By signing in (OAuth): the client needs only the URL, registers itself, opens Undercroft's own sign-in page (Google or emailed code, invite-only) and a consent page where the person picks read only or read and write, beside their role in each customer and what the grant reaches (never more than that role; for a viewer, write adds only changes to their own account's preferences, such as the language they read); the client then holds an 8-hour access token ([[ADR 0062: A refused bearer is logged with its reason, and an access token lives eight hours]]) and a refresh token. Or with a personal access token (`upat_…`) minted on `/account`, whose form shows the same role-by-customer reach beside the grant, and pasted into a header. Both reach exactly what the person reaches, both carry a grant, both are revoked on the account page (Connected apps / Personal access tokens); revoking stops the client at its next call.
 
 **Per client.** claude.ai and Claude Desktop: Settings, Connectors, Add custom connector with `https://<control plane>/mcp`, then Connect. Claude Code: `claude mcp add --transport http undercroft <url>/mcp`, then `/mcp` and Authenticate; with a token add `--header "Authorization: Bearer upat_…"`. Desktop can also use `mcp-remote` with the header through `env`.
 

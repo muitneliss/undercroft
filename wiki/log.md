@@ -345,3 +345,4 @@
 ## [2026-10-08] ingest | ADR 0118 The Title Page Reads Only the Clock
 ## [2026-10-08] ingest | Design: The Village, the Journal Drawn as People at Work
 ## [2026-10-10] ingest | Runbook Google Ingestion Setup
+## [2026-10-10] ingest | Runbook: Connecting an agent over MCP

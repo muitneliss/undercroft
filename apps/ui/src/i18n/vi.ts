@@ -580,6 +580,33 @@ export const vi = {
     clientFailed: "Không đọc được thông tin ứng dụng.",
   },
 
+  /**
+   * What a read or write grant reaches, beside the choice on `/consent` and on the token form
+   * (`GrantReach`). Each sentence states what the router enforces and nothing more:
+   * `grantAdmits` in `surface.ts` is the ceiling, `requireRole` the role gate read on every call,
+   * and `session.setLocale` the one write that is the person's own rather than a customer's. A
+   * gate that moves makes a sentence false, so the two change in one commit. What each role may
+   * do is not worded here: it is `people.rights*`, said once.
+   */
+  grantReach: {
+    label: "Phạm vi của quyền này",
+    ceiling:
+      "Quyền cấp ở đây không bao giờ vượt quá những gì chính bạn làm được: ở mỗi khách hàng, nó dừng lại ở vai trò bạn đang giữ tại đó.",
+    read: "Chỉ đọc chỉ cho phép xem, và chỉ trong phạm vi vai trò đó.",
+    write:
+      "Đọc và ghi mở ra mọi điều vai trò đó được làm, và cả việc đổi tuỳ chọn của chính tài khoản bạn, như ngôn ngữ bạn đọc, dù bạn giữ vai trò nào.",
+    followsRole:
+      "Khi vai trò của bạn thay đổi, phạm vi của quyền này đổi theo ngay từ lần gọi kế tiếp.",
+    rolesLabel: "Vai trò của bạn ở từng khách hàng",
+    heldIn: "Tại {{customers}}.",
+    more_other: "{{count, number}} khách hàng khác",
+    viewerEverywhere:
+      "Bạn là viewer ở mọi khách hàng của mình, nên ở đó Đọc và ghi không thêm được gì so với Chỉ đọc, ngoài việc đổi tuỳ chọn của chính tài khoản bạn.",
+    none: "Quyền này chưa với tới dữ liệu của khách hàng nào: bạn chưa giữ vai trò ở khách hàng nào đang hoạt động.",
+    notLoaded:
+      "Không đọc được vai trò của bạn ở các khách hàng. Dù vậy, quyền này vẫn không vượt quá các vai trò đó.",
+  },
+
   lake: {
     head: "Hồ dữ liệu",
     title: "Hồ dữ liệu thô",

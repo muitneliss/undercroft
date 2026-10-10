@@ -20,6 +20,11 @@
  * - **A request for neither scope is only refusable.** Such a client could be let in and do
  *   nothing, which is a grant nobody meant to make.
  *
+ * Beside the choice, `GrantReach` says what it reaches: the person's role in each customer and
+ * what that role allows, so a viewer offered "read and write" is told it buys them nothing in
+ * those customers beyond their own account. It reads `tenants.list`, which needs the session the
+ * page already requires, and never blocks the answer.
+ *
  * Like `SignIn`, the page holds no state: the choice is an uncontrolled radio read from the
  * submitted form, and pending and failure are the mutation's own.
  */
@@ -33,6 +38,7 @@ import { useLocation } from "react-router-dom";
 import { answerConsent, requestingClient } from "@/auth.ts";
 import { Colophon } from "@/components/Colophon.tsx";
 import { Errata } from "@/components/Errata.tsx";
+import { GrantReach } from "@/components/GrantReach.tsx";
 import { Mark } from "@/components/Mark.tsx";
 import { MISSING } from "@/lib/money.ts";
 
@@ -210,6 +216,7 @@ export function Consent({ signedInAs }: { signedInAs: string }): React.JSX.Eleme
           }}
         >
           <GrantChoice offersRead={offersRead} offersWrite={offersWrite} disabled={leaving} />
+          {offersRead || offersWrite ? <GrantReach /> : null}
 
           {answer.isError ? (
             <Errata heading={t("consent.notAnswered")} live={true}>

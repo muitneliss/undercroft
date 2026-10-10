@@ -14,7 +14,7 @@ import { Trans, useTranslation } from "react-i18next";
 import { Address } from "@/components/Address.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { StatusLine } from "@/components/StatusLine.tsx";
-import { byAddress, isRole, ROLES, type Role } from "@/lib/roles.ts";
+import { byAddress, isRole, ROLE_RIGHTS, ROLES } from "@/lib/roles.ts";
 import { formatDate } from "@/lib/when.ts";
 import type { trpc } from "@/trpc.ts";
 
@@ -169,15 +169,11 @@ function InviteOutcome({
   );
 }
 
-/** Each role's sentence, keyed by the role so a fourth role is a type error until worded. */
-const RIGHTS = {
-  viewer: "people.rightsViewer",
-  member: "people.rightsMember",
-  admin: "people.rightsAdmin",
-} as const satisfies Record<Role, string>;
-
 /**
  * What each role may do in this customer, beside the form that grants one.
+ *
+ * The same sentences, through `ROLE_RIGHTS`, are what `GrantReach` shows beside a token's or a
+ * connector's grant for each role the person holds, so this note binds both readers.
  *
  * One catalogue entry per role, never assembled from role names (`i18n.md`), and each states
  * what the router's gates allow and refuse and nothing more: `requireRole("member")` on asking
@@ -198,7 +194,7 @@ export function RoleRights({ tenantId }: { tenantId: string }): React.JSX.Elemen
         out of React's types: `.access` lays `dt` and `dd` out as direct grid children. */}
       {ROLES.flatMap((role) => [
         <dt key={`${role}-role`}>{role}</dt>,
-        <dd key={`${role}-rights`}>{t(RIGHTS[role])}</dd>,
+        <dd key={`${role}-rights`}>{t(ROLE_RIGHTS[role])}</dd>,
       ])}
     </dl>
   );
