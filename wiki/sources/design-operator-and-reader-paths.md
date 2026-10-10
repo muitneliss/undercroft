@@ -1,12 +1,12 @@
 ---
 title: 'Design: Operator and reader paths'
 type: source
-date: 2026-10-08
+date: 2026-10-10
 tags: []
 source: docs/design/operator-and-reader-paths.md
 source_path: docs/design/operator-and-reader-paths.md
-source_hash: b2eef7c9f746437aa3c25777047ddfae24ab147e5f891cbd129de1347a9709ed
-ingested: 2026-10-08
+source_hash: b8f76fe53fdc2346d4cef7db225880e8d876dc5a9b4c9db8e6d80c0d7253974d
+ingested: 2026-10-10
 ---
 
 # Design: Operator and reader paths
@@ -19,6 +19,6 @@ An accepted design contract (#346, #347, #348) for three walks through the book 
 
 **Reports.** Chart.js and all sixteen types stay, with no drill-through ([[ADR 0020: BI is first-party, Metabase leaves the stack]]). Every chart offers its rows as a table to every role that can see it, and a CSV of exactly those rows: all digits, a missing value empty never 0, formula-leading text neutralised, a truncated result announced before download. The list is searchable with accents ignored (`foldForSearch`), and its time is named as when the definition was saved, never as data freshness.
 
-**People and Customers.** The last admin's row is marked; the guard in `membership.ts` (#168) stays the control. Each role's rights are stated beside the invitation form and must match the router's gates; inviting stays admin-only and a re-invite refreshes the open invitation ([[ADR 0010 Invite-Only Sign-In with Better Auth]]). The customer list narrows by the reader's role together with search.
+**People and Customers.** Since the contract and outside it, [[ADR 0119 Who Has Access to a Customer Is Read by Its Admin Alone]] made the whole People division admin-only, reads included: a member's or viewer's tab is face-down with that reason, and its address prints a notice pointing at their own activity on Account instead of the division. The last admin's row is marked; the guard in `membership.ts` (#168) stays the control. Each role's rights are stated beside the invitation form and must match the router's gates; inviting stays admin-only and a re-invite refreshes the open invitation ([[ADR 0010 Invite-Only Sign-In with Better Auth]]). The customer list narrows by the reader's role together with search.
 
 Across all three: stepped motion ([[ADR 0014 Frames Are Size, Nothing Eases]]), no modal (`apps/ui/DESIGN.md`), usable below 760 px, filter values in the address and second presses in a `<details>` fold rather than `useState`, every word a dictionary entry with Vietnamese first. Out of scope: edges to source accounts or reports, drill-through to records, model versions, a review step before every role change, and any change to roles or grants.

@@ -437,6 +437,24 @@ describe("only an admin of this customer may change or end access", () => {
 });
 
 describe("the roster says who has access", () => {
+  it("is read by an admin alone: a viewer and a member are refused it and the invitations", async () => {
+    // The access list is the admin's to manage, and so to read (ADR 0119). FORBIDDEN rather
+    // than NOT_FOUND: both already know the customer exists. An admin's reads are the quiet
+    // side, here and throughout this file.
+    await admin();
+
+    for (const role of ["viewer", "member"] as const) {
+      const email = `${role}@example.test`;
+      const api = caller({ userId: await seedMember(email, role), email });
+      expect(await errorCode(() => api.people.members({ tenantId: "CASE-0042" }))).toBe(
+        "FORBIDDEN",
+      );
+      expect(await errorCode(() => api.people.invitations({ tenantId: "CASE-0042" }))).toBe(
+        "FORBIDDEN",
+      );
+    }
+  });
+
   it("members are listed with their roles", async () => {
     const api = await admin();
     await seedMember("hand@example.test", "viewer");

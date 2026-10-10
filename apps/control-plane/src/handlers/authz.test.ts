@@ -280,6 +280,21 @@ describe("a superadmin can act in a tenant, not only see it", () => {
     expect(result.email).toBe("new@example.test");
   });
 
+  it("may read who has access to a tenant they have no membership in", async () => {
+    // `people.members` and `people.invitations` are admin-only (ADR 0119). A superadmin who
+    // can invite must be able to see whom they invited, or they act blind.
+    const user = await seedUser("root@example.test");
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
+    const root = caller({ userId: user, email: "root@example.test" }, true);
+    await root.people.invite({ tenantId: "CASE-1", email: "new@example.test", role: "viewer" });
+
+    const members = await root.people.members({ tenantId: "CASE-1" });
+    const invitations = await root.people.invitations({ tenantId: "CASE-1" });
+
+    expect(members).toEqual([]);
+    expect(invitations.map((invitation) => invitation.email)).toEqual(["new@example.test"]);
+  });
+
   it("the list view shows every tenant, including ones with no membership", async () => {
     const user = await seedUser("root@example.test");
     await seedMembership("CASE-1", user, "member");
@@ -443,13 +458,13 @@ describe("a deactivated customer", () => {
   it("refuses a member's tenant procedure by name, and answered it before", async () => {
     const member = await seeded("member");
     const admin = await seeded("admin");
-    expect(await errorCode(() => member.people.members({ tenantId: "CASE-0001" }))).toBe(
+    expect(await errorCode(() => member.connections.list({ tenantId: "CASE-0001" }))).toBe(
       "NO_ERROR",
     );
 
     await admin.tenants.deactivate({ tenantId: "CASE-0001" });
 
-    expect(await refusedWith(() => member.people.members({ tenantId: "CASE-0001" }))).toBe(
+    expect(await refusedWith(() => member.connections.list({ tenantId: "CASE-0001" }))).toBe(
       "PRECONDITION_FAILED:TENANT_DEACTIVATED",
     );
   });
@@ -521,7 +536,7 @@ describe("a deactivated customer", () => {
     const reactivated = await admin.tenants.reactivate({ tenantId: "CASE-0001" });
 
     expect(reactivated.deactivatedAt).toBeNull();
-    expect(await errorCode(() => member.people.members({ tenantId: "CASE-0001" }))).toBe(
+    expect(await errorCode(() => member.connections.list({ tenantId: "CASE-0001" }))).toBe(
       "NO_ERROR",
     );
     const { rows } = await db.query<{ action: string; actor: string }>(

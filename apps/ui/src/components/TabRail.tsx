@@ -27,6 +27,11 @@
  * it. `aria-disabled` with the reason in the accessible name says the same thing
  * to someone who cannot see the turned-over leaf.
  *
+ * A division can also be face-down for the reader's role in the open book: People
+ * opens only for an admin of it (ADR 0119). The same turned-over leaf, with that
+ * reason in its name instead. Which reason applies is `closedTo`'s to decide, so
+ * the strip and the leaf `Book` prints can never disagree about it.
+ *
  * The form says the divider boards "carry no mark at all". These carry their
  * labels. This is an Operate surface and unlabelled navigation is not a
  * stylistic position, it is a defect; it is the only place this build departs
@@ -42,16 +47,28 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { letteringOn } from "@/lib/acetate.ts";
-import { DIVISIONS, type DivisionId, divisionPath } from "@/lib/divisions.ts";
+import {
+  CLOSED_WORDS,
+  type Closed,
+  closedTo,
+  DIVISIONS,
+  type Division,
+  type DivisionId,
+  divisionPath,
+} from "@/lib/divisions.ts";
+import type { Role } from "@/lib/roles.ts";
 
 /** The phone layout's breakpoint, where the strip sits at the foot and scrolls sideways. */
 const FOOT_STRIP = "(max-width: 760px)";
 
 export function TabRail({
   tenantId,
+  role,
   current,
 }: {
   tenantId: string | undefined;
+  /** The reader's role in the open book, or `undefined` while it is not known. */
+  role: Role | undefined;
   current: DivisionId;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -93,44 +110,61 @@ export function TabRail({
 
   return (
     <nav className="rail" aria-label={t("nav.sections")} ref={railRef}>
-      {DIVISIONS.map((div) => {
-        const locked = div.scoped && !tenantId;
-        // Lettering is chosen per hue rather than fixed: white reads at 2.09:1
-        // on the chrome board and 7.6:1 on the ultramarine one.
-        const style = {
-          flexGrow: div.extent,
-          background: div.hue,
-          color: letteringOn(div.hue),
-        } as const;
-
-        if (locked) {
-          return (
-            <span
-              key={div.id}
-              className="rail__tab"
-              aria-disabled="true"
-              style={{ flexGrow: div.extent }}
-              title={t("nav.lockedTitle")}
-            >
-              {t(div.labelKey)}
-              <span className="visually-hidden">{t("nav.lockedHint")}</span>
-            </span>
-          );
-        }
-
-        return (
-          <Link
-            key={div.id}
-            className="rail__tab"
-            style={style}
-            to={divisionPath(div.id, tenantId)}
-            data-division={div.id}
-            {...(div.id === current ? { "aria-current": "page" as const } : {})}
-          >
-            {t(div.labelKey)}
-          </Link>
-        );
-      })}
+      {DIVISIONS.map((div) => (
+        <Tab
+          key={div.id}
+          div={div}
+          closed={closedTo(div, { tenantId, role })}
+          tenantId={tenantId}
+          current={div.id === current}
+        />
+      ))}
     </nav>
+  );
+}
+
+/** One division's tab: face-down with the reason it is closed, or a link that opens it. */
+function Tab({
+  div,
+  closed,
+  tenantId,
+  current,
+}: {
+  div: Division;
+  closed: Closed | null;
+  tenantId: string | undefined;
+  current: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  if (closed !== null) {
+    // `data-division` here too: the current division can be the one closed to this reader,
+    // and the phone strip still has to bring its tab into view.
+    return (
+      <span
+        className="rail__tab"
+        aria-disabled="true"
+        style={{ flexGrow: div.extent }}
+        title={t(CLOSED_WORDS[closed].title)}
+        data-division={div.id}
+      >
+        {t(div.labelKey)}
+        <span className="visually-hidden">{t(CLOSED_WORDS[closed].hint)}</span>
+      </span>
+    );
+  }
+
+  // Lettering is chosen per hue rather than fixed: white reads at 2.09:1 on the chrome board
+  // and 7.6:1 on the ultramarine one.
+  return (
+    <Link
+      className="rail__tab"
+      style={{ flexGrow: div.extent, background: div.hue, color: letteringOn(div.hue) }}
+      to={divisionPath(div.id, tenantId)}
+      data-division={div.id}
+      {...(current ? { "aria-current": "page" as const } : {})}
+    >
+      {t(div.labelKey)}
+    </Link>
   );
 }

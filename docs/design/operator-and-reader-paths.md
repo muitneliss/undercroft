@@ -201,6 +201,11 @@ to figures Reports totals or bounds on its own:
 
 ### People
 
+- Since this contract, and outside it: ADR 0119 (#425) made the whole division admin-only, the
+  roster and the open invitations included, which is the one permission change this section now
+  describes. For a member or viewer its tab is face-down with that reason in its name, and its
+  address prints a notice in its place that points at the reader's own activity on Account
+  (ADR 0113); the division asks the server nothing.
 - When exactly one member of a customer holds admin, that member's row says so and offers no
   lower role and no removal. The server's last-admin guard stays the control (#168); the row
   only shows in advance what it refuses.

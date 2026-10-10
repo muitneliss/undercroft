@@ -5,11 +5,13 @@
  * invitation; this page is how one comes to exist. Without it a correct sign-in admits
  * nobody without a SQL client, which is not a product.
  *
- * Inviting, changing a member's role and removing a member are admin-only on the server
- * (`requireRole("admin")`), and the server alone refuses to leave a customer without an
- * admin. The form and the roster's controls are hidden for anyone else rather than shown and
- * rejected, because the role is already known here — but hiding them is courtesy, not the
- * control: the procedures refuse regardless of what the browser renders.
+ * The whole division is admin-only (ADR 0119): reading the roster and the invitations is
+ * `requireRole("admin")` on the server, as every write here is, and `Book` never mounts this
+ * page for anybody else -- it prints `AdminOnlyNotice` in its place, so a member's browser does
+ * not even ask. The `isAdmin` checks below predate that and no longer decide what an ordinary
+ * reader sees; like the hiding they do, they are courtesy, not the control. The procedures
+ * refuse regardless of what the browser renders, and the server alone refuses to leave a
+ * customer without an admin.
  *
  * No `useState`, per `state.md`, and nothing here needs it. The two invitation inputs are
  * uncontrolled and read through refs on submit; the open view and the address search are the

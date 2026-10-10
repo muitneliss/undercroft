@@ -1,12 +1,12 @@
 ---
 title: 'Runbook: Connecting an agent over MCP'
 type: source
-date: 2026-10-06
+date: 2026-10-10
 tags: []
 source: docs/runbook/mcp-setup.md
 source_path: docs/runbook/mcp-setup.md
-source_hash: 353524821e4d1e2a6e121be874dffc39213cced973d9bf5e77f63b9a30122704
-ingested: 2026-10-06
+source_hash: 650718d34688e9cfb57c09d2b83687562da80a614e8b91f83200f34999834c9a
+ingested: 2026-10-10
 ---
 
 # Runbook: Connecting an agent over MCP
@@ -19,7 +19,7 @@ How a person connects claude.ai, Claude Desktop, Claude Code or any MCP client t
 
 **URLs.** Deployment `https://<control plane>/mcp`; local `http://localhost:5173/mcp` (Vite), `:3000` (control plane), `:13000` (Path A).
 
-**Tokens.** read vs write per `EFFECTS` in `surface.ts` (`lake_query` and every delete/revoke/disconnect are not reads); at most a year; shown once; cannot mint or revoke tokens. `task dev:mcp-smoke` checks the 401 challenge, the tool list split by effect, and whose token it is.
+**Tokens.** read vs write per `EFFECTS` in `surface.ts` (`lake_query` and every delete/revoke/disconnect are not reads, and a read grant shows people only to an admin, [[ADR 0119 Who Has Access to a Customer Is Read by Its Admin Alone]]); at most a year; shown once; cannot mint or revoke tokens. `task dev:mcp-smoke` checks the 401 challenge, the tool list split by effect, and whose token it is.
 
 **What the agent sees.** Tool names are paths with `_` for `.`; descriptions in the client's language (vi default); results whole in `structuredContent`, text clipped to 50 items/60 KB with a note; refusals carry a code, sentence, facts and traceId. In hosts that draw MCP Apps, query results render as a table (up to 500 rows, amounts digit for digit) and `runs_trigger`/`runs_get` as a live run status. Account procedures, sign-out, health and the Picker config are not offered.
 
