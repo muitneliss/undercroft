@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.74.0](https://github.com/muitneliss/undercroft/compare/v1.73.0...v1.74.0) (2026-10-10)
+
+
+### Features
+
+* **ui:** show the role in each customer and what a grant reaches beside the MCP grant choice ([#430](https://github.com/muitneliss/undercroft/issues/430)) ([19b6d47](https://github.com/muitneliss/undercroft/commit/19b6d476117317d2f9058b37f897c276b27081a5)), closes [#427](https://github.com/muitneliss/undercroft/issues/427)
+
+
+### Bug Fixes
+
+* **people:** who has access to a customer is read by its admin alone (ADR 0119) ([#428](https://github.com/muitneliss/undercroft/issues/428)) ([2c51215](https://github.com/muitneliss/undercroft/commit/2c51215578b16c18a9e00fd1de8f77150c2ece23)), closes [#425](https://github.com/muitneliss/undercroft/issues/425)
+
 ## [1.73.0](https://github.com/muitneliss/undercroft/compare/v1.72.0...v1.73.0) (2026-10-08)
 
 
