@@ -47,6 +47,7 @@ import {
   type VerifiedToken,
   verifyAccessToken,
 } from "./mcpAccessToken.ts";
+import { type StoredConsent, strings } from "./mcpConsent.ts";
 
 /**
  * How long an access token lives: eight hours. ADR 0062.
@@ -167,22 +168,9 @@ export interface Issuing {
 /** Better Auth's own storage, which knows the model mapping in `authSchema.ts`. */
 type Store = Pick<AuthContext, "adapter" | "internalAdapter">;
 
-/** A consent as the adapter answers it: the fields read here, typed as what they must be. */
-interface StoredConsent {
-  readonly id: string;
-  readonly clientId: string;
-  readonly scopes: unknown;
-  readonly createdAt?: unknown;
-  readonly updatedAt?: unknown;
-}
-
 interface StoredClient {
   readonly name?: unknown;
   readonly redirectUris?: unknown;
-}
-
-function strings(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
 }
 
 function isoOf(value: unknown): string | null {
@@ -228,7 +216,7 @@ async function admitted(
     return { ok: false, reason: "no_person", clientId };
   }
   if (consent === null) {
-    return { ok: false, reason: "revoked", clientId };
+    return { ok: false, reason: "revoked", clientId, email: user.email };
   }
   return {
     ok: true,

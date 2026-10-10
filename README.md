@@ -77,8 +77,9 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
   about to expire are emailed to the tenant's admins. A failure, and the run that next
   succeeds, can also post to the operators' Lark group.
 - **Every action is on the record.** What a person does, in the browser, the CLI, over MCP or
-  through the assistant, lands in an append-only audit log, refusals included. Each person
-  reads their own on the account page, an admin a customer's in People, a superadmin all of it.
+  through the assistant, lands in an append-only audit log, refusals included -- and so does
+  every read an agent makes, and every sign-in, sign-out and refused token. Each person reads
+  their own on the account page, an admin a customer's in People, a superadmin all of it.
 - **An assistant with exactly your permissions.** It reaches the platform's own procedures
   through the real role gates, so it can refuse you; a change is proposed as a proof you
   strike, and a separate model checks you asked for it before one is ever offered.

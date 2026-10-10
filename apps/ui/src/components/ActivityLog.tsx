@@ -156,7 +156,8 @@ function ActivityTable({
         {entries.map((entry) => (
           <TableRow key={entry.id}>
             <TableCell className="datum datum--quiet">{formatDateTime(entry.at, locale)}</TableCell>
-            {who ? <TableCell className="datum">{entry.actor}</TableCell> : null}
+            {/* Nobody, for a token refused at the door that no person was proven to own. */}
+            {who ? <TableCell className="datum">{entry.actor ?? MISSING}</TableCell> : null}
             <TableCell>
               <span className="datum">{actionLabel(t, entry.action)}</span>
               <span className="datum datum--quiet journal__trigger">

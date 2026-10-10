@@ -23,6 +23,7 @@ import {
   isPersonalToken,
   type Refused as TokenRefused,
 } from "../services/accessTokens.ts";
+import { recordTokenRefusal } from "../services/audit.ts";
 import { grantFor } from "../services/connectedApps.ts";
 import { appUserForEmail } from "../services/invite.ts";
 import { type GoogleIngestConfig, type ProviderConfig, startConsent } from "../services/oauth.ts";
@@ -33,7 +34,7 @@ import type { WorkerClient } from "../services/workerClient.ts";
 import type { Assistant } from "../services/assistant/agent.ts";
 import type { Judge } from "../services/assistant/judge.ts";
 import type { Auth } from "./auth.ts";
-import type { OAuthRefused } from "./mcpAccessToken.ts";
+import { type OAuthRefused, oauthCredential } from "./mcpAccessToken.ts";
 import type { Skill } from "./mcpSkills.ts";
 import type { Widgets } from "./mcpWidgets.ts";
 import { channelOf } from "./channel.ts";
@@ -220,25 +221,14 @@ export type RefusalReason =
 
 /**
  * A refused bearer: why, and whose it was when that is proven -- `upat_<id>` for a personal
- * token whose row was found, `oauth:<clientId>` for a JWT whose signature verified. Never the
- * token, nor any part of its secret.
+ * token whose row was found, `oauth:<clientId>` for a JWT whose signature verified, and `owner`,
+ * the address of the person it belongs to, where an account was read for it. Never the token,
+ * nor any part of its secret.
  */
 export interface BearerRefusal {
   readonly reason: RefusalReason;
-  readonly credentialId?: string;
-}
-
-function refusedAs(reason: RefusalReason, credentialId: string | undefined): BearerRefusal {
-  return credentialId === undefined ? { reason } : { reason, credentialId };
-}
-
-/**
- * The id an OAuth credential is logged by: its client, not the token. A token is renewed while
- * the app stays the same app, and which app acted is what an operator follows through the
- * `mcp_call` and `mcp_refused` lines.
- */
-function oauthCredential(clientId: string): string {
-  return `oauth:${clientId}`;
+  readonly credentialId?: string | undefined;
+  readonly owner?: string | undefined;
 }
 
 /** Nothing to verify a JWT with: no authorization server runs here (plain HTTP off loopback). */
@@ -266,20 +256,18 @@ async function resolveBearer(
     const admitted = await admit(deps.exec, bearer);
     return admitted.ok
       ? { email: admitted.email, credentialId: admitted.id, grant: admitted.grant }
-      : refusedAs(admitted.reason, admitted.id);
+      : { reason: admitted.reason, credentialId: admitted.id, owner: admitted.email };
   }
   const admission = (await deps.auth?.mcp?.admit(bearer)) ?? NO_ISSUER;
   if (!admission.ok) {
     const { clientId } = admission;
-    return refusedAs(
-      admission.reason,
-      clientId === undefined ? undefined : oauthCredential(clientId),
-    );
+    const credentialId = clientId === undefined ? undefined : oauthCredential(clientId);
+    return { reason: admission.reason, credentialId, owner: admission.email };
   }
   const credentialId = oauthCredential(admission.clientId);
   const grant = grantFor(admission.tokenScopes, admission.consentScopes);
   if (grant === null) {
-    return { reason: "insufficient_scope", credentialId };
+    return { reason: "insufficient_scope", credentialId, owner: admission.email };
   }
   return { email: admission.email, credentialId, grant };
 }
@@ -369,9 +357,12 @@ export async function createContext(
 /**
  * The bearer door's context, or why there is none.
  *
- * What `/mcp` asks, rather than `createContext`: a model-context client that is nobody is
- * answered before any MCP message is read, and HOW it is answered depends on why -- see
- * {@link RefusalReason}.
+ * What every door that reads a bearer asks -- `/mcp`, and an export's download sent with one --
+ * rather than `createContext`: a model-context client that is nobody is answered before any MCP
+ * message is read, and HOW it is answered depends on why -- see {@link RefusalReason}.
+ *
+ * And the one place a refused bearer reaches the audit log (ADR 0120), so a door added tomorrow
+ * that admits through here records its refusals without knowing it does.
  */
 export async function bearerContext(
   deps: ServerDeps,
@@ -379,13 +370,31 @@ export async function bearerContext(
 ): Promise<Context | BearerRefusal> {
   const presented = await resolveBearer(deps, headers);
   if ("reason" in presented) {
-    return presented;
+    return await recorded(deps, presented);
   }
   const caller = await callerFor(deps, presented, "bearer");
   // A live credential, and nobody here: the shared tail found no `app_user` for its address.
   return caller.user === null
-    ? { reason: "no_person", credentialId: presented.credentialId }
+    ? await recorded(deps, {
+        reason: "no_person",
+        credentialId: presented.credentialId,
+        owner: presented.email,
+      })
     : contextFor(deps, headers, "bearer", caller);
+}
+
+/**
+ * A refused bearer, written to the audit log and handed back.
+ *
+ * Every reason but `missing`. No header at all is every OAuth client's first contact -- the
+ * challenge is how it learns to sign in -- so a row for it would be one per connector per session
+ * with nobody behind it.
+ */
+async function recorded(deps: ServerDeps, refusal: BearerRefusal): Promise<BearerRefusal> {
+  if (refusal.reason !== "missing") {
+    await recordTokenRefusal(deps.exec, refusal);
+  }
+  return refusal;
 }
 
 /**

@@ -19,6 +19,16 @@ const ACCESS_TOKEN_TYPE = "at+jwt";
 /** Reads the key set the access tokens are signed with. */
 export type KeySet = () => Promise<JSONWebKeySet>;
 
+/**
+ * The id an OAuth credential is logged and audited by: its client, not the token. A token is
+ * renewed while the app stays the same app, and which app acted is what an operator follows
+ * through the `mcp_call` and `mcp_refused` lines, and what a person matches a consent to in
+ * their activity.
+ */
+export function oauthCredential(clientId: string): string {
+  return `oauth:${clientId}`;
+}
+
 /** A genuine, unexpired access token for `/mcp`, as far as the token alone can say. */
 export interface VerifiedToken {
   readonly ok: true;
@@ -41,12 +51,15 @@ export interface VerifiedToken {
  * - `revoked`: the consent behind it is gone -- "Revoke" on the account page (`mcpAuth.ts`).
  * - `no_person`: the person it was issued to has no account any more (`mcpAuth.ts`).
  *
- * `clientId` only where the signature verified, so it is a fact rather than a claim.
+ * `clientId` only where the signature verified, so it is a fact rather than a claim. `email`, the
+ * person's address for the audit log (ADR 0120), only where their account was read: a consent
+ * revoked by a person who is still here.
  */
 export interface OAuthRefused {
   readonly ok: false;
   readonly reason: "malformed" | "unknown" | "expired" | "revoked" | "no_person";
   readonly clientId?: string;
+  readonly email?: string;
 }
 
 /** The client a token was issued to, as the provider writes it, or `null` for none. */

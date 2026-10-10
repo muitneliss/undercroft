@@ -43,8 +43,8 @@ import { messages } from "../i18n/index.ts";
 import type { Grant } from "../services/accessTokens.ts";
 import {
   type Actor,
-  type AuditDetail,
   type Channel,
+  type Outcome,
   recordAction,
   recordAttempt,
 } from "../services/audit.ts";
@@ -54,7 +54,7 @@ import { accessIn, outranks, type Role } from "../services/authz.ts";
 import type { SpecReads } from "../services/connections.ts";
 import type { StartOutcome } from "../services/oauth.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
-import { type AuditRule, auditRuleOf } from "./audited.ts";
+import { auditRuleOf, detailOf, isRecorded, namedTenant } from "./audited.ts";
 import { effectOf, grantAdmits } from "./surface.ts";
 
 export interface SessionUser {
@@ -270,53 +270,26 @@ export function refusalFacts(error: TRPCError): RefusalFacts | null {
 
 export const { router } = t;
 
-/** A field of a call's raw input, if the input is an object that has it. */
-function field(raw: unknown, name: string): unknown {
-  return typeof raw === "object" && raw !== null && Object.hasOwn(raw, name)
-    ? Reflect.get(raw, name)
-    : undefined;
-}
-
-/** The fields a router-written row copies, kept only where they are a plain value. */
-function detailOf(rule: Exclude<AuditRule, "service" | "none">, raw: unknown): AuditDetail {
-  const detail: Record<string, string | number | boolean | null> = {};
-  for (const name of rule.fields) {
-    const value = field(raw, name);
-    if (
-      typeof value === "string" ||
-      typeof value === "number" ||
-      typeof value === "boolean" ||
-      value === null
-    ) {
-      detail[name] = value;
-    }
-  }
-  return detail;
-}
-
-/** The tenant a call named, off its raw input: the one place every tenant procedure puts it. */
-function namedTenant(raw: unknown): string | null {
-  const value = field(raw, "tenantId");
-  return typeof value === "string" && value !== "" ? value : null;
-}
-
 /**
- * The audit log's half of every mutation (ADR 0113), outermost, so it sees what every gate below
- * it decided -- the grant guard's refusal included.
+ * The audit log's half of every call (ADR 0113, ADR 0120), outermost, so it sees what every gate
+ * below it decided -- the grant guard's refusal included.
  *
- * A mutation `AUDITED` marks `none` is not an action and leaves no row. For the rest: an attempt
- * that did not succeed is recorded here, whoever refused it, as `refused` (a 4xx) or `failed` (a
- * 5xx); one that succeeded is recorded here only when the table names the router as its writer,
- * because otherwise its service already wrote the row and knows more than this does. A caller who
- * is nobody leaves no row: there is no one to attribute it to.
+ * A read -- a query, or a POST `AUDITED` marks `read` -- through the browser leaves no row
+ * (`isRecorded`). Through an agent's door it leaves one however it ends: `ok`, copying nothing of
+ * the input but the tenant it named, since a read's input is SQL or a question that may quote a
+ * customer's data. For an action: an attempt that did not succeed is recorded here, whoever
+ * refused it, as `refused` (a 4xx) or `failed` (a 5xx); one that succeeded is recorded here only
+ * when the table names the router as its writer, because otherwise its service already wrote the
+ * row and knows more than this does. A caller who is nobody leaves no row: there is no one to
+ * attribute it to, and a refused credential has its own row (`auth.tokenRefused`, `context.ts`).
  *
  * The raw input, not the parsed one: this runs before any `.input()` has parsed it. It is read for
  * the tenant it names and for the fields the table lists, both kept only as plain values.
  */
 const audited = t.procedure.use(async ({ ctx, path, type, getRawInput, next }) => {
   const result = await next();
-  const rule = type === "mutation" ? (auditRuleOf(path) ?? "service") : "none";
-  if (rule === "none" || ctx.user === null) {
+  const rule = auditRuleOf(path, type);
+  if (ctx.user === null || !isRecorded(rule, ctx.channel)) {
     return result;
   }
   const actor = actorOf({ ...ctx, user: ctx.user });
@@ -324,7 +297,7 @@ const audited = t.procedure.use(async ({ ctx, path, type, getRawInput, next }) =
   // carry none -- which this lazy parse would refuse after the call already happened. A call
   // that sent nothing readable named nothing.
   const raw: unknown = await getRawInput().catch(() => undefined);
-  if (result.ok) {
+  if (result.ok && rule !== "read") {
     if (rule !== "service") {
       await recordAction(ctx.exec, {
         tenantId: namedTenant(raw),
@@ -335,16 +308,46 @@ const audited = t.procedure.use(async ({ ctx, path, type, getRawInput, next }) =
     }
     return result;
   }
-  await recordAttempt(ctx.exec, {
-    action: path,
-    actor: { ...actor, userId: ctx.user.userId },
-    superadmin: ctx.superadmin,
-    named: namedTenant(raw),
-    outcome: getHTTPStatusCodeFromError(result.error) >= 500 ? "failed" : "refused",
-    reason: refusalFacts(result.error)?.reason ?? result.error.code,
-  });
+  await recordCall(
+    { ...ctx, user: ctx.user },
+    { path, raw, ...endingOf(result.ok ? null : result.error) },
+  );
   return result;
 });
+
+/**
+ * Record a call that is not an action taking effect: refused, failed, or an agent's read. The one
+ * shape such a row has, whoever writes it -- the middleware above, or a door that refuses a call
+ * before the router runs (`mcp.ts`'s grant check) -- so a refusal reads the same wherever it fell.
+ * `raw` is the call's input, read for the tenant it named and nothing else.
+ */
+export async function recordCall(
+  ctx: Context & { readonly user: SessionUser },
+  call: { path: string; raw: unknown; outcome: Outcome; reason: string | null },
+): Promise<void> {
+  await recordAttempt(ctx.exec, {
+    action: call.path,
+    actor: { ...actorOf(ctx), userId: ctx.user.userId },
+    superadmin: ctx.superadmin,
+    named: namedTenant(call.raw),
+    outcome: call.outcome,
+    reason: call.reason,
+  });
+}
+
+/**
+ * How a call ended, as its row says it: `ok`, or `refused` (a 4xx) or `failed` (a 5xx) with the
+ * refusal's facts' `reason` when it has one (`WRITES_DISABLED`), otherwise the tRPC code.
+ */
+function endingOf(error: TRPCError | null): { outcome: Outcome; reason: string | null } {
+  if (error === null) {
+    return { outcome: "ok", reason: null };
+  }
+  return {
+    outcome: getHTTPStatusCodeFromError(error) >= 500 ? "failed" : "refused",
+    reason: refusalFacts(error)?.reason ?? error.code,
+  };
+}
 
 /**
  * The grant guard, at the root of every procedure under the audit log's -- the one door every

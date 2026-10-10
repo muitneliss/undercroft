@@ -134,12 +134,14 @@ async function continuation(response: Response): Promise<URL> {
 
 /**
  * The person's side of one authorization: sent to `/sign-in` by the authorize step, sign in
- * with the emailed code, land on `/consent`, and agree to `keep` of the scopes asked for.
- * Resolves with the session cookie and the address the client is sent back to.
+ * with the emailed code, land on `/consent`, and agree to `keep` of the scopes asked for -- or
+ * refuse the app outright. Resolves with the session cookie and the address the client is sent
+ * back to.
  */
 async function signInAndConsent(
   authorizationUrl: URL,
   keep: (scope: string) => boolean,
+  answer: "agree" | "refuse" = "agree",
 ): Promise<{ cookie: string; back: URL }> {
   const toSignIn = await Bun.fetch(authorizationUrl, { redirect: "manual" });
   const signInPage = new URL(toSignIn.headers.get("location") ?? "", plane.origin);
@@ -165,7 +167,11 @@ async function signInAndConsent(
   const asked = (consentPage.searchParams.get("scope") ?? "").split(" ");
   const answered = await post(
     "/api/auth/oauth2/consent",
-    { accept: true, scope: asked.filter(keep).join(" "), oauth_query: consentPage.search.slice(1) },
+    {
+      accept: answer === "agree",
+      scope: asked.filter(keep).join(" "),
+      oauth_query: consentPage.search.slice(1),
+    },
     cookie,
   );
   return { cookie, back: await continuation(answered) };
@@ -284,5 +290,43 @@ describe("a client signed in through OAuth", () => {
         credential: `oauth:${client.clientInformation()?.client_id}`,
       },
     ]);
+  });
+});
+
+describe("a consent, in the person's audit log (ADR 0120)", () => {
+  async function consents(): Promise<Record<string, unknown>[]> {
+    const { rows } = await plane.db.query<Record<string, unknown>>(
+      `SELECT actor, channel, credential, outcome, detail
+         FROM ops.audit_log WHERE action = 'auth.consentGranted' ORDER BY id`,
+    );
+    return rows;
+  }
+
+  it("names the app by the id its calls carry, and what the person granted it", async () => {
+    const { client } = await authorize((scope) => scope !== "undercroft:write");
+
+    expect(await consents()).toEqual([
+      {
+        actor: OPERATOR,
+        channel: "web",
+        credential: null,
+        outcome: "ok",
+        detail: {
+          client: `oauth:${client.clientInformation()?.client_id}`,
+          // What the client asked for, less the write scope the person did not keep.
+          scopes: "undercroft:read offline_access",
+        },
+      },
+    ]);
+  });
+
+  it("is not written when the person refuses the app, though an earlier consent stands", async () => {
+    const { client } = await authorize((scope) => scope !== "undercroft:write");
+    // The same app asks again, and this time the person is asked again and says no.
+    const again = new URL(client.authorizationUrl ?? plane.origin);
+    again.searchParams.set("prompt", "consent");
+    await signInAndConsent(again, () => true, "refuse");
+
+    expect(await consents()).toHaveLength(1);
   });
 });

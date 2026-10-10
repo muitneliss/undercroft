@@ -1,9 +1,10 @@
 /**
  * The audit log (ADR 0113), through the router as every door calls it, against PGlite.
  *
- * What is promised: an attempt is recorded however it ends, through whichever door; a
- * non-member's attempt never reaches the tenant's own log; and each reader sees exactly the rows
- * their gate admits. What a service writes when its change takes effect is pinned beside that
+ * What is promised: an attempt is recorded however it ends, through whichever door; a read is
+ * recorded through an agent's door and not through the browser's (ADR 0120); a non-member's
+ * attempt never reaches the tenant's own log; and each reader sees exactly the rows their gate
+ * admits. What a service writes when its change takes effect is pinned beside that
  * service.
  */
 
@@ -170,8 +171,9 @@ describe("what is recorded", () => {
     ]);
   });
 
-  it("a check that changes nothing leaves no row", async () => {
+  it("a read through the browser leaves no row", async () => {
     const admin = await person("admin@example.test", { "CASE-1": "admin" });
+    await caller(admin).tenants.get({ tenantId: "CASE-1" });
     await caller(admin).models.check({
       tenantId: "CASE-1",
       name: "stg_x",
@@ -180,6 +182,72 @@ describe("what is recorded", () => {
     });
 
     expect((await caller(admin).audit.mine({})).items).toEqual([]);
+  });
+});
+
+describe("a read through an agent's door (ADR 0120)", () => {
+  const token = { via: "token", channel: "mcp", grant: "read", credentialId: "upat_abc" } as const;
+
+  it("over MCP is in the log, with the token that made it and the tenant it read", async () => {
+    const admin = await person("admin@example.test", { "CASE-1": "admin" });
+    await caller(admin, token).tenants.get({ tenantId: "CASE-1" });
+
+    const { items: entries } = await caller(admin).audit.tenant({ tenantId: "CASE-1" });
+    expect(entries).toMatchObject([
+      {
+        action: "tenants.get",
+        actor: "admin@example.test",
+        userId: admin.userId,
+        channel: "mcp",
+        credential: "upat_abc",
+        outcome: "ok",
+        reason: null,
+        tenantId: "CASE-1",
+      },
+    ]);
+  });
+
+  it("through the CLI is the CLI's, and copies nothing of what it was sent", async () => {
+    const admin = await person("admin@example.test", { "CASE-1": "admin" });
+    await caller(admin, { channel: "cli" }).models.check({
+      tenantId: "CASE-1",
+      name: "stg_customers",
+      sql: "select 'Acme Holdings' as name",
+      tests: {},
+    });
+
+    const { items: entries } = await caller(admin).audit.mine({});
+    expect(
+      entries.map(({ action, channel, credential, outcome, detail }) => ({
+        action,
+        channel,
+        credential,
+        outcome,
+        detail,
+      })),
+    ).toEqual([
+      { action: "models.check", channel: "cli", credential: null, outcome: "ok", detail: {} },
+    ]);
+  });
+
+  it("refused, is recorded as refused and kept out of a tenant the reader is not in", async () => {
+    const admin = await person("admin@example.test", { "CASE-1": "admin" });
+    const outsider = await person("outsider@example.test");
+    expect(await codeOf(() => caller(outsider, token).tenants.get({ tenantId: "CASE-1" }))).toBe(
+      "NOT_FOUND",
+    );
+
+    expect((await caller(admin).audit.tenant({ tenantId: "CASE-1" })).items).toEqual([]);
+    expect((await caller(outsider).audit.mine({})).items).toMatchObject([
+      {
+        action: "tenants.get",
+        channel: "mcp",
+        outcome: "refused",
+        reason: "NOT_FOUND",
+        tenantId: null,
+        detail: { tenantId: "CASE-1" },
+      },
+    ]);
   });
 });
 

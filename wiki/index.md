@@ -123,6 +123,7 @@
 - [ADR 0117 The Village Is an Overview of the Journal, and Replaces No Drawing](sources/adr-0117-the-village-is-an-overview-of-the-journal-and-replaces-no-drawing.md)
 - [ADR 0118 The Title Page Reads Only the Clock](sources/adr-0118-the-title-page-reads-only-the-clock.md)
 - [ADR 0119 Who Has Access to a Customer Is Read by Its Admin Alone](sources/adr-0119-who-has-access-to-a-customer-is-read-by-its-admin-alone.md)
+- [ADR 0120 An Agent's Reads, and Every Sign-In Event, Are on the Record](sources/adr-0120-an-agent-s-reads-and-every-sign-in-event-are-on-the-record.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

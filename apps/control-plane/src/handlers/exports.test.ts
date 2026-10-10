@@ -135,8 +135,11 @@ describe("an export", () => {
     const exports = body.result.data.items.filter((entry) =>
       entry.action.startsWith("bi.exports."),
     );
+    // Between the asking and the taking, the route reads the export through the router as its
+    // caller, and a read through an agent's door is on the record too (ADR 0120).
     expect(exports.map((entry) => [entry.action, entry.channel])).toEqual([
       ["bi.exports.download", "mcp"],
+      ["bi.exports.get", "mcp"],
       ["bi.exports.create", "mcp"],
     ]);
   });

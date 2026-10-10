@@ -43,6 +43,7 @@ import { findIdByEmail, provisionByEmail } from "../repos/appUser.ts";
 import { type Channel, record as recordAudit } from "../repos/auditLog.ts";
 import { isKnownOrInvited, listLiveForEmail, markAccepted } from "../repos/invitation.ts";
 import { addMember } from "../repos/membership.ts";
+import { recordEvent } from "./audit.ts";
 import { isSuperadmin, NO_SUPERADMINS, type Superadmins } from "./superadmin.ts";
 
 export interface InvitedUser {
@@ -168,7 +169,17 @@ export async function isAdmissible(
 export type RefusedVia = "google" | "email-otp";
 
 /**
- * Record that an address was turned away.
+ * Why a sign-in was turned away, as the audit row's `reason` says it (ADR 0120). Ours, not the
+ * library's error codes, so a renamed code upstream cannot quietly change what the trail says.
+ *
+ * - `NOT_INVITED`: the address may not hold a session at all.
+ * - `WRONG_CODE`, `CODE_EXPIRED`, `TOO_MANY_ATTEMPTS`: an address that may, offered a one-time
+ *   code that was not the one sent, or no longer good, or tried once too often.
+ */
+export type SignInRefusal = "NOT_INVITED" | "WRONG_CODE" | "CODE_EXPIRED" | "TOO_MANY_ATTEMPTS";
+
+/**
+ * Record that an address was turned away at sign-in.
  *
  * Deliberately NOT folded into `isAdmissible`: that function is the read-only gate, and a
  * gate that also writes is one refactor away from writing the wrong thing. This is a
@@ -179,60 +190,27 @@ export type RefusedVia = "google" | "email-otp";
  * guessing that one `SELECT` on this table would have answered: *which* address was
  * refused, which is exactly the thing a typo or the wrong Google account gets wrong.
  *
- * `tenantId` is null and `actor` is the address itself: a refused caller belongs to no
- * tenant and is not a user, so anything else here would be invented.
+ * `tenantId` is null and `actor` is the address that was offered: a refused caller belongs to no
+ * tenant. The row names the `app_user` that address belongs to, when it belongs to one -- which
+ * only a wrong code for a real person's address can, since `NOT_INVITED` means there is none --
+ * so a person finds in their own log that somebody offered a code for their address.
  *
  * Never allowed to break a sign-in. If the audit insert fails, the refusal still stands --
  * it is already decided -- and losing the log line is strictly better than turning a
- * deliberate "no" into a 500 that reads like an outage.
+ * deliberate "no" into a 500 that reads like an outage. `recordEvent` swallows it.
  */
 export async function recordRefusal(
   exec: SqlExecutor,
-  input: { email: string; via: RefusedVia },
+  input: { email: string; via: RefusedVia; channel: Channel | null; reason: SignInRefusal },
 ): Promise<void> {
-  try {
-    await recordAudit(exec, {
-      tenantId: null,
-      // Nobody here, and no door of ours: the address was turned away before it had either.
-      actor: { userId: null, email: normalizeEmail(input.email), channel: null, credential: null },
-      action: "auth.refused",
-      detail: JSON.stringify({ via: input.via }),
-    });
-  } catch {
-    // Intentionally swallowed; see above.
-  }
-}
-
-/**
- * Record that a person signed in: a session now exists for them (ADR 0113).
- *
- * `endpoint` is the Better Auth path that made the session -- which way in it was -- or `null`
- * where none was given. An address with no `app_user` is recorded by address alone, which the
- * gates above make the superadmin bootstrap's first moment and nothing else.
- *
- * Swallowed like the refusal, and for the same reason: the session already exists, and a failed
- * insert turned into a failed sign-in would read like an outage to a person who is in fact in.
- */
-export async function recordSignIn(
-  exec: SqlExecutor,
-  input: { email: string; channel: Channel; endpoint: string | null },
-): Promise<void> {
-  const email = normalizeEmail(input.email);
-  try {
-    await recordAudit(exec, {
-      tenantId: null,
-      actor: {
-        userId: await findIdByEmail(exec, email),
-        email,
-        channel: input.channel,
-        credential: null,
-      },
-      action: "auth.signIn",
-      detail: JSON.stringify({ endpoint: input.endpoint }),
-    });
-  } catch {
-    // Intentionally swallowed; see above.
-  }
+  await recordEvent(exec, {
+    action: "auth.refused",
+    email: normalizeEmail(input.email),
+    channel: input.channel,
+    detail: { via: input.via },
+    outcome: "refused",
+    reason: input.reason,
+  });
 }
 
 /**

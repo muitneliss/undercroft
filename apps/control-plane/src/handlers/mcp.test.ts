@@ -171,6 +171,29 @@ describe("a write through a token", () => {
     }).toEqual({ code: "WRITES_DISABLED", triggered: 0 });
   });
 
+  it("refused to a read token at the door, is in the audit log as the router would write it", async () => {
+    const token = await mint("read");
+    const client = await connect(token);
+    await client.callTool({ name: "runs_trigger", arguments: { tenantId: OWN, source: "xero" } });
+    await client.close();
+
+    const { rows } = await plane.db.query<Record<string, unknown>>(
+      `SELECT action, tenant_id, actor, channel, credential, outcome, reason
+         FROM ops.audit_log WHERE outcome = 'refused' ORDER BY id`,
+    );
+    expect(rows).toEqual([
+      {
+        action: "runs.trigger",
+        tenant_id: OWN,
+        actor: OPERATOR,
+        channel: "mcp",
+        credential: token.slice(0, token.indexOf(".")),
+        outcome: "refused",
+        reason: "WRITES_DISABLED",
+      },
+    ]);
+  });
+
   it("reaches the worker with a write token", async () => {
     const client = await connect(await mint("write"));
     await client.callTool({ name: "runs_trigger", arguments: { tenantId: OWN, source: "xero" } });
@@ -571,5 +594,68 @@ describe("a refused bearer, as an operator finds it", () => {
     await rawList({ authorization: `Bearer ${await mint("read")}` });
 
     expect(refusals()).toEqual([]);
+  });
+});
+
+describe("a refused bearer, as a person reads it in the audit log (ADR 0120)", () => {
+  /** Every `auth.tokenRefused` row, whole, so a column that should not hold something fails. */
+  async function tokenRefusals(): Promise<Record<string, unknown>[]> {
+    const { rows } = await plane.db.query<Record<string, unknown>>(
+      `SELECT tenant_id, actor, user_id::text AS user_id, channel, credential, outcome, reason,
+              detail
+         FROM ops.audit_log WHERE action = 'auth.tokenRefused' ORDER BY id`,
+    );
+    return rows;
+  }
+
+  it("names the owner and the token's id, and never the token", async () => {
+    const token = await mint("write");
+    const id = token.slice(0, token.indexOf("."));
+    await Bun.fetch(`${plane.origin}/trpc/account.tokens.revoke`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    await rawList({ authorization: `Bearer ${token}` });
+    const { rows: owner } = await plane.db.query<{ id: string }>(
+      "SELECT id::text AS id FROM app.app_user WHERE email = $1",
+      [OPERATOR],
+    );
+
+    expect(await tokenRefusals()).toEqual([
+      {
+        tenant_id: null,
+        actor: OPERATOR,
+        user_id: owner[0]?.id,
+        channel: "mcp",
+        credential: id,
+        outcome: "refused",
+        reason: "revoked",
+        detail: {},
+      },
+    ]);
+  });
+
+  it("names nobody for a token nobody here issued", async () => {
+    await rawList({ authorization: `Bearer upat_nobody00.${"x".repeat(43)}` });
+
+    expect(await tokenRefusals()).toEqual([
+      {
+        tenant_id: null,
+        actor: null,
+        user_id: null,
+        channel: "mcp",
+        credential: null,
+        outcome: "refused",
+        reason: "unknown",
+        detail: {},
+      },
+    ]);
+  });
+
+  it("is not written when no bearer came at all", async () => {
+    await rawList({});
+
+    expect(await tokenRefusals()).toEqual([]);
   });
 });

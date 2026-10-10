@@ -351,3 +351,9 @@
 ## [2026-10-10] ingest | Design: Operator and reader paths
 ## [2026-10-10] ingest | Runbook: Connecting an agent over MCP
 ## [2026-10-10] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-10] ingest | ADR 0120 An Agent's Reads, and Every Sign-In Event, Are on the Record
+## [2026-10-10] ingest | ADR 0120 An Agent's Reads, and Every Sign-In Event, Are on the Record
+## [2026-10-10] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-10] ingest | Runbook: Onboarding a new person
+## [2026-10-10] ingest | Runbook Sign-In Setup
+## [2026-10-10] ingest | ADR 0120 An Agent's Reads, and Every Sign-In Event, Are on the Record

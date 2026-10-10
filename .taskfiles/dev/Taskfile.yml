@@ -22,6 +22,13 @@ vars:
   API_PORT: '{{.UNDERCROFT_API_PORT | default "3000"}}'
 
 tasks:
+  install:
+    desc: Install the workspace's dependencies exactly as bun.lock pins them (a fresh clone or worktree needs this first).
+    cmds:
+      # --frozen-lockfile, as CI installs: a checkout installs what the lockfile records and
+      # fails rather than quietly resolving something newer.
+      - bun install --frozen-lockfile
+
   env:
     desc: Bootstrap deploy/compose/.env from the example, if it doesn't exist yet.
     run: once

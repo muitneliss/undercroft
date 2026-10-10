@@ -121,7 +121,8 @@ address before any agent is involved.
 - Every connection and token is revoked on the account page, effective at the next call. See
   [What a token is](mcp-setup.md#what-a-token-is).
 - What an agent did on your behalf is under **Hoạt động / Activity** on the account page, marked
-  with the door it came through (MCP, the CLI or the assistant), refusals included.
+  with the door it came through (MCP, the CLI or the assistant), refusals included -- what it
+  read as well as what it changed, the apps you allowed in, and any of your tokens refused.
 
 ### 5. A first session
 

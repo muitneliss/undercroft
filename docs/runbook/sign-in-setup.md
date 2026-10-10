@@ -321,6 +321,13 @@ written to `ops.audit_log` as `people.setRole` or `people.removeMember`, with wh
 and the role the person held before. An admin reads it under **Hoạt động / Activity** on the
 same page, or with `undercroft audit tenant`; refused attempts are there too.
 
+Sign-in itself is on the record, in each person's own **Activity** on the account page: every
+sign-in and sign-out (one row, whichever button ended the session), an address turned away
+(`auth.refused`, with `NOT_INVITED`, or `WRONG_CODE`, `CODE_EXPIRED` or `TOO_MANY_ATTEMPTS` for a
+code offered for a real person's address), an app the person allowed in on the consent page, and
+a token of theirs refused at `/mcp` (`auth.tokenRefused`). A token nobody here issued is recorded
+too, naming nobody, and only a superadmin reads it. ADR 0120.
+
 ## Skip sign-in locally
 
 For Path B only. You need no Google client and no mail key, only a session secret (step 1)

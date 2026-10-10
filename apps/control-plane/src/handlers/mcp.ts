@@ -54,7 +54,7 @@ import { listResources, NO_WIDGETS, readResource, resultMeta, type Widgets } fro
 import { resolveProcedure } from "./procedures.ts";
 import { appRouter } from "./router.ts";
 import { BY_TRPC_CODE, grantAdmits } from "./surface.ts";
-import type { Context } from "./trpc.ts";
+import { type Context, recordCall } from "./trpc.ts";
 
 export interface McpDeps {
   /** The bearer door: this request's context, or why it has none (`bearerContext`). */
@@ -155,9 +155,14 @@ async function callTool(
     throw new ProtocolError(ProtocolErrorCode.InvalidParams, t("mcp.unknownTool", { tool }));
   }
   // The grant guard in `trpc.ts` holds regardless; asking first names the refusal the way an
-  // agent matches it -- the CLI's `WRITES_DISABLED` -- before any procedure is resolved.
+  // agent matches it -- the CLI's `WRITES_DISABLED` -- before any procedure is resolved. Since the
+  // router never runs, its audit row is written here, in the router's own shape (ADR 0113, 0120).
   if (!grantAdmits(ctx.grant, spec.effect)) {
     logCall(deps, { ctx, tool, outcome: "WRITES_DISABLED" });
+    if (ctx.user !== null) {
+      const refusal = { outcome: "refused", reason: "WRITES_DISABLED" } as const;
+      await recordCall({ ...ctx, user: ctx.user }, { path: spec.path, raw: args, ...refusal });
+    }
     return refused("WRITES_DISABLED", t("error.writesDisabled"));
   }
   const procedure = resolveProcedure(appRouter.createCaller(ctx), spec.path);

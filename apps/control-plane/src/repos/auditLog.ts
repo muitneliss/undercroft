@@ -29,6 +29,13 @@ export interface Actor {
 /** `ok` took effect; `refused` was turned away (a 4xx); `failed` broke on our side (a 5xx). */
 export type Outcome = "ok" | "refused" | "failed";
 
+/**
+ * Who a row names. An {@link Actor}, or -- for a bearer credential nobody could be proven to own,
+ * a token that is not ours at all -- nobody: `email` and `userId` both `null` (ADR 0120). The
+ * column holds NULL then, not a placeholder, because a placeholder would read as somebody.
+ */
+export type Named = Actor | (Omit<Actor, "email" | "userId"> & { email: null; userId: null });
+
 export async function record(
   exec: SqlExecutor,
   /**
@@ -39,7 +46,7 @@ export async function record(
    */
   entry: {
     tenantId: string | null;
-    actor: Actor;
+    actor: Named;
     action: string;
     detail: string;
     outcome?: Outcome;
@@ -69,7 +76,8 @@ export interface AuditRow {
   readonly id: string;
   readonly at: string;
   readonly tenantId: string | null;
-  readonly actor: string;
+  /** The address that acted; `null` only for a bearer nobody could be proven to own. */
+  readonly actor: string | null;
   readonly userId: string | null;
   readonly channel: Channel | null;
   readonly credential: string | null;
@@ -93,7 +101,7 @@ interface Selected {
   id: string;
   at: Date | string;
   tenant_id: string | null;
-  actor: string;
+  actor: string | null;
   user_id: string | null;
   channel: Channel | null;
   credential: string | null;
