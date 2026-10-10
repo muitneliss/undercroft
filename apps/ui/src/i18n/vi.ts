@@ -86,6 +86,19 @@ export const vi = {
     lockedTitle: "Hãy chọn một khách hàng trước",
     /** Read to a screen reader after the tab's own label, hence the leading dash. */
     lockedHint: " — hãy chọn một khách hàng trước",
+    /**
+     * A division only an admin of the open customer may open (ADR 0119): the face-down tab's
+     * reason, then the notice that stands in for the division. Worded for any such division,
+     * which today is People.
+     */
+    adminOnlyTitle: "Chỉ quản trị viên của khách hàng này mới mở được",
+    adminOnlyHint: " — chỉ quản trị viên của khách hàng này mới mở được",
+    adminOnlyHead: "Chỉ quản trị viên mới mở được mục {{division}}",
+    adminOnlyLead:
+      "Mục này chỉ dành cho quản trị viên của {{tenantId}}. Vai trò của bạn ở đây là {{role}}.",
+    adminOnlyOwn:
+      "Những thao tác của chính bạn, ở khách hàng này và mọi khách hàng khác, nằm ở trang tài khoản của bạn.",
+    adminOnlyOwnLink: "Xem hoạt động của bạn",
   },
 
   common: {
@@ -917,11 +930,11 @@ export const vi = {
      */
     rightsLabel: "Mỗi vai trò được làm gì trong {{tenantId}}",
     rightsViewer:
-      "Xem các nguồn đã kết nối, nhật ký chạy, tổng quan hồ dữ liệu thô, các mô hình và macro, danh mục loại tài liệu, ai có quyền truy cập và ai đang được mời; mở và chạy các câu hỏi và bảng điều khiển đã lưu. Không soạn hay lưu được câu hỏi, và không thay đổi được gì khác.",
+      "Xem các nguồn đã kết nối, nhật ký chạy, tổng quan hồ dữ liệu thô, các mô hình và macro, và danh mục loại tài liệu; mở và chạy các câu hỏi và bảng điều khiển đã lưu. Không soạn hay lưu được câu hỏi, và không thay đổi được gì khác.",
     rightsMember:
-      "Mọi điều viewer làm được, và thêm: soạn và chạy câu hỏi mới, lưu và xoá câu hỏi và bảng điều khiển. Không kết nối tài khoản, không đọc nội dung hồ dữ liệu thô, không lưu hay dựng mô hình, không mời hay gỡ người khác.",
+      "Mọi điều viewer làm được, và thêm: soạn và chạy câu hỏi mới, lưu và xoá câu hỏi và bảng điều khiển. Không kết nối tài khoản, không đọc nội dung hồ dữ liệu thô, không lưu hay dựng mô hình, không xem ai có quyền truy cập, không mời hay gỡ người khác.",
     rightsAdmin:
-      "Mọi điều member làm được, và thêm: kết nối và ngắt tài khoản, chọn phạm vi và tần suất đọc, chạy đồng bộ ngay; đọc, tìm và truy vấn bản ghi và tài liệu trong hồ dữ liệu thô, và các dòng mà kiểm thử chất lượng dữ liệu lưu lại khi thất bại; lưu, xoá và dựng mô hình, lưu và xoá macro; sửa và publish danh mục loại tài liệu; tạo và thu hồi khoá nạp dữ liệu; mời, đổi vai trò, gỡ người dùng và thu hồi lời mời; đổi tên khách hàng. Thêm khách hàng mới thì chỉ quản trị viên toàn hệ thống làm được.",
+      "Mọi điều member làm được, và thêm: kết nối và ngắt tài khoản, chọn phạm vi và tần suất đọc, chạy đồng bộ ngay; đọc, tìm và truy vấn bản ghi và tài liệu trong hồ dữ liệu thô, và các dòng mà kiểm thử chất lượng dữ liệu lưu lại khi thất bại; lưu, xoá và dựng mô hình, lưu và xoá macro; sửa và publish danh mục loại tài liệu; tạo và thu hồi khoá nạp dữ liệu; xem ai có quyền truy cập và ai đang được mời, mời, đổi vai trò, gỡ người dùng và thu hồi lời mời; đọc mọi thao tác trong khách hàng, của bất kỳ ai; đổi tên khách hàng. Thêm khách hàng mới thì chỉ quản trị viên toàn hệ thống làm được.",
     notInvited: "Chưa mời được",
     invitedAndEmailed: "Đã mời {{email}}. Email đã được gửi cho họ.",
     invitedNotEmailedHeading: "Đã mời, nhưng chưa gửi được email",

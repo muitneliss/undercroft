@@ -7,14 +7,18 @@
  *
  * No mocks: the real route, tRPC client and react-query, over a fetch that answers the page's
  * three queries and the withdrawal, and REFUSES every other path.
+ *
+ * And who may open it at all (ADR 0119): only the customer's admin. That is the book's to
+ * decide, so those tests mount the division inside it, tab strip and all.
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpLink } from "@trpc/client";
 import { afterEach, describe, expect, test as it } from "bun:test";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
+import { Opened } from "@/components/Opened.tsx";
 import { translatorFor } from "@/i18n/index.ts";
 import { People } from "@/routes/People.tsx";
 import { mountRoute } from "@/test/mountRoute.tsx";
@@ -253,5 +257,52 @@ describe("the customer's activity (ADR 0113)", () => {
     expect(await screen.findByText("ada@example.test")).toBeDefined();
     expect(screen.queryByRole("link", { name: t("people.viewActivity") })).toBeNull();
     expect(received.map((request) => request.path)).not.toContain("audit.tenant");
+  });
+});
+
+describe("only the customer's admin opens it (ADR 0119)", () => {
+  /** The division as the app opens it, inside the book, read by `role`. */
+  function openInBook(role: "admin" | "member") {
+    const mounted = mountRoute({
+      pattern: "/tenants/:tenantId/people",
+      url: `/tenants/${TENANT}/people`,
+      element: (
+        <Opened division="people" signedInAs="ada@example.test">
+          {(tenantId): React.JSX.Element => (
+            <People tenantId={tenantId} signedInAs="ada@example.test" />
+          )}
+        </Opened>
+      ),
+      answers: {
+        "tenants.get": () => ({ id: TENANT, displayName: "Acme", role, deactivatedAt: null }),
+        "people.members": () => [{ userId: "u1", email: "ada@example.test", role }],
+        "people.invitations": () => [],
+      },
+    });
+    return { ...mounted, strip: screen.getByRole("navigation", { name: t("nav.sections") }) };
+  }
+
+  it("shows a member the notice in its place, and asks the server nothing it would refuse", async () => {
+    const { received, strip } = openInBook("member");
+
+    await screen.findByRole("heading", {
+      name: t("nav.adminOnlyHead", { division: t("nav.people") }),
+    });
+    const tab = within(strip).getByTitle(t("nav.adminOnlyTitle"));
+    expect(tab.getAttribute("aria-disabled")).toBe("true");
+    expect(tab.textContent).toBe(`${t("nav.people")}${t("nav.adminOnlyHint")}`);
+    const asked = received.map((request) => request.path);
+    expect(asked).not.toContain("people.members");
+    expect(asked).not.toContain("people.invitations");
+  });
+
+  it("opens for its admin, whose tab stays a link", async () => {
+    const { strip } = openInBook("admin");
+
+    // The division's own heading, which it prints only once the roster and the invitations
+    // have answered (the reader's address is in the running head from the start).
+    expect(await screen.findByRole("heading", { name: t("people.title") })).toBeDefined();
+    expect(within(strip).getByRole("link", { name: t("nav.people") })).toBeDefined();
+    expect(within(strip).queryByTitle(t("nav.adminOnlyTitle"))).toBeNull();
   });
 });

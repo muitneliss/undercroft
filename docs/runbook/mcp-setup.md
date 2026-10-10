@@ -78,10 +78,10 @@ access removes your tokens' at the next request.
 
 Each token carries a **grant** you choose when you mint it:
 
-| Grant                | The agent is offered             | The agent can                                         |
-| -------------------- | -------------------------------- | ----------------------------------------------------- |
-| `read` (Chỉ đọc)     | only the tools classified `read` | look at runs, the lake, models, reports, people       |
-| `write` (Đọc và ghi) | every tool your role allows      | also trigger runs, save and delete, invite and remove |
+| Grant                | The agent is offered             | The agent can                                                           |
+| -------------------- | -------------------------------- | ----------------------------------------------------------------------- |
+| `read` (Chỉ đọc)     | only the tools classified `read` | look at runs, the lake, models, reports, and people if you are an admin |
+| `write` (Đọc và ghi) | every tool your role allows      | also trigger runs, save and delete, invite and remove                   |
 
 What counts as a read is `EFFECTS` in `apps/control-plane/src/handlers/surface.ts`. Two things
 that look harmless are **not** reads: `lake_query` runs SQL an admin wrote against the raw lake,

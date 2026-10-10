@@ -21,7 +21,14 @@ import { Link } from "react-router-dom";
 import { Errata } from "@/components/Errata.tsx";
 import { Fact, Facts } from "@/components/Facts.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
-import { DIVISIONS, type DivisionId, divisionPath } from "@/lib/divisions.ts";
+import {
+  CLOSED_WORDS,
+  closedTo,
+  DIVISIONS,
+  type DivisionId,
+  divisionPath,
+} from "@/lib/divisions.ts";
+import type { Role } from "@/lib/roles.ts";
 import { trpc } from "@/trpc.ts";
 
 /**
@@ -37,21 +44,36 @@ const ANSWERS = {
   people: "tenants.insidePeople",
 } as const satisfies Record<Exclude<DivisionId, "customers">, string>;
 
-/** Each division of the book, in ring order, with the question it answers. */
-function Directory({ tenantId }: { tenantId: string }): React.JSX.Element {
+/**
+ * Each division of the book, in ring order, with the question it answers.
+ *
+ * A division closed to this reader (ADR 0119) keeps its entry, unlinked, with the reason in its
+ * name, as its tab on the strip does: the directory says what the book holds, and a door that
+ * opens on a notice is not a door.
+ */
+function Directory({ tenantId, role }: { tenantId: string; role: Role }): React.JSX.Element {
   const { t } = useTranslation();
   return (
     <dl className="access" aria-label={t("tenants.insideLabel", { tenantId })}>
-      {DIVISIONS.flatMap((div) =>
-        div.id === "customers"
-          ? []
-          : [
-              <dt key={`${div.id}-name`}>
-                <Link to={divisionPath(div.id, tenantId)}>{t(div.labelKey)}</Link>
-              </dt>,
-              <dd key={`${div.id}-answers`}>{t(ANSWERS[div.id])}</dd>,
-            ],
-      )}
+      {DIVISIONS.flatMap((div) => {
+        if (div.id === "customers") {
+          return [];
+        }
+        const closed = closedTo(div, { tenantId, role });
+        return [
+          <dt key={`${div.id}-name`}>
+            {closed === null ? (
+              <Link to={divisionPath(div.id, tenantId)}>{t(div.labelKey)}</Link>
+            ) : (
+              <span aria-disabled="true" title={t(CLOSED_WORDS[closed].title)}>
+                {t(div.labelKey)}
+                <span className="visually-hidden">{t(CLOSED_WORDS[closed].hint)}</span>
+              </span>
+            )}
+          </dt>,
+          <dd key={`${div.id}-answers`}>{t(ANSWERS[div.id])}</dd>,
+        ];
+      })}
     </dl>
   );
 }
@@ -103,7 +125,7 @@ export function Customer({ tenantId }: { tenantId: string }): React.JSX.Element 
 
       <h2 className="head">{t("tenants.insideHead")}</h2>
       <div className="body">
-        <Directory tenantId={tenantId} />
+        <Directory tenantId={tenantId} role={tenant.data.role} />
       </div>
     </div>
   );

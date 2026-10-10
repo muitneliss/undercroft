@@ -381,8 +381,10 @@ Rule-strong hairline on the edge that meets the leaf. Width is the division's `e
 A tab that is not current sits retracted 0.75rem toward the leaf and rises 0.25rem on hover;
 the current tab stands proud and its selection is a punched hole at the label's line. A
 division that cannot open renders face-down: a diagonal hatch of board back with the reason in
-its accessible name. The whole leaf turns 5° about its spine in four frames when the division
-or the customer changes, and does not turn for a panel hinging open inside a section.
+its accessible name. The reason is either that no customer is chosen, or that the division is
+for the customer's admins and the reader is not one (People, ADR 0119); the board is the same.
+The whole leaf turns 5° about its spine in four frames when the division or the customer
+changes, and does not turn for a panel hinging open inside a section.
 
 ### Token
 

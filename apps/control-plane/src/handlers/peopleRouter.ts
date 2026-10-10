@@ -11,7 +11,7 @@ import { z } from "zod";
 import { Email, Role } from "./inputs.ts";
 import { messages } from "../i18n/index.ts";
 import * as people from "../services/people.ts";
-import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
+import { actorOf, requireRole, router } from "./trpc.ts";
 
 /**
  * Why a role change or a removal was refused, worded for the caller.
@@ -33,10 +33,20 @@ function membershipRefusal(
 }
 
 export const peopleRouter = router({
-  members: tenantProcedure.query(({ ctx, input }) => people.members(ctx.exec, input.tenantId)),
+  /**
+   * Who holds a role in the customer, and which. Admin-only, as `invitations` is (ADR 0119).
+   *
+   * The roster and the open invitations are the customer's access list: every address that can
+   * reach its connected accounts, and every one that soon may. Only an admin manages that list,
+   * so only an admin reads it. A person's own actions stay theirs to read in every customer,
+   * through `audit.mine` (ADR 0113). The browser keeps the division closed to anyone else; this
+   * gate is the control, and the one the CLI, `/mcp` and the assistant reach as well.
+   */
+  members: requireRole("admin").query(({ ctx }) => people.members(ctx.exec, ctx.tenantId)),
 
-  invitations: tenantProcedure.query(({ ctx, input }) =>
-    people.invitationsFor(ctx.exec, input.tenantId),
+  /** The invitations sent into the customer. Admin-only, for the reason `members` is. */
+  invitations: requireRole("admin").query(({ ctx }) =>
+    people.invitationsFor(ctx.exec, ctx.tenantId),
   ),
 
   /**
