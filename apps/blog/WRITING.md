@@ -100,3 +100,12 @@ integration: xero
 ```
 
 `task build:blog` checks all of this, the schema and the pairs, before it builds.
+
+## The privacy policy and terms are not posts
+
+`src/content/legal/<lang>/{privacy,terms}.md` hold the hosted service's privacy policy and terms,
+at `/privacy/`, `/terms/` and their `/en/` pairs. None of the rules above apply to them: they keep
+the same name in both languages so one address can be handed to a reviewer, and they name what
+they must, such as the providers that receive Google data. What they say must be true of the
+running service. Change the date in `updated` with every edit. Google's verification reads the
+English pages, and `docs/runbook/google-ingestion-setup.md` says how.

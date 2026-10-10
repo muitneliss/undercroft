@@ -31,6 +31,14 @@ export function langPrefix(lang: Lang): string {
   return lang === DEFAULT_LANG ? "" : `/${lang}`;
 }
 
+/** The hosted service's legal pages, one per name per language (`src/content/legal`). */
+export const LEGAL_PAGES = ["privacy", "terms"] as const;
+export type LegalPageName = (typeof LEGAL_PAGES)[number];
+
+export function legalPath(lang: Lang, page: LegalPageName): string {
+  return `${langPrefix(lang)}/${page}/`;
+}
+
 export const STRINGS = {
   vi: {
     ogLocale: "vi_VN",
@@ -60,6 +68,9 @@ export const STRINGS = {
     rss: "RSS",
     footer: "Undercroft · mã nguồn mở theo giấy phép MIT",
     contact: `Liên hệ: ${CONTACT_EMAIL}`,
+    privacy: "Chính sách quyền riêng tư",
+    terms: "Điều khoản dịch vụ",
+    legalUpdated: "Cập nhật ngày",
     dateLocale: "vi-VN",
   },
   en: {
@@ -90,6 +101,9 @@ export const STRINGS = {
     rss: "RSS",
     footer: "Undercroft · open source under the MIT licence",
     contact: `Contact: ${CONTACT_EMAIL}`,
+    privacy: "Privacy policy",
+    terms: "Terms of service",
+    legalUpdated: "Last updated",
     dateLocale: "en-GB",
   },
 } as const satisfies Record<Lang, Record<string, unknown>>;

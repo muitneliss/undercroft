@@ -72,6 +72,22 @@ with `origin_mismatch`.
 | both                       | `openid`, `email`                                | identity, so the callback learns which account consented        |
 | Drive Picker, browser only | `https://www.googleapis.com/auth/drive.file`     | non-sensitive; only shows the Picker and returns the chosen ids |
 
+**OAuth consent screen** → **Branding**, which Google's verification reviews against the scopes
+above. Every link must sit on an authorised domain and open without signing in:
+
+| Field                        | Value on the hosted service                        |
+| ---------------------------- | -------------------------------------------------- |
+| App logo                     | `apps/ui/public/apple-touch-icon.png` (square PNG) |
+| Application home page        | `https://blog.undercroft.lowbit.link/en/`          |
+| Application privacy policy   | `https://blog.undercroft.lowbit.link/en/privacy/`  |
+| Application terms of service | `https://blog.undercroft.lowbit.link/en/terms/`    |
+| Authorised domains           | `lowbit.link`                                      |
+
+The home page is the blog, not the product, because the product's root is a sign-in screen,
+which a reviewer cannot read past. The privacy policy and terms are the blog's
+`src/content/legal/`. The privacy policy carries Google's Limited Use statement, and it names
+every provider that can receive Google user data. Change it in the same change that adds one.
+
 ## 4. Create the Picker API key
 
 **Credentials** → **Create credentials** → **API key**. Restrict it to the **Google Picker
