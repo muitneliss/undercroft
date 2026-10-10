@@ -35,6 +35,7 @@ function openAccount(superadmin: boolean, pages: Record<string, unknown>) {
       "session.me": () => ({ userId: "u-ada", email: "ada@example.test", superadmin }),
       "account.tokens.list": () => [],
       "account.apps.list": () => [],
+      "tenants.list": () => [],
       "audit.mine": (input) => pages[(input as { cursor?: string }).cursor ?? "first"],
       "audit.all": () => ({ items: [], nextCursor: null }),
     },

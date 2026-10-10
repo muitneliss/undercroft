@@ -30,22 +30,24 @@ import { appRouter } from "./router.ts";
 import { MCP_EXCLUDED, SESSION_ONLY } from "./surface.ts";
 
 const OPERATOR = "operator@example.test";
-/** The operator's own tenant, and one that exists but is not theirs. */
+/** The operator's own tenant, one that exists but is not theirs, and one they only view. */
 const OWN = "CASE-0042";
 const OTHER = "CASE-0099";
+const VIEWED = "CASE-0077";
 
 let plane: ControlPlane;
 let cookie = "";
 /** Every line the server logged, as the process's own logger writes it, trace id included. */
 let logged: Record<string, unknown>[] = [];
 
-/** The two tenants, and the operator's invitation to their own. */
+/** The three tenants, and the operator's invitations: admin of their own, viewer of another. */
 async function seed(db: TestDatabase): Promise<void> {
-  await db.query("INSERT INTO ops.tenant (id) VALUES ($1), ($2)", [OWN, OTHER]);
+  await db.query("INSERT INTO ops.tenant (id) VALUES ($1), ($2), ($3)", [OWN, OTHER, VIEWED]);
   await db.query(
     `INSERT INTO app.invitation (tenant_id, email, role, token_sha256, expires_at)
-     VALUES ($1, $2, 'admin', repeat('a', 64), now() + interval '7 days')`,
-    [OWN, OPERATOR],
+     VALUES ($1, $3, 'admin', repeat('a', 64), now() + interval '7 days'),
+            ($2, $3, 'viewer', repeat('b', 64), now() + interval '7 days')`,
+    [OWN, VIEWED, OPERATOR],
   );
 }
 
@@ -209,6 +211,27 @@ describe("the grant guard at the router, which every door goes through", () => {
       .catch((error: unknown) => error as TRPCError);
 
     expect(refusal).toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  // What the consent page and the token form promise (#427): a write grant never reaches past
+  // the role, so a viewer's write token buys no customer's write -- only the person's own.
+  it("refuses a write token a customer's write where its holder is a viewer", async () => {
+    const caller = await bearerCaller(await mint("write"));
+    const refusal = await caller.runs.trigger({ tenantId: VIEWED, source: "xero" }).then(
+      () => null,
+      (error: unknown) => error as TRPCError,
+    );
+
+    expect({ code: refusal?.code, triggered: plane.worker.triggered.length }).toEqual({
+      code: "FORBIDDEN",
+      triggered: 0,
+    });
+  });
+
+  it("lets the same write token change its holder's own language", async () => {
+    const caller = await bearerCaller(await mint("write"));
+
+    expect(await caller.session.setLocale({ locale: "en" })).toEqual({ ok: true });
   });
 });
 

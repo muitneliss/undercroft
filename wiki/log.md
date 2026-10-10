@@ -350,3 +350,4 @@
 ## [2026-10-10] ingest | Runbook: Connecting an agent over MCP
 ## [2026-10-10] ingest | Design: Operator and reader paths
 ## [2026-10-10] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-10] ingest | Runbook: Connecting an agent over MCP

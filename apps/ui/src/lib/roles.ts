@@ -7,7 +7,8 @@
  * this order, which is the order of authority (`ROLE_RANK` in the control plane).
  *
  * Wordless on purpose, as `connectionFacts` is beside `presentConnection`: what a role grants
- * is a sentence, and sentences live in the catalogues, one entry per role.
+ * is a sentence, and sentences live in the catalogues, one entry per role. `ROLE_RIGHTS` names
+ * which entry, and nothing more.
  */
 
 import { foldForSearch } from "@/lib/labelIndex.ts";
@@ -16,6 +17,22 @@ export const ROLES = ["viewer", "member", "admin"] as const;
 export type Role = (typeof ROLES)[number];
 
 const ROLE_SET: ReadonlySet<string> = new Set(ROLES);
+
+/**
+ * Each role's catalogue sentence saying what it may do, keyed by the role so a fourth role is a
+ * type error until worded.
+ *
+ * Two readers, one description: `RoleRights` beside the invitation form, and `GrantReach` beside
+ * a token's or a connector's grant. The sentences mirror the router's role gates (the reasoning,
+ * and what a moved gate obliges, is on `RoleRights`); a second description of a role would be a
+ * second thing to keep true. Here rather than in either component because a component module may
+ * export only components (Fast Refresh).
+ */
+export const ROLE_RIGHTS = {
+  viewer: "people.rightsViewer",
+  member: "people.rightsMember",
+  admin: "people.rightsAdmin",
+} as const satisfies Record<Role, string>;
 
 export function isRole(value: string): value is Role {
   return ROLE_SET.has(value);

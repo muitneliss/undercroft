@@ -27,7 +27,10 @@ everywhere:
    Sign in with Google or with a code, using the address you were invited with.
 3. The consent page names the app, the host it will send you back to, and your address. Choose
    **Chỉ đọc / Read only** unless you mean the agent to change things, then **Cho phép / Allow**.
-   **Từ chối / Deny** sends the client away with nothing.
+   **Từ chối / Deny** sends the client away with nothing. Beside the choice, the page shows your
+   role in each customer and what the grant reaches: never more than that role, so for a viewer
+   **Đọc và ghi / Read and write** adds nothing in their customers beyond changing their own
+   account's preferences, such as the language they read.
 4. The browser returns to the client, which now holds an access token (8 hours) and a refresh
    token, and renews it without asking you again.
 
@@ -92,7 +95,9 @@ tokens itself -- only your browser session (or the CLI, which signs in the same 
 
 1. Sign in, and click your address in the running head. That is the account page, `/account`.
 2. Under **Token truy cập cá nhân / Personal access tokens**, give it a label that says where it
-   will live ("Claude Code on my laptop"), pick the grant and the expiry, and mint it.
+   will live ("Claude Code on my laptop"), pick the grant and the expiry, and mint it. Beside the
+   grant, the form shows your role in each customer and what the grant reaches; it never reaches
+   further than that role, and follows it if the role changes.
 3. Copy the `upat_…` value now. It is not shown again; if it is lost, mint another and revoke
    this one.
 

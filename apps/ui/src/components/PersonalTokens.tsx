@@ -6,7 +6,9 @@
  * the PERSON's, not a customer's, so this band sits on the account page rather than on a
  * customer's leaf and needs no role; and it carries a GRANT the person chooses. `read` is the
  * default, and the one a person should reach for -- an agent acting on text somebody else wrote
- * can do no harm with it. `write` says, in its hint, exactly what it hands over.
+ * can do no harm with it. `write` says, in its hint, exactly what it hands over, and
+ * `GrantReach` beside the choice says how far either reaches: the person's role in each customer
+ * and what it allows, since a grant never reaches past the role.
  *
  * A token is shown ONCE, by `OneTimeSecret`. Expiry is required and a year at most, because
  * the server refuses anything else; the select offers only what it accepts.
@@ -20,6 +22,7 @@ import { useTranslation } from "react-i18next";
 
 import type { PersonalToken } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
+import { GrantReach } from "@/components/GrantReach.tsx";
 import { OneTimeSecret } from "@/components/OneTimeSecret.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import {
@@ -285,6 +288,7 @@ function MintForm({
           <GrantRadio key={grant.value} grant={grant} disabled={mint.isPending} />
         ))}
       </fieldset>
+      <GrantReach />
 
       <div className="field">
         <label className="label" htmlFor={expiresId}>
