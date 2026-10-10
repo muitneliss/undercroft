@@ -1,0 +1,54 @@
+---
+/**
+ * The privacy policy or the terms, in one language. Both pages exist in both languages at the
+ * same name (`/privacy/`, `/en/privacy/`): a reviewer or a regulator is handed one address and
+ * must find the other language from it, so the slug is not localised the way a post's is.
+ */
+import { getEntry, render } from "astro:content";
+import Base from "../layouts/Base.astro";
+import { LANGS, type Lang, type LegalPageName, STRINGS, legalPath } from "../site.ts";
+import "../styles/blog.css";
+
+interface Props {
+  lang: Lang;
+  page: LegalPageName;
+}
+
+const { lang, page } = Astro.props;
+const s = STRINGS[lang];
+const entry = await getEntry("legal", `${lang}/${page}`);
+if (entry === undefined) {
+  throw new Error(`src/content/legal/${lang}/${page}.md is missing`);
+}
+const { Content } = await render(entry);
+const date = new Intl.DateTimeFormat(s.dateLocale, { dateStyle: "long" });
+const other = LANGS.find((candidate) => candidate !== lang);
+---
+
+<Base
+  lang={lang}
+  title={`${entry.data.title} | Undercroft`}
+  description={entry.data.description}
+  path={legalPath(lang, page)}
+  alternates={LANGS.map((alt) => ({ lang: alt, path: legalPath(alt, page) }))}
+>
+  <article class="article">
+    <header class="article__head">
+      <h1 class="article__title">{entry.data.title}</h1>
+      <p class="meta">
+        <span>{s.legalUpdated}</span>
+        <time datetime={entry.data.updated.toISOString()}>{date.format(entry.data.updated)}</time>
+        {
+          other && (
+            <a href={legalPath(other, page)} hreflang={other} lang={other}>
+              {s.otherLanguage}
+            </a>
+          )
+        }
+      </p>
+    </header>
+    <div class="prose">
+      <Content />
+    </div>
+  </article>
+</Base>
