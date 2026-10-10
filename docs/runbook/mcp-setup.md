@@ -232,3 +232,11 @@ To find them: `task obs:search FOR=status=401 SINCE=6h` lists the refused reques
 trace ids, `task obs:logs FOR=mcp_refused SINCE=6h` lists the reasons, and
 `task obs:logs FOR=<credential>` shows when that credential last worked. The `debug-trace`
 skill walks through it.
+
+Every refusal but `missing` is also in the audit log, as `auth.tokenRefused` with the same
+`reason` and credential id (ADR 0120). The owner reads it under **Hoạt động / Activity** on the
+account page when the refusal proves whose it is: a personal token revoked or expired, an app
+whose consent was revoked or that was granted neither scope. A superadmin reads all of them,
+including those that name nobody (`malformed`, `unknown`, an expired OAuth token) and those of a
+person who no longer has access (`no_person`). Every call a token makes, reads included, is there
+too, with the token's id.

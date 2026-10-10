@@ -247,10 +247,17 @@ describe("a one-time code is only ever posted to an address that could use it", 
     // cost a round of guessing that one query against this table answers.
     await requestCode("stranger@example.test");
 
-    const { rows } = await db.query<{ actor: string; action: string }>(
-      "SELECT actor, action FROM ops.audit_log WHERE action = 'auth.refused'",
+    const { rows } = await db.query<Record<string, unknown>>(
+      "SELECT actor, action, outcome, reason FROM ops.audit_log WHERE action = 'auth.refused'",
     );
-    expect(rows).toEqual([{ actor: "stranger@example.test", action: "auth.refused" }]);
+    expect(rows).toEqual([
+      {
+        actor: "stranger@example.test",
+        action: "auth.refused",
+        outcome: "refused",
+        reason: "NOT_INVITED",
+      },
+    ]);
   });
 
   it("an admitted address leaves no refusal behind", async () => {
@@ -368,6 +375,75 @@ describe("a session can be withdrawn before it expires", () => {
     const after = await sessionMe(cookie);
     const body = (await after.json()) as { error?: { data?: { code?: string } } };
     expect(body.error?.data?.code).toBe("UNAUTHORIZED");
+  });
+});
+
+describe("signing out is one row in the audit log, whichever way it went (ADR 0120)", () => {
+  async function signedIn(): Promise<string> {
+    await seedInvitation("CASE-0042", "operator@example.test", "admin");
+    await requestCode("operator@example.test");
+    return await signInWithCode("operator@example.test");
+  }
+
+  /** Every row a sign-out could have left, under either name. */
+  async function signOuts(): Promise<{ action: string; actor: string; channel: string }[]> {
+    const { rows } = await db.query<{ action: string; actor: string; channel: string }>(
+      `SELECT action, actor, channel FROM ops.audit_log
+        WHERE action IN ('auth.signOut', 'session.signOut') ORDER BY id`,
+    );
+    return rows;
+  }
+
+  const ONE = [{ action: "auth.signOut", actor: "operator@example.test", channel: "web" }];
+
+  it("through the session.signOut procedure", async () => {
+    await post("/trpc/session.signOut", {}, await signedIn());
+
+    expect(await signOuts()).toEqual(ONE);
+  });
+
+  it("through Better Auth's own sign-out", async () => {
+    await post("/api/auth/sign-out", {}, await signedIn());
+
+    expect(await signOuts()).toEqual(ONE);
+  });
+});
+
+describe("a one-time code turned away is in the audit log (ADR 0120)", () => {
+  async function refusals(): Promise<Record<string, unknown>[]> {
+    const { rows } = await db.query<Record<string, unknown>>(
+      `SELECT actor, outcome, reason, detail FROM ops.audit_log
+        WHERE action = 'auth.refused' ORDER BY id`,
+    );
+    return rows;
+  }
+
+  it("for an address that may sign in, as a wrong code", async () => {
+    await seedInvitation("CASE-0042", "operator@example.test", "admin");
+    await requestCode("operator@example.test");
+    // Six digits that are not the ones the mailbox holds.
+    const wrong = codeFromEmail() === "000000" ? "111111" : "000000";
+
+    const signIn = await post("/api/auth/sign-in/email-otp", {
+      email: "operator@example.test",
+      otp: wrong,
+    });
+
+    expect(signIn.status).not.toBe(200);
+    expect(await refusals()).toEqual([
+      {
+        actor: "operator@example.test",
+        outcome: "refused",
+        reason: "WRONG_CODE",
+        detail: { via: "email-otp" },
+      },
+    ]);
+  });
+
+  it("not for an address that may not, which was never sent one", async () => {
+    await post("/api/auth/sign-in/email-otp", { email: "stranger@example.test", otp: "000000" });
+
+    expect(await refusals()).toEqual([]);
   });
 });
 

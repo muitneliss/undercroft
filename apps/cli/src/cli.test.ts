@@ -310,20 +310,30 @@ describe("a write needs a person's permission, per environment", () => {
     ]);
   });
 
-  it("what a person does through the CLI is in their own log as the CLI's (ADR 0113)", async () => {
+  it("what a person does and reads through the CLI is in their own log as the CLI's (ADR 0113, ADR 0120)", async () => {
     writeProfile("local", plane.origin, true);
     await signIn();
     await undercroft(["runs", "trigger", "--tenant-id", OWN, "--source", "hubspot", "--agent"]);
+    await undercroft(["tenants", "get", "--tenant-id", OWN, "--agent"]);
 
+    // A read of the log is a read too, so its own row lands after the page it answered with.
     const read = await undercroft(["audit", "mine", "--agent"]);
 
     const { items: entries } = envelope(read).data as {
-      items: { action: string; channel: string | null }[];
+      items: {
+        action: string;
+        channel: string | null;
+        outcome: string;
+        tenantId: string | null;
+      }[];
     };
-    expect(entries.map((entry) => [entry.action, entry.channel])).toEqual([
-      ["runs.trigger", "cli"],
-      ["auth.signIn", "cli"],
-      ["auth.invitationRedeemed", null],
+    expect(
+      entries.map(({ action, channel, outcome, tenantId }) => [action, channel, outcome, tenantId]),
+    ).toEqual([
+      ["tenants.get", "cli", "ok", OWN],
+      ["runs.trigger", "cli", "ok", OWN],
+      ["auth.signIn", "cli", "ok", null],
+      ["auth.invitationRedeemed", null, "ok", OWN],
     ]);
   });
 

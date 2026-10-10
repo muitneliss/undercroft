@@ -2,8 +2,9 @@
  * An audit row (ADR 0113) as the browser prints it: which label its action has, and what of its
  * detail a reader is shown.
  *
- * The action set is the server's (`AuditAction`, every mutation and the five events outside the
- * router), borrowed as a type, so `activity.actions` in the catalogues must answer every one. A
+ * The action set is the server's (`AuditAction`: every procedure, since a read through an agent's
+ * door is recorded too -- ADR 0120 -- and the events outside the router), borrowed as a type, so
+ * `activity.actions` in the catalogues must answer every one. A
  * row may still name an action no catalogue knows -- one written by an older release -- and then
  * the action itself is printed: a raw name is visibly unfamiliar, a guessed label is not.
  */

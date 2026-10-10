@@ -131,14 +131,16 @@ export interface Admitted {
  * Why a presented token admits nobody.
  *
  * `unknown` is no row with this digest: never ours, mistyped, or its person's row deleted and
- * the token with it (`ON DELETE CASCADE`). `id` is the token's id only where a row proved whose
- * token it is. The `upat_…` prefix of an unknown one is text the caller wrote, so it is not
- * reported: it would name a real token for a bearer that is not that token.
+ * the token with it (`ON DELETE CASCADE`). `id`, and `email` -- its owner's address, for the audit
+ * log (ADR 0120) -- only where a row proved whose token it is. The `upat_…` prefix of an unknown
+ * one is text the caller wrote, so it is not reported: it would name a real token for a bearer
+ * that is not that token.
  */
 export interface Refused {
   readonly ok: false;
   readonly reason: "unknown" | "revoked" | "expired";
   readonly id?: string;
+  readonly email?: string;
 }
 
 /**
@@ -166,10 +168,10 @@ export async function admit(
   }
   // Revoked before expired: a person's deliberate act is the more telling of the two.
   if (token.revokedAt !== null) {
-    return { ok: false, reason: "revoked", id: token.id };
+    return { ok: false, reason: "revoked", id: token.id, email: token.email };
   }
   if (token.expiresAt.getTime() <= now.getTime()) {
-    return { ok: false, reason: "expired", id: token.id };
+    return { ok: false, reason: "expired", id: token.id, email: token.email };
   }
   await touchTokenUse(exec, token.id);
   return { ok: true, id: token.id, email: token.email, grant: token.grant };

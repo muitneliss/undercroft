@@ -5,11 +5,9 @@ date: 2026-10-10
 tags: []
 source: docs/runbook/mcp-setup.md
 source_path: docs/runbook/mcp-setup.md
-source_hash: 4342b46fe5d68d07b296866708549608f30b40f3b25a29e4d520934b2c2065dc
+source_hash: 79ccf95f52d759366c8c61e42f7a64ce861ec23c914e3899ecff7235b5975012
 ingested: 2026-10-10
 ---
-
-# Runbook: Connecting an agent over MCP
 
 # Runbook: Connecting an agent over MCP
 
@@ -27,7 +25,7 @@ How a person connects claude.ai, Claude Desktop, Claude Code or any MCP client t
 
 **Troubleshooting.** OAuth: "No access" = not invited; `invalid_redirect_uri` = a loopback callback registered as a web app (update the client); 403 `insufficient_scope` = neither grant chosen (revoke and reconnect); `/.well-known` 404 = public URL is plain HTTP off loopback; 429 = five registrations a minute. Tokens: 401 = revoked/expired/mistyped or access removed (a cookie never works); a client that fails after working for a while usually let its access token expire without renewing it; missing tools or `WRITES_DISABLED` = read token; `NOT_FOUND` = not a member; `PERMISSION_DENIED` = role; `CONFLICT` naming `TENANT_DEACTIVATED` = an admin deactivated the customer (ADR 0110), every tool refuses for it until reactivated, and `tenants_get` still says since when; `INTERNAL_ERROR` = follow the traceId with `task obs:trace`; `-32602` = unknown tool. Every call logs `mcp_call { tool, via, credential, outcome }`, never arguments or results.
 
-**Why a bearer was refused.** The client gets the same 401 whatever the cause (403 for `insufficient_scope`); the server logs `mcp_refused { status, refusal, reason, credential }` with the request's `traceId`, `credential` being the `upat_…` id or `oauth:<clientId>` when proven, never the token. Reasons: `expired` (mint a new token; an OAuth client should renew by itself), `revoked` (token or app revoked), `no_person` (access removed; re-invite), `missing` (no bearer; every OAuth client's first contact, logged at info), `malformed` (unreadable), `unknown` (not issued by this server for `/mcp`), `insufficient_scope` (neither grant). Find them with `task obs:search FOR=status=401 SINCE=6h`, then `task obs:logs FOR=mcp_refused SINCE=6h`, and `task obs:logs FOR=<credential>` for when it last worked; the `debug-trace` skill walks through it.
+**Why a bearer was refused.** The client gets the same 401 whatever the cause (403 for `insufficient_scope`); the server logs `mcp_refused { status, refusal, reason, credential }` with the request's `traceId`, `credential` being the `upat_…` id or `oauth:<clientId>` when proven, never the token. Reasons: `expired` (mint a new token; an OAuth client should renew by itself), `revoked` (token or app revoked), `no_person` (access removed; re-invite), `missing` (no bearer; every OAuth client's first contact, logged at info), `malformed` (unreadable), `unknown` (not issued by this server for `/mcp`), `insufficient_scope` (neither grant). Find them with `task obs:search FOR=status=401 SINCE=6h`, then `task obs:logs FOR=mcp_refused SINCE=6h`, and `task obs:logs FOR=<credential>` for when it last worked; the `debug-trace` skill walks through it. Every refusal but `missing` is also in the audit log as `auth.tokenRefused`, with the same reason and credential id ([[ADR 0120 An Agent's Reads, and Every Sign-In Event, Are on the Record]]): its owner reads it under Activity on the account page when the refusal proves whose it is (a personal token revoked or expired, an app whose consent was revoked or that was granted neither scope), and a superadmin reads all of them, including those naming nobody (`malformed`, `unknown`, an expired OAuth token) and those of a person who no longer has access (`no_person`). Every call a token makes, reads included, is there too, with the token's id.
 
 **Skills.** Besides tools and widgets, `/mcp` serves Undercroft's own Agent Skills through the MCP Skills extension (`skills/list`, `skills/get`, files at `skill://<name>/<path>`), the same files `npx skills add` installs; a host that supports the extension needs nothing installed, and Claude Code and Codex install them with `npx skills` ([[Runbook: Agent skills]], [[ADR 0067: The published skills are one family, installed by npx skills and served by /mcp]]).
 

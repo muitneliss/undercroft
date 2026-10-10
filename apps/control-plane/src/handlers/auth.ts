@@ -67,11 +67,11 @@ import { type BetterAuthOptions, type BetterAuthPlugin, betterAuth } from "bette
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
 import { messages } from "../i18n/index.ts";
-import { isAdmissible, recordRefusal, resolveInvitedUser } from "../services/invite.ts";
+import { isAdmissible, resolveInvitedUser } from "../services/invite.ts";
 import { setLocale } from "../services/preferences.ts";
 import { NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
+import { auditPlugin, refuseUninvited } from "./authAudit.ts";
 import { localeOf } from "./authLocale.ts";
-import { signInHooks } from "./authSignIn.ts";
 import { coreModels, USER_TABLE } from "./authSchema.ts";
 import { devSignIn } from "./devSignIn.ts";
 import { createMcpAuth, type McpAuth, mcpPlugins, oauthIssuer } from "./mcpAuth.ts";
@@ -245,9 +245,10 @@ function userModel(config: AuthConfig, superadmins: Superadmins): BetterAuthOpti
      * it runs on paths where nothing should be provisioned. The library fails this hook
      * CLOSED: if it throws, the sign-in is refused rather than allowed.
      */
-    validateUserInfo: async ({
-      user,
-    }): Promise<{ error: string; errorDescription: string } | undefined> => {
+    validateUserInfo: async (
+      { user },
+      context,
+    ): Promise<{ error: string; errorDescription: string } | undefined> => {
       // An identity with no address cannot be matched to an invitation, so it is refused:
       // `isAdmissible("")` is false. Failing closed on a missing email is the point.
       if (await isAdmissible(config.exec, user.email ?? "", superadmins)) {
@@ -257,7 +258,7 @@ function userModel(config: AuthConfig, superadmins: Superadmins): BetterAuthOpti
       // Recorded, because the person on the other side sees only "No access" and the
       // operator needs to know WHICH address was turned away -- usually a typo or the
       // wrong Google account.
-      await recordRefusal(config.exec, { email: user.email ?? "", via: "google" });
+      await refuseUninvited(config.exec, { email: user.email ?? "", via: "google" }, context);
 
       return {
         error: "not_invited",
@@ -280,6 +281,7 @@ function authPlugins(
 ): NonNullable<BetterAuthOptions["plugins"]> {
   const issuer = oauthIssuer(config.baseUrl);
   return [
+    auditPlugin(config.exec, superadmins),
     ...(issuer === null ? [] : mcpPlugins(issuer)),
     ...(config.email === undefined ? [] : [otpSignIn(config, config.email, superadmins)]),
     ...(config.devSignInAs === undefined
@@ -319,7 +321,7 @@ function otpSignIn(
       if (!(await isAdmissible(config.exec, email, superadmins))) {
         // Silent to the caller, not to the operator: the response must not reveal that
         // this address has no access, but the trail must say so.
-        await recordRefusal(config.exec, { email, via: "email-otp" });
+        await refuseUninvited(config.exec, { email, via: "email-otp" }, context);
         return;
       }
 
@@ -338,8 +340,8 @@ function otpSignIn(
 }
 
 /**
- * The hooks that admit a platform superadmin on a fresh install (ADR 0013), and record every
- * sign-in (ADR 0113).
+ * The hooks that admit a platform superadmin on a fresh install (ADR 0013). What a session's
+ * beginning and end write to the audit log is the audit plugin's (`authAudit.ts`).
  */
 function bootstrapHooks(
   config: AuthConfig,
@@ -379,7 +381,6 @@ function bootstrapHooks(
         },
       },
     },
-    session: signInHooks(config.exec),
   };
 }
 
