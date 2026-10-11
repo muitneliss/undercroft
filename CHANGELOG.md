@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.75.2](https://github.com/muitneliss/undercroft/compare/v1.75.1...v1.75.2) (2026-10-11)
+
+
+### Bug Fixes
+
+* **audit:** order the log by number, so entries past a new digit are not hidden ([#436](https://github.com/muitneliss/undercroft/issues/436)) ([a36e489](https://github.com/muitneliss/undercroft/commit/a36e489243c296531bb5bbcf306e7b517c75c341))
+
 ## [1.75.1](https://github.com/muitneliss/undercroft/compare/v1.75.0...v1.75.1) (2026-10-11)
 
 
