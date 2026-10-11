@@ -1,8 +1,8 @@
-# Source inventory — local review snapshot
+# Source inventory — review Git files
 
-Prepared 2026-10-11. These hashes describe working-tree file bytes, including uncommitted changes. This is not a published revision. Regenerate after any change (including line-ending normalization), before the final review commit; verify hashes against the checked-out submission. The inventory excludes itself to avoid a circular hash.
+Prepared 2026-10-11. SHA-256 and byte lengths describe staged Git blob content, not checkout-specific CRLF conversion. Regenerate from the index after final edits and staging, before the review commit. Compare against Git blobs at the submitted commit. The inventory excludes itself to avoid a circular hash; the PR supplies the immutable review commit link.
 
-Local base HEAD: bc5e774ee8ab8dd1e5852d0eca38a4b49b9c2d9e. Do not present this base SHA as the prototype review commit. Shared upstream sources are available in the same Git tree; the second table lists principal references, not every transitive dependency.
+Upstream integration base: deb49f74db6162ff697f4a8db9a5006e0ab7bac8. This is the base SHA, not the prototype review commit. Shared upstream sources are available in the same Git tree; the second table lists principal references, not every transitive dependency.
 
 ## Contribution and design files (49)
 
@@ -35,8 +35,8 @@ Local base HEAD: bc5e774ee8ab8dd1e5852d0eca38a4b49b9c2d9e. Do not present this b
 | [apps/ui/src/features/models-workspace/types.ts](../../../apps/ui/src/features/models-workspace/types.ts) | 1790 | ed646159704272acbd5cd02dfbbd716658a85c9ead720c79c3f822bb467405f8 |
 | [apps/ui/src/features/models-workspace/workspace.css](../../../apps/ui/src/features/models-workspace/workspace.css) | 4755 | d4e34c11eb85099ec40f03278b29e2916a284b82f6af0d78e23092f40c3fca6f |
 | [apps/ui/src/features/models-workspace/workspace.test.tsx](../../../apps/ui/src/features/models-workspace/workspace.test.tsx) | 6717 | 0ce006101be2198ff70e86a4da2ed1c29b36891f7ce0380936c068324bf6e978 |
-| [apps/ui/src/i18n/en.ts](../../../apps/ui/src/i18n/en.ts) | 99995 | d7c7344b965ad08b7c8cca01cbc8cc9a6745b48e4033835ca8d2862d155bb354 |
-| [apps/ui/src/i18n/vi.ts](../../../apps/ui/src/i18n/vi.ts) | 137170 | 1243cc0f8e05e6491d7109e3baeac9630e4f91b8028f20f3df33ef3305773792 |
+| [apps/ui/src/i18n/en.ts](../../../apps/ui/src/i18n/en.ts) | 103605 | df8300737d0cffd89f9beddd54a8c5fd17f21e46edf98452e6221fd1bcacef71 |
+| [apps/ui/src/i18n/vi.ts](../../../apps/ui/src/i18n/vi.ts) | 142614 | 50dfabf5bec64a87f2ba20bc1744672a536db6992ab4e07ad85373d5976dc983 |
 | [apps/ui/src/prototype/details.ts](../../../apps/ui/src/prototype/details.ts) | 2622 | 96c7a48dc27975710c015f97077b89e47a7a3c3bfc657224416f7feaa257b920 |
 | [apps/ui/src/prototype/engineering.ts](../../../apps/ui/src/prototype/engineering.ts) | 3422 | 66269d1cf935f7cf6451d8402cf798386e86ed9f006534911fa9e499eddeb8a3 |
 | [apps/ui/src/prototype/fixtures.ts](../../../apps/ui/src/prototype/fixtures.ts) | 6825 | 397d65b5c3181e8573775e3cf21851a7c34917ab290fb25b4258b5a72fd5138e |
@@ -44,39 +44,39 @@ Local base HEAD: bc5e774ee8ab8dd1e5852d0eca38a4b49b9c2d9e. Do not present this b
 | [apps/ui/src/prototype/Prototype.tsx](../../../apps/ui/src/prototype/Prototype.tsx) | 2307 | ca5c4f4de1692680fa69a2b95e8f128402820c054d902b1963169c2dcd4efb79 |
 | [apps/ui/src/store.ts](../../../apps/ui/src/store.ts) | 42794 | 785a5fef47ba35f8d97d1f0c66861a5e86d5502cdfcc902ff09dbc61c31f59d7 |
 | [apps/ui/vite.prototype.config.ts](../../../apps/ui/vite.prototype.config.ts) | 1223 | 2c5051419045a6f735eb522b8fd25f83fd67285e187c8154de64361408a51d4b |
-| [biome.jsonc](../../../biome.jsonc) | 69371 | 7c36c578e823e59e54bc52f4e72332a6e1069e8d62ae953975e54c5baf382143 |
-| [docs/design/models-ux/AUDIT-models-live-2026-10-10.md](../../../docs/design/models-ux/AUDIT-models-live-2026-10-10.md) | 6528 | 0cf48e6990c39d0e2d365904ac63b1b31c7ff7c4dba27a0b0f180161626e7650 |
-| [docs/design/models-ux/AUDIT-models-performance-2026-10-11.md](../../../docs/design/models-ux/AUDIT-models-performance-2026-10-11.md) | 12748 | a0084f2241a9e56b50b3c4697c2846eaae1c7f25105b5515727c245835f3f0fc |
+| [biome.jsonc](../../../biome.jsonc) | 68161 | f89979b0895787b87d89867a92a66637b3245ff999afc2b691848dba2c5518ff |
+| [docs/design/models-ux/AUDIT-models-live-2026-10-10.md](../../../docs/design/models-ux/AUDIT-models-live-2026-10-10.md) | 6526 | eaa646d6b358aa86bf4d2ca72f8c768d840e3aef3a2193f660b894f351ef5200 |
+| [docs/design/models-ux/AUDIT-models-performance-2026-10-11.md](../../../docs/design/models-ux/AUDIT-models-performance-2026-10-11.md) | 12745 | 21849071dc07347e126b81abbfece58985feb57bd25a204b307d70ee10fdef10 |
 | [docs/design/models-ux/AUDIT-models-plan-spec-final-2026-10-11.md](../../../docs/design/models-ux/AUDIT-models-plan-spec-final-2026-10-11.md) | 7785 | fdc75c27ccbf29af79751b25ca190f2151d3cca65d262fe3ddb431964f5ecfa0 |
-| [docs/design/models-ux/FEASIBILITY-models-repo.md](../../../docs/design/models-ux/FEASIBILITY-models-repo.md) | 9894 | 022880cca7422f96ea5804b1a791329675afa7b014ce56c8c6120ca28761435e |
-| [docs/design/models-ux/IMPLEMENTATION-STATUS-models-ux.md](../../../docs/design/models-ux/IMPLEMENTATION-STATUS-models-ux.md) | 22098 | 793376869b4035793f41946965a58f1647faa59a5d9029437caff3f7275bdbb7 |
+| [docs/design/models-ux/FEASIBILITY-models-repo.md](../../../docs/design/models-ux/FEASIBILITY-models-repo.md) | 9893 | c54f6cc5c9a31b412bce835ba84ec25327fc85c5598af48a83f3d53dd4637602 |
+| [docs/design/models-ux/IMPLEMENTATION-STATUS-models-ux.md](../../../docs/design/models-ux/IMPLEMENTATION-STATUS-models-ux.md) | 22144 | 128935a2c0f4928a5aa9b37f14dc2ddc7f89983112928316403eca130e1ab1e2 |
 | [docs/design/models-ux/PLAN-models-ux.md](../../../docs/design/models-ux/PLAN-models-ux.md) | 12879 | f7513bc50fb06ea1b4deb745c07b7c5d633c325192908b1604c2c768bd39999f |
 | [docs/design/models-ux/PROMPT-implement-models-ux.md](../../../docs/design/models-ux/PROMPT-implement-models-ux.md) | 8250 | 0424a710af1d9943bf896c85ef5d1daca639701a5cad4011027487cf413cc33f |
-| [docs/design/models-ux/PROTOTYPE-HANDOFF.md](../../../docs/design/models-ux/PROTOTYPE-HANDOFF.md) | 12092 | 7f476bef985796e1cdfcda92945b188795c1346405085c47dde7ea9e8c06ae60 |
-| [docs/design/models-ux/README.md](../../../docs/design/models-ux/README.md) | 8448 | cfae2ad7e426063340754f2a2db4a5cfd5053a69257cc76f848553b83820014a |
+| [docs/design/models-ux/PROTOTYPE-HANDOFF.md](../../../docs/design/models-ux/PROTOTYPE-HANDOFF.md) | 12738 | d3488253a9fc52ca3f9a7fee66931f76ee577b9147f03b5c67e0412ba59712ba |
+| [docs/design/models-ux/README.md](../../../docs/design/models-ux/README.md) | 9001 | 1c15fd680b6b41198c529072922ec87f7bae952ed9e687fe785e03a435f02409 |
 | [docs/design/models-ux/RESEARCH-lineage-scale-2026-10-11.md](../../../docs/design/models-ux/RESEARCH-lineage-scale-2026-10-11.md) | 12165 | e06a45c56d3ceaf8cfc32201e56ef7ba422df02363a8bf5368c2382962597817 |
-| [docs/design/models-ux/SPEC-models-ux.md](../../../docs/design/models-ux/SPEC-models-ux.md) | 133690 | d9bb29d34c78d6d1be9d1c44c3dedd713edcbcbc0e71154f6511183dfe5cda5c |
-| [package.json](../../../package.json) | 4114 | 4c604227932968e474620435d86be5d8108fea0acc3decd6776fb809e18f4a88 |
+| [docs/design/models-ux/SPEC-models-ux.md](../../../docs/design/models-ux/SPEC-models-ux.md) | 132860 | f111ec73246a1b20d56a0cba92a5a78b73cb73da575ddca54c580fed8b04ca50 |
+| [package.json](../../../package.json) | 4114 | d9b570877dd8e98258964a34fbc5a687989074c9ea82a2b6d44c42e7934754dc |
 
 ## Existing shared sources and reproducibility references
 
 | File | SHA-256 |
 | --- | --- |
-| [bun.lock](../../../bun.lock) | fea033bb7373510111a14d6e85e543da0655a56f2f9854bee025e86d78f0f362 |
-| [.bun-version](../../../.bun-version) | d63588ea4b78e83a37d1219d7c9f625e5080a5b269d1784819cba93a86c14ee1 |
-| [Taskfile.yml](../../../Taskfile.yml) | 1ae139dd1209f7666ab27b6df7615b521fde26f41748cab9847f53c80048053f |
-| [CLAUDE.md](../../../CLAUDE.md) | 23e33dd44ac014bad37ac81007429906fa5868bcfdb1ffca1ad05dfdddb3b62a |
-| [CONTRIBUTING.md](../../../CONTRIBUTING.md) | 04943a2b3174cd8315e0fef041aa2d1d0a2094de882470568adc598ad222a669 |
+| [bun.lock](../../../bun.lock) | 7aa1cf08cfb66feae8545e7e10d1d8db5d77d33f2a4318c6de8dee915baabc1b |
+| [.bun-version](../../../.bun-version) | b99b4c7cdf236f59bc9f65d963deaecae3b16a7dad87939cacb9057f7664daee |
+| [Taskfile.yml](../../../Taskfile.yml) | 74fb6e1916d4294c76e9d69822340d8eba414dab08a28ef8be36a206f79517a5 |
+| [CLAUDE.md](../../../CLAUDE.md) | 0da8c11f7267be591dc04d1110cf6da020641d9434a0b9ff6a8c744f5ae731c8 |
+| [CONTRIBUTING.md](../../../CONTRIBUTING.md) | a49a871662706e1fc241440f315c82c0e9e32e4a1985ba4a88a1a448b7c83bf0 |
 | [apps/ui/AGENTS.md](../../../apps/ui/AGENTS.md) | 6e7222ffb718b8eaf2b7fa7307c80f0c0950101a57029f2f518f5e887b944d8d |
-| [apps/ui/DESIGN.md](../../../apps/ui/DESIGN.md) | 5488070ff97dbd3c95d641496d1d29cc77464071b6dba903748a50aa28d2599f |
-| [apps/ui/src/components/Book.tsx](../../../apps/ui/src/components/Book.tsx) | ea4fc8f074c5b6e79719f87aefbfc6eb1835eb13c378fe949ff971875908c3d8 |
-| [apps/ui/src/components/TabRail.tsx](../../../apps/ui/src/components/TabRail.tsx) | 3732fd542e50e70511b2ce38afc0697daf29222451bdd6c6cd2927f15c0acefe |
-| [apps/ui/src/components/LineageCanvas.tsx](../../../apps/ui/src/components/LineageCanvas.tsx) | dbf959efe163a4731689149fb1b70f97945d3ac0d75e41d71d633d74aea2b798 |
-| [apps/ui/src/index.css](../../../apps/ui/src/index.css) | d3c519fdb7fb20e1ffae68b7954beab54dbeb2b75e6db2a9d167a824bde52d3c |
-| [apps/ui/src/routes/Models.tsx](../../../apps/ui/src/routes/Models.tsx) | aebd5271963730550b2eb3b1f16f4f63619d583eb18e934f63a566b4abc860da |
-| [apps/ui/src/routeTable.tsx](../../../apps/ui/src/routeTable.tsx) | 4781e33b710841f6e455afcf8e2e9b2804bdaefdc3e03298c9dd26dea0519bff |
-| [docs/design/operator-and-reader-paths.md](../../../docs/design/operator-and-reader-paths.md) | 6bf622512e0fea33c5473c44db30082e69782002ce78beb9f3b19f1c9892439c |
-| [docs/adr/0112-a-model-carries-no-business-context.md](../../../docs/adr/0112-a-model-carries-no-business-context.md) | 6731606fb8853ecc69e137863cb929a8670bad418fd26a99d35ccda4239c5ab8 |
-| [docs/adr/0117-the-village-is-an-overview-and-replaces-no-drawing.md](../../../docs/adr/0117-the-village-is-an-overview-and-replaces-no-drawing.md) | e4f055e8bff2028ff1f9c1e6bd3ede8a1ca422d5c074d3efb274df05dd164547 |
+| [apps/ui/DESIGN.md](../../../apps/ui/DESIGN.md) | eb7192f550d22333f6106f53df4f6deb49e2905797ddb777173cced728ae90fa |
+| [apps/ui/src/components/Book.tsx](../../../apps/ui/src/components/Book.tsx) | fe61377430a2ba068a39ac52a160163d94ba846c962e89e92382225c44816b41 |
+| [apps/ui/src/components/TabRail.tsx](../../../apps/ui/src/components/TabRail.tsx) | 5234be1c73ec0d3170357c319ced284cfb0b84e3c322da07b44254fa45dc785e |
+| [apps/ui/src/components/LineageCanvas.tsx](../../../apps/ui/src/components/LineageCanvas.tsx) | e52a49fa043811d1751de085330fffb21526ca2e15102e21e63c934a4f8ca4b4 |
+| [apps/ui/src/index.css](../../../apps/ui/src/index.css) | d19df9b9da9a583ea52b83b2f896adc7172b07155bda2482d49d9ec0ab539475 |
+| [apps/ui/src/routes/Models.tsx](../../../apps/ui/src/routes/Models.tsx) | 3cf28451ce878b69a17087d45960e44860aa15417eacf785fb70340a92330430 |
+| [apps/ui/src/routeTable.tsx](../../../apps/ui/src/routeTable.tsx) | 06bdb1c9d26965286e4025b2db203d76ff5d32e964965a609ede536932a6614c |
+| [docs/design/operator-and-reader-paths.md](../../../docs/design/operator-and-reader-paths.md) | b8f76fe53fdc2346d4cef7db225880e8d876dc5a9b4c9db8e6d80c0d7253974d |
+| [docs/adr/0112-a-model-carries-no-business-context.md](../../../docs/adr/0112-a-model-carries-no-business-context.md) | dad3f837952edb4a38ca3fc2b06f2b9d42ad2bb778fcbbedf8b0055a1cae52df |
+| [docs/adr/0117-the-village-is-an-overview-and-replaces-no-drawing.md](../../../docs/adr/0117-the-village-is-an-overview-and-replaces-no-drawing.md) | 3fc0903993a6b491e4bf9336420a0b50b141629b4163cd3020d4dc18ee8b0e41 |
 
 Complete delivery also includes this inventory. Source files are ordinary readable Git files, not archives or generated bundles. Installed packages and build outputs are reproduced from the lockfile and Task commands. Local investigation notes outside the repository are not runtime dependencies. Any new contribution file must be added here; no authored runtime source may be excluded merely because it was untracked during preparation.

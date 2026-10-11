@@ -81,6 +81,8 @@ task build:models-prototype
 
 ## Mốc tương thích và kết quả
 
+**Bản gửi review:** đã rebase lên main `deb49f74db6162ff697f4a8db9a5006e0ab7bac8` ngày 2026-10-11, không xung đột. Đã chạy lại `ci:models-prototype`, `ci:typecheck`, `build:models-prototype` và `ci:test-one` cho feature/i18n/Models: 36 pass, 0 fail. Có cảnh báo React `act(...)` trong bộ test Models và annotation của dependency khi build. Formatter của repo xử lý CRLF sau rebase; không đổi hành vi. Chưa chạy lại browser/VRT/full gate trên bản rebase. Các kết quả dưới đây ghi lại mốc kiểm tra trước đó, không thay thế nghiệm thu còn thiếu.
+
 - Checkout thi công: HEAD `bc5e774ee8ab8dd1e5852d0eca38a4b49b9c2d9e`, code nền `69d69280390fbfbc07f5be8233e91d34687168fa`, v1.73.0.
 - Đã fetch và đối chiếu `origin/main` tại `6bb345e09d51d498bb3476291b4431a39a190759`. Dependencies UI, store, formatter, Vite config và rules được đối chiếu không đổi. Book/TabRail upstream có thay đổi quyền; props Book đang dùng vẫn tương thích. Kiểm tra áp patch các file tracked bằng index tạm trên SHA upstream này đều clean; file mới không trùng đường dẫn upstream. Đã đồng bộ định nghĩa task install với upstream để tránh conflict. Chưa merge hoặc chạy toàn gate trên SHA upstream này.
 - Build UI hiện hữu và build prototype đã thành công. Bộ test tập trung gồm 36 test Models/i18n đạt trong lần chạy cuối (36 pass, 0 fail). TypeScript, lint toàn repo, lint-rules và spec validation đạt.

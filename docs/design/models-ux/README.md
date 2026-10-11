@@ -73,4 +73,4 @@ Use a report rather than a blanket “reviewed” statement:
 | Backend support | Current endpoint/artifact for each capability, or explicit unsupported/proposed status |
 | Decision | Blocking findings, design questions and recommended next increment; no automatic production changes |
 
-Before publishing, regenerate the inventory after the final edit, commit the complete contribution, verify the remote tree matches that commit, and add permanent tree/blob links to the PR. The current inventory is a local preparation snapshot, not proof of upload. A review prompt cannot guarantee that an AI reads every line; this evidence makes omissions visible.
+Before publishing, regenerate the inventory from staged Git blobs after the final edit, commit the complete contribution, verify the remote tree matches that commit, and add permanent tree/blob links to the PR. Hashes describe Git file bytes rather than Windows checkout line endings. The inventory itself is not proof of upload; use the PR's pinned commit and remote tree. A review prompt cannot guarantee that an AI reads every line; this evidence makes omissions visible.
