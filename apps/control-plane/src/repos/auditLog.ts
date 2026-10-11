@@ -116,6 +116,10 @@ interface Selected {
  *
  * One statement for every reader, each condition switched off by a NULL parameter, so the three
  * readers cannot drift into three slightly different ideas of a row.
+ *
+ * `ORDER BY` names the table's column, not the bare `id`: a bare name resolves to the output
+ * column first, which is the `text` cast, and "999" sorts above "1000" -- so every row past a
+ * new digit fell below the first page, while the `bigint` cursor in `WHERE` skipped it too.
  */
 export async function list(exec: SqlExecutor, filter: AuditFilter): Promise<AuditRow[]> {
   const { rows } = await exec.query<Selected>(
@@ -126,7 +130,7 @@ export async function list(exec: SqlExecutor, filter: AuditFilter): Promise<Audi
         AND ($2::uuid IS NULL OR user_id = $2)
         AND ($3::text IS NULL OR actor = $3)
         AND ($4::bigint IS NULL OR id < $4::bigint)
-      ORDER BY id DESC
+      ORDER BY audit_log.id DESC
       LIMIT $5`,
     [
       filter.tenantId ?? null,
