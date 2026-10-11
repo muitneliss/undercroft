@@ -1,16 +1,14 @@
 # Models workspace — review starts here
 
-This branch supplies the original, runnable React/TypeScript prototype as ordinary Git files. Review this implementation before proposing a replacement. Screenshots illustrate it; they are not the implementation specification.
+Review the Models prototype at the PR's linked commit. Evaluate discovery, model profiles and lineage against SPEC and repository rules, using the supplied source and runnable prototype.
 
-This is a design-review contribution, not a production integration or a claim that production loading is fixed. Reading this document does not authorize implementation, publication or deployment. Follow the maintainer's actual request and the repository rules.
-
-Previous handoff: #349 contained the design contract, while readable prototype source and a ZIP lived on the unrelated-history `review/ui-r5b` branch. Its PR body explicitly called for rebuilding accepted behavior in the existing application. This contribution instead puts the runnable source in the review PR itself. The previous source was not absent; the boundary between reviewing a harness and reviewing an implementation was different.
+The current task is design and code review. Return findings with file/line references, execution evidence and checks not completed. For integration recommendations, identify reusable code and explain necessary changes. Production implementation requires a separate request.
 
 ## Open and run the exact source
 
-1. Check out the submitted PR head. Record `git rev-parse HEAD` and whether the working tree is clean. The PR must include commit-pinned source links; do not use a moving branch as the only visual reference.
+1. Check out the commit linked in the PR. Record `git rev-parse HEAD` and whether the working tree is clean.
 2. Read `CLAUDE.md`, `CONTRIBUTING.md`, `apps/ui/AGENTS.md`, applicable `.claude/rules/`, and `apps/ui/DESIGN.md`.
-3. Read the source map below and every contributed code/config/test file in [SOURCE-INVENTORY.md](SOURCE-INVENTORY.md), including files GitHub collapses. Follow imports into shared application code as needed. Record any files or checks not inspected; do not claim complete review from this summary alone.
+3. Read every contributed source/config/test file using the map below and [SOURCE-INVENTORY.md](SOURCE-INVENTORY.md), including files GitHub collapses. Follow relevant shared imports and record any files not inspected.
 4. Install with the checkout's pinned Bun/Task toolchain and run from the repository root:
 
 ```text
@@ -18,11 +16,11 @@ task dev:install
 task dev:models-prototype
 ```
 
-Open `http://127.0.0.1:5174/tenants/CASE-0042/models`. This local URL works only after running the branch. Do not build a substitute demo to perform this review. If startup fails, report the command and error, then diagnose the original source.
+Open `http://127.0.0.1:5174/tenants/CASE-0042/models` after starting the supplied prototype. If startup fails, report the command and error, then diagnose that source.
 
 ## Source map
 
-Paths below are relative to the repository root. The inventory provides clickable links for individual files and their local snapshot hashes.
+Paths below are relative to the repository root. The inventory provides clickable links and hashes of Git file contents.
 
 | Read in this order | Files | What to verify |
 | --- | --- | --- |
@@ -46,9 +44,9 @@ Shared source is in this same checkout, not a hidden dependency: `apps/ui/src/co
 
 ## Preserve the reviewed behavior during integration
 
-The original source remains available at the review commit even if maintainers choose not to merge the isolated demo into main. No ZIP or compressed/minified replacement is acceptable for source review. Include the complete authored source, fixtures, tests, styles, translations, configuration and documentation in Git; shared upstream code remains in the same checkout.
+The review commit preserves the complete authored source, fixtures, tests, styles, translations, configuration and documentation as readable Git files. Shared upstream code is in the same checkout.
 
-When integration is explicitly requested, prefer reusing compatible components and logic. A rewrite can be necessary, but it must identify the original file/symbol, the repository constraint, the replacement, and the comparison test or browser evidence. Do not infer a new layout from screenshots, silently omit interactions, or treat visual resemblance as behavioral equivalence.
+For a later integration, prefer reusing compatible components and logic. For each necessary rewrite, identify the original file/symbol, the repository constraint, the replacement, and a comparison test or browser evidence that the required behavior is preserved.
 
 Review these concrete paths in the original and, later, in the integrated version:
 
