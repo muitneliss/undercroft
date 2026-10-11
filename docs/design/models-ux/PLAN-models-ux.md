@@ -1,210 +1,130 @@
-# Plan hoàn thiện Models — phân bổ thông tin giữa List và Lineage
+# Kế hoạch thi công Models
 
-Phiên bản: **1.3 · 11/10/2026 — bổ sung cổng hiệu năng sau audit**
-Trạng thái: Kế hoạch triển khai, chưa thay đổi ứng dụng.
-Đồng bộ: [SPEC v1.3](./SPEC-models-ux.md). Bằng chứng: [Điều tra web đã đăng nhập](./AUDIT-models-live-2026-10-10.md), [Audit hiệu năng](./AUDIT-models-performance-2026-10-11.md).
+**Baseline:** 2.0 · 11/10/2026. **Loại tài liệu:** kế hoạch thực hiện, không phải báo cáo tiến độ.
 
-**Ưu tiên mới trước thi công giao diện:** xử lý lỗi layout và luồng xử lý, không chỉ giảm rối bằng phân lớp. Audit web mới có 207 model + 2 raw, 1.079 cạnh. Replay bằng bundle production: cấu hình hiện tại tràn stack khoảng 2,72 giây; placement thay thế chạy được nhưng chiếm event loop khoảng 3,45 giây. Đây là số đo cục bộ, chưa phải thời gian load browser/API. Các số 205 model/103 downstream trong phần audit cũ và fixture bên dưới là snapshot lịch sử, không phải số hiện tại.
+## 1. Mục tiêu và tài liệu chuẩn
 
-### Cổng hiệu năng bắt buộc của v1.3
+Hoàn thiện nội dung Models để người không chuyên tìm/hiểu dữ liệu dễ dàng, kỹ sư truy cập SQL/vận hành nhanh và lineage không làm treo giao diện khi có hàng trăm model. Giữ nguyên giao diện chung của ứng dụng.
 
-1. **Chẩn đoán:** lưu lỗi có nguyên nhân và timing từng giai đoạn; tiếp tục đo API/DB/browser trước khi kết luận end-to-end. Source có lãng phí backend nhưng chưa có bằng chứng thời gian production.
-2. **Layout an toàn:** regression graph tổng hợp; đánh giá sửa/fallback placement; Worker thật, timeout, hủy tác vụ cũ, loại kết quả stale. Đổi thuật toán đơn lẻ chưa đủ.
-3. **Giới hạn công việc thực:** mặc định scope cục bộ; kiểm soát cả độ sâu, độ rộng và cạnh. Khi chuyển sang Bảng hoặc không hiển thị canvas, không khởi động layout. Ẩn bằng CSS không đạt yêu cầu.
-4. **Hiển thị độc lập:** tìm kiếm, danh sách và bảng quan hệ dùng được khi layout đang chạy hoặc lỗi. Graph/Bảng cùng scope; scope lớn vẫn truy cập bằng bảng có phân trang/virtualization và tổng số rõ ràng.
-5. **Tránh tính lại:** index quan hệ theo revision; cache layout bounded theo revision/scope/options; không layout lại khi chỉ chọn/highlight node trong cùng phạm vi. Chỉ tải detail SQL/schema khi mở.
-6. **Nghiệm thu:** kiểm tra cold/warm load, root đổi liên tiếp, lỗi/timeout và mobile bằng 250–1.000 model tổng hợp; có nhánh rộng, merge dày và chuỗi dài. Mục tiêu đề xuất: phản hồi ≤200 ms; scope ban đầu ≤1 giây sau metadata; tác vụ layout không chặn main thread >50 ms; quá 3 giây vẫn thao tác và fallback được. Cố định máy/network đo trước khi dùng làm tiêu chí phát hành.
-
-Legacy `scope=related` vẫn giữ ý nghĩa toàn bộ chuỗi như spec; có thể vào bảng trước và yêu cầu thu phạm vi để vẽ, không âm thầm đổi dữ liệu sang một bước. Nhóm Đầu vào/Biến đổi/Đầu ra không được làm mất cạnh vượt lớp.
-
-Bổ sung này khóa yêu cầu hiệu năng, chưa duyệt bố cục prototype mới và chưa sửa ứng dụng. Không thêm nút AI; giữ hai tab cấp cao.
-
-**Đối chiếu code bổ sung:** main `69d6928`, v1.73.0; xem [ma trận khả thi](./FEASIBILITY-models-repo.md). `bi.schema` và `models.check` đã có, nên ưu tiên tái sử dụng. Lớp/nghiệp vụ/alias/grain không có trong model API; business context đã bị gỡ có chủ đích theo ADR 0112. Những mục metadata bên dưới là phần phát triển mới, không phải dữ liệu sẵn có. Không hồi sinh form bắt điền/duyệt context và cảnh báo thiếu trên mọi model. Preview model ID, lastSuccessfulBuild, hash SQL và ánh xạ test-model còn cần nối/bổ sung hợp đồng; trợ lý trong web không có Save/Build, khác agent ngoài qua MCP/CLI.
-
-## 1. Quyết định thiết kế
-
-**Hai tab, một hồ sơ model dùng chung:**
-
-- **Danh sách (List):** tìm đúng model, hiểu sơ bộ mục đích và nhận biết tình trạng.
-- **Dòng dữ liệu (Lineage):** hiểu model đọc từ đâu, được dùng ở đâu và thay đổi có thể ảnh hưởng tới gì.
-- **Hồ sơ:** trang chi tiết bên trong khu vực Models, không thành tab cấp cao thứ ba. Dùng cùng metadata dù mở từ List hay Lineage.
-- **Editor và Nhật ký:** giữ công việc chuyên biệt hiện có; có lối tắt trực tiếp cho kỹ sư.
-
-“Thân thiện với người low-code” nghĩa là dễ đọc, dễ hiểu và dễ kiểm chứng. Không thêm wizard tạo pipeline, form cấu hình dài hay chatbot riêng vào mỗi tab. AI có thể thực hiện thay đổi; UI giúp người dùng hiểu và kiểm tra kết quả.
-
-**Quyết định đã chốt với người dùng:** không thiết kế nút AI, chat AI, hành động “Nhờ AI sửa/kiểm tra” hoặc luồng chuyển ngữ cảnh sang AI trong List, Lineage và hồ sơ model. Trợ lý chung hiện có của ứng dụng không thuộc phạm vi thay đổi này; khả năng agent ngoài qua MCP/CLI không bị thay đổi.
-
-## 2. Những gì web thật làm thay đổi quyết định
-
-| Quan sát ngày 10/10/2026, v1.73.0 | Quyết định |
+| Tài liệu | Trách nhiệm |
 |---|---|
-| List đang có 205 model; tìm tên ra đúng 1/205 | Giữ tìm kiếm; không coi ảnh cũ là bằng chứng search lỗi |
-| Kết quả dựng, run ID, số cột, SQL sửa lúc chiếm bảng chính | Đưa thông tin điều tra vào hồ sơ; danh sách ưu tiên định danh, phạm vi và kết quả chạy |
-| Bấm tên vào editor; ý nghĩa dữ liệu nằm trong comment SQL | Tên mở hồ sơ đọc; giữ Sửa SQL một thao tác từ hàng theo quyền |
-| Lineage báo 207 nút và Không sắp được sơ đồ | Sửa lỗi/fallback trước khi trang trí; không khẳng định nguyên nhân là số node |
-| Chọn invoice vẫn công bố 103 nút hạ nguồn và nhiều khối văn bản | Mặc định một bước; mở thêm có chủ đích; phân biệt trực tiếp và nhiều bước |
-| Lineage chỉ bao phủ khai báo model và bảng thô; có 35 trường hợp chưa khai báo | Giới hạn bằng chứng là thông tin chính của Lineage, không chôn trong tài liệu |
-| Nhật ký đã có bước dbt và kết quả kiểm thử | Models lấy tóm tắt đúng model/run, link về Nhật ký; không xây lại trang vận hành |
-| Cả Xero/HubSpot đi qua raw.records | Tách bảng thô khỏi nguồn nghiệp vụ, không suy nguồn chỉ từ cạnh tới raw.records |
+| [SPEC-models-ux.md](./SPEC-models-ux.md) | Nguồn duy nhất cho hành vi sản phẩm, hợp đồng dữ liệu, lỗi, quyền và 118 acceptance case |
+| PLAN này | Thứ tự công việc, phụ thuộc, đầu ra và điều kiện hoàn thành từng giai đoạn |
+| [PROMPT-implement-models-ux.md](./PROMPT-implement-models-ux.md) | Lệnh giao việc cho agent triển khai prototype, có giới hạn quyền hành động |
+| [IMPLEMENTATION-STATUS-models-ux.md](./IMPLEMENTATION-STATUS-models-ux.md) | Tiến độ, bằng chứng kiểm tra, sai khác và công việc còn lại |
+| [README.md](./README.md) | Điểm vào review full source; chạy bản gốc, báo cáo có bằng chứng và đối chiếu phần tái sử dụng/thay đổi |
+| Các AUDIT/FEASIBILITY/RESEARCH | Bằng chứng tham khảo theo thời điểm; không ghi đè SPEC hoặc tạo yêu cầu mới |
 
-Sau thao tác scope=related, đọc trang bị timeout. Đây là điểm cần tái hiện bằng instrumentation, chưa phải kết luận về lỗi ứng dụng. Số 205/207/103 là số UI hiển thị trong phiên audit, không phải hằng số thiết kế.
+Đọc chỉ dẫn trực tiếp của người dùng và quy tắc repository trước. Nếu các tài liệu dự án mâu thuẫn về hành vi, dùng SPEC; ghi sai khác trong STATUS. Nếu SPEC xung đột với code/ADR về quyền hoặc tính đúng đắn dữ liệu, xác minh và dùng fallback đã quy định; không tự nới quyền hoặc bịa metadata. Không cần đọc lại toàn bộ hội thoại để thi công.
 
-## 3. Bản đồ phân bổ thông tin
+## 2. Phạm vi cố định
 
-| Thông tin | List | Hồ sơ dùng chung | Lineage |
-|---|---|---|---|
-| Tên dễ hiểu + tên kỹ thuật | Chính; tên dễ hiểu chỉ khi được xác nhận | Đầy đủ, có copy ID | Hai dòng trên node, không lặp tên nếu giống nhau |
-| Mục đích/nghiệp vụ | Mô tả ngắn khi có; lọc nghiệp vụ | Giải thích đầy đủ, chủ sở hữu nếu biết | Panel node; không chèn mọi mô tả vào canvas |
-| Lớp Đầu vào/Xử lý/Đầu ra | Bộ chọn phạm vi chính | Metadata có nguồn | Nhãn phụ trong panel; không dùng làm cột layout bắt buộc |
-| Grain, đơn vị, tiền tệ, múi giờ | Không thêm cột | Nổi bật ở Tổng quan | Grain của node đang chọn nếu có |
-| Kết quả chạy | Trạng thái + thời điểm đúng nghĩa | Lần thử gần nhất và bản thành công còn dùng được | Trên node chỉ nhấn lỗi/đang chạy/chưa rõ; chi tiết trong panel |
-| Độ mới/chất lượng | Không thêm hai cột mặc định; cảnh báo cụ thể nếu được hỗ trợ | Hai khối riêng, có bằng chứng và thời điểm | Chỉ dấu liên quan khi điều tra; không lan nhãn lỗi sang downstream |
-| Schema, khóa, kiểu dữ liệu, dữ liệu mẫu | Đưa vào hồ sơ | Mục Dữ liệu; sample theo quyền | Link mở đúng mục; không liệt kê toàn bộ cột trong panel |
-| SQL và phiên bản | Lối tắt Sửa SQL theo quyền | Mục SQL, thông tin bản lưu/bản build | Lối tắt; không editor cạnh graph |
-| Run ID, log, lỗi, thời lượng | Mở nhật ký từ trạng thái/menu | Tóm tắt vận hành và link Nhật ký | Link trong panel khi cần |
-| Đầu vào và nơi sử dụng trực tiếp | Nút Xem dòng dữ liệu | Tóm tắt tối đa 5 mỗi phía | Nội dung chính, default một bước |
-| Phụ thuộc nhiều bước/ảnh hưởng | Không thêm cột tổng đếm | Nút Xem tác động | Sơ đồ/bảng cùng phạm vi; đường đi và count rõ ràng |
-| Coverage, nguồn và phiên bản lineage | Chỉ cạnh lọc nguồn nếu cần | Tóm tắt khi quan hệ chưa đủ | Luôn có câu ngắn; mở được giải thích bằng chứng |
-| Cách cập nhật, lưu lịch sử, materialization | Không cột mặc định | Khối kỹ thuật mở dần khi có metadata | Không trên canvas |
-| Hiệu năng/chi phí/quyền/owner | Không biến thành dashboard rộng | Dẫn tới nguồn đo/quản trị hiện có; chỉ bổ sung khi hỗ trợ | Không dựng dashboard thứ hai |
+Trước bàn giao GitHub: đưa toàn bộ source/config/fixtures/tests/docs vào branch đọc được; tạo lại SOURCE-INVENTORY, chốt commit và kiểm tra remote có đủ file. Gắn link theo SHA trong PR, không dùng ZIP hoặc ảnh thay source. Người review chạy nguyên bản trước; tích hợp sau phải nêu phần tái sử dụng/adapter/viết lại và bằng chứng đối chiếu. Giữ source tại commit review kể cả khi maintainer chỉ muốn merge phần tích hợp.
 
-Các thông tin có một nguồn dữ liệu chuẩn; bản tóm tắt ở nơi khác phải cùng ID, phiên bản và ý nghĩa. Không tạo hai hồ sơ riêng cho hai tab.
+Sai khác cần xử lý trước khi PR ready: picker hiện dùng modal trái `apps/ui/DESIGN.md`; chuyển inline theo SPEC §10.3. Metadata nghiệp vụ vẫn là capability có điều kiện theo ADR 0112, không tự hồi sinh context API. Xem README và STATUS để tách yêu cầu đích khỏi phần chưa làm.
 
-## 4. List — tìm trước, kiểm tra sau
+- Giữ `Book`, `TabRail`, running header, bảy phân khu, font, màu, hiệu ứng, responsive và trợ lý chung. Chỉ thay children trong vùng Models. Nguồn chuẩn: SPEC §2.4.
+- Đúng hai tab Danh sách / Dòng dữ liệu; một hồ sơ dùng chung với Hiểu dữ liệu / Dữ liệu / SQL & cấu hình / Vận hành.
+- Danh sách nhóm theo lớp và metadata có bằng chứng; 25 model/trang, tìm/lọc toàn tập, một ID một hàng.
+- Lineage theo root, mặc định hai phía một bước; mở/thu nhánh, chọn tất cả, Bảng quan hệ, tác động down/all/table và Hoàn tác. Chọn hết không có nghĩa phải vẽ hết.
+- Sửa lỗi và chi phí layout; danh sách/bảng vẫn dùng được khi graph lỗi. Không tắt hiệu ứng chung để che tác vụ nặng.
+- Không thêm nút AI, taxonomy editor, pipeline builder, bulk Build/Delete, dashboard chi phí hoặc tab cấp cao khác. Không thay editor, phạm vi Build, quyền hay bảo vệ draft.
+- Không tự thêm report/column lineage; metadata/metrics nâng cao chỉ bật khi có nguồn, quyền và hợp đồng chính xác.
 
-```text
-Mô hình dữ liệu · N model                         [Tạo model]
-[Danh sách] [Dòng dữ liệu]
+## 3. Hai chế độ triển khai
 
-[Tìm tên hoặc mô tả — theo khả năng thực tế…]
-[Tất cả lớp] [Đầu vào] [Xử lý] [Đầu ra] [Chưa phân loại]
-[Nghiệp vụ ▾] [Bộ lọc (N): nguồn / lần chạy / family]  [Sắp xếp]
-Các điều kiện đang bật · N kết quả                    [Xóa lọc]
+| Chế độ | Dữ liệu và khả năng | Điều kiện hoàn thành |
+|---|---|---|
+| Prototype local | 250 model tổng hợp; đủ normal/empty/loading/error/partial/unsupported/forbidden. Dùng shell/component thật, tương tác chính và điều hướng chạy được | Đạt AC UI/logic trên fixture, không còn nút giả trong luồng chính; có URL local, cách chạy và bằng chứng. Không tuyên bố backend/quyền/hiệu năng production đã đạt |
+| Tích hợp dữ liệu thật | Adapter API/permission/revision hiện hữu hoặc phần bổ sung đúng hợp đồng | Đạt AC trên seam thực, kiểm thử server/quyền, đo hiệu năng và hồi quy shell; capability chưa hỗ trợ có fallback đúng |
 
-Model / tên kỹ thuật / mô tả ngắn | Lớp | Lần chạy gần nhất | ⋯
-```
+Lệnh làm prototype chỉ cho phép chế độ thứ nhất. Không tự chuyển sang production, migration, merge/push hoặc deploy. Khi người dùng đã yêu cầu thi công prototype, tiếp tục công việc local được cho phép; không xin duyệt lại từng component hoặc quyết định kỹ thuật thường lệ. Phản hồi minh họa là đầu vào thiết kế, không tự thay thế lệnh thi công.
 
-- Tên thân thiện chỉ thay vị trí ưu tiên khi đã xác nhận; tên kỹ thuật vẫn luôn đọc được. Thiếu alias thì dùng tên kỹ thuật, không tự dịch đoán.
-- Nghiệp vụ xuất hiện một cách ở phạm vi lọc hoặc dòng phụ, không tạo thêm nhiều cột. Nguồn vật lý/nguồn nghiệp vụ ở bộ lọc và hồ sơ, không mặc định chiếm cột bảng.
-- Bỏ dãy năm thẻ lớn và phép cộng. Giữ tổng tenant + số kết quả; trạng thái vẫn lọc được trong Bộ lọc. Không thêm tab Cần chú ý hoặc chỉ số health tổng hợp.
-- Chưa build không tự coi là lỗi. Cột thời gian là thời điểm của lần chạy, không lấy thời điểm sửa SQL thay vào.
-- Menu hàng có Xem dòng dữ liệu, Xem SQL, Sửa SQL, Mở lần chạy theo quyền/khả năng. Sửa SQL đi thẳng editor; không bắt kỹ sư qua hồ sơ rồi tab SQL.
-- Tên mở hồ sơ đọc, không tự kích hoạt SQL editor hoặc preview query.
-- Form tạo model thu vào nút Tạo model, tái sử dụng luồng và quyền hiện hữu.
-- Khi metadata phân lớp/nghiệp vụ chưa hỗ trợ, công bố ngắn tình trạng chưa phân loại; giữ tìm theo tên và kết quả chạy dùng được. Không chặn bản phát hành gọn vì chờ đủ taxonomy.
-- Khi bộ lọc có trong URL nhưng control đang thu gọn, luôn hiện chip; không ẩn điều kiện đang áp dụng.
+## 4. Trình tự thực hiện
 
-Phân lớp là metadata có nguồn. Đầu vào/Xử lý/Đầu ra là mặc định; Bronze/Silver/Gold chỉ sau khi xác nhận mapping, không tự map stg/int/mart. Nghiệp vụ và nguồn có thể nhiều giá trị; mỗi control chọn một giá trị ở v1, kết hợp AND. Count lớp loại bỏ riêng điều kiện layer, áp các điều kiện khác; count distinct trên dataset theo quyền, trước phân trang.
+### P0 — Kiểm tra checkout và dựng đường chuẩn
 
-## 5. Hồ sơ model — hiểu nhanh, mở sâu khi cần
+**Phụ thuộc:** có yêu cầu thi công tương ứng.
 
-Đầu trang: tên dễ hiểu/tên kỹ thuật, một câu mục đích, lớp và kết quả chạy; nút Xem dòng dữ liệu và Sửa SQL theo quyền. Có đường về đúng ngữ cảnh trước đó.
+1. Đọc AGENTS/CLAUDE và rules theo đường dẫn; kiểm tra Git, giữ thay đổi ngoài nhiệm vụ. Xác minh route/component/API ở checkout sẽ sửa, không coi SHA audit cũ là production hiện tại.
+2. Chạy ứng dụng qua Taskfile; ghi command/URL vào STATUS. Ghi baseline shell với tenant/tài khoản tổng hợp: desktop/mobile, VI/EN, hover/active và reduced motion.
+3. Lập ma trận capability theo SPEC §4.7/§8/§9: field, nguồn, quyền, trạng thái hỗ trợ, fallback. Kiểm tra metadata theo ADR 0112; không tái tạo context bắt điền.
+4. Ghi cấu hình máy/browser/viewport/network và kịch bản đo. Prototype không gọi production. Đo baseline nếu có thể; thiếu phép đo ghi rõ, không suy từ số model.
 
-Chỉ ba mục con:
+**Đầu ra:** STATUS có checkout, baseline, capability matrix, lệnh chạy và điều kiện đo.
 
-1. **Tổng quan:** mục đích → mỗi dòng là gì → đơn vị/quy tắc nghiệp vụ → ba thông tin riêng về lần chạy, độ mới, kiểm tra → đầu vào/nơi sử dụng trực tiếp. Nhật ký chi tiết là liên kết, không sao chép toàn bộ run nhiều model.
-2. **Dữ liệu:** cột, kiểu, nullable, khóa/quan hệ đã khai báo và mức kiểm chứng; tìm cột; preview độc lập nếu API hỗ trợ. Số cột ở đây, không chiếm List hay panel graph.
-3. **SQL:** bản lưu và bằng chứng so với bản đã build; mở editor; khối kỹ thuật mở dần cho cách cập nhật/materialization/cấu hình khi có dữ liệu xác thực.
+### P1 — Hợp đồng state, adapter và fixture
 
-Cấu hình kiểm thử không phải kết quả đạt. Tổng kiểm thử của run không phải tổng kiểm thử model. Comment SQL có thể làm ứng viên mô tả/grain có provenance để rà soát; không tự xuất bản thành định nghĩa nghiệp vụ đã xác nhận.
+**Phụ thuộc:** P0.
 
-Trường cốt lõi thiếu (mục đích/grain/chất lượng) có nhãn chưa có ngắn gọn. Không dựng hàng chục thẻ trống cho các khả năng chưa hỗ trợ như cost, SCD, column lineage. Không suy freshness từ tuổi lần build, SQL-sync từ timestamp, hay grain từ tên/khóa.
+1. Tạo fixture tổng hợp 250 model, mở rộng bộ kiểm tra đến 1.000; bao phủ F01–F11 trong SPEC. Có fan-out 100, nhóm 58, merge/cycle, nguồn partial/complete rỗng, multi-assignment và raw root.
+2. Tách fixture khỏi component qua adapter theo hợp đồng logic. Dùng schema/dependency hiện hữu; chỉ thêm package khi có lý do. Không hardcode nhóm theo tên/prefix.
+3. State UI dùng Zustand, server data dùng tRPC cache. EntityRef/revision/cache identity đúng tenant/quyền. Tách root, node đang xem, scope, tập vẽ, draft lựa chọn và camera.
+4. Logic grouping/count/pagination và scope/path dùng chung; kiểm thử nhiều đường đi, cycle, stale response, partial coverage. Không tạo thuật toán đếm riêng cho graph và bảng.
 
-## 6. Lineage — xem đường đi và tác động
+**Đầu ra:** adapter/fixture/state và logic có kiểm tra đúng nghĩa; không lấy CSS của minh họa thay design system.
 
-```text
-Mô hình dữ liệu
-[Danh sách] [Dòng dữ liệu]
+### P2 — Danh sách và hồ sơ dùng chung
 
-[Chọn đối tượng trung tâm…]                [Mở hồ sơ]
-[Lấy từ đâu | Hai phía | Được dùng ở đâu]   [1 bước ▾]
-[Sơ đồ | Bảng quan hệ]      [Xem toàn bộ tác động]
-Phạm vi: … · Quan hệ theo SQL đã lưu · Độ đầy đủ: …
+**Phụ thuộc:** P1.
 
-Đầu vào → Đối tượng trung tâm → Nơi sử dụng   | Panel khi chọn
-```
+1. Dựng M01 theo SPEC §3: lớp → nhóm → model; nhóm trước phân trang, thu/mở, tìm/lọc/sort, trạng thái cần chú ý và count đúng.
+2. Dựng M02 theo §4: bốn mục, đủ/thiếu metadata, build lỗi còn dữ liệu cũ, preview theo yêu cầu, SQL chỉ đọc và lối tắt editor/journal.
+3. Nối URL/back/forward và state phục hồi theo §2.2. Link tên là link thật; không lấy nút JS của minh họa làm chuẩn.
+4. Dùng lại shell/token/formatter. Không fetch detail/SQL/schema cho mọi hàng và không khởi động layout ở List/hồ sơ.
 
-- Vào chưa có root: bộ chọn có tìm kiếm và phạm vi lớp/nghiệp vụ khi hỗ trợ; không mặc định layout toàn tenant. Giữ khả năng tìm bảng thô đang có trong production, với loại đối tượng riêng.
-- Giữ nghĩa gốc của dữ liệu: “Đọc từ / Được dùng bởi”. “Có thể bị ảnh hưởng” chỉ ở chế độ downstream; không gọi upstream là ảnh hưởng.
-- Mặc định hai phía một bước. Chọn node chỉ mở panel; nút Lấy làm trung tâm mới đổi root. Không fit/zoom lại khi chọn.
-- Node chỉ tên dễ hiểu + kỹ thuật, loại và trạng thái đáng chú ý. Không nhét 27 cột, SQL, grain và timestamp trên mọi node.
-- Panel: tên, mục đích/grain ngắn, kết quả chạy, quan hệ trực tiếp và bằng chứng cảnh báo; link Hồ sơ/SQL/Nhật ký. Các danh sách dài nằm ở Bảng quan hệ.
-- Phân biệt rõ hai thao tác: Hiện thêm N (chỉ vẽ thêm trong scope) và Mở tiếp nhánh (mở rộng scope). Graph/table dùng chung một logic duyệt/count/path.
-- Bảng quan hệ nằm ngay trong tab, không đặt một danh sách toàn tenant kéo dài bên dưới graph. Có tìm tên, loại, trực tiếp/gián tiếp và một đường phụ thuộc đã biết.
-- Xem toàn bộ tác động đặt down/all/table, tự hiển thị partial nếu chưa đủ dữ liệu; không ép vẽ hàng trăm node trước khi trả lời.
-- Dòng bằng chứng ngắn luôn thấy, ví dụ “Theo khai báo SQL · Chưa có quan hệ tới báo cáo”; diễn giải ref/source/macro trong phần mở rộng. Thiếu khai báo và ref bị đứt là hai cảnh báo khác nhau.
-- Không tự ẩn chk_*, coi mọi cạnh là luồng giá trị nghiệp vụ hoặc gán loại cạnh từ tên. Khi chưa có loại dependency, dùng nhãn trung tính và bằng chứng ref/source/macro.
-- Graph lỗi: bảng theo root vẫn dùng được nếu dữ liệu hợp lệ, nút Thử lại sơ đồ rõ ràng. Lỗi dữ liệu thì báo lỗi, không giả bảng đầy đủ.
-- Các số trực tiếp/toàn chuỗi/đang vẽ đều có nhãn phạm vi. Không cộng node trùng nhiều đường đi, không đếm root vào số liên quan.
+**Đầu ra:** tìm → hồ sơ → quay lại hoạt động; chứng minh AC tương ứng trong SPEC §12.2, đặc biệt AC-91–108 và AC-113–118.
 
-## 7. Điều hướng và khả năng tương thích
+### P3 — Bảng quan hệ và chọn hàng loạt
 
-- Đúng hai tab cấp cao, không thêm tab Hồ sơ, SQL, Tác động hoặc AI ngang cấp.
-- Hồ sơ thuộc Danh sách nhưng có Quay lại dòng dữ liệu nếu đến từ graph; giữ root, selected node, scope, camera và scroll trong session. Đổi tenant xóa ngữ cảnh không còn hợp lệ.
-- Từ hàng/hồ sơ sang Lineage dùng đúng model đó. Từ List chưa chọn model thì mở bộ chọn; không tự chọn kết quả đầu.
-- Chuyển hai tab giữ bộ lọc danh sách. Bộ lọc List chỉ giới hạn picker, không cắt dependency của root.
-- Kiểm tra tương thích các URL đã quan sát: `q`, `build=failed/never/other/ok`, `view=lineage`, `model`, `scope=related`; thêm link prototype `fam`. Mapping old scope=related phải giữ nghĩa toàn chuỗi đã biết; không âm thầm đổi về một bước.
-- Giữ link root bảng thô `model=raw.records`, tên có dấu chấm và editor `/models/:name`; dùng adapter ID có loại để tránh xung đột.
-- Build một model vẫn chỉ build phạm vi hiện hữu; bản nháp và quyền giữ nguyên. Không suy rằng một run theo lịch gồm nhiều model là thao tác Build của editor.
+**Phụ thuộc:** P1; dùng hồ sơ P2.
 
-## 8. Triển khai theo ba đợt có giá trị độc lập
+1. Dựng M04 picker tìm/lọc/phân trang; thiếu root thì không tự chọn model đầu và không chạy layout.
+2. Dựng Bảng quan hệ cùng scope/count/path, đủ trạng thái tải/partial/lỗi/quyền. Xem tác động luôn down/all/table.
+3. Bộ chọn có chọn trang/chọn tất cả/bỏ chọn/ngoài bộ lọc/Chỉ xem đã chọn; draft áp dụng một lần. Vượt ngân sách thì xem đủ tập chọn bằng bảng.
+4. Nối Hủy/Escape/Back/Hoàn tác; một mốc state cho một lần áp dụng. Không build/delete từ bộ chọn.
 
-### Đợt A — Đọc và điều tra được bằng dữ liệu hiện có
+**Đầu ra:** bảng độc lập engine; AC-75–90 có bằng chứng tương tác. Phần này phải hoàn thành trong prototype, không ghi chung là sẽ làm sau.
 
-- Audit checkout/API/quyền; chẩn đoán layout bằng fixture, logs và instrumentation.
-- Gọn List, giữ tìm/lọc/sort và URL cũ; thêm hồ sơ đọc tối thiểu từ metadata hiện có, giữ lối tắt editor/journal.
-- Dùng `bi.schema` cho tên/kiểu cột và `models.check` cho kiểm tra SQL chưa chạy; không tạo bộ đọc schema hay bộ kiểm tra SQL thứ hai.
-- Bảng quan hệ theo root, phạm vi/count/bằng chứng; fallback không phụ thuộc layout thành công.
-- Không đợi taxonomy, preview, freshness hoặc cost hoàn chỉnh mới phát hành đợt A.
+### P4 — Sơ đồ tập trung và hiệu năng
 
-### Đợt B — Lineage tập trung và khám phá theo lớp
+**Phụ thuộc:** P1/P3 và module scope dùng chung.
 
-- Graph một bước, mở nhánh, panel gọn, bảng đồng bộ, điều hướng hai tab.
-- Xác minh nơi lưu metadata/version, người chịu trách nhiệm; tạo mapping lớp/nghiệp vụ cho nhóm model đại diện, rà soát trước khi áp dụng.
-- ADR 0112 đã gỡ business context: mapping lớp/nghiệp vụ là quyết định mới có phạm vi tối thiểu, không tự coi bảng context cũ hay API setContext còn tồn tại. Có thể tách phần này khỏi bản phát hành graph nếu chưa chốt nguồn duy trì.
-- Prefix/comment/AI chỉ tạo ứng viên; metadata chưa xác nhận giữ unclassified. Có revision và luồng cập nhật bằng config/API hiện hữu, không thêm màn quản trị taxonomy mới.
-- Bật bộ lọc lớp/nghiệp vụ khi adapter có dữ liệu; mapping thiếu vẫn hiển thị Chưa phân loại.
+1. Tái hiện lỗi engine bằng fixture tổng hợp; sửa/fallback theo nguyên nhân. Thay thư viện chỉ khi có bằng chứng nền hiện hữu không đáp ứng.
+2. Worker thật cho tác vụ nặng; timeout/hủy/stale result/cache bounded theo SPEC §14. List/Bảng/mobile không dùng canvas thì không chạy layout ẩn.
+3. Chọn scope/tập vẽ trước layout; giới hạn cả node và cạnh. Hiệu chỉnh ngân sách tập trung theo phép đo, không lấy 9 node của minh họa làm giới hạn sản phẩm.
+4. Mở/thu nhánh, panel, refocus, camera và dải vai trò mềm; giữ cạnh thật, node chung, root và count đúng.
+5. Đo cold/warm, đổi root liên tục, fan-out/merge/chuỗi dài, lỗi/timeout; tách fetch/index/layout/render. Worker hoặc phân trang tự thân không chứng minh đã hết lag.
 
-### Đợt C — Bổ sung theo bằng chứng và nhu cầu
+**Đầu ra:** AC-60–74 và phần hiệu năng AC-90 có số đo theo môi trường công bố. Mục tiêu: p95 thao tác ≤200 ms; scope chuẩn ≤1 giây sau metadata; layout không gây main-thread task >50 ms; job quá 3 giây ngắt và dùng bảng. Ngân sách end-to-end dựa trên baseline thật, không giả định 1 giây bao gồm API.
 
-- Nguồn nghiệp vụ qua ingestion/macro mapping; alias, grain, ngữ nghĩa cột được rà soát.
-- Kết quả kiểm thử theo model/run từ Nhật ký; preview độc lập; hash SQL; freshness có định nghĩa/ngưỡng.
-- Hiệu năng, cập nhật/lịch sử và owner/quyền nếu nguồn dữ liệu hỗ trợ. Không xây mới hệ quan sát, feature store, cost dashboard hay cơ chế chuyển ngữ cảnh sang AI trong đợt này.
-- Report lineage và column lineage là phần riêng sau khi có nguồn quan hệ đáng tin cậy.
+### P5 — Nghiệm thu và bàn giao local
 
-## 9. Nghiệm thu
+**Phụ thuộc:** P2/P3/P4.
 
-### Chức năng và dữ liệu
+1. Chạy checks và gate repository qua Taskfile. Gate không chạy được phải ghi command/lỗi/phạm vi chưa xác minh; không đánh dấu pass.
+2. So shell trước/sau và motion riêng theo SHELL-01–06; kiểm tra thêm phân khu ngoài Models để phát hiện CSS rò.
+3. Kiểm tra keyboard/focus, mobile/zoom 200%, VI/EN, stale response, deep link và draft.
+4. Ghi từng AC: pass/fail/not-run/not-applicable kèm bằng chứng; not-applicable phải có capability/phase và fallback. Không dùng nó để bỏ tương tác cốt lõi.
+5. Bàn giao URL local, cách chạy, file thay đổi, ảnh/tương tác, kết quả checks, số đo và hạn chế. Không báo hoàn thành khi còn lỗi luồng chính hoặc shell bị đổi.
 
-- Tìm model ngoài trang đầu; count không từ riêng trang hiện tại; request cũ không ghi đè query mới.
-- Graph và bảng cùng root/scope; có cycle, fan-out, missing-ref, undeclared upstream, raw root và partial coverage.
-- Fixture ít nhất 205 model + 2 raw nodes; thêm trường hợp 103 downstream, 16 trực tiếp để phân biệt scope. Đây là fixture lấy cảm hứng từ audit, không hardcode production.
-- API preview không build; SQL và dữ liệu mẫu đúng quyền; bản nháp không mất; link editor/journal cũ tiếp tục mở.
-- Không gộp kết quả build/freshness/quality, không biến cấu hình test thành kết quả test hoặc tổng run thành kết quả từng model.
-- Tái sử dụng module dữ liệu, scope và component hồ sơ; chạy checks bắt buộc của repository khi triển khai. Bản sửa tài liệu hiện tại chỉ kiểm tra tính nhất quán, không tuyên bố ứng dụng đã pass.
+**Đầu ra:** prototype reviewable và STATUS kiểm chứng được. Người dùng duyệt prototype trước khi chuyển sang tích hợp dữ liệu thật.
 
-### Thử với người dùng
+## 5. Đợt tích hợp dữ liệu thật
 
-Thử cùng tác vụ với người không chuyên data và kỹ sư; gợi ý 3 người mỗi nhóm cho vòng định tính đầu, không coi là nghiên cứu thống kê.
+Thực hiện khi được yêu cầu tích hợp; không tự động thuộc prototype.
 
-| Tác vụ | Dấu hiệu đạt |
-|---|---|
-| Chưa biết tên nhưng biết nghiệp vụ | Tìm đúng nhóm/model mà không đọc SQL |
-| Hiểu invoice model | Nói được mỗi dòng là gì và giới hạn tiền tệ nếu metadata có; nhận biết nếu chưa xác nhận |
-| Kiểm tra dữ liệu dùng được chưa | Phân biệt chạy thành công, độ mới và kiểm thử |
-| Tìm nguồn và nơi sử dụng | Phân biệt raw table với tài khoản nguồn, trực tiếp với nhiều bước |
-| Sửa SQL đã biết model | Từ hàng mở editor một thao tác theo quyền |
-| Graph lỗi | Vẫn đọc được quan hệ theo root mà không dò danh sách toàn tenant |
-| Đổi tab rồi quay lại | Không mất bộ lọc, root và ngữ cảnh điều tra |
+| Đợt | Nội dung | Điều kiện bật |
+|---|---|---|
+| A — Nền có sẵn | List gọn, hồ sơ kỹ thuật tối thiểu, bảng quan hệ, sửa layout, lối tắt editor/journal | Adapter/capability đúng API thực; không chờ taxonomy để phát hành phần tối thiểu |
+| B — Khám phá đầy đủ | Graph tập trung, chọn hàng loạt, grouping lớp/nghiệp vụ | Graph qua đo kiểm; assignment có nguồn/chủ sở hữu/revision. Thiếu metadata dùng fallback |
+| C — Metadata và chỉ số | Nguồn nghiệp vụ, alias/grain, preview model ID, lastSuccessfulBuild/hash, test-model, freshness | Từng field có nguồn/quyền/version/kiểm thử; phần chưa hỗ trợ có nhãn đúng. Không phục dựng form context cũ |
 
-Ghi thời gian, số lần đi nhầm, câu trả lời sai và mức trợ giúp trước/sau. Mục tiêu vòng thử: ít nhất 5/6 người hoàn tất các tác vụ tìm/hiểu/truy nguyên không cần hướng dẫn thao tác; không ai kết luận build xanh = dữ liệu chắc chắn đúng/mới sau khi đọc hồ sơ. Nếu không đạt, sửa ngôn ngữ/phân bổ rồi thử lại; đây là mục tiêu chưa đo.
+Mỗi đợt qua P5 trên seam thật và AC áp dụng. Migration/release/rollback theo yêu cầu người dùng và quy tắc deployment; không ngầm deploy trong lúc làm UI.
 
-## 10. Không làm trong vòng này
+## 6. Quy tắc duy trì tài liệu
 
-- Không thêm các tab cấp cao hoặc tách chế độ Người mới/Chuyên gia.
-- Không hiển thị đồng thời mọi bộ lọc, ma trận, graph, schema và SQL.
-- Không đổi toàn bộ branding/design system, không thay thư viện graph trước khi chẩn đoán.
-- Không xây visual pipeline builder, AI chat mới, health score tổng hợp hoặc phân loại tự động được coi là sự thật.
-- Không xây lại Nhật ký/Báo cáo/Nguồn dữ liệu trong Models.
-
-Cơ sở tham khảo của v1.1 vẫn dùng: dbt Catalog, Atlan, DataHub, Dagster, OpenMetadata. Quyết định v1.2 được điều chỉnh theo web trực tiếp và nhu cầu người dùng; không gán toàn bộ chức năng các sản phẩm tham khảo cho Undercroft.
+- SPEC mô tả một thiết kế hiện hành; khi quyết định đổi, sửa trực tiếp yêu cầu và AC, không nối nhật ký phiên bản.
+- PLAN giữ work package/phụ thuộc/đầu ra; không chép lại SPEC hoặc kết quả từng lượt.
+- STATUS chứa tiến độ, phép đo, lỗi và bằng chứng. Audit giữ ngữ cảnh lịch sử, không tạo cổng phê duyệt mới.
+- Không hứa hoàn hảo; hoàn thành phải chứng minh bằng hành vi/số đo/checks. Thiếu bằng chứng ghi chưa xác minh.

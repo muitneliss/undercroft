@@ -32,6 +32,7 @@
   "license": "MIT",
   "private": true,
   "scripts": {
+    "check:models-prototype": "biome check apps/ui/src/features/models-workspace apps/ui/src/prototype apps/ui/src/store.ts apps/ui/src/i18n/vi.ts apps/ui/src/i18n/en.ts apps/ui/vite.prototype.config.ts apps/ui/prototype/index.html apps/ui/package.json package.json",
     "typecheck": "tsc -b --pretty false",
     "lint": "biome lint --error-on-warnings .",
     "lint:rules": "ast-grep scan",
@@ -66,7 +67,8 @@
     "visual": "bun run scripts/visual.ts",
     "visual:update": "bun run scripts/visual.ts --update",
     "verify": "bun run typecheck && bun run lint && bun run lint:rules && bun run format:check && bun run spec:validate && bun run build:ui && bun run test",
-    "wiki:check": "bun run scripts/wikiCoverage.ts"
+    "wiki:check": "bun run scripts/wikiCoverage.ts",
+    "format:models-prototype": "biome check --write apps/ui/src/features/models-workspace apps/ui/src/prototype apps/ui/src/store.ts apps/ui/src/i18n/vi.ts apps/ui/src/i18n/en.ts apps/ui/vite.prototype.config.ts apps/ui/prototype/index.html apps/ui/package.json package.json && prettier --write .taskfiles/ci/Taskfile.yml .taskfiles/dev/Taskfile.yml .taskfiles/artifacts/Taskfile.yml docs/design/models-ux/PROTOTYPE-HANDOFF.md docs/design/models-ux/IMPLEMENTATION-STATUS-models-ux.md"
   },
   "type": "module",
   "trustedDependencies": [

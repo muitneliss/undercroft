@@ -177,6 +177,17 @@
   // An override merges on top of the base config, which is how both survive: every style
   // rule stays at error, and these two also get their lists.
   "overrides": [
+    // These components render HTML in React DOM, not React Native. The native rule
+    // reports separators and SQL content because they are not inside a native <Text>.
+    // noJsxLiterals remains enabled to enforce catalogued UI prose.
+    { "includes": ["apps/ui/src/features/models-workspace/**/*.tsx", "apps/ui/src/prototype/main.tsx"],
+      "linter": { "rules": { "nursery": { "noReactNativeRawText": "off" } } } },
+
+    // The local entry also uses React lazy/Suspense/StrictMode, whose React 19
+    // declarations this Biome version cannot resolve (same exception as Book).
+    { "includes": ["apps/ui/src/features/models-workspace/ModelLineage.tsx", "apps/ui/src/prototype/main.tsx"],
+      "linter": { "rules": { "correctness": { "noUnresolvedImports": "off" } } } },
+
     {
       "includes": ["**"],
       "linter": {
@@ -476,6 +487,7 @@
         "scripts/**",
         ".claude/**",
         "apps/ui/vite.config.ts",
+        "apps/ui/vite.prototype.config.ts",
         "apps/ui/vitest.config.ts",
         "apps/ui/src/test/setup.ts"
       ],
@@ -501,6 +513,7 @@
         // already named above for `noNodejsModules`, for the same reason -- it runs on Node,
         // never in the browser.
         "apps/ui/vite.config.ts",
+        "apps/ui/vite.prototype.config.ts",
         // DEBT, listed here rather than hidden: `keys()` takes an `env` and every public
         // function in the module threads one through, but the parameter still DEFAULTS to
         // `process.env`, so a caller that forgets gets ambient configuration in a package
@@ -837,6 +850,7 @@
         "apps/ui/src/lib/drivePicker.ts",
         "apps/ui/src/test/setup.ts",
         "apps/ui/vite.config.ts",
+        "apps/ui/vite.prototype.config.ts",
         "apps/worker/src/handlers/lake.ts",
         "apps/worker/src/handlers/analytics.ts",
         "apps/worker/src/services/loadToRaw.ts",
@@ -868,6 +882,7 @@
         "apps/*/src/main.ts",
         "apps/worker/src/server.ts",
         "apps/ui/vite.config.ts",
+        "apps/ui/vite.prototype.config.ts",
         "apps/ui/vitest.config.ts",
         "apps/blog/astro.config.ts",
         "apps/desktop/electrobun.config.ts",

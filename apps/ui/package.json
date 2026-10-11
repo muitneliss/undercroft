@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prototype": "vite --config vite.prototype.config.ts",
+    "build:prototype": "vite build --config vite.prototype.config.ts",
     "build": "vite build",
     "visual": "vitest run"
   },

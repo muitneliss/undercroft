@@ -291,3 +291,8 @@ tasks:
       has no screen to check it on, so this is the only way to see one before it is posted.
     cmds:
       - bun run email:preview
+
+  models-prototype:
+    desc: Run the isolated Models prototype with synthetic data, without a backend.
+    cmds:
+      - bun run --filter '@undercroft/ui' prototype {{.CLI_ARGS}}

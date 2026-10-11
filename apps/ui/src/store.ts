@@ -41,6 +41,7 @@ import type { TestKind } from "@undercroft/contracts/models";
 import { DEFAULT_LOCALE, type Locale } from "@undercroft/core/locale";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { initialWorkspace, type WorkspaceState } from "@/features/models-workspace/types.ts";
 
 import { type DashboardDraft, isDashboardDirty } from "@/lib/dashboardDraft.ts";
 import { isDirty, type ModelDraft } from "@/lib/modelDraft.ts";
@@ -96,6 +97,8 @@ export interface ScopeDraft {
 }
 
 interface UiState {
+  modelsWorkspace: WorkspaceState;
+  patchModelsWorkspace: (patch: Partial<WorkspaceState>) => void;
   /** The language every surface is rendered in, and the one the server is asked to answer in. */
   locale: Locale;
   /** Change language. The only writer; `@/i18n` follows this, never the other way round. */
@@ -997,6 +1000,9 @@ function accountSlice(set: Setter): Pick<UiState, "selectedAccount" | "selectAcc
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
+      modelsWorkspace: initialWorkspace,
+      patchModelsWorkspace: (patch) =>
+        set((state) => ({ modelsWorkspace: { ...state.modelsWorkspace, ...patch } })),
       ...localeSlice(set),
       ...releaseSlice(set),
       ...accountSlice(set),

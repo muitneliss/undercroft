@@ -2,6 +2,11 @@
 version: "3"
 
 tasks:
+  models-prototype:
+    desc: Build the isolated Models prototype; does not replace the production SPA.
+    cmds:
+      - bun run --filter '@undercroft/ui' build:prototype
+
   ui:
     desc: Build the SPA bundle (vite build). Also the build:ui step of the gate.
     cmds:

@@ -9,6 +9,16 @@ vars:
   COMPOSE_EXAMPLE_ENV: "{{.ROOT_DIR}}/deploy/compose/.env.example"
 
 tasks:
+  models-prototype:
+    desc: Check the Models prototype without changing files.
+    cmds:
+      - bun run check:models-prototype
+
+  models-prototype-format:
+    desc: Format Models prototype code and handoff documents.
+    cmds:
+      - bun run format:models-prototype
+
   typecheck:
     desc: tsc -b across the workspace.
     cmds:
