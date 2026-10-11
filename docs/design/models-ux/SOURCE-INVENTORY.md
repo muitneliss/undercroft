@@ -53,7 +53,7 @@ Upstream integration base: deb49f74db6162ff697f4a8db9a5006e0ab7bac8. This is the
 | [docs/design/models-ux/PLAN-models-ux.md](../../../docs/design/models-ux/PLAN-models-ux.md) | 12879 | f7513bc50fb06ea1b4deb745c07b7c5d633c325192908b1604c2c768bd39999f |
 | [docs/design/models-ux/PROMPT-implement-models-ux.md](../../../docs/design/models-ux/PROMPT-implement-models-ux.md) | 8250 | 0424a710af1d9943bf896c85ef5d1daca639701a5cad4011027487cf413cc33f |
 | [docs/design/models-ux/PROTOTYPE-HANDOFF.md](../../../docs/design/models-ux/PROTOTYPE-HANDOFF.md) | 12738 | d3488253a9fc52ca3f9a7fee66931f76ee577b9147f03b5c67e0412ba59712ba |
-| [docs/design/models-ux/README.md](../../../docs/design/models-ux/README.md) | 7956 | fd0cf2748f71e6a213b1d3c161ba87ff3ceeb13a1fe6ed3e97a5b7c07081d058 |
+| [docs/design/models-ux/README.md](../../../docs/design/models-ux/README.md) | 8233 | 2d7aefa146d519e01055e2aeafe48a9df36f9b9a63917f35ed12b1c8d632ddc1 |
 | [docs/design/models-ux/RESEARCH-lineage-scale-2026-10-11.md](../../../docs/design/models-ux/RESEARCH-lineage-scale-2026-10-11.md) | 12165 | e06a45c56d3ceaf8cfc32201e56ef7ba422df02363a8bf5368c2382962597817 |
 | [docs/design/models-ux/SPEC-models-ux.md](../../../docs/design/models-ux/SPEC-models-ux.md) | 132860 | f111ec73246a1b20d56a0cba92a5a78b73cb73da575ddca54c580fed8b04ca50 |
 | [package.json](../../../package.json) | 4114 | d9b570877dd8e98258964a34fbc5a687989074c9ea82a2b6d44c42e7934754dc |

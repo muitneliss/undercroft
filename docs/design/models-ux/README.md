@@ -2,7 +2,7 @@
 
 Review the Models prototype at the PR's linked commit. Evaluate discovery, model profiles and lineage against SPEC and repository rules, using the supplied source and runnable prototype.
 
-The current task is design and code review. Return findings with file/line references, execution evidence and checks not completed. For integration recommendations, identify reusable code and explain necessary changes. Production implementation requires a separate request.
+The current task is design and code review. Return findings with file/line references, execution evidence and checks not completed. For integration recommendations, identify reusable code and explain necessary changes. Source changes, commits, pushes and deployment require a separate implementation or delivery request.
 
 ## Open and run the exact source
 
@@ -38,7 +38,7 @@ Shared source is in this same checkout, not a hidden dependency: `apps/ui/src/co
 ## Required compatibility decisions
 
 - **Business meaning is conditional.** [ADR 0112](../../adr/0112-a-model-carries-no-business-context.md) removed the previous business-context feature. Purpose/grain/owner/classification examples do not establish production support. SPEC §4.7 already distinguishes current capabilities from proposals. Do not revive `models.setContext`, mandatory context forms or tenant-wide lineage reads on each model request. New metadata support requires an explicit source, owner, permission/cost model and a separate architectural decision.
-- **Known UI deviation:** `ModelChooser.tsx` currently uses `dialog.showModal()`, contrary to the no-modal rule in `apps/ui/DESIGN.md`. SPEC §10.3 now requires inline expansion. Fix and verify this discrepancy before ready-for-review status; do not report full design-rule compliance while it remains.
+- **Known UI deviation:** `ModelChooser.tsx` currently uses `dialog.showModal()`, contrary to the no-modal rule in `apps/ui/DESIGN.md`. SPEC §10.3 now requires inline expansion. Report this discrepancy as a blocker. Implementation and verification of the fix belong to a subsequent change request.
 - **Lineage:** apply current ADRs, including [0117](../../adr/0117-the-village-is-an-overview-and-replaces-no-drawing.md), rather than only the original no-library decision in 0092. React Flow/ELK are present upstream. Review this prototype's worker implementation separately.
 - **Verification remains incomplete.** Full repository gate, visual tier, production adapters and measured production latency are not established by the fixture demo. See HANDOFF/STATUS; rerun on the actual submission commit.
 
@@ -71,4 +71,10 @@ Use a report rather than a blanket “reviewed” statement:
 | Backend support | Current endpoint/artifact for each capability, or explicit unsupported/proposed status |
 | Decision | Blocking findings, design questions and recommended next increment; no automatic production changes |
 
-Before publishing, regenerate the inventory from staged Git blobs after the final edit, commit the complete contribution, verify the remote tree matches that commit, and add permanent tree/blob links to the PR. Hashes describe Git file bytes rather than Windows checkout line endings. The inventory itself is not proof of upload; use the PR's pinned commit and remote tree. A review prompt cannot guarantee that an AI reads every line; this evidence makes omissions visible.
+The report should distinguish verified findings from uninspected files and incomplete checks. Source links and the inventory identify the reviewed revision; they do not establish review coverage by themselves.
+
+## Contributor maintenance — outside the review task
+
+This section applies only when a contributor is explicitly updating or publishing the handoff. It is reference material for that separate task, not work assigned to the reviewer.
+
+After final edits and staging, regenerate the inventory from Git blobs, commit the contribution, verify the remote tree matches that commit, and update the PR's permanent tree/blob links. Hashes describe Git file bytes rather than Windows checkout line endings.
