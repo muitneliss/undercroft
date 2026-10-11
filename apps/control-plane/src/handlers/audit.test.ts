@@ -307,4 +307,21 @@ describe("who reads what", () => {
     ]);
     expect(second.nextCursor).toBeNull();
   });
+
+  it("orders by number past a new digit, so row 10 is not hidden behind row 9", async () => {
+    const ada = await person("ada@example.test", { "CASE-1": "admin" });
+    const names = Array.from({ length: 11 }, (_, index) => `Name ${index + 1}`);
+    for (const displayName of names) {
+      await caller(ada).tenants.rename({ tenantId: "CASE-1", displayName });
+    }
+
+    const seen: unknown[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await caller(ada).audit.tenant({ tenantId: "CASE-1", limit: 4, cursor });
+      seen.push(...page.items.map((entry) => entry.detail?.to));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+    expect(seen).toEqual(names.toReversed());
+  });
 });
