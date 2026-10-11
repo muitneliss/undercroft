@@ -57,10 +57,11 @@ const SERVER_COMPOSE = "deploy/compose/docker-compose.server.yml";
 
 /**
  * Where the panel clones that file from (ADR 0049). The panel holds no copy of it: every
- * deploy clones this branch, so the file in the repo is the only one there is.
+ * deploy clones this branch, so the file in the repo is the only one there is. Over SSH, with
+ * the read-only deploy key the panel holds, because the repository is private (ADR 0121).
  */
 const COMPOSE_SOURCE = {
-  url: "https://github.com/muitneliss/undercroft.git",
+  url: "git@github.com:muitneliss/undercroft.git",
   branch: "main",
 } as const;
 

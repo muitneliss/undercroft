@@ -72,7 +72,7 @@ const PANEL = {
   command:
     "compose -p undercroft-test --env-file deploy/compose/.env -f deploy/compose/docker-compose.server.yml up -d --pull always --wait --wait-timeout 600 --remove-orphans",
   sourceType: "git",
-  customGitUrl: "https://github.com/muitneliss/undercroft.git",
+  customGitUrl: "git@github.com:muitneliss/undercroft.git",
   customGitBranch: "main",
   composePath: "deploy/compose/docker-compose.server.yml",
   autoDeploy: false,

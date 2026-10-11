@@ -124,6 +124,7 @@
 - [ADR 0118 The Title Page Reads Only the Clock](sources/adr-0118-the-title-page-reads-only-the-clock.md)
 - [ADR 0119 Who Has Access to a Customer Is Read by Its Admin Alone](sources/adr-0119-who-has-access-to-a-customer-is-read-by-its-admin-alone.md)
 - [ADR 0120 An Agent's Reads, and Every Sign-In Event, Are on the Record](sources/adr-0120-an-agent-s-reads-and-every-sign-in-event-are-on-the-record.md)
+- [ADR 0121 Dokploy Clones the Private Repository over SSH, with a Read-Only Deploy Key](sources/adr-0121-dokploy-clones-the-private-repository-over-ssh-with-a-read-only-deploy-key.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)
