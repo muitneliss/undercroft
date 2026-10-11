@@ -102,7 +102,8 @@ direct edit on the host is drift the next deploy silently reverts.
 Four things, before anything is queued:
 
 1. **The panel clones the file rather than holding a copy.** Its compose source is `git`,
-   `https://github.com/muitneliss/undercroft.git` at `main`, compose path
+   `git@github.com:muitneliss/undercroft.git` at `main`, cloned over SSH with the panel's
+   read-only deploy key because the repository is private (ADR 0121), compose path
    `deploy/compose/docker-compose.server.yml`, with **auto deploy off** — on, it would roll
    out every push to `main` while images change only on a release.
 2. **`main` carries the same file as this checkout.** The host clones `main`'s head at deploy
