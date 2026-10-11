@@ -20,6 +20,8 @@ Open `http://127.0.0.1:5174/tenants/CASE-0042/models` after starting the supplie
 
 ## Source map
 
+Illustrations: [Model profile](screenshots/model-profile.jpg) · [Data flow](screenshots/model-lineage.jpg). Captured on 2026-10-11 from runtime source at `233ed57dfb9b4c1113dbbc84cf30bdd3020906e0`, desktop viewport 1280 × 900, Vietnamese, 250 synthetic models. These two screenshots illustrate the running UI; they are not a full visual-regression result.
+
 Paths below are relative to the repository root. The inventory provides clickable links and hashes of Git file contents.
 
 | Read in this order | Files | What to verify |
