@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.75.1](https://github.com/muitneliss/undercroft/compare/v1.75.0...v1.75.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **deploy:** clone the private repository over SSH with a read-only deploy key (ADR 0121) ([#433](https://github.com/muitneliss/undercroft/issues/433)) ([deb49f7](https://github.com/muitneliss/undercroft/commit/deb49f74db6162ff697f4a8db9a5006e0ab7bac8))
+
 ## [1.75.0](https://github.com/muitneliss/undercroft/compare/v1.74.0...v1.75.0) (2026-10-10)
 
 
