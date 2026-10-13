@@ -12,12 +12,7 @@
 
 import { compile, QuestionDefinition } from "@undercroft/contracts/bi";
 
-import type {
-  DashboardView,
-  QualifiedAnswer,
-  QuestionView,
-  SchemaView,
-} from "@/api/types.ts";
+import type { DashboardView, QualifiedAnswer, QuestionView, SchemaView } from "@/api/types.ts";
 import { AUTHOR, idOf, type Role, reader } from "@/test/modelsBook.ts";
 import type { Answers } from "@/test/visual.tsx";
 

@@ -163,15 +163,17 @@ const IN_FULL: readonly Omit<ModelDetail, "sql" | "tests">[] = MODELS.map(
 );
 
 /** The list as `models.list` answers it: each build's column count, and not its columns. */
-export const MODEL_LIST: readonly ModelItem[] = IN_FULL.map(({ lastBuild, lastTests, ...model }) => {
-  // The list carries each model's test state and counts, and not the tests themselves.
-  const { failingTests: _failing, warningTests: _warned, ...testSummary } = lastTests;
-  if (lastBuild === null) {
-    return { ...model, lastBuild, lastTests: testSummary };
-  }
-  const { columns: _listedOnRequest, ...summary } = lastBuild;
-  return { ...model, lastBuild: summary, lastTests: testSummary };
-});
+export const MODEL_LIST: readonly ModelItem[] = IN_FULL.map(
+  ({ lastBuild, lastTests, ...model }) => {
+    // The list carries each model's test state and counts, and not the tests themselves.
+    const { failingTests: _failing, warningTests: _warned, ...testSummary } = lastTests;
+    if (lastBuild === null) {
+      return { ...model, lastBuild, lastTests: testSummary };
+    }
+    const { columns: _listedOnRequest, ...summary } = lastBuild;
+    return { ...model, lastBuild: summary, lastTests: testSummary };
+  },
+);
 
 function modelDetail(name: string): ModelDetail | undefined {
   const item = IN_FULL.find((model) => model.name === name);

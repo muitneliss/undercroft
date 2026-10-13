@@ -5,11 +5,9 @@ date: 2026-10-13
 tags: []
 source: docs/reference/run-counts.md
 source_path: docs/reference/run-counts.md
-source_hash: ad23133a4fcdb606d9a22e9753b0c30ec39c2d9b4d1a48401836619a495eafef
+source_hash: 0dbfa3aa171edfb8263c394bac2bb5cb9933c13174855c8eba551e697bd4c76a
 ingested: 2026-10-13
 ---
-
-# What an ingest run counts
 
 # What an ingest run counts
 

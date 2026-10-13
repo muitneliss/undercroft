@@ -143,8 +143,18 @@ function mount(url: string): ReturnType<typeof createMemoryRouter> {
                   runId: "run-7",
                   endedAt: WHEN,
                   failingTests: [
-                    { name: "not_null_mart_pipeline_amount", uniqueId: "t1", status: "fail", failures: 3 },
-                    { name: "unique_mart_pipeline_deal_id", uniqueId: "t2", status: "fail", failures: 1 },
+                    {
+                      name: "not_null_mart_pipeline_amount",
+                      uniqueId: "t1",
+                      status: "fail",
+                      failures: 3,
+                    },
+                    {
+                      name: "unique_mart_pipeline_deal_id",
+                      uniqueId: "t2",
+                      status: "fail",
+                      failures: 1,
+                    },
                   ],
                   warningTests: [],
                 },

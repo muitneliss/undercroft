@@ -42,46 +42,46 @@ export function ModelFacts({
     list.map((test) => test.name).join(", ");
   return (
     <>
-    <Facts>
-      <Fact label={t("models.colBuild")}>
-        <StatusMark
-          mark={buildMark(built?.status ?? null)}
-          label={buildMarkLabel(t, built?.status ?? null)}
-        />
-      </Fact>
-      <Fact label={t("models.factSql")}>{dirty ? t("models.unsaved") : t("models.saved")}</Fact>
-      <Fact label={t("models.colRun")}>
-        {built === null ? (
-          <span className="missing">{MISSING}</span>
-        ) : (
-          <Link to={journalPath(tenantId, { runId: built.runId })}>{built.runId}</Link>
-        )}
-      </Fact>
-      <Fact label={t("models.factColumns")}>
-        {columns === null ? (
-          <span className="missing">{MISSING}</span>
-        ) : (
-          formatCount(columns, locale)
-        )}
-      </Fact>
-      {/* Not the build's status: a build whose tests fail still succeeds and is served. */}
-      <Fact label={t("models.colTests")}>
-        <StatusMark mark={testsMark(tests.state)} label={testsLabel(t, locale, tests)} />
-        {warned === null ? null : (
-          <span className="datum datum--quiet journal__trigger">{warned}</span>
-        )}
-      </Fact>
-    </Facts>
-    {tests.failingTests.length === 0 || tests.runId === null ? null : (
-      <p className="note">
-        {t("models.failingTestsNote", { runId: tests.runId, tests: names(tests.failingTests) })}
-      </p>
-    )}
-    {tests.warningTests.length === 0 || tests.runId === null ? null : (
-      <p className="note">
-        {t("models.warningTestsNote", { runId: tests.runId, tests: names(tests.warningTests) })}
-      </p>
-    )}
+      <Facts>
+        <Fact label={t("models.colBuild")}>
+          <StatusMark
+            mark={buildMark(built?.status ?? null)}
+            label={buildMarkLabel(t, built?.status ?? null)}
+          />
+        </Fact>
+        <Fact label={t("models.factSql")}>{dirty ? t("models.unsaved") : t("models.saved")}</Fact>
+        <Fact label={t("models.colRun")}>
+          {built === null ? (
+            <span className="missing">{MISSING}</span>
+          ) : (
+            <Link to={journalPath(tenantId, { runId: built.runId })}>{built.runId}</Link>
+          )}
+        </Fact>
+        <Fact label={t("models.factColumns")}>
+          {columns === null ? (
+            <span className="missing">{MISSING}</span>
+          ) : (
+            formatCount(columns, locale)
+          )}
+        </Fact>
+        {/* Not the build's status: a build whose tests fail still succeeds and is served. */}
+        <Fact label={t("models.colTests")}>
+          <StatusMark mark={testsMark(tests.state)} label={testsLabel(t, locale, tests)} />
+          {warned === null ? null : (
+            <span className="datum datum--quiet journal__trigger">{warned}</span>
+          )}
+        </Fact>
+      </Facts>
+      {tests.failingTests.length === 0 || tests.runId === null ? null : (
+        <p className="note">
+          {t("models.failingTestsNote", { runId: tests.runId, tests: names(tests.failingTests) })}
+        </p>
+      )}
+      {tests.warningTests.length === 0 || tests.runId === null ? null : (
+        <p className="note">
+          {t("models.warningTestsNote", { runId: tests.runId, tests: names(tests.warningTests) })}
+        </p>
+      )}
     </>
   );
 }

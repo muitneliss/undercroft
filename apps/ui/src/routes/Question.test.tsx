@@ -60,11 +60,7 @@ function saved(over: Record<string, unknown> = {}): unknown {
   };
 }
 
-function served(
-  role: string,
-  question: unknown,
-  result: unknown = RESULT,
-): Record<string, Answer> {
+function served(role: string, question: unknown, result: unknown = RESULT): Record<string, Answer> {
   return {
     "tenants.get": () => ({ tenantId: TENANT, displayName: "Acme", role }),
     "bi.schema": () => ({
