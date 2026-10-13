@@ -30,9 +30,9 @@ export const modelCheck = {
     "raw-direct":
       "Đọc raw.{{subject}} qua hàm source() của dbt, với nguồn undercroft, thay vì gọi thẳng -- để dbt biết mô hình phụ thuộc vào đâu.",
     "analytics-direct":
-      "Đọc {{subject}} qua hàm ref() của dbt thay vì gọi thẳng theo schema, để dbt dựng mô hình kia trước mô hình này.",
+      "Đọc {{subject}} qua hàm ref() của dbt thay vì gọi thẳng theo schema, để dbt dựng mô hình hay nạp bảng tham chiếu đó trước mô hình này.",
     "unknown-source": "Không có nguồn {{subject}}. Các nguồn có sẵn nằm trong models.reference.",
-    "unknown-ref": "Khách hàng này không có mô hình nào tên {{subject}}.",
+    "unknown-ref": "Khách hàng này không có mô hình hay bảng tham chiếu nào tên {{subject}}.",
     "self-ref": "Mô hình không thể đọc chính nó.",
     "report-parameter":
       "{{subject}} là tham số của một câu hỏi báo cáo. Mô hình không có tham số: dbt sẽ thay nó bằng chuỗi rỗng và bộ lọc biến mất mà không báo lỗi. Hãy thay bằng một giá trị cố định, hoặc bỏ bộ lọc đó.",

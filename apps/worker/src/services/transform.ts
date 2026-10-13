@@ -11,16 +11,16 @@
  *
  * 1. **Provision** the tenant's roles and schemas (idempotent).
  * 2. **Write the project** to a fresh temporary directory: the platform's sources and macros,
- *    the customer's models from `app.model` and macros from `app.macro`, and a profile that
- *    IS the tenant. A directory
- *    that exists for one build cannot drift from the table.
- * 3. **Spawn `dbt build`** with a deadline, **holding** the password of the tenant's dbt login
+ *    the customer's models from `app.model`, macros from `app.macro` and seeds from `app.seed`
+ *    (each seed loaded the way `seedLoad.ts` decides), and a profile that IS the tenant. A
+ *    directory that exists for one build cannot drift from the table.
+ * 3. **Spawn `dbt build`** over the selection and the seeds it reaches, with a deadline, **holding** the password of the tenant's dbt login
  *    for as long as that deadline: dbt parses for seconds before it first connects, and opens
  *    connections for the whole build, so a password changed under it by another session of the
  *    same login locks it out (ADR 0087). The password is the environment of one child process.
  *    A build that runs for half an hour is a build that has hung, and the previous tables keep
  *    serving -- stale, not wrong.
- * 4. **Read `run_results.json`** into steps for the ledger, one per model or test. A
+ * 4. **Read `run_results.json`** into steps for the ledger, one per model, test or seed. A
  *    non-zero exit with results is a build that ran and found something wrong, reported step
  *    by step; a non-zero exit with no results is dbt stopping before its first model, and that
  *    raises with dbt's own statement of why (`causeOf`).
@@ -28,7 +28,7 @@
  *    as the tenant's dbt login and written back to `app.model` so the editor can offer them.
  * 6. **Remove the directory**, whatever happened.
  *
- * A tenant with no models spawns nothing and reports an empty, successful build.
+ * A tenant with no models and no seeds spawns nothing and reports an empty, successful build.
  */
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -39,6 +39,7 @@ import type { DatabaseAddress, SqlExecutor } from "@undercroft/db";
 import {
   listMacros,
   listModels,
+  listSeeds,
   provisionTenantRoles,
   type RunStep,
   setModelColumns,
@@ -47,6 +48,7 @@ import {
 import { parseRunResults, PASSWORD_VAR, renderProject } from "@undercroft/db/services";
 
 import { columnsOf } from "../repos/relations.ts";
+import { projectSeeds, seedSelectors } from "./seedLoad.ts";
 import { TenantNotProvisioned, type TenantSessions } from "./tenantSession.ts";
 
 export interface SpawnOptions {
@@ -229,9 +231,13 @@ async function readRunResults(dir: string): Promise<unknown> {
   }
 }
 
-/** Why the build is not ok, in dbt's own words for the model that broke. */
+/**
+ * Why the build is not ok, in dbt's own words for the model -- or the seed -- that broke. A seed
+ * that did not load is a failed build: the models reading it were skipped, or would have read
+ * whatever the last load left (ADR 0128).
+ */
 function errorOf(steps: readonly RunStep[], tail: string): string | null {
-  const broken = steps.find((s) => s.kind === "model" && s.status === "error");
+  const broken = steps.find((s) => s.kind !== "test" && s.status === "error");
   if (broken === undefined) {
     return null;
   }
@@ -293,10 +299,11 @@ async function spawnDbt(
     "--project-dir",
     dir,
     // Last, and one argv item per selector: dbt 1.9's `--select` takes every value up to the
-    // next flag and builds their union, so several selectors are one build, not several.
+    // next flag and builds their union, so several selectors are one build, not several. The
+    // seeds each one reaches follow it, or a model would read a seed nothing loaded.
     ...(input.select === undefined || input.select.length === 0
       ? []
-      : ["--select", ...input.select]),
+      : ["--select", ...input.select, ...seedSelectors(input.select)]),
   ];
   const timeoutMs = input.timeoutMs ?? deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const { exitCode, stdout, stderr } = await deps.sessions.withPassword(
@@ -323,12 +330,20 @@ export async function runTransform(
   if (roles === null) {
     throw new TenantNotProvisioned(input.tenantId);
   }
-  const models = await listModels(deps.exec, input.tenantId);
-  if (models.length === 0) {
+  const [models, seeds] = await Promise.all([
+    listModels(deps.exec, input.tenantId),
+    listSeeds(deps.exec, input.tenantId),
+  ]);
+  if (models.length === 0 && seeds.length === 0) {
     return { ok: true, steps: [], testsFailed: 0, error: null, models: 0 };
   }
 
   const macros = await listMacros(deps.exec, input.tenantId);
+  const loads = await projectSeeds(deps.sessions, {
+    tenantId: input.tenantId,
+    analyticsSchema: roles.analyticsSchema,
+    seeds,
+  });
   const dir = await mkdtemp(join(deps.workDir ?? tmpdir(), "undercroft-dbt-"));
   try {
     await writeProject(
@@ -338,6 +353,7 @@ export async function runTransform(
         database: deps.database,
         models: models.map((m) => ({ name: m.name, sql: m.sql, tests: m.tests })),
         macros: macros.map((m) => ({ name: m.name, sql: m.sql })),
+        seeds: loads,
       }),
     );
     const { exitCode, output } = await spawnDbt(deps, input, dir);

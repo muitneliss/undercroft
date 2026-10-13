@@ -40,6 +40,7 @@ const PROJECT = renderProject({
     { name: "stg_contacts", sql: "select 2 as contact_id", tests: { columns: {} } },
   ],
   macros: [{ name: "trimmed", sql: "{% macro trimmed(x) %}btrim({{ x }}){% endmacro %}" }],
+  seeds: [],
 });
 
 describe("renderProject", () => {

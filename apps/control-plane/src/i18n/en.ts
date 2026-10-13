@@ -6,6 +6,7 @@
  */
 
 import { modelCheck } from "./modelCheck.en.ts";
+import { seedTable } from "./seedTable.en.ts";
 
 export const en = {
   email: {
@@ -110,6 +111,8 @@ export const en = {
       "The catalogue has no kind besides other, so publishing it would classify every document as nothing. Add a kind or initialise the catalogue first.",
     modelNameTaken:
       "A model named {{name}} already exists. Open it to edit, or choose another name.",
+    modelNameIsSeed:
+      "A reference table (seed) named {{name}} already exists. A model and a reference table may not share a name, since ref('{{name}}') reads both. Choose another name.",
     buildInProgress:
       "A build is already running for this customer. Wait for it to finish, then try again.",
     buildInProgressAs:
@@ -127,6 +130,14 @@ export const en = {
       "A macro named {{name}} already exists. Open it to edit, or choose another name.",
     macroDependedOn:
       "The macro {{name}} was not deleted: it is still called by {{dependents}}. Remove those calls first, then try again.",
+    seedNameTaken:
+      "A reference table named {{name}} already exists. Save without create to replace it, or choose another name.",
+    seedNameIsModel:
+      "A model named {{name}} already exists. A reference table and a model may not share a name, since ref('{{name}}') reads both. Choose another name.",
+    seedDependedOn:
+      "The reference table {{name}} was not deleted: {{dependents}} still read it. Change them so they no longer read {{name}}, then try again.",
+    seedNotDeleted:
+      "The reference table {{name}} was not deleted: the processing service could not drop the table loaded from it, so the reference table is still here. Try again in a few minutes.",
     dqNotRead: "The failing rows for this step could not be read.",
     lineageNameUnknown:
       "This customer's lineage has no model or table named {{name}}. A raw table is written as schema.table, such as raw.records.",
@@ -187,6 +198,8 @@ export const en = {
   },
 
   modelCheck,
+
+  seedTable,
 
   mcp: {
     refused: {

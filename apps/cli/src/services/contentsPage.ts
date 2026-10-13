@@ -50,6 +50,7 @@ const PLACE = {
   lake: "contents",
   models: "contents",
   macros: "contents",
+  seeds: "contents",
   documentKinds: "contents",
   dq: "contents",
   bi: "contents",

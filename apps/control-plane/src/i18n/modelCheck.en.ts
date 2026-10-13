@@ -27,9 +27,9 @@ export const modelCheck = {
     "raw-direct":
       "Read raw.{{subject}} through dbt's source() function, naming the undercroft source, rather than directly -- so dbt knows what the model depends on.",
     "analytics-direct":
-      "Read {{subject}} through dbt's ref() rather than by its schema, so dbt builds that model before this one.",
+      "Read {{subject}} through dbt's ref() rather than by its schema, so dbt builds that model, or loads that reference table, before this one.",
     "unknown-source": "There is no source {{subject}}. models.reference lists the sources.",
-    "unknown-ref": "This customer has no model named {{subject}}.",
+    "unknown-ref": "This customer has no model or reference table named {{subject}}.",
     "self-ref": "A model cannot read itself.",
     "report-parameter":
       "{{subject}} is a report question's parameter. A model has none: dbt would render it as an empty string and the filter would vanish without an error. Replace it with a fixed value, or drop that filter.",

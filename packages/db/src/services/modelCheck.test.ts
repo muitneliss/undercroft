@@ -27,7 +27,12 @@ select * from deals
 
 function check(
   sql: string,
-  options: { name?: string; tests?: Record<string, string[]>; existing?: string[] } = {},
+  options: {
+    name?: string;
+    tests?: Record<string, string[]>;
+    existing?: string[];
+    seeds?: string[];
+  } = {},
 ): ModelCheck {
   return checkModel({
     name: options.name ?? "stg_deals",
@@ -35,6 +40,7 @@ function check(
     tests: { columns: options.tests ?? {} },
     existingModels: options.existing ?? [],
     existingMacros: [],
+    existingSeeds: options.seeds ?? [],
   });
 }
 

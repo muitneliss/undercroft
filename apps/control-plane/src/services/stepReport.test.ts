@@ -46,6 +46,7 @@ describe("the summary", () => {
       byStatus: {
         model: { success: 2, skipped: 1, error: 1 },
         test: { pass: 1, fail: 1, warn: 1, skipped: 1 },
+        seed: {},
       },
       problems: 3,
     });
@@ -53,7 +54,7 @@ describe("the summary", () => {
 
   it("is there for a run with no steps at all, saying so in zeroes it actually counted", () => {
     expect(reportSteps([], { stepLimit: 100 })).toEqual({
-      stepSummary: { total: 0, byStatus: { model: {}, test: {} }, problems: 0 },
+      stepSummary: { total: 0, byStatus: { model: {}, test: {}, seed: {} }, problems: 0 },
       steps: [],
       nextStepCursor: null,
     });

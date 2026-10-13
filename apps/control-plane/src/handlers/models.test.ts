@@ -381,7 +381,7 @@ describe("models.build", () => {
 
     expect(lean.stepSummary).toEqual({
       total: 4,
-      byStatus: { model: { success: 1 }, test: { pass: 1, fail: 1, skipped: 1 } },
+      byStatus: { model: { success: 1 }, test: { pass: 1, fail: 1, skipped: 1 }, seed: {} },
       problems: 1,
     });
     expect(lean.steps.map((s) => s.name)).toEqual(["unique_stg_deals_deal_id"]);

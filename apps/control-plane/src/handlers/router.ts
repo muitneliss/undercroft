@@ -26,6 +26,7 @@ import { lakeRouter } from "./lakeRouter.ts";
 import { biRouter } from "./biRouter.ts";
 import { documentKindsRouter } from "./documentKindsRouter.ts";
 import { macrosRouter } from "./macrosRouter.ts";
+import { seedsRouter } from "./seedsRouter.ts";
 import { modelsRouter } from "./modelsRouter.ts";
 import { peopleRouter } from "./peopleRouter.ts";
 import { tenantsRouter } from "./tenantsRouter.ts";
@@ -148,6 +149,7 @@ export const appRouter = router({
   lake: lakeRouter,
   models: modelsRouter,
   macros: macrosRouter,
+  seeds: seedsRouter,
   documentKinds: documentKindsRouter,
 
   bi: biRouter,

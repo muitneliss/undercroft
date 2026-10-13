@@ -38,6 +38,38 @@ export async function columnsOf(
 }
 
 /**
+ * Each named relation's columns in table order, with each type as Postgres prints it in full
+ * (`format_type`: `numeric(18,4)`, `timestamp with time zone`) rather than the bare family
+ * `columnsOf` answers with -- for a caller comparing a table against declared types, where
+ * `numeric` alone could not tell `numeric(18,4)` from `numeric(12,2)`. A relation the login
+ * cannot see, or that is not there, has no entry.
+ */
+export async function declaredColumnsOf(
+  exec: SqlExecutor,
+  schema: string,
+  relations: readonly string[],
+): Promise<Map<string, Column[]>> {
+  const { rows } = await exec.query<{ relation: string; name: string; type: string }>(
+    `SELECT c.relname AS relation, a.attname AS name,
+            format_type(a.atttypid, a.atttypmod) AS type
+     FROM pg_class c
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+     JOIN pg_attribute a ON a.attrelid = c.oid
+     WHERE n.nspname = $1 AND c.relname = ANY($2::text[])
+       AND a.attnum > 0 AND NOT a.attisdropped
+     ORDER BY c.relname, a.attnum`,
+    [schema, relations],
+  );
+  const byRelation = new Map<string, Column[]>();
+  for (const row of rows) {
+    const columns = byRelation.get(row.relation) ?? [];
+    columns.push({ name: row.name, type: row.type });
+    byRelation.set(row.relation, columns);
+  }
+  return byRelation;
+}
+
+/**
  * The first `limit + 1` rows, as arrays in `columns` order. One more than asked, so the
  * caller can say the page was cut rather than guess from a full one.
  */

@@ -53,6 +53,8 @@ export class InMemoryWorkerClient implements WorkerClient {
   #catalogueExists = false;
   /** Every model whose relations this double was asked to drop, and did. */
   readonly dropped: { tenantId: string; model: string }[] = [];
+  /** Every seed it was asked to drop the table of, in order. */
+  readonly droppedSeeds: { tenantId: string; seed: string }[] = [];
   /** Which listing each browse asked for: the one fact about a browse only its caller decides. */
   readonly browsed: { source: string; tenantId: string; kind: BrowseListing }[] = [];
   #choices: BrowseScopeResponse = { items: [], partial: [] };
@@ -228,6 +230,18 @@ export class InMemoryWorkerClient implements WorkerClient {
       return Promise.resolve({ ok: false, reason: "depended-on", dependents: this.#dependents });
     }
     this.dropped.push(input);
+    return Promise.resolve({ ok: true, value: { dropped: [] } });
+  }
+
+  /** A seed's drop, answered as a model's is: dropped, refused with dependents, or not reached. */
+  dropSeed(input: { tenantId: string; seed: string }): Promise<DropOutcome> {
+    if (this.#failWith !== null) {
+      return this.#fail();
+    }
+    if (this.#dependents.length > 0) {
+      return Promise.resolve({ ok: false, reason: "depended-on", dependents: this.#dependents });
+    }
+    this.droppedSeeds.push(input);
     return Promise.resolve({ ok: true, value: { dropped: [] } });
   }
 

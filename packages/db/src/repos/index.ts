@@ -59,6 +59,20 @@ export {
   saveMacro,
 } from "./macros.ts";
 export {
+  deleteSeedUnlessBuilding,
+  getSeed,
+  insertSeed,
+  listSeeds,
+  listSeedSummaries,
+  type Seed,
+  type SeedColumnJson,
+  type SeedDeleteOutcome,
+  seedExists,
+  type SeedSummary,
+  type SeedWrite,
+  saveSeed,
+} from "./seeds.ts";
+export {
   type DeleteOutcome,
   deleteModelUnlessBuilding,
   getModel,
@@ -116,6 +130,7 @@ export {
   type RunRefusal,
   type RunStatus,
   type RunStep,
+  type RunStepKind,
   type RunTrigger,
   type RunVerb,
   runningRun,

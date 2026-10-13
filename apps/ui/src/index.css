@@ -3945,6 +3945,12 @@
     border-width: 3px;
   }
 
+  /* A seed is an input like a raw table, kept by hand: a ruled face rather than a double one. */
+  .lineage-card--seed .lineage-card__face {
+    border-width: 2px;
+    border-left-width: 6px;
+  }
+
   .lineage-card--missing .lineage-card__face {
     border-style: dashed;
     background: transparent;

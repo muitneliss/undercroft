@@ -29,8 +29,12 @@ function texts(record: Record<string, string>): { name: string; sql: string }[] 
   return Object.entries(record).map(([name, sql]) => ({ name, sql }));
 }
 
-function lineage(models: Record<string, string>, macros: Record<string, string> = {}): Lineage {
-  return modelLineage({ models: texts(models), macros: texts(macros) });
+function lineage(
+  models: Record<string, string>,
+  macros: Record<string, string> = {},
+  seeds: string[] = [],
+): Lineage {
+  return modelLineage({ models: texts(models), macros: texts(macros), seeds });
 }
 
 function edges(graph: Lineage): string[] {

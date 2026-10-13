@@ -211,6 +211,8 @@ function exampleFindings(sql: string, macros: readonly string[]): string[] {
     tests: { columns: {} },
     existingModels: modelsRefdIn(sql),
     existingMacros: macros,
+    // Every ref is taken as a model's, so a seed's name needs no list of its own.
+    existingSeeds: [],
   });
   return said(findings);
 }
@@ -226,6 +228,8 @@ function macroFindings(sql: string, macros: readonly string[]): string[] {
     sql,
     existingModels: modelsRefdIn(sql),
     existingMacros: macros,
+    // Every ref is taken as a model's, so a seed's name needs no list of its own.
+    existingSeeds: [],
   });
   return said(findings);
 }

@@ -70,6 +70,8 @@ export function LineageDetail({
           <dd>{count("model")}</dd>
           <dt>{t("lineage.factRaw")}</dt>
           <dd>{count("raw")}</dd>
+          <dt>{t("lineage.factSeeds")}</dt>
+          <dd>{count("seed")}</dd>
           <dt>{t("lineage.factMissing")}</dt>
           <dd>{count("missing")}</dd>
           <dt>{t("lineage.factUndeclared")}</dt>
@@ -113,6 +115,7 @@ export function LineageDetail({
           </Link>
         </>
       ) : null}
+      {node.kind === "seed" ? <p className="prose">{t("lineage.seedLong")}</p> : null}
       {node.kind === "missing" ? <p className="note">{t("lineage.missingLong")}</p> : null}
 
       <dl className="lineage-facts">

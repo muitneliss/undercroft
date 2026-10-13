@@ -88,7 +88,7 @@ export const procedureSentences: SentenceTable = {
   "models.list":
     'Các mô hình dbt của khách hàng kèm lần dựng gần nhất: sqlSha256 và testsSha256 để so một bản sao, và số cột, không kèm SQL. names hoặc match để lọc; include: ["columns"] để lấy các cột của từng lần dựng.',
   "models.revision":
-    "Một mã băm cho các mô hình, macro và câu hỏi của khách hàng và một mã cho tất cả, tính từ những gì mỗi lần lưu đã ghi: bằng nhau nghĩa là không có gì thay đổi.",
+    "Một mã băm cho các mô hình, macro, bảng tham chiếu và câu hỏi của khách hàng và một mã cho tất cả, tính từ những gì mỗi lần lưu đã ghi: bằng nhau nghĩa là không có gì thay đổi.",
   "models.get": "Một mô hình dbt, SQL và kiểm thử của nó, kèm mã băm của chúng.",
   "models.save":
     "Lưu một mô hình dbt; không chạy gì. SQL và kiểm thử giống hệt bản đã lưu trả về unchanged: true và không thay đổi gì. Quản trị.",
@@ -97,7 +97,7 @@ export const procedureSentences: SentenceTable = {
   "models.build":
     "Dựng mô hình bằng một lần dbt build: name cho một mô hình, hoặc names cho tối đa 20, mỗi mục là name, +name (kèm các mô hình phía trên) hoặc name+ (kèm các mô hình phía dưới); mọi tên phải là mô hình của khách hàng. Mặc định chờ kết quả và trả về waited true với ok, testsFailed, stepSummary (đếm theo loại và trạng thái), các bước được hỏi (steps: none, problems là mặc định, hoặc all; lọc bằng stepStatus, stepKind, stepName; trang tiếp đọc bằng runs.get với runId và stepCursor), rowCounts (số dòng của từng mô hình được nêu; null là không đếm được, không phải 0) và preview khi chỉ nêu một mô hình. wait false trả về ngay waited false với runId; chờ lần chạy đó bằng runs.get với waitSeconds. Khi đang có lần dựng khác, CONFLICT nêu runId và startedAt của lần đó. Quản trị.",
   "models.lineage":
-    "Mô hình nào đọc mô hình nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro. name cho phần quanh một mô hình hay một bảng thô (raw.records), direction up, down hoặc both và depth để giới hạn số bước.",
+    "Mô hình nào đọc mô hình nào, bảng tham chiếu nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro. name cho phần quanh một mô hình, một bảng tham chiếu hay một bảng thô (raw.records), direction up, down hoặc both và depth để giới hạn số bước.",
   "models.reference":
     "Tài liệu tham khảo cho người viết mô hình: các nguồn, macro của nền tảng và macro riêng của khách hàng. parts để chỉ lấy một số trong sources, platformMacros và tenantMacros; hai phần đầu giống hệt nhau ở mọi lần gọi.",
   "models.check":
@@ -110,6 +110,14 @@ export const procedureSentences: SentenceTable = {
   "macros.save":
     "Lưu một macro dbt, trọn một định nghĩa {% macro %} mà mọi mô hình gọi được; không chạy gì. Định nghĩa và mô tả giống hệt bản đã lưu trả về unchanged: true và không thay đổi gì. Quản trị.",
   "macros.delete": "Xoá một macro dbt; bị từ chối khi còn mô hình hay macro khác gọi nó. Quản trị.",
+  "seeds.list":
+    "Các bảng tham chiếu (seed dbt) của khách hàng mà mô hình đọc bằng ref(): tên, số cột, số dòng và mã băm nội dung, không kèm ô nào. names hoặc match để lọc.",
+  "seeds.get":
+    "Một bảng tham chiếu trọn vẹn: các cột với kiểu đã khai báo, mọi dòng, mỗi ô là chuỗi hoặc null, và mã băm.",
+  "seeds.save":
+    "Lưu một bảng tham chiếu nhỏ: columns là [{name, type}] với type trong text, integer, bigint, numeric(18,4), boolean, date, timestamptz; rows là các mảng chuỗi hoặc null, mỗi cột một ô. Không suy đoán kiểu: ô nào cột không chứa được thì bị từ chối, nêu dòng và cột. Tối đa 10.000 dòng, 100 cột, 1 MB. Bảng giống hệt bản đã lưu trả về unchanged: true. Quản trị.",
+  "seeds.delete":
+    "Xoá một bảng tham chiếu và bảng đã nạp từ nó; bị từ chối khi còn mô hình đọc nó bằng ref(). Quản trị.",
   "bi.answer": "Trả lời một định nghĩa câu hỏi. Thành viên trở lên.",
   "bi.runQuestion": "Chạy một câu hỏi đã lưu với tham số.",
   "bi.compile": "Dịch một định nghĩa câu hỏi thành SQL. Thành viên trở lên.",

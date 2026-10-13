@@ -25,6 +25,7 @@ import { NodeLink } from "@/components/LineageNode.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import {
   type Focus,
+  isOtherInput,
   laneLabel,
   nodeState,
   nodeWords,
@@ -40,6 +41,9 @@ import { MISSING } from "@/lib/money.ts";
 function readsText(t: TFunction, graph: Graph, node: LineageNode): string {
   if (node.kind === "raw") {
     return t("lineage.rawTableLong");
+  }
+  if (node.kind === "seed") {
+    return t("lineage.seedLong");
   }
   if (node.kind === "missing") {
     return t("lineage.missingLong");
@@ -211,7 +215,7 @@ function Levels({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const { placed, columns } = layout(graph);
-  const missing = placed.some((p) => p.column === 0 && p.node.kind === "missing");
+  const missing = placed.some((p) => p.column === 0 && isOtherInput(p.node));
   const lanes = Array.from({ length: columns }, (_, column) =>
     placed.filter((p) => p.column === column).map((p) => p.node),
   );

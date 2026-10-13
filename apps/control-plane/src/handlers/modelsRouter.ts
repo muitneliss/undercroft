@@ -104,7 +104,8 @@ export const modelsRouter = router({
   /**
    * Store a model. Executes nothing: Build is the worker's verb, chosen separately, so a
    * saved mistake is a row and not a broken table. Admin-only, like every write that
-   * changes what a customer's dashboards will show.
+   * changes what a customer's dashboards will show. A name taken by a model under `create`,
+   * or by one of the tenant's seeds at all (ADR 0128), is a CONFLICT.
    */
   save: requireRole("admin")
     .input(
@@ -126,9 +127,10 @@ export const modelsRouter = router({
         actorId: ctx.user.userId,
       });
       if (!outcome.ok) {
+        const key = outcome.reason === "seed-named" ? "error.modelNameIsSeed" : "error.modelNameTaken";
         throw new TRPCError({
           code: "CONFLICT",
-          message: messages(ctx.locale)("error.modelNameTaken", { name: input.name }),
+          message: messages(ctx.locale)(key, { name: input.name }),
         });
       }
       return outcome;

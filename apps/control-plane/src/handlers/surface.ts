@@ -169,6 +169,11 @@ export const EFFECTS: EffectTable = {
   "macros.save": "write",
   "macros.delete": "destructive",
 
+  // A seed's table is what the models reading it build from; deleting one drops that table and
+  // the cells a person kept, like deleting a model (ADR 0128).
+  "seeds.save": "write",
+  "seeds.delete": "destructive",
+
   // Edits change a draft; `publish` is the one that costs, since the worker then classifies every
   // text again (ADR 0085). Removing a kind is undone by adding it back, so it is a write.
   "documentKinds.add": "write",

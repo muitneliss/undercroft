@@ -4,10 +4,12 @@
  * There is no dbt project in the repository any more. What the platform ships is here, as
  * text: the source definition over `raw.records`, the macros every project carries, and
  * the shape of a `dbt_project.yml` and a `profiles.yml`. What the customer wrote is in
- * `app.model` and `app.macro`. `renderProject` joins the two into the files dbt reads, for a
- * directory that exists for one build and is removed after. The customer's macros go under
- * `macros/tenant/`, apart from the platform's, and every one is rendered on every build: a
- * macro is a helper any model may call, and which models call which is dbt's to resolve.
+ * `app.model`, `app.macro` and `app.seed`. `renderProject` joins the two into the files dbt
+ * reads, for a directory that exists for one build and is removed after. The customer's macros
+ * go under `macros/tenant/`, apart from the platform's, and every one is rendered on every
+ * build: a macro is a helper any model may call, and which models call which is dbt's to
+ * resolve. Every seed is rendered too, as `seeds/<name>.csv` with a `column_types` entry for
+ * each of its columns (ADR 0128); which of them a build loads is its selection's to say.
  *
  * Three things the rendering holds to:
  *
@@ -23,12 +25,13 @@
  *   USAGE on it.
  *
  * `parseRunResults` is the other half: dbt's `run_results.json` as the ledger's steps, one
- * per model or test, with the failing-row count a test reported. Pure, so a fixture pins it.
+ * per model, test or seed, with the failing-row count a test reported. Pure, so a fixture pins
+ * it.
  */
 
 import { createHash } from "node:crypto";
 
-import type { RunStep } from "../repos/runs.ts";
+import type { RunStep, RunStepKind } from "../repos/runs.ts";
 
 /** The environment variable the generated profile reads the tenant's password from. */
 export const PASSWORD_VAR = "UNDERCROFT_DBT_PASSWORD";
@@ -321,6 +324,23 @@ export interface ProjectMacro {
   readonly sql: string;
 }
 
+/**
+ * A tenant's reference table as the project carries it: its declared columns, and the CSV text
+ * `seedCsv` (`@undercroft/contracts`) wrote for the rows `seedRefusal` admitted.
+ */
+export interface ProjectSeed {
+  readonly name: string;
+  readonly columns: readonly { readonly name: string; readonly type: string }[];
+  readonly csv: string;
+  /**
+   * Load it by dropping and re-creating its table, rather than by truncating and inserting. Set
+   * when the table standing in the schema does not have the declared columns and types: an
+   * insert into it would fail on a column it lacks, leave a removed column standing as NULLs,
+   * or cast a cell into the column's OLD type. dbt drops it `cascade`, so this is set only then.
+   */
+  readonly fullRefresh: boolean;
+}
+
 export interface DatabaseAddress {
   readonly host: string;
   readonly port: number;
@@ -332,6 +352,7 @@ export interface ProjectInput {
   readonly slug: string;
   readonly models: readonly ProjectModel[];
   readonly macros: readonly ProjectMacro[];
+  readonly seeds: readonly ProjectSeed[];
   readonly database: DatabaseAddress;
 }
 
@@ -340,7 +361,27 @@ function yamlString(value: string): string {
   return JSON.stringify(value);
 }
 
-function projectYml(slug: string): string {
+/**
+ * The `seeds:` block: every seed's column types, so dbt reads every cell as text and Postgres
+ * casts it into the declared type -- no type is inferred (ADR 0128) -- and, for a seed whose
+ * standing table no longer matches, a full refresh. Column names are quoted as written, which
+ * keeps a column called `order` a column.
+ */
+function seedsYml(seeds: readonly ProjectSeed[]): string {
+  const lines = ["seeds:", "  undercroft:", "    +quote_columns: true"];
+  for (const seed of seeds) {
+    lines.push(`    ${seed.name}:`, "      +column_types:");
+    for (const column of seed.columns) {
+      lines.push(`        ${column.name}: ${yamlString(column.type)}`);
+    }
+    if (seed.fullRefresh) {
+      lines.push("      +full_refresh: true");
+    }
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function projectYml(slug: string, seeds: readonly ProjectSeed[]): string {
   return `name: undercroft
 version: 1.0.0
 config-version: 2
@@ -349,11 +390,13 @@ profile: undercroft
 
 model-paths: ["models"]
 macro-paths: ["macros"]
+seed-paths: ["seeds"]
 
 models:
   undercroft:
     +materialized: table
 
+${seedsYml(seeds)}
 # A failing test stores its offending rows -- which contain source data -- in the tenant's
 # dq schema, which the BI role has no USAGE on. See generate_schema_name.
 data_tests:
@@ -405,15 +448,15 @@ function schemaYml(models: readonly ProjectModel[]): string {
 /**
  * Every file of the tenant's project, keyed by path relative to the project root.
  *
- * Model, macro and column names have been validated against the contract's identifier rule
- * before they reach a row, and the slug is Postgres's own folding; nothing here is quoted
- * for YAML except the two values that come from configuration. A tenant's macro has its own
+ * Model, macro, seed and column names have been validated against the contract's identifier
+ * rule before they reach a row, and the slug is Postgres's own folding; nothing here is quoted
+ * for YAML except the values that come from configuration and a seed column's type. A tenant's macro has its own
  * directory, so its file can never be one of the platform's whatever it is named -- and a name
  * that would override one of the platform's macros never reaches a row (`macroDefinition.ts`).
  */
 export function renderProject(input: ProjectInput): Record<string, string> {
   const files: Record<string, string> = {
-    "dbt_project.yml": projectYml(input.slug),
+    "dbt_project.yml": projectYml(input.slug, input.seeds),
     "profiles.yml": profilesYml(input.slug, input.database),
     "models/sources.yml": SOURCES_YML,
     "models/schema.yml": schemaYml(input.models),
@@ -426,6 +469,9 @@ export function renderProject(input: ProjectInput): Record<string, string> {
   }
   for (const model of input.models) {
     files[`models/${model.name}.sql`] = model.sql;
+  }
+  for (const seed of input.seeds) {
+    files[`seeds/${seed.name}.csv`] = seed.csv;
   }
   return files;
 }
@@ -521,10 +567,19 @@ function nodeOf(value: unknown): RunResultsNode | null {
   };
 }
 
-/** `model.undercroft.stg_deals` -> `stg_deals`; `test.undercroft.not_null_x.a1b2` -> `not_null_x`. */
+const STEP_KINDS: ReadonlySet<string> = new Set<RunStepKind>(["model", "test", "seed"]);
+
+function isStepKind(kind: string | undefined): kind is RunStepKind {
+  return kind !== undefined && STEP_KINDS.has(kind);
+}
+
+/**
+ * `model.undercroft.stg_deals` -> `stg_deals`; `test.undercroft.not_null_x.a1b2` -> `not_null_x`;
+ * `seed.undercroft.account_groups` -> `account_groups`.
+ */
 function stepOf(node: RunResultsNode): RunStep | null {
   const [kind, , name] = node.unique_id.split(".");
-  if ((kind !== "model" && kind !== "test") || name === undefined || name === "") {
+  if (!isStepKind(kind) || name === undefined || name === "") {
     return null;
   }
   return {
@@ -544,9 +599,10 @@ function stepOf(node: RunResultsNode): RunStep | null {
 const TEST_FAILED = new Set(["fail", "error"]);
 
 /**
- * dbt's `run_results.json` as the ledger's steps. Seeds, snapshots and operations are not
- * steps of ours and are skipped; a result that is not shaped like dbt's is skipped too
- * rather than guessed at.
+ * dbt's `run_results.json` as the ledger's steps: its models, tests and seeds. A seed is a step
+ * because a build that failed to load one is a failed build, and only a step can say so (ADR
+ * 0128). Snapshots and operations are not steps of ours and are skipped; a result that is not
+ * shaped like dbt's is skipped too rather than guessed at.
  */
 export function parseRunResults(json: unknown): { steps: RunStep[]; testsFailed: number } {
   const results = isRecord(json) && Array.isArray(json.results) ? json.results : [];

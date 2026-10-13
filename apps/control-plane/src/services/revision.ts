@@ -25,7 +25,7 @@
 import { createHash } from "node:crypto";
 import { canonicalJson } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { listMacroHashes, listModelHashes } from "@undercroft/db/repos";
+import { listMacroHashes, listModelHashes, listSeedSummaries } from "@undercroft/db/repos";
 
 import { listQuestionHashes } from "../repos/biQuestions.ts";
 
@@ -33,6 +33,8 @@ import { listQuestionHashes } from "../repos/biQuestions.ts";
 export interface RevisionParts {
   readonly models: string;
   readonly macros: string;
+  /** The tenant's reference tables (ADR 0128), each by its name and the hash of its content. */
+  readonly seeds: string;
   readonly questions: string;
 }
 
@@ -58,14 +60,16 @@ export function partRevision(entries: readonly Entry[]): string {
 }
 
 async function partsOf(exec: SqlExecutor, tenantId: string): Promise<RevisionParts> {
-  const [models, macros, questions] = await Promise.all([
+  const [models, macros, seeds, questions] = await Promise.all([
     listModelHashes(exec, tenantId),
     listMacroHashes(exec, tenantId),
+    listSeedSummaries(exec, tenantId),
     listQuestionHashes(exec, tenantId),
   ]);
   return {
     models: partRevision(models.map((m) => [m.name, m.sqlSha256, m.testsSha256])),
     macros: partRevision(macros.map((m) => [m.name, m.sqlSha256, m.descriptionSha256])),
+    seeds: partRevision(seeds.map((s) => [s.name, s.sha256])),
     // A question is keyed by its id, since two may share a name; renaming one is a change.
     questions: partRevision(
       questions.map((q) => [q.id, q.name, q.definitionSha256, q.chartSha256]),

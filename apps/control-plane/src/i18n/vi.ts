@@ -15,6 +15,7 @@
  */
 
 import { modelCheck } from "./modelCheck.vi.ts";
+import { seedTable } from "./seedTable.vi.ts";
 
 export const vi = {
   /**
@@ -184,6 +185,9 @@ export const vi = {
     documentKindsEmpty:
       "Catalogue chưa có loại nào ngoài other, nên publish sẽ xếp mọi tài liệu vào không loại nào. Hãy thêm một loại hoặc khởi tạo catalogue trước.",
     modelNameTaken: "Đã có một mô hình tên {{name}}. Hãy mở mô hình đó để sửa, hoặc chọn tên khác.",
+    /** A model may not take a seed's name, nor a seed a model's: `ref()` reads both (ADR 0128). */
+    modelNameIsSeed:
+      "Đã có một bảng tham chiếu (seed) tên {{name}}. Mô hình và bảng tham chiếu không được trùng tên, vì cả hai đều được đọc bằng ref('{{name}}'). Hãy chọn tên khác.",
     buildInProgress:
       "Đang có một lần dựng mô hình cho khách hàng này. Hãy đợi lần đó xong rồi thử lại.",
     /** The same refusal, naming the run that holds the lock, so it can be waited on (#442). */
@@ -209,6 +213,16 @@ export const vi = {
     /** Dependents are models and macros alike, by name: whichever still calls it. */
     macroDependedOn:
       "Chưa xoá macro {{name}}: {{dependents}} vẫn còn gọi nó. Hãy bỏ các lời gọi đó trước, rồi thử lại.",
+    seedNameTaken:
+      "Đã có một bảng tham chiếu tên {{name}}. Hãy lưu không kèm create để thay nó, hoặc chọn tên khác.",
+    seedNameIsModel:
+      "Đã có một mô hình tên {{name}}. Bảng tham chiếu và mô hình không được trùng tên, vì cả hai đều được đọc bằng ref('{{name}}'). Hãy chọn tên khác.",
+    /** Dependents are the models that ref() it, by name, or the views that read its table. */
+    seedDependedOn:
+      "Chưa xoá bảng tham chiếu {{name}}: {{dependents}} vẫn đọc nó. Hãy sửa để chúng không đọc {{name}} nữa, rồi thử lại.",
+    /** As `modelNotDeleted`: the row is kept whenever its table was not dropped (ADR 0077). */
+    seedNotDeleted:
+      "Chưa xoá bảng tham chiếu {{name}}: dịch vụ xử lý chưa gỡ được bảng đã nạp từ nó, nên bảng tham chiếu vẫn còn nguyên. Hãy thử lại sau ít phút.",
     dqNotRead: "Không đọc được các dòng không đạt kiểm tra của bước này.",
     /** A lineage asked about a node the tenant's graph does not hold: never an empty graph. */
     lineageNameUnknown:
@@ -358,6 +372,12 @@ export const vi = {
    * a column -- and is left out of the sentences whose finding names nothing.
    */
   modelCheck,
+
+  /**
+   * Why `seeds.save` refuses a table (`seedRefusal`, `@undercroft/contracts`, ADR 0128): one
+   * sentence per problem, naming the row and the column, and what to send instead.
+   */
+  seedTable,
 
   /**
    * What `/mcp` says to a model-context client -- and through it, to the person who asked.

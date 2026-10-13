@@ -12,6 +12,7 @@
 import { z } from "zod";
 
 import { MAX_BUILD_SELECTORS, ModelName, ModelSelector } from "./models.ts";
+import { SeedName } from "./seeds.ts";
 
 export const Cell = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 export type Cell = z.infer<typeof Cell>;
@@ -47,7 +48,7 @@ export const MAX_PREVIEW_ROWS = 50;
 
 export const RunStepShape = z.object({
   uniqueId: z.string(),
-  kind: z.enum(["model", "test"]),
+  kind: z.enum(["model", "test", "seed"]),
   name: z.string(),
   status: z.string(),
   failures: z.number().int().nullable(),
@@ -136,6 +137,18 @@ export const DropModelRequest = z.object({
   model: ModelName,
 });
 export type DropModelRequest = z.infer<typeof DropModelRequest>;
+
+/**
+ * Drop the table a seed's loads left in the tenant's analytics schema, before its row is deleted
+ * (ADR 0128): `DropModelRequest`'s arrangement, answered the same way, for the one relation a
+ * seed makes. Its own route rather than a field on the model's, so a worker that predates it
+ * refuses the call (404) and the control plane deletes nothing.
+ */
+export const DropSeedRequest = z.object({
+  tenantId: z.string().min(1),
+  seed: SeedName,
+});
+export type DropSeedRequest = z.infer<typeof DropSeedRequest>;
 
 export const DroppedRelation = z.object({
   schema: z.string(),

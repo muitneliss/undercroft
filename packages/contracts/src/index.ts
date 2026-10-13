@@ -123,6 +123,22 @@ export {
   TestKind,
 } from "./models.ts";
 export { MacroDescription, MacroName, MAX_MACRO_SQL_BYTES } from "./macros.ts";
+export {
+  MAX_SEED_BYTES,
+  MAX_SEED_CELL_CHARS,
+  MAX_SEED_COLUMNS,
+  MAX_SEED_ROWS,
+  SEED_COLUMN_TYPES,
+  SeedCell,
+  SeedColumn,
+  SeedColumnType,
+  seedCsv,
+  SeedName,
+  type SeedProblem,
+  type SeedRefusal,
+  seedRefusal,
+  type SeedTable,
+} from "./seeds.ts";
 export { documentKeyOf, documentPrefixOf, RawDocument } from "./rawDocument.ts";
 export {
   DEFAULT_SEARCH_HITS,
@@ -143,6 +159,7 @@ export {
   DqFailuresRequest,
   DropModelRequest,
   DropModelResponse,
+  DropSeedRequest,
   DroppedRelation,
   ExportQueryRequest,
   isNumericType,

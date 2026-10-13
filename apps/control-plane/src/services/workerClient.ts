@@ -124,6 +124,8 @@ export interface WorkerClient {
   buildModels: (input: BuildInput) => Promise<BuildOutcome>;
   /** Drop what a model built, before its row goes; drops nothing when it refuses. */
   dropModel: (input: { tenantId: string; model: string }) => Promise<DropOutcome>;
+  /** Drop the table a seed's loads made, before its row goes, as `dropModel` does (ADR 0128). */
+  dropSeed: (input: { tenantId: string; seed: string }) => Promise<DropOutcome>;
   /** The rows a failed test stored, as the worker reads them for an admin. */
   dqFailures: (input: DqFailuresRequest) => Promise<WorkerOutcome<TableResult>>;
   /** SQL an author wrote, run as the tenant's read-only login. */
@@ -274,17 +276,22 @@ function queryOn(t: WorkerTransport): typeof query {
  * The third call whose refusal body IS read: a 409 names a build in progress, or what reads from
  * the model -- the tenant's own model names, never a value.
  */
-function dropOn(t: WorkerTransport): typeof drop {
-  function drop(input: { tenantId: string; model: string }): Promise<DropOutcome> {
-    return exchange(t, { path: "/v1/models/drop", body: input }, async (response) => {
+/**
+ * A drop at `path`: a model's or a seed's, which the worker answers the same way. A worker older
+ * than the seed route answers 404, which is a refusal, so nothing is deleted.
+ */
+function dropOn<Body extends { tenantId: string }>(
+  t: WorkerTransport,
+  path: string,
+): (input: Body) => Promise<DropOutcome> {
+  return (input) =>
+    exchange(t, { path, body: input }, async (response) => {
       if (!response.ok) {
         return dropRefusalOf(response.status === CONFLICT ? await envelopeOf(response) : null);
       }
       const parsed = DropModelResponse.safeParse(await response.json());
       return parsed.success ? { ok: true, value: parsed.data } : { ok: false, reason: "refused" };
     });
-  }
-  return drop;
 }
 
 /** A refused drop, read from its envelope; a status that names nothing is a plain refusal. */
@@ -306,7 +313,6 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
   const post = postTo(t);
   const trigger = triggerOn(t);
   const query = queryOn(t);
-  const drop = dropOn(t);
 
   return {
     storeCredential: (input) => post("/v1/connections/credential", input),
@@ -320,7 +326,8 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     initialiseDocumentKinds: initialiseOn(t),
     // Its own module: the worker's build deadline, and a refusal whose body is read.
     buildModels: buildOn(t),
-    dropModel: drop,
+    dropModel: dropOn(t, "/v1/models/drop"),
+    dropSeed: dropOn(t, "/v1/seeds/drop"),
     dqFailures: (input) => post("/v1/dq/failures", input),
     runQuery: (input) => query("/v1/queries/run", input),
     exportQuery: exportOn(t),

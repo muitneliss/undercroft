@@ -12,13 +12,14 @@ import {
   DqFailuresRequest,
   DropModelRequest,
   type DropModelResponse,
+  DropSeedRequest,
   RawSearchRequest,
   RunQueryRequest,
 } from "@undercroft/contracts";
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { buildModels, dqFailures, startBuildJob } from "../services/jobs.ts";
 import { findRun } from "../services/ledger.ts";
-import { dropModelRelations } from "../services/modelDrop.ts";
+import { type DropOutcome, dropModelRelations, dropSeedRelations } from "../services/modelDrop.ts";
 import { readRawSchema, readSchema, runQuery, runRawQuery } from "../services/queryRunner.ts";
 import { searchRaw } from "../services/rawSearch.ts";
 import { listDue, listExtractDue } from "../services/schedule.ts";
@@ -56,6 +57,7 @@ export function registerAnalyticsRoutes(app: Hono, deps: LakeApiDeps): void {
   /** One run, by id, for whoever started it. The control plane reads the ledger directly. */
   registerModelsBuildRoute(app, deps);
   registerModelsDropRoute(app, deps);
+  registerSeedsDropRoute(app, deps);
   registerDqFailuresRoute(app, deps);
   registerQueriesRunRoute(app, deps);
   registerExportRoute(app, deps);
@@ -123,19 +125,54 @@ function registerModelsDropRoute(app: Hono, deps: LakeApiDeps): void {
       { exec: deps.exec, sessions: deps.dbt.sessions },
       parsed.data,
     );
-    if (!outcome.ok) {
+    return answerDrop(c, outcome, "other relations read from this model");
+  });
+}
+
+/**
+ * Drop the table a seed's loads made, as the tenant's dbt login, before the control plane
+ * deletes its row: the model route's contract, for a seed (ADR 0128).
+ */
+function registerSeedsDropRoute(app: Hono, deps: LakeApiDeps): void {
+  app.post("/v1/seeds/drop", async (c) => {
+    if (deps.dbt === undefined) {
       return c.json(
-        {
-          code: "relation_depended_on",
-          message: "other relations read from this model",
-          details: outcome.dependents.map((d) => d.name),
-        },
-        409,
+        { code: "invalid_request", message: "transform is not configured", details: [] },
+        400,
       );
     }
-    const body: DropModelResponse = { dropped: outcome.dropped };
-    return c.json(body, 200);
+    if (!serviceTokenOk(deps, c)) {
+      return c.json(UNAUTHENTICATED, 401);
+    }
+    const parsed = DropSeedRequest.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json(
+        { code: "invalid_request", message: "tenantId and seed are required", details: [] },
+        400,
+      );
+    }
+    const outcome = await dropSeedRelations(
+      { exec: deps.exec, sessions: deps.dbt.sessions },
+      parsed.data,
+    );
+    return answerDrop(c, outcome, "other relations read from this seed");
   });
+}
+
+/** A drop's answer: what went, or 409 `relation_depended_on` naming what reads from it. */
+function answerDrop(c: Context, outcome: DropOutcome, refusal: string): Response {
+  if (!outcome.ok) {
+    return c.json(
+      {
+        code: "relation_depended_on",
+        message: refusal,
+        details: outcome.dependents.map((d) => d.name),
+      },
+      409,
+    );
+  }
+  const body: DropModelResponse = { dropped: outcome.dropped };
+  return c.json(body, 200);
 }
 
 function registerDqFailuresRoute(app: Hono, deps: LakeApiDeps): void {

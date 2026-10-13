@@ -49,7 +49,7 @@ export function runDetail(over: Partial<RunDetail> = {}): RunDetail {
     refusals: [],
     reasonCounts: [],
     refusalsPruned: false,
-    stepSummary: { total: 0, byStatus: { model: {}, test: {} }, problems: 0 },
+    stepSummary: { total: 0, byStatus: { model: {}, test: {}, seed: {} }, problems: 0 },
     steps: [],
     nextStepCursor: null,
     parentRun: null,

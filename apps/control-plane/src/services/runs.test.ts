@@ -311,7 +311,7 @@ describe("a run's steps", () => {
 
     expect(detail?.stepSummary).toEqual({
       total: 3,
-      byStatus: { model: { success: 1 }, test: { pass: 1, fail: 1 } },
+      byStatus: { model: { success: 1 }, test: { pass: 1, fail: 1 }, seed: {} },
       problems: 1,
     });
     expect(detail?.steps.map((s) => s.name)).toEqual(["not_null_orders_total"]);

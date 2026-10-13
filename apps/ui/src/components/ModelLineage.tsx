@@ -138,6 +138,7 @@ function Picker({
   const groups: [string, LineageNode[]][] = [
     [t("lineage.groupModels"), graph.nodes.filter((node) => node.kind === "model")],
     [t("lineage.groupRaw"), graph.nodes.filter((node) => node.kind === "raw")],
+    [t("lineage.groupSeeds"), graph.nodes.filter((node) => node.kind === "seed")],
     [t("lineage.groupMissing"), graph.nodes.filter((node) => node.kind === "missing")],
   ];
 
