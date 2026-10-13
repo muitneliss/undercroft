@@ -55,9 +55,21 @@ function kindOf(schema: JsonSchema): FlagKind | null {
   }
 }
 
+/**
+ * A scalar that may also be `null` -- `anyOf: [scalar, null]`, how a nullable input reads --
+ * is the scalar: its flag types the value, and `null`, which argv text cannot spell, arrives
+ * as JSON. `connections.browseScope`'s `parentId` is an id, or `null` for the top level.
+ */
+function nonNull(schema: JsonSchema): JsonSchema {
+  const variants = schema.anyOf ?? [];
+  const scalar = variants.filter((variant) => variant.type !== "null");
+  return variants.length === 2 && scalar.length === 1 ? (scalar[0] ?? schema) : schema;
+}
+
 /** The typed flags a procedure's input offers, in the schema's own property order. */
 export function flagSpecs(schema: JsonSchema): FlagSpec[] {
-  return Object.entries(schema.properties ?? {}).flatMap(([property, value]) => {
+  return Object.entries(schema.properties ?? {}).flatMap(([property, nullable]) => {
+    const value = nonNull(nullable);
     const kind = kindOf(value);
     if (kind === null) {
       return [];

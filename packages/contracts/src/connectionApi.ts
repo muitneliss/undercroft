@@ -112,6 +112,19 @@ export const BrowseScopeResponse = z.object({
        */
       path: z.array(z.string()).optional(),
       /**
+       * Where this item sits in its listing's tree: the id of the folder or label that holds
+       * it, or `null` at the top -- for a Drive folder whose parent this listing did not see
+       * (My Drive's root, a shared drive's, a folder shared from elsewhere), or a Gmail label
+       * whose name is not nested under another listed label's (`Clients/Acme` under
+       * `Clients`). Absent for anything not in a tree: a file type, an organisation, a
+       * property. What `connections.browseScope` walks one level at a time (issue 443).
+       *
+       * Absent, never guessed, from a worker built before this field. A listing in which no
+       * item carries it is not a tree as far as a reader can tell, and a browse by parent over
+       * it is refused rather than answered with an empty level.
+       */
+      parentId: z.string().nullable().optional(),
+      /**
        * For a HubSpot property, the spec entity it is read on: the key a `HubspotScope` records
        * it under. Absent for anything that is not a property.
        */

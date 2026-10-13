@@ -27,7 +27,6 @@ import {
   type QueryParams,
   QuestionDefinition,
   type RunQueryRequest,
-  type SchemaResponse,
   type TableResult,
 } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
@@ -47,6 +46,7 @@ import {
   listQuestions,
   updateQuestion,
 } from "../repos/biQuestions.ts";
+import { readSchema, type SchemaFilter, type SchemaOutcome } from "./tableSchema.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 
 export interface QuestionView {
@@ -74,11 +74,13 @@ export function run(
   return worker.runQuery(input);
 }
 
+/** The analytics schema, narrowed to what `filter` names (`tableSchema.ts`); whole without one. */
 export function schema(
   worker: WorkerClient,
   input: { tenantId: string },
-): Promise<WorkerOutcome<SchemaResponse>> {
-  return worker.readSchema(input);
+  filter: SchemaFilter = {},
+): Promise<SchemaOutcome> {
+  return readSchema(() => worker.readSchema(input), filter);
 }
 
 /** The SQL a definition compiles to, parameters unbound. What the builder shows beside itself. */

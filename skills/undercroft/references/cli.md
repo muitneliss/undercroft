@@ -123,10 +123,13 @@ Failure:
   `status` for a sign-in refusal. It also carries any facts the server named with its
   refusal, verbatim. For example, a refused `connections browse-scope` gives `source`,
   `listing` (`labels`, `organisations`, `folders` or `properties`), `reason` (`unsupported`,
-  `scope-insufficient`, `credential-expired`, `worker-unreachable` or `refused`) and `remedy`
-  (`reconnect`, `retry-later` or `none`). `credential-expired` means the stored credential
-  could not be refreshed and the connection now reads `expired`: reconnect it, with nothing
-  new to grant. A HubSpot `connections set-scope` has no size limit: every
+  `scope-insufficient`, `credential-expired`, `worker-unreachable`, `refused`, or for a cut
+  listing `not-a-tree`, `unknown-parent` or `unknown-cursor`) and `remedy` (`reconnect`,
+  `retry-later`, `omit-parent`, `restart` or `none`). `credential-expired` means the stored
+  credential could not be refreshed and the connection now reads `expired`: reconnect it, with
+  nothing new to grant. `--parent-id <id>` browses one level; the top level is `parentId: null`,
+  which only JSON can spell: `--input-json '{"parentId": null}'`. A refused `bi schema` or
+  `lake query-schema` names the tables it does not hold in `tables`. A HubSpot `connections set-scope` has no size limit: every
   property of every object may be chosen at once. A refused `connections set-cadence` gives
   `source` and `reason`: `cron-fields`, `cron-invalid`, `cron-never` or `cron-too-frequent`
   for a `--cron` that cannot be kept (five fields, read in Singapore time, no two fires

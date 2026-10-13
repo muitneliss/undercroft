@@ -36,6 +36,8 @@ import {
 import {
   checkModel,
   type Lineage,
+  type LineageTarget,
+  lineageAround,
   MACROS,
   type ModelCheck,
   modelLineage,
@@ -183,13 +185,22 @@ export async function check(
  * models' and macros' own declarations and from nothing else (`modelLineage.ts`, ADR 0092).
  * Computed on every call rather than stored: a stored graph would be one more thing a save
  * could leave stale, and the text it is read from is already here.
+ *
+ * With a `target`, only the part around the node it names (`lineageAround`), or `null` when
+ * the tenant's graph has no such node. The whole graph is read either way: which models reach
+ * a node is only known once every model's declarations are.
  */
-export async function lineage(exec: SqlExecutor, tenantId: string): Promise<Lineage> {
+export async function lineage(
+  exec: SqlExecutor,
+  tenantId: string,
+  target: LineageTarget | null = null,
+): Promise<Lineage | null> {
   const [models, macros] = await Promise.all([
     listModels(exec, tenantId),
     listMacros(exec, tenantId),
   ]);
-  return modelLineage({ models, macros });
+  const graph = modelLineage({ models, macros });
+  return target === null ? graph : lineageAround(graph, target);
 }
 
 export interface Reference {

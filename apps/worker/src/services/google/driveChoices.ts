@@ -132,6 +132,10 @@ function folderItems(drivePages: readonly unknown[], folderPages: readonly unkno
       name: folder.name,
       kind: "folder" as const,
       path: pathOf(id, folders, driveNames),
+      // The tree is the folders this listing saw: a parent it did not -- a drive's root, or
+      // the folder above one shared from elsewhere -- puts the folder at the top, as its path
+      // starts there too.
+      parentId: folders.has(folder.parent) ? folder.parent : null,
     }))
     .toSorted((a, b) => comparePaths(a.path, b.path));
 }

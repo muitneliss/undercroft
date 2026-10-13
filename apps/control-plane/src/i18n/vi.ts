@@ -200,6 +200,11 @@ export const vi = {
     macroDependedOn:
       "Chưa xoá macro {{name}}: {{dependents}} vẫn còn gọi nó. Hãy bỏ các lời gọi đó trước, rồi thử lại.",
     dqNotRead: "Không đọc được các dòng không đạt kiểm tra của bước này.",
+    /** A lineage asked about a node the tenant's graph does not hold: never an empty graph. */
+    lineageNameUnknown:
+      "Lineage của khách hàng này không có mô hình hay bảng nào tên {{name}}. Bảng thô được ghi dạng schema.bảng, ví dụ raw.records.",
+    /** Every name asked for and not held, comma-joined; worded so one or many reads the same. */
+    tablesUnknown: "Không có trong các bảng của khách hàng này: {{tables}}.",
     /** Postgres's own sentence follows the colon; it quotes the author's SQL and nothing else. */
     queryFailed: "Câu truy vấn không chạy được: {{message}}",
     queryNotRun:
@@ -253,6 +258,16 @@ export const vi = {
     browseRefused: "Dịch vụ xử lý không lấy được danh sách cho nguồn {{source}}.",
     /** A source whose scope is not chosen from a list at all -- not a fault anywhere. */
     browseUnsupported: "Nguồn {{source}} không có danh sách nào để chọn phạm vi đọc.",
+    /**
+     * The three refusals of a browse cut to a level or a page (issue 443). Each is the
+     * request's to change, and says how: there is nothing to wait for.
+     */
+    browseNotTree:
+      "Danh sách của nguồn {{source}} không phân cấp, nên không duyệt theo mục cha được. Hãy bỏ parentId.",
+    browseParentUnknown:
+      "Danh sách của nguồn {{source}} không có mục nào mang mã {{parentId}}. Hãy dùng mã của một thư mục hoặc nhãn có trong danh sách.",
+    browseCursorUnknown:
+      "Con trỏ trang này không còn khớp với danh sách của nguồn {{source}}: mục mà nó tiếp nối không còn trong danh sách. Hãy duyệt lại từ trang đầu.",
     scopeNotUnderstood: "Không đọc được lựa chọn cho nguồn {{source}}.",
     /**
      * Why a custom schedule was not saved, one sentence per `CronRefusal` in

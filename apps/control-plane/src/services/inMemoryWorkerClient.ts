@@ -53,6 +53,7 @@ export class InMemoryWorkerClient implements WorkerClient {
   /** Which listing each browse asked for: the one fact about a browse only its caller decides. */
   readonly browsed: { source: string; tenantId: string; kind: BrowseListing }[] = [];
   #choices: BrowseScopeResponse = { items: [], partial: [] };
+  #schema: SchemaResponse = { tables: [] };
   #failWith: WorkerFailure | null = null;
   #runningAs: string | null = null;
   #dependents: readonly string[] = [];
@@ -88,6 +89,12 @@ export class InMemoryWorkerClient implements WorkerClient {
   /** Make every call fail, to exercise the caller's failure path. */
   failing(reason: WorkerFailure): this {
     this.#failWith = reason;
+    return this;
+  }
+
+  /** What every schema read answers, the analytics and the raw console's alike. */
+  withSchema(schema: SchemaResponse): this {
+    this.#schema = schema;
     return this;
   }
 
@@ -136,10 +143,7 @@ export class InMemoryWorkerClient implements WorkerClient {
     kind: BrowseListing;
   }): Promise<WorkerOutcome<BrowseScopeResponse>> {
     this.browsed.push(input);
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    return Promise.resolve({ ok: true, value: this.#choices });
+    return this.#unlessFailing(this.#choices);
   }
 
   revokeConnection(input: {
@@ -231,10 +235,7 @@ export class InMemoryWorkerClient implements WorkerClient {
   }
 
   dqFailures(): Promise<WorkerOutcome<TableResult>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    return Promise.resolve({ ok: true, value: { columns: [], rows: [], truncated: false } });
+    return this.#unlessFailing({ columns: [], rows: [], truncated: false });
   }
 
   /** Every query this double was asked to run, in order. */
@@ -289,10 +290,7 @@ export class InMemoryWorkerClient implements WorkerClient {
   }
 
   readSchema(): Promise<WorkerOutcome<SchemaResponse>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    return Promise.resolve({ ok: true, value: { tables: [] } });
+    return this.#unlessFailing(this.#schema);
   }
 
   /**
@@ -332,6 +330,11 @@ export class InMemoryWorkerClient implements WorkerClient {
   answersSearchWith(found: RawSearchResponse): this {
     this.#found = found;
     return this;
+  }
+
+  /** `value`, unless this double was told to fail every call. */
+  #unlessFailing<T>(value: T): Promise<WorkerOutcome<T>> {
+    return this.#failWith === null ? Promise.resolve({ ok: true, value }) : this.#fail();
   }
 
   #fail<T>(): Promise<WorkerOutcome<T>> {
