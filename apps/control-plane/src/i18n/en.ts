@@ -152,6 +152,10 @@ export const en = {
     noPassingVersion:
       "{{model}} has no passing version yet: its build in run {{runId}} failed its tests or did not build, so nothing of it is published for Reports. Fix the model and build it again.",
     queryFailed: "The query did not run: {{message}}",
+    previewCompileFailed:
+      "The model {{name}} did not compile, so nothing ran and nothing was saved: {{cause}}",
+    previewNotRun:
+      "The model could not be previewed. The processing service did not answer; try again in a few minutes.",
     queryNotRun:
       "The query could not be run. The processing service did not answer; try again in a few minutes.",
     searchNotRun:

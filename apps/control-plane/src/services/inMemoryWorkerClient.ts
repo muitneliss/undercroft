@@ -34,6 +34,7 @@ import type {
   WorkerOutcome,
 } from "./workerClient.ts";
 import { InMemoryBuilds } from "./inMemoryBuilds.ts";
+import { InMemoryPreviews } from "./inMemoryPreviews.ts";
 import type { WorkerFailure } from "./workerRefusals.ts";
 
 /**
@@ -303,13 +304,8 @@ export class InMemoryWorkerClient implements WorkerClient {
    * can honestly model. The login boundary is proven where it lives, against real Postgres
    * in `privileges.test.ts`.
    */
-  runRawQuery(input: QueryInput): Promise<WorkerOutcome<TableResult>> {
-    return this.runQuery(input);
-  }
-
-  readRawSchema(): Promise<WorkerOutcome<SchemaResponse>> {
-    return this.readSchema();
-  }
+  readonly runRawQuery: WorkerClient["runRawQuery"] = (input) => this.runQuery(input);
+  readonly readRawSchema: WorkerClient["readRawSchema"] = () => this.readSchema();
 
   /**
    * Records the question and answers with whatever `answersSearchWith` was given.
@@ -332,6 +328,11 @@ export class InMemoryWorkerClient implements WorkerClient {
     this.#found = found;
     return this;
   }
+
+  /** The model previews this double was asked for, and what one answers (`inMemoryPreviews.ts`). */
+  readonly previews = new InMemoryPreviews();
+  readonly previewModel: WorkerClient["previewModel"] = (input) =>
+    this.previews.run(input, this.#failWith, this.#refusal);
 
   /** `value`, unless this double was told to fail every call. */
   #unlessFailing<T>(value: T): Promise<WorkerOutcome<T>> {

@@ -7,18 +7,18 @@
 
 import { TRPCError } from "@trpc/server";
 import {
+  DEFAULT_QUERY_ROWS,
   MAX_BUILD_SELECTORS,
   MAX_MODEL_SQL_BYTES,
+  MAX_QUERY_ROWS,
+  MAX_QUERY_SQL_BYTES,
   ModelName,
   ModelSelector,
   ModelTests,
 } from "@undercroft/contracts";
-import type { Locale } from "@undercroft/core/locale";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
-import { formatWhen } from "../services/alertWording.ts";
-import type { ParentTests } from "../services/buildGuard.ts";
-import { type BuildHolder, buildModels } from "../services/modelBuild.ts";
+import { buildModels } from "../services/modelBuild.ts";
 import {
   REFERENCE_PARTS,
   type Reference,
@@ -27,73 +27,20 @@ import {
   referenceParts,
 } from "../services/modelReference.ts";
 import { check } from "../services/modelChecks.ts";
+import { preview } from "../services/modelPreview.ts";
 import * as models from "../services/models.ts";
 import { revision } from "../services/revision.ts";
 import { BUILD_DEADLINE_MS } from "../services/workerBuild.ts";
+import { PREVIEW_DEADLINE_MS } from "../services/workerPreview.ts";
 import { notRun } from "./answers.ts";
 import { testedFindingSentence, wordCheck } from "./checkWords.ts";
 import { ANSWER_SECONDS } from "./holdOpen.ts";
 import { StepQuery } from "./inputs.ts";
 import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
+import { buildHeld, parentTestsFailing, previewRefused } from "./modelRefusals.ts";
 import { actorOf, refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
 
 const MS_PER_SECOND = 1000;
-
-/**
- * A build refused because one is already running: CONFLICT, with the holder's run and start as
- * facts an agent waits on (`runs.get` with `waitSeconds`) and in the sentence a person reads.
- * A holder the ledger no longer has -- it finished between the refusal and the read -- is not
- * named, and the sentence says only that a build was running.
- */
-function buildHeld(locale: Locale, holder: BuildHolder | null): TRPCError {
-  const t = messages(locale);
-  if (holder === null) {
-    return refusal("CONFLICT", t("error.buildInProgress"), {
-      reason: "BUILD_IN_PROGRESS",
-      runId: null,
-      startedAt: null,
-    });
-  }
-  return refusal(
-    "CONFLICT",
-    t("error.buildInProgressAs", {
-      runId: holder.runId,
-      startedAt: formatWhen(holder.startedAt, locale),
-    }),
-    { reason: "BUILD_IN_PROGRESS", runId: holder.runId, startedAt: holder.startedAt },
-  );
-}
-
-/**
- * A build refused because a parent it would read without rebuilding has failing tests (issue
- * 457): PRECONDITION_FAILED, since the fix is upstream of the request. The sentence names the
- * first such parent, its failing tests and the run, and the way on -- fix and rebuild it, or
- * build `+name`; the facts carry every failing parent, comma-joined, for an agent.
- */
-function parentTestsFailing(locale: Locale, failing: readonly ParentTests[]): TRPCError {
-  const [first] = failing;
-  const tests = first?.tests.failingTests.map((test) => test.name) ?? [];
-  const parent = first?.parent ?? "";
-  const model = first?.readBy[0] ?? "";
-  const runId = first?.tests.runId ?? null;
-  return refusal(
-    "PRECONDITION_FAILED",
-    messages(locale)("error.buildParentTestsFailing", {
-      model,
-      parent,
-      tests: tests.join(", "),
-      runId: runId ?? "",
-    }),
-    {
-      reason: "PARENT_TESTS_FAILING",
-      model,
-      parent,
-      tests: tests.join(","),
-      runId,
-      parents: failing.map((p) => p.parent).join(","),
-    },
-  );
-}
 
 /**
  * The longest lineage `name` worth reading: a model's name, or a source table as
@@ -312,6 +259,50 @@ export const modelsRouter = router({
         tests: input.tests,
       });
       return wordCheck(ctx.locale, checked);
+    }),
+
+  /**
+   * What an unsaved model returns (ADR 0132): dbt compiles `sql` as the model `name` in the
+   * tenant's own project -- in place of the saved model of that name, or beside the saved ones --
+   * and the worker runs what it compiled, read-only, as the tenant's dbt login. A sample of its
+   * rows, or `query` over it, where the model is named `name`. Nothing is saved or built.
+   *
+   * ADMIN-ONLY, and a write for a credential's grant, as `lake.query` is: it runs SQL an author
+   * wrote as the login that may read the raw lake, so it reaches exactly what that console does.
+   * A mutation, as `models.check` is, because a model's SQL does not fit a query string.
+   *
+   * A model dbt would not compile, and SQL Postgres refused, are BAD_REQUEST quoting dbt or
+   * Postgres: the request was the fault, and the sentence is how the author fixes it. A worker
+   * that did not answer is a precondition. It holds its request open for the worker's deadline.
+   */
+  preview: requireRole("admin")
+    .meta({ holdsOpenSeconds: PREVIEW_DEADLINE_MS / MS_PER_SECOND + ANSWER_SECONDS })
+    .input(
+      z.object({
+        name: ModelName,
+        sql: z.string().min(1).max(MAX_MODEL_SQL_BYTES),
+        query: z.string().trim().min(1).max(MAX_QUERY_SQL_BYTES).optional(),
+        limit: z.number().int().min(1).max(MAX_QUERY_ROWS).default(DEFAULT_QUERY_ROWS),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.worker === null) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: messages(ctx.locale)("error.previewNotRun"),
+        });
+      }
+      const outcome = await preview(ctx.worker, {
+        tenantId: ctx.tenantId,
+        name: input.name,
+        sql: input.sql,
+        limit: input.limit,
+        ...(input.query === undefined ? {} : { query: input.query }),
+      });
+      if (outcome.ok) {
+        return outcome.value;
+      }
+      throw previewRefused(ctx.locale, input.name, outcome);
     }),
 
   /**

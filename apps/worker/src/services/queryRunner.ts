@@ -18,10 +18,10 @@
  */
 
 import type { QueryAnswer, SchemaResponse, TableResult } from "@undercroft/contracts";
-import { UndercroftError } from "@undercroft/core";
 import { tenantRolesFor } from "@undercroft/db/repos";
 
 import { runFramed, runFramedWithRelations, schemaColumns, typeNames } from "../repos/queries.ts";
+import { AuthorTextRefused } from "./authorTextRefused.ts";
 import { cellOf } from "./preview.ts";
 import { TenantNotProvisioned, type TenantSessions } from "./tenantSession.ts";
 
@@ -33,7 +33,9 @@ export const QUERY_TIMEOUT_MS = 15_000;
  * read-only transaction. Carries Postgres's own sentence, which quotes the author's text and
  * nothing else; a refusal an author can act on has to say what was refused.
  */
-export class QueryFailed extends UndercroftError {}
+export class QueryFailed extends AuthorTextRefused {
+  readonly code = "query_failed";
+}
 
 export interface QueryDeps {
   readonly sessions: TenantSessions;

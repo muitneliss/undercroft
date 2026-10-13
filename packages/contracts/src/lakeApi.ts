@@ -74,6 +74,10 @@ export type LandRecordsResponse = z.infer<typeof LandRecordsResponse>;
  * `query_timeout` (504) is a statement Postgres cancelled at its time limit (ADR 0123). Unlike
  * `tenant_busy` it is NOT worth asking again unchanged: the same question takes the same time.
  * The remedy is a narrower question, and the caller's sentence says so.
+ *
+ * `compile_failed` (400) is a model preview whose project dbt would not compile (ADR 0132). Its
+ * message is dbt's own account of why, which quotes the tenant's model text and nothing else --
+ * compiling never touches a row -- and is what lets the author fix it, as `query_failed` is.
  */
 export const ApiError = z.object({
   code: z.enum([
@@ -93,6 +97,7 @@ export const ApiError = z.object({
     "credential_rejected",
     "account_mismatch",
     "query_failed",
+    "compile_failed",
     "relation_depended_on",
     "not_found",
     "tenant_busy",

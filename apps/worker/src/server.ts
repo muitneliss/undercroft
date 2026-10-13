@@ -50,6 +50,11 @@ const EDITOR_BUILDS = 2;
  * of the pooler's eight per login and fifty in all (ADR 0088); four leaves the dashboards theirs.
  */
 const EXPORTS_AT_ONCE = 4;
+/**
+ * Model previews at once (ADR 0132). Each is a `dbt compile`, the same Python process as a build
+ * without its connections, so as many as the editor's builds; a third is told the worker is busy.
+ */
+const PREVIEWS_AT_ONCE = 2;
 
 /**
  * A run limit from the environment, for one kind of run. Unset or empty is no limit; anything
@@ -209,6 +214,8 @@ const app = createLakeApi({
     editorBuild: createSlots(EDITOR_BUILDS),
     // A person waits on an export's first byte; a fifth is told the worker is busy.
     export: createSlots(EXPORTS_AT_ONCE),
+    // A person waits on a preview's compile; a third, while two compile, is told it is busy.
+    preview: createSlots(PREVIEWS_AT_ONCE),
   },
   // The child environment every spawned reader inherits. `PATH` is the load-bearing part:
   // without it `Bun.spawn` cannot find `pdftotext` even where the image installed it, and

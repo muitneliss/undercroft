@@ -20,6 +20,8 @@ import {
   type DqFailuresRequest,
   DropModelResponse,
   type ExportQueryRequest,
+  type ModelPreview,
+  type PreviewModelRequest,
   type QueryAnswer,
   type RawSearchRequest,
   type RawSearchResponse,
@@ -44,6 +46,7 @@ import {
 } from "./workerRefusals.ts";
 import { type BuildInput, type BuildOutcome, buildOn } from "./workerBuild.ts";
 import { exportOn } from "./workerExport.ts";
+import { previewOn } from "./workerPreview.ts";
 import {
   type Envelope,
   envelopeOf,
@@ -69,7 +72,10 @@ export type WorkerOutcome<T> =
   | {
       ok: false;
       reason: WorkerFailure;
-      /** The worker's own sentence, for the one refusal an author can act on: a failed query. */
+      /**
+       * The worker's own sentence, for the refusals an author can act on: a failed query, and a
+       * model preview dbt would not compile.
+       */
       message?: string;
     };
 
@@ -139,6 +145,11 @@ export interface WorkerClient {
   runRawQuery: (input: QueryInput) => Promise<WorkerOutcome<TableResult>>;
   /** The `raw` schema's tables and columns, for the console's sidebar. */
   readRawSchema: (input: { tenantId: string }) => Promise<WorkerOutcome<SchemaResponse>>;
+  /**
+   * What an unsaved model returns: compiled by dbt in the tenant's project, run in the read-only
+   * frame as its dbt login (`workerPreview.ts`, ADR 0132). Admin-only at the caller.
+   */
+  previewModel: (input: PreviewModelRequest) => Promise<WorkerOutcome<ModelPreview>>;
   /**
    * One question over the whole raw lake, as that same dbt login. Admin-only at the caller.
    *
@@ -338,6 +349,8 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     // `raw` at all. See `queryRunner.runRawQuery`.
     runRawQuery: (input) => query("/v1/queries/raw/run", input),
     readRawSchema: (input) => post("/v1/queries/raw/schema", input),
+    // Its own module: the preview's deadline, and two refusals whose body is read.
+    previewModel: previewOn(t),
     // Plain `post`, not `query`: there is no author's SQL here to quote back, so there is no
     // refusal body worth reading. Its one refusal of its own -- the statement timeout, a 504 --
     // is named by the status alone (ADR 0123).

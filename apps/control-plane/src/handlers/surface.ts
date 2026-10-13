@@ -162,6 +162,8 @@ export const EFFECTS: EffectTable = {
   "models.save": "write",
   "models.build": "write",
   "models.delete": "destructive",
+  // As `lake.query`: author SQL, run as the login that reads the raw lake (ADR 0132).
+  "models.preview": "write",
 
   // As `models.check`: a POST for the text, reading only the tenant's names. Deleting a macro
   // deletes text the customer wrote, like deleting a model (ADR 0086).
@@ -295,6 +297,7 @@ export const MCP_WIDGETS = {
   "lake.search": "grid",
   "lake.records": "grid",
   "lake.documents": "grid",
+  "models.preview": "grid",
   "bi.answer": "grid",
   "bi.runQuestion": "grid",
   "bi.questions.answer": "grid",

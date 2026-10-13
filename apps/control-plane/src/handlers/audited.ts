@@ -73,6 +73,8 @@ export const AUDITED: AuditTable = {
   "models.save": "service",
   "models.build": "service",
   "models.delete": "service",
+  // A read, as `lake.query` is: it stores nothing, and its SQL may quote customer data.
+  "models.preview": "read",
 
   "macros.check": "read",
   "macros.save": "service",

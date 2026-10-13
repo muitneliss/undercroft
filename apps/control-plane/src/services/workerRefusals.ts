@@ -45,6 +45,11 @@ export type WorkerFailure =
   /** The author's SQL did not run. The outcome carries Postgres's sentence about it. */
   | "query-failed"
   /**
+   * A model preview's project would not compile (ADR 0132). The outcome carries dbt's account of
+   * why, which quotes the tenant's model text and nothing else.
+   */
+  | "compile-failed"
+  /**
    * The worker's 503: the tenant's database login had no connection to give in time (ADR
    * 0088). Not `unreachable` -- the worker answered -- and not `refused` -- nothing was wrong
    * with the request. Asked again in a moment, it runs.
