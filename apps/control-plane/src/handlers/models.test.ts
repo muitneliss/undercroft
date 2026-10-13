@@ -308,10 +308,11 @@ describe("models.build", () => {
     );
 
     expect(got.code).toBe("CONFLICT");
-    // The minute in Singapore time, as every screen and email words an instant.
-    expect(got.message).toBe(
-      "A build is already running for this customer: run run-held, started 13 Oct 2026 at 10:05. Wait for it to finish, then try again.",
-    );
+    // The run, and the minute in Singapore time, as every screen and email words an instant. The
+    // joint between date and time is ICU's ("at" on one build, a comma on another), so not pinned.
+    expect(got.message).toStartWith("A build is already running for this customer: run run-held,");
+    expect(got.message).toContain("13 Oct 2026");
+    expect(got.message).toContain("10:05");
     expect(got.facts).toEqual({
       reason: "BUILD_IN_PROGRESS",
       runId: "run-held",
