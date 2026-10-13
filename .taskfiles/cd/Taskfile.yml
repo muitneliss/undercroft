@@ -45,6 +45,23 @@ tasks:
     cmds:
       - bun run scripts/dokploy.ts status
 
+  # TEMPORARY (ADR 0136), while GitHub Actions has no minutes: the two halves of one switch.
+  # They WRITE the panel's configuration, which CI never does, so only a person runs them. Both
+  # also need `gh` signed in with admin on the repository. Delete them with the ADR's exit PR.
+  outage-on:
+    desc: >-
+      TEMPORARY (ADR 0136): deploy every push to main by building on the host -- auto deploy on
+      with watch paths, the build override in the command, workflows disabled, a push webhook.
+    cmds:
+      - bun run scripts/dokploy.ts outage on
+
+  outage-off:
+    desc: >-
+      TEMPORARY (ADR 0136): put the panel back to release-only deploys, re-enable the workflows,
+      remove the push webhook, then run preflight so a wrong switch back fails here.
+    cmds:
+      - bun run scripts/dokploy.ts outage off
+
   cli-upload:
     desc: >-
       Attach the packed CLI to the GitHub release TAG (after task build:cli-pack), under its

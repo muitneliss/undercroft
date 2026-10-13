@@ -2,6 +2,7 @@
  * The deploy client. CI runs this; an operator runs the same commands by hand.
  *
  *   bun run scripts/dokploy.ts preflight | deploy | verify | smoke | logs | status
+ *   bun run scripts/dokploy.ts outage on | off      (TEMPORARY, ADR 0136)
  *
  * The Dokploy API is the only channel for changes. SSH is for reading state, never for
  * making one: a direct edit on the host bypasses Dokploy's record of what it deployed, and
@@ -51,9 +52,20 @@ const NESTED_NAME = /^\s+(?<name>[a-z0-9][a-z0-9-]*):\s*$/u;
 const COMPLETED_CONDITION = /^\s+condition:\s*service_completed_successfully\s*$/u;
 /** Blank lines at the very end of a file, which YAML does not read and a paste can add. */
 const TRAILING_NEWLINES = /\n+$/u;
+/** The `-p <project>` of a stored compose command. */
+const COMPOSE_PROJECT = /(?:^|\s)-p\s+(?<name>\S+)/u;
+
+/** The repository the panel clones, as GitHub's API names it. */
+const REPOSITORY = "muitneliss/undercroft";
 
 /** The compose file Dokploy deploys, relative to the repo root. */
 const SERVER_COMPOSE = "deploy/compose/docker-compose.server.yml";
+
+/**
+ * TEMPORARY (ADR 0136): the override that makes the host build the first-party images from
+ * `main` while GitHub Actions cannot. Named only by `storedCommand("outage")`.
+ */
+const BUILD_OVERRIDE = "deploy/compose/docker-compose.server.build.yml";
 
 /**
  * Where the panel clones that file from (ADR 0049). The panel holds no copy of it: every
@@ -61,12 +73,12 @@ const SERVER_COMPOSE = "deploy/compose/docker-compose.server.yml";
  * the read-only deploy key the panel holds, because the repository is private (ADR 0121).
  */
 const COMPOSE_SOURCE = {
-  url: "git@github.com:muitneliss/undercroft.git",
+  url: `git@github.com:${REPOSITORY}.git`,
   branch: "main",
 } as const;
 
 /** The same file on the same branch, read the way the host is about to read it. */
-const COMPOSE_ON_BRANCH_URL = `https://api.github.com/repos/muitneliss/undercroft/contents/${SERVER_COMPOSE}?ref=${COMPOSE_SOURCE.branch}`;
+const COMPOSE_ON_BRANCH_URL = `https://api.github.com/repos/${REPOSITORY}/contents/${SERVER_COMPOSE}?ref=${COMPOSE_SOURCE.branch}`;
 
 /**
  * Flags the stored compose command must carry. Asserted by `preflight`, never written by CI.
@@ -74,14 +86,34 @@ const COMPOSE_ON_BRANCH_URL = `https://api.github.com/repos/muitneliss/undercrof
  * so both paths are the file's own; a command still naming `docker-compose.yml` would fail on
  * the host, after the old stack had already been told to go.
  */
+const ENV_FILE_FLAG = "--env-file deploy/compose/.env";
 const REQUIRED_COMMAND_FLAGS = [
-  "--env-file deploy/compose/.env",
+  ENV_FILE_FLAG,
   `-f ${SERVER_COMPOSE}`,
   "--pull always",
   "--wait",
   "--wait-timeout",
   "--remove-orphans",
 ];
+
+/**
+ * The whole stored command, for each way the host can run. Written once here so that a
+ * switch back cannot restore a command that differs from the one `preflight` asserts: the
+ * `released` command carries every flag above, and a test holds them together.
+ *
+ * `outage` (ADR 0136, TEMPORARY) layers the build override on the server file and builds
+ * rather than pulls. It passes no `--pull` on purpose: the flag overrides every service's own
+ * `pull_policy`, so `--pull missing` would send `db-migrate` and `kestra-flows` to Docker Hub
+ * for `undercroft-control-plane:main`, an image only this host's build can produce. Without
+ * it, each service keeps the policy the override gives it, and an upstream image is pulled
+ * only when missing, which is compose's default.
+ */
+export function storedCommand(project: string, mode: "released" | "outage"): string {
+  const files =
+    mode === "released" ? `-f ${SERVER_COMPOSE}` : `-f ${SERVER_COMPOSE} -f ${BUILD_OVERRIDE}`;
+  const images = mode === "released" ? "--pull always" : "--build";
+  return `compose -p ${project} ${ENV_FILE_FLAG} ${files} up -d ${images} --wait --wait-timeout 600 --remove-orphans`;
+}
 
 export interface Config {
   readonly endpoint: string;
@@ -277,6 +309,8 @@ interface ComposeRecord {
   readonly composePath: string;
   readonly autoDeploy: boolean | null;
   readonly composeStatus: string;
+  /** The secret in the panel's deploy webhook URL. Read by `outage on` alone, never logged. */
+  readonly refreshToken: string | null;
 }
 
 export async function composeRecord(cfg: Config, deps: Deps): Promise<ComposeRecord> {
@@ -475,7 +509,11 @@ export async function preflight(
       `the panel does not clone ${SERVER_COMPOSE} from ${COMPOSE_SOURCE.url}@${COMPOSE_SOURCE.branch}:\n` +
         `  ${faults.join("\n  ")}\n` +
         "  Set it in the panel (or with compose.update) rather than here: CI does not write " +
-        "the panel's configuration. See docs/runbook/deployment.md.",
+        "the panel's configuration. See docs/runbook/deployment.md." +
+        (compose.autoDeploy === true
+          ? "\n  If Actions outage mode is on (ADR 0136), this refusal is expected; " +
+            "`task cd:outage-off` is the way back."
+          : ""),
     );
   }
   deps.log(`  clones ${SERVER_COMPOSE} from ${COMPOSE_SOURCE.branch}, autoDeploy off`);
@@ -751,6 +789,227 @@ export async function printLogs(cfg: Config, deps: Deps): Promise<void> {
   deps.log(typeof logs === "string" ? logs : JSON.stringify(logs));
 }
 
+// --- Actions outage mode -------------------------------------------------------------------
+//
+// TEMPORARY (ADR 0136). GitHub Actions cannot run until its minutes reset, so no release can
+// build an image and nothing can deploy one. `outage on` makes Dokploy deploy every push to
+// `main` by building it on the host; `outage off` puts back exactly what `preflight` asserts,
+// then runs `preflight`, so a switch back that missed anything fails where a person is
+// watching. Delete this section, its two tasks and the build override in the PR that ends
+// ADR 0136.
+//
+// These two commands WRITE the panel's configuration, which CI never does (ADR 0008). They are
+// a person's tools, run from a terminal, and no workflow calls them -- none can run anyway.
+
+/** What `outage` needs from GitHub. `gh` in production; an in-memory repository in a test. */
+export interface GitHub {
+  /** Turn one workflow, named by its file, on or off. Idempotent either way. */
+  readonly setWorkflow: (file: string, enabled: boolean) => Promise<void>;
+  /** The repository's webhooks, each with the URL it posts to. */
+  readonly hooks: () => Promise<{ id: number; url: string }[]>;
+  /** Add a webhook that posts every push to `url`, as JSON. */
+  readonly addPushHook: (url: string) => Promise<void>;
+  readonly removeHook: (id: number) => Promise<void>;
+}
+
+/** Every workflow in `.github/workflows`, so none is left queuing runs that cannot start. */
+const WORKFLOWS = [
+  "ci.yml",
+  "release.yml",
+  "build-images.yml",
+  "deploy.yml",
+  "blog.yml",
+  "desktop.yml",
+  "visual.yml",
+] as const;
+
+/**
+ * What a push to `main` must touch to be worth a deploy: everything an image or the compose
+ * file is built from. A push that changes only docs, the wiki or a workflow builds nothing.
+ */
+const OUTAGE_WATCH_PATHS = [
+  "apps/**",
+  "packages/**",
+  "deploy/**",
+  "flows/**",
+  "specs/**",
+  "skills/**",
+  "package.json",
+  "bun.lock",
+];
+
+/**
+ * Where the panel's deploy webhook for a compose lives, up to the refresh token. Under the
+ * configured endpoint, so `outage off` removes the hook `outage on` made and no other.
+ */
+function deployHookPrefix(cfg: Config): string {
+  return `${cfg.endpoint}/deploy/compose/`;
+}
+
+/**
+ * The compose project the stored command names. Read from the command rather than assumed
+ * from `appName`: a switch that changed `-p` would bring up a SECOND stack with empty
+ * volumes beside the real one. No `-p` is refused rather than guessed.
+ */
+function composeProject(command: string): string {
+  const project = COMPOSE_PROJECT.exec(command)?.groups?.name;
+  if (project === undefined) {
+    throw new Error(
+      "the stored compose command names no project (-p), so there is no project to keep.\n" +
+        `  stored: ${command === "" ? "(Dokploy default)" : command}\n` +
+        "  Repair it in the panel first; see docs/runbook/deployment.md.",
+    );
+  }
+  return project;
+}
+
+/** Only the three fields a mode owns. Never `env`: it replaces the whole credential blob. */
+async function setPanelMode(
+  cfg: Config,
+  deps: Deps,
+  mode: { autoDeploy: boolean; watchPaths: readonly string[] | null; command: string },
+): Promise<void> {
+  await callApi(cfg, deps, "compose.update", { payload: { composeId: cfg.composeId, ...mode } });
+  deps.log(`  panel: autoDeploy ${mode.autoDeploy}, command ${mode.command}`);
+}
+
+export async function outageOn(cfg: Config, deps: Deps, github: GitHub): Promise<void> {
+  const compose = await composeRecord(cfg, deps);
+  const refreshToken = compose.refreshToken ?? "";
+  if (refreshToken === "") {
+    throw new Error("compose.one carries no refreshToken, so there is no deploy webhook to add");
+  }
+  await setPanelMode(cfg, deps, {
+    autoDeploy: true,
+    watchPaths: OUTAGE_WATCH_PATHS,
+    command: storedCommand(composeProject(compose.command), "outage"),
+  });
+
+  for (const file of WORKFLOWS) {
+    await github.setWorkflow(file, false);
+  }
+  deps.log(`  workflows disabled: ${WORKFLOWS.join(", ")}`);
+
+  // The URL carries the panel's secret, so it is compared and sent, never printed.
+  const url = `${deployHookPrefix(cfg)}${refreshToken}`;
+  if ((await github.hooks()).some((hook) => hook.url === url)) {
+    deps.log(`  push webhook to ${deployHookPrefix(cfg)}<refreshToken> already there`);
+  } else {
+    await github.addPushHook(url);
+    deps.log(`  push webhook added to ${deployHookPrefix(cfg)}<refreshToken>`);
+  }
+  deps.log("outage mode on: the next push to main touching a watched path builds and deploys");
+}
+
+export async function outageOff(
+  cfg: Config,
+  deps: Deps,
+  github: GitHub,
+  rollout: { expected: string; githubToken: string },
+): Promise<void> {
+  const compose = await composeRecord(cfg, deps);
+  await setPanelMode(cfg, deps, {
+    autoDeploy: false,
+    watchPaths: null,
+    command: storedCommand(composeProject(compose.command), "released"),
+  });
+
+  for (const hook of await github.hooks()) {
+    if (hook.url.startsWith(deployHookPrefix(cfg))) {
+      await github.removeHook(hook.id);
+      deps.log(`  push webhook ${hook.id} removed`);
+    }
+  }
+
+  for (const file of WORKFLOWS) {
+    await github.setWorkflow(file, true);
+  }
+  deps.log(`  workflows enabled: ${WORKFLOWS.join(", ")}`);
+
+  await preflight(cfg, deps, rollout.expected, rollout.githubToken);
+}
+
+/**
+ * `gh`, signed in as the person running it; it needs admin on the repository for webhooks.
+ * Workflows are switched through the REST endpoints rather than `gh workflow disable`, which
+ * refuses a workflow that is already disabled and so would make a re-run fail.
+ */
+async function gh(args: readonly string[], input?: string): Promise<string> {
+  const child = Bun.spawn(["gh", ...args], {
+    stdin: input === undefined ? "ignore" : Buffer.from(input),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (code !== 0) {
+    throw new Error(
+      `gh ${args.slice(0, 4).join(" ")} exited ${code}: ${stderr.trim().slice(0, 300)}`,
+    );
+  }
+  return stdout;
+}
+
+export const ghGitHub: GitHub = {
+  setWorkflow: async (file, enabled) => {
+    await gh([
+      "api",
+      "-X",
+      "PUT",
+      `repos/${REPOSITORY}/actions/workflows/${file}/${enabled ? "enable" : "disable"}`,
+    ]);
+  },
+  hooks: async () => {
+    const lines = await gh([
+      "api",
+      `repos/${REPOSITORY}/hooks`,
+      "--paginate",
+      "--jq",
+      ".[] | {id, url: .config.url}",
+    ]);
+    return lines
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .map((line) => JSON.parse(line) as { id: number; url: string });
+  },
+  addPushHook: async (url) => {
+    // The body goes on stdin, not the command line, so the secret in the URL is never in an
+    // argument list another process can read. GitHub echoes the hook back; it is dropped.
+    const body = {
+      name: "web",
+      active: true,
+      events: ["push"],
+      config: { url, content_type: "json", insecure_ssl: "0" },
+    };
+    await gh(
+      ["api", "-X", "POST", `repos/${REPOSITORY}/hooks`, "--input", "-"],
+      JSON.stringify(body),
+    );
+  },
+  removeHook: async (id) => {
+    await gh(["api", "-X", "DELETE", `repos/${REPOSITORY}/hooks/${id}`]);
+  },
+};
+
+/** `outage on|off` from the command line, with `gh` and this checkout's compose file. */
+async function outage(cfg: Config, deps: Deps, mode: string): Promise<void> {
+  if (mode === "on") {
+    await outageOn(cfg, deps, ghGitHub);
+    return;
+  }
+  if (mode === "off") {
+    await outageOff(cfg, deps, ghGitHub, {
+      expected: publishedCompose(),
+      githubToken: process.env.GITHUB_TOKEN ?? "",
+    });
+    return;
+  }
+  throw new Error("usage: dokploy.ts outage on|off");
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2] ?? "";
   const cfg = configFromEnv(process.env);
@@ -801,8 +1060,11 @@ async function main(): Promise<void> {
       deps.log(record === undefined ? "no deployments" : `${record.title}: ${record.status}`);
       return;
     }
+    case "outage":
+      await outage(cfg, deps, process.argv[3] ?? "");
+      return;
     default:
-      throw new Error("usage: dokploy.ts preflight|deploy|verify|smoke|logs|status");
+      throw new Error("usage: dokploy.ts preflight|deploy|verify|smoke|logs|status|outage");
   }
 }
 
