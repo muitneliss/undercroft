@@ -28,6 +28,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { ModelLineage } from "@/components/ModelLineage.tsx";
+import { ModelRow } from "@/components/ModelRow.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
@@ -35,8 +36,6 @@ import { LINEAGE_VIEW, lineagePath, VIEW_PARAM } from "@/lib/lineage.ts";
 import {
   BUILD_STATES,
   type BuildState,
-  buildMark,
-  buildMarkLabel,
   buildTally,
   stateLabel,
   stateMark,
@@ -52,10 +51,7 @@ import {
 } from "@/lib/modelList.ts";
 import { isModelName } from "@/lib/modelName.ts";
 import { modelTemplate } from "@/lib/modelTemplate.ts";
-import { formatCount, MISSING } from "@/lib/money.ts";
-import { journalPath } from "@/lib/runs.ts";
-import { testsLabel, testsMark } from "@/lib/testState.ts";
-import { relativeTime } from "@/lib/when.ts";
+import { formatCount } from "@/lib/money.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -331,54 +327,16 @@ function ModelList({
             </tr>
           </thead>
           <tbody>
-            {shown.map((model) => {
-              const columns = model.lastBuild?.columnCount ?? null;
-              return (
-                <tr key={model.name}>
-                  <td>
-                    <Link className="journal__what" to={`${base}/${model.name}`}>
-                      {model.name}
-                    </Link>
-                    {unsaved === model.name ? (
-                      <span className="datum datum--quiet journal__trigger">
-                        {t("models.unsaved")}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td>
-                    <StatusMark
-                      mark={buildMark(model.lastBuild?.status ?? null)}
-                      label={buildMarkLabel(t, model.lastBuild?.status ?? null)}
-                    />
-                  </td>
-                  <td className="datum">
-                    {model.lastBuild === null ? (
-                      <span className="missing">{MISSING}</span>
-                    ) : (
-                      <Link to={journalPath(tenantId, { runId: model.lastBuild.runId })}>
-                        {model.lastBuild.runId}
-                      </Link>
-                    )}
-                  </td>
-                  <td className="datum num">
-                    {columns === null ? (
-                      <span className="missing">{MISSING}</span>
-                    ) : (
-                      formatCount(columns, locale)
-                    )}
-                  </td>
-                  <td>
-                    {/* What the build serving its rows tested, beside a status that alone would
-                        read a build with failing tests as a success (ADR 0129). */}
-                    <StatusMark
-                      mark={testsMark(model.lastTests.state)}
-                      label={testsLabel(t, locale, model.lastTests)}
-                    />
-                  </td>
-                  <td className="datum datum--quiet">{relativeTime(model.updatedAt, locale)}</td>
-                </tr>
-              );
-            })}
+            {shown.map((model) => (
+              <ModelRow
+                key={model.name}
+                tenantId={tenantId}
+                model={model}
+                base={base}
+                unsaved={unsaved === model.name}
+                locale={locale}
+              />
+            ))}
           </tbody>
         </table>
       </div>

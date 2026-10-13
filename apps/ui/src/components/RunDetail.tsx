@@ -158,8 +158,8 @@ function RunFacts({
             row (ADR 0129); a run whose status says everything gets no second fact. */}
         {verdict === null ? null : (
           <Fact label={t("journal.verdict")}>
-            <StatusMark mark={runMark(detail.status)} label={runMarkLabel(t, detail.status)} />{" "}
-            {verdict}
+            <StatusMark mark={runMark(detail.status)} label={runMarkLabel(t, detail.status)} />
+            <span className="datum datum--quiet journal__trigger">{verdict}</span>
           </Fact>
         )}
         <Fact label={t("journal.started")}>{formatDateTime(detail.startedAt, locale)}</Fact>

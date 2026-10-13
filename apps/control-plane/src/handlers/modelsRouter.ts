@@ -26,6 +26,7 @@ import {
   reference,
   referenceParts,
 } from "../services/modelReference.ts";
+import { check } from "../services/modelChecks.ts";
 import * as models from "../services/models.ts";
 import { revision } from "../services/revision.ts";
 import { BUILD_DEADLINE_MS } from "../services/workerBuild.ts";
@@ -304,7 +305,7 @@ export const modelsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const checked = await models.check(ctx.exec, {
+      const checked = await check(ctx.exec, {
         tenantId: ctx.tenantId,
         name: input.name,
         sql: input.sql,

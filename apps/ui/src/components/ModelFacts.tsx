@@ -17,6 +17,11 @@ import { formatCount, MISSING } from "@/lib/money.ts";
 import { journalPath } from "@/lib/runs.ts";
 import { testsLabel, testsMark, warningsLabel } from "@/lib/testState.ts";
 
+/** The tests of a list by name, as one sentence's list. */
+function names(list: readonly { readonly name: string }[]): string {
+  return list.map((test) => test.name).join(", ");
+}
+
 /**
  * A model never built says so as a state, and has no run and no known columns: those two are
  * MISSING, never a zero or an empty cell (`columnCount` on the server says why no columns recorded
@@ -38,8 +43,6 @@ export function ModelFacts({
   const columns = built?.columnCount ?? null;
   const tests = stored.lastTests;
   const warned = warningsLabel(t, locale, tests);
-  const names = (list: readonly { readonly name: string }[]): string =>
-    list.map((test) => test.name).join(", ");
   return (
     <>
       <Facts>
