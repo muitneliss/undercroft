@@ -14,27 +14,20 @@
  * because the folder that would have been in it was past the bound is exactly the claim it
  * exists to stop (CLAUDE.md rule 2).
  *
- * **A page continues after an item, not at a number.** The cursor names the last item a page
- * held, and the next page starts after it in the listing as it is read THEN. A count would skip
- * or repeat whatever was added or removed before it between two calls, without a sign; an item
- * that is no longer there makes the cursor unusable, and that is refused rather than restarted
- * from the top, which would repeat a page the reader already has.
+ * **A page continues after an item, not at a number** -- the rule every paged read shares, in
+ * `listPage.ts`. Without a `limit`, a cursor answers the rest of the listing after it.
  */
 
 import type { BrowseScopeResponse } from "@undercroft/contracts";
 
-/** The most items one page may ask for. Past it, a reader wants the whole listing. */
-export const MAX_CHOICES_PAGE = 1000;
+import { type PageKey, type PageRequest, pageAfter } from "./listPage.ts";
 
 /** What a reader asked to see of a listing. Every field optional; each only narrows. */
-export interface ChoiceFilter {
+export interface ChoiceFilter extends PageRequest {
   /** The items held by this one; `null` for the items at the top of the tree. */
   readonly parentId?: string | null | undefined;
   /** Items whose name, or a folder's path joined with `/`, contains this, case-insensitively. */
   readonly query?: string | undefined;
-  readonly limit?: number | undefined;
-  /** A `nextCursor` a previous page of the same browse answered with. */
-  readonly cursor?: string | undefined;
 }
 
 /** A listing, or one page of it, and where the next page starts. */
@@ -88,31 +81,18 @@ export function narrowChoices(listing: BrowseScopeResponse, filter: ChoiceFilter
       [item.name, item.path?.join("/") ?? ""].some((text) => text.toLowerCase().includes(fragment)),
     );
   }
-  if (filter.cursor !== undefined) {
-    const after = items.findIndex((item) => keyOf(item) === filter.cursor);
-    if (after === -1) {
-      return { ok: false, reason: "unknown-cursor" };
-    }
-    items = items.slice(after + 1);
+  const page = pageAfter(items, keyOf, filter);
+  if (!page.ok) {
+    return page;
   }
-  const { limit } = filter;
-  const last = limit !== undefined && items.length > limit ? items[limit - 1] : undefined;
-  return {
-    ok: true,
-    value: {
-      items: last === undefined ? items : items.slice(0, limit),
-      partial: listing.partial,
-      nextCursor: last === undefined ? null : keyOf(last),
-    },
-  };
+  const { items: kept, nextCursor } = page.value;
+  return { ok: true, value: { items: kept, partial: listing.partial, nextCursor } };
 }
 
 /**
- * An item's place in a listing, as an opaque cursor. Not the id alone: a HubSpot property's
- * id is its internal name, which two objects share (`createdate` on contacts and on deals).
+ * An item's place in a listing. Not the id alone: a HubSpot property's id is its internal name,
+ * which two objects share (`createdate` on contacts and on deals).
  */
-function keyOf(item: Item): string {
-  return Buffer.from(JSON.stringify([item.entity ?? null, item.kind, item.id])).toString(
-    "base64url",
-  );
+function keyOf(item: Item): PageKey {
+  return [item.entity ?? null, item.kind, item.id];
 }

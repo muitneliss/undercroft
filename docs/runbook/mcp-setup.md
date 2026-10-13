@@ -174,7 +174,9 @@ token as an environment variable, as above, so it stays off every process's comm
   bounded, because a client may put either in the model's context: at most 50 items of any
   top-level list, each cut named in a note (the text's extra blocks, `structuredContent`'s
   `"undercroft/clipped"`). An answer still over 60 KB has its text cut there and no
-  `structuredContent`. The rest is reached through the tool's own filters, limit or cursor. A
+  `structuredContent`. The rest is reached through the tool's own filters, limit or cursor:
+  `models_list`, `macros_list`, `bi_questions_list`, `models_lineage` and
+  `connections_browseScope` page, answering `nextCursor` until the last page (ADR 0133). A
   widget gets the whole answer in the result's `_meta`, which the host keeps from the model.
   ADR 0122.
 - **Exports.** An answer stops at 5,000 rows. For every row of a saved question, a definition or

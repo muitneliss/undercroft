@@ -96,6 +96,13 @@ door with this rule.
    rows. Ask `include` for one only when you need it (`include: ["definition", "chart"]`,
    `["config"]`, `["columns"]`), or `get` the one item. `models.reference` takes `parts`:
    ask for `["tenantMacros"]` alone, since the other two parts never change.
+   To read past what one answer holds, page. `models.list`, `macros.list`, `bi.questions.list`
+   and `models.lineage` take `limit` and `cursor`, as `connections.browseScope` does. With
+   either, a list answers `{ items, nextCursor }` and the lineage `{ nodes, edges, nextCursor }`,
+   at most `limit` nodes and `limit` edges a page; without them, the answer is what it always
+   was. Pass `nextCursor` back as `cursor`, with the same filters, until it is `null`, and only
+   then treat what you read as all there is. A cursor whose item has gone since is refused with
+   `reason: "unknown-cursor"`: start again from the first page.
 4. **Say what you will change, then change it.** Before a `write` or `destructive`
    operation, tell the person what it will do and to what. With the CLI, run it with
    `--dry-run` first.

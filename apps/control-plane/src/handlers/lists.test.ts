@@ -27,6 +27,14 @@ const SQL_QUESTION = { kind: "sql" as const, sql: "select 1 as n" };
 const BAR = { type: "bar" as const, x: "n", y: ["n"], options: {} };
 const MACRO_SQL = "{% macro tidy(value) %}\n  trim({{ value }})\n{% endmacro %}\n";
 
+/** A list asked no page answers its array (ADR 0133); a page here is the contract broken. */
+function whole<T>(answer: T[] | { readonly items: T[] }): T[] {
+  if (!Array.isArray(answer)) {
+    throw new Error("a page of a list that was asked for no page");
+  }
+  return answer;
+}
+
 let db: TestDatabase;
 let api: ReturnType<typeof appRouter.createCaller>;
 
@@ -125,11 +133,11 @@ describe("models.list", () => {
   it("counts a build's columns, and lists them only when asked", async () => {
     await builtModel("stg_deals", ["deal_id", "amount"]);
 
-    const [summary] = await api.models.list({ tenantId: TENANT });
+    const [summary] = whole(await api.models.list({ tenantId: TENANT }));
     expect(summary?.lastBuild).toMatchObject({ status: "success", columnCount: 2 });
     expect(summary?.lastBuild).not.toHaveProperty("columns");
 
-    const [full] = await api.models.list({ tenantId: TENANT, include: ["columns"] });
+    const [full] = whole(await api.models.list({ tenantId: TENANT, include: ["columns"] }));
     expect(full?.lastBuild?.columns).toEqual(["deal_id", "amount"]);
   });
 });
@@ -143,15 +151,14 @@ describe("bi.questions.list", () => {
       chart: BAR,
     });
 
-    const [summary] = await api.bi.questions.list({ tenantId: TENANT });
+    const [summary] = whole(await api.bi.questions.list({ tenantId: TENANT }));
     expect(summary).toMatchObject({ id, name: "Revenue", kind: "sql", chartType: "bar" });
     expect(summary).not.toHaveProperty("definition");
     expect(summary).not.toHaveProperty("chart");
 
-    const [full] = await api.bi.questions.list({
-      tenantId: TENANT,
-      include: ["definition", "chart"],
-    });
+    const [full] = whole(
+      await api.bi.questions.list({ tenantId: TENANT, include: ["definition", "chart"] }),
+    );
     expect(full).toEqual(await api.bi.questions.get({ tenantId: TENANT, id }));
   });
 });
@@ -200,15 +207,15 @@ describe("macros.list", () => {
       sql: MACRO_SQL,
     });
 
-    const [listed] = await api.macros.list({ tenantId: TENANT });
+    const [listed] = whole(await api.macros.list({ tenantId: TENANT }));
     expect(listed).toMatchObject({ name: "tidy", params: ["value"] });
     expect(listed).not.toHaveProperty("sql");
     expect((await api.macros.get({ tenantId: TENANT, name: "tidy" })).sql).toBe(MACRO_SQL);
   });
 });
 
-function names(items: readonly { name: string }[]): string[] {
-  return items.map((item) => item.name);
+function names(answer: { name: string }[] | { readonly items: { name: string }[] }): string[] {
+  return whole(answer).map((item) => item.name);
 }
 
 describe("names and match", () => {
@@ -250,6 +257,110 @@ describe("names and match", () => {
     );
     expect(got.code).toBe("NOT_FOUND");
     expect(got.facts).toEqual({ reason: "unknown-names", names: "stg_dealz,stg_x" });
+  });
+});
+
+/** A list's answer: the array when no page was asked, else one page. */
+type Answer<T> = T[] | { readonly items: T[]; readonly nextCursor: string | null };
+
+/** Every page of a read, each asked after the last until `nextCursor` is null. */
+async function everyPage<T>(
+  read: (cursor: string | undefined) => Promise<Answer<T>>,
+): Promise<T[][]> {
+  const pages: T[][] = [];
+  let cursor: string | undefined;
+  do {
+    const answer = await read(cursor);
+    if (Array.isArray(answer)) {
+      throw new Error("the whole list, though a page was asked");
+    }
+    pages.push(answer.items);
+    cursor = answer.nextCursor ?? undefined;
+  } while (cursor !== undefined && pages.length < 10);
+  return pages;
+}
+
+function atCursor(cursor: string | undefined): { cursor?: string } {
+  return cursor === undefined ? {} : { cursor };
+}
+
+describe("limit and cursor", () => {
+  it("walk every list a page at a time: each item once, in the list's own order, narrowed by match", async () => {
+    for (const name of ["stg_e", "stg_a", "stg_c", "mart_x", "stg_b", "stg_d"]) {
+      await api.models.save({ tenantId: TENANT, name, sql: "select 1", tests: { columns: {} } });
+    }
+    for (const name of ["tidy_e", "tidy_a", "tidy_c", "other", "tidy_b", "tidy_d"]) {
+      await api.macros.save({
+        tenantId: TENANT,
+        name,
+        description: "x",
+        sql: MACRO_SQL.replace("tidy", name),
+      });
+    }
+    // Two questions share a name: a page keyed by name would lose one of them.
+    for (const name of [
+      "1. Refunds",
+      "1. Revenue",
+      "1. Revenue",
+      "2. Ledger",
+      "1. Costs",
+      "1. Aged",
+    ]) {
+      await api.bi.questions.save({ tenantId: TENANT, name, definition: SQL_QUESTION, chart: BAR });
+    }
+
+    const models = await everyPage((cursor) =>
+      api.models.list({ tenantId: TENANT, match: "stg_", limit: 2, ...atCursor(cursor) }),
+    );
+    const macros = await everyPage((cursor) =>
+      api.macros.list({ tenantId: TENANT, match: "tidy_", limit: 2, ...atCursor(cursor) }),
+    );
+    const questions = await everyPage((cursor) =>
+      api.bi.questions.list({ tenantId: TENANT, match: "1.", limit: 2, ...atCursor(cursor) }),
+    );
+
+    expect([models, macros, questions].map((pages) => pages.map((page) => page.length))).toEqual([
+      [2, 2, 1],
+      [2, 2, 1],
+      [2, 2, 1],
+    ]);
+    expect(models.flat().map((model) => model.name)).toEqual(
+      names(await api.models.list({ tenantId: TENANT, match: "stg_" })),
+    );
+    expect(macros.flat().map((macro) => macro.name)).toEqual([
+      "tidy_a",
+      "tidy_b",
+      "tidy_c",
+      "tidy_d",
+      "tidy_e",
+    ]);
+    const listed = whole(await api.bi.questions.list({ tenantId: TENANT, match: "1." }));
+    expect(questions.flat().map((question) => question.id)).toEqual(listed.map((q) => q.id));
+    expect(new Set(listed.map((q) => q.id)).size).toBe(5);
+  });
+
+  it("a cursor whose item has left the list is refused, never restarted from the top", async () => {
+    for (const name of ["tidy_a", "tidy_b", "tidy_c"]) {
+      await api.macros.save({
+        tenantId: TENANT,
+        name,
+        description: "x",
+        sql: MACRO_SQL.replace("tidy", name),
+      });
+    }
+    const first = await api.macros.list({ tenantId: TENANT, limit: 1 });
+    const cursor = Array.isArray(first) ? undefined : (first.nextCursor ?? undefined);
+    await api.macros.delete({ tenantId: TENANT, name: "tidy_a" });
+
+    const got = await refusal(() => api.macros.list({ tenantId: TENANT, ...atCursor(cursor) }));
+
+    expect(cursor).toBeDefined();
+    expect(got.code).toBe("BAD_REQUEST");
+    expect(got.facts).toEqual({
+      procedure: "macros.list",
+      reason: "unknown-cursor",
+      remedy: "restart",
+    });
   });
 });
 

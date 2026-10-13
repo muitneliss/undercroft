@@ -96,7 +96,7 @@ describe("questions", () => {
     expect(
       await removeQuestion(db, { tenantId: OTHER, id: saved.id, actor: asActor("x@example.test") }),
     ).toBe(false);
-    expect(await listQuestionViews(db, OTHER)).toEqual({ ok: true, items: [] });
+    expect(await listQuestionViews(db, OTHER)).toEqual({ ok: true, value: [] });
     expect(await removeQuestion(db, { tenantId: TENANT, id: saved.id, actor: ACTOR.actor })).toBe(
       true,
     );
