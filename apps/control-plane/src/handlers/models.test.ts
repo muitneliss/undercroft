@@ -13,7 +13,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
-import type { Context, Role } from "./trpc.ts";
+import { type Context, type Role, refusalFacts } from "./trpc.ts";
 
 const TENANT = "CASE-0042";
 
@@ -139,46 +139,254 @@ describe("models.save", () => {
 });
 
 describe("models.build", () => {
-  it("a member is refused; an admin's build reaches the worker and is on the trail", async () => {
-    const member = await seedMember("m@example.test", "member");
+  /** An admin, and the customer's models these tests build, saved the way an admin saves them. */
+  async function adminWithModels(...names: string[]): Promise<string> {
     const admin = await seedMember("a@example.test", "admin");
+    for (const name of names) {
+      await caller(admin, "a@example.test").models.save({ ...DRAFT, name, create: true });
+    }
+    return admin;
+  }
+
+  /** The refusal's code, sentence and facts, as an agent at either door receives them. */
+  async function refusedWith(
+    fn: () => Promise<unknown>,
+  ): Promise<{ code: string; message: string; facts: unknown }> {
+    try {
+      await fn();
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        return { code: error.code, message: error.message, facts: refusalFacts(error) };
+      }
+      throw error;
+    }
+    throw new Error("expected a refusal");
+  }
+
+  async function buildTrail(): Promise<{ outcome: string; detail: unknown }[]> {
+    const { rows } = await db.query<{ outcome: string; detail: unknown }>(
+      `SELECT outcome, detail FROM ops.audit_log
+       WHERE tenant_id = $1 AND action = 'models.build' ORDER BY id`,
+      [TENANT],
+    );
+    return rows;
+  }
+
+  it("a member is refused; an admin's build of several models is ONE selection, on the trail", async () => {
+    const member = await seedMember("m@example.test", "member");
+    const admin = await adminWithModels("stg_deals", "fct_pipeline", "dim_owner");
     const worker = new InMemoryWorkerClient();
+    const names = ["stg_deals", "+fct_pipeline", "dim_owner+"];
 
     const got = await refusal(() =>
-      caller(member, "m@example.test", "vi", { worker }).models.build({
-        tenantId: TENANT,
-        name: "stg_deals",
-      }),
+      caller(member, "m@example.test", "vi", { worker }).models.build({ tenantId: TENANT, names }),
     );
     expect(got.code).toBe("FORBIDDEN");
 
     const built = await caller(admin, "a@example.test", "vi", { worker }).models.build({
       tenantId: TENANT,
-      name: "stg_deals",
+      names,
     });
-    expect(built.ok).toBe(true);
-    expect(worker.built).toEqual([{ tenantId: TENANT, model: "stg_deals", triggeredBy: admin }]);
-    const { rows } = await db.query<{ action: string; outcome: string }>(
-      "SELECT action, outcome FROM ops.audit_log WHERE tenant_id = $1 ORDER BY id",
-      [TENANT],
-    );
-    expect(rows).toEqual([
-      { action: "models.build", outcome: "refused" },
-      { action: "models.build", outcome: "ok" },
+    expect(built.waited && built.ok).toBe(true);
+    // Issue 442: three models were three calls, each taking the tenant's build lock in turn.
+    expect(worker.builds.asked).toEqual([
+      { tenantId: TENANT, select: names, wait: true, triggeredBy: admin },
     ]);
+    const trail = await buildTrail();
+    expect(trail.map((row) => row.outcome)).toEqual(["refused", "ok"]);
+    // The selection and the run, never SQL.
+    expect(trail[1]?.detail).toEqual({ names, runId: built.runId, waited: true, ok: true });
   });
 
-  it("a build already running is a CONFLICT the person can wait out, worded", async () => {
-    const admin = await seedMember("a@example.test", "admin");
-    const worker = new InMemoryWorkerClient().failing("in-progress");
-    const got = await refusal(() =>
+  it("`name` alone still builds its one model, as every caller before `names` sends it", async () => {
+    const admin = await adminWithModels("stg_deals");
+    const worker = new InMemoryWorkerClient();
+
+    await caller(admin, "a@example.test", "vi", { worker }).models.build({
+      tenantId: TENANT,
+      name: "stg_deals",
+    });
+
+    expect(worker.builds.asked.map((asked) => asked.select)).toEqual([["stg_deals"]]);
+  });
+
+  it("a name the customer has no model of is NOT_FOUND naming it, and nothing is built", async () => {
+    // dbt answers a selector that matches nothing with a green build of nothing: the one answer
+    // this must never pass on as a success.
+    const admin = await adminWithModels("stg_deals");
+    const worker = new InMemoryWorkerClient();
+
+    const got = await refusedWith(() =>
+      caller(admin, "a@example.test", "en", { worker }).models.build({
+        tenantId: TENANT,
+        names: ["stg_deals", "+stg_dels", "stg_dels+", "fct_gone"],
+      }),
+    );
+
+    expect(got.code).toBe("NOT_FOUND");
+    expect(got.message).toBe(
+      "This customer has no model named stg_dels, fct_gone. Check the names against the list of models; nothing was built.",
+    );
+    expect(got.facts).toEqual({ reason: "MODEL_NOT_FOUND", missing: "stg_dels,fct_gone" });
+    expect(worker.builds.asked).toEqual([]);
+  });
+
+  it("a selector beyond name, +name and name+ is refused before anything reads it", async () => {
+    const admin = await adminWithModels("stg_deals");
+    const worker = new InMemoryWorkerClient();
+
+    for (const selector of ["+stg_deals+", "tag:finance", "stg_deals --full-refresh", "@stg"]) {
+      const got = await refusal(() =>
+        caller(admin, "a@example.test", "vi", { worker }).models.build({
+          tenantId: TENANT,
+          names: [selector],
+        }),
+      );
+      expect(got.code).toBe("BAD_REQUEST");
+    }
+    expect(worker.builds.asked).toEqual([]);
+  });
+
+  it("both `name` and `names`, or neither, is refused in the caller's language", async () => {
+    const admin = await adminWithModels("stg_deals");
+    const worker = new InMemoryWorkerClient();
+    const { build } = caller(admin, "a@example.test", "en", { worker }).models;
+
+    const both = await refusal(() =>
+      build({ tenantId: TENANT, name: "stg_deals", names: ["stg_deals"] }),
+    );
+    const neither = await refusal(() => build({ tenantId: TENANT }));
+
+    expect([both, neither]).toEqual([
+      {
+        code: "BAD_REQUEST",
+        message: "Give exactly one of name, for one model, or names, for a list of models.",
+      },
+      {
+        code: "BAD_REQUEST",
+        message: "Give exactly one of name, for one model, or names, for a list of models.",
+      },
+    ]);
+    expect(worker.builds.asked).toEqual([]);
+  });
+
+  it("`wait: false` answers with the run at once, and the trail says it was not waited for", async () => {
+    const admin = await adminWithModels("stg_deals");
+    const worker = new InMemoryWorkerClient();
+
+    const started = await caller(admin, "a@example.test", "vi", { worker }).models.build({
+      tenantId: TENANT,
+      names: ["stg_deals+"],
+      wait: false,
+    });
+
+    expect(started).toEqual({ waited: false, runId: "run-mem-build-1" });
+    expect(worker.builds.asked.map((asked) => asked.wait)).toEqual([false]);
+    expect((await buildTrail())[0]?.detail).toEqual({
+      names: ["stg_deals+"],
+      runId: "run-mem-build-1",
+      waited: false,
+    });
+  });
+
+  it("a build already running is a CONFLICT naming the run that holds it, and since when", async () => {
+    const admin = await adminWithModels("stg_deals");
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `INSERT INTO ops.run (id, tenant_id, source, verb, trigger, started_at)
+         VALUES ('run-held', $1, '*', 'transform', 'build', '2026-10-13T02:05:00Z')`,
+        [TENANT],
+      ),
+    );
+    const worker = new InMemoryWorkerClient().runningAs("run-held");
+
+    const got = await refusedWith(() =>
       caller(admin, "a@example.test", "en", { worker }).models.build({
         tenantId: TENANT,
         name: "stg_deals",
       }),
     );
+
     expect(got.code).toBe("CONFLICT");
-    expect(got.message).toContain("already running");
+    // The run, and the minute in Singapore time, as every screen and email words an instant. The
+    // joint between date and time is ICU's ("at" on one build, a comma on another), so not pinned.
+    expect(got.message).toStartWith("A build is already running for this customer: run run-held,");
+    expect(got.message).toContain("13 Oct 2026");
+    expect(got.message).toContain("10:05");
+    expect(got.facts).toEqual({
+      reason: "BUILD_IN_PROGRESS",
+      runId: "run-held",
+      startedAt: "2026-10-13T02:05:00.000Z",
+    });
+  });
+
+  it("a holder the ledger does not have is not named: it is a build, running, and nothing more", async () => {
+    // The holder can close between the worker's refusal and this read. Naming a run that is not
+    // there would send an agent to wait on nothing.
+    const admin = await adminWithModels("stg_deals");
+    const worker = new InMemoryWorkerClient().runningAs("run-gone");
+
+    const got = await refusedWith(() =>
+      caller(admin, "a@example.test", "en", { worker }).models.build({
+        tenantId: TENANT,
+        name: "stg_deals",
+      }),
+    );
+
+    expect(got.code).toBe("CONFLICT");
+    expect(got.message).toBe(
+      "A build is already running for this customer. Wait for it to finish, then try again.",
+    );
+    expect(got.facts).toEqual({ reason: "BUILD_IN_PROGRESS", runId: null, startedAt: null });
+  });
+
+  it("the answer leads with the summary and lists the problems, unless every step is asked for", async () => {
+    // Issue 441: a build answered with every step, about 300 bytes each, to find the one that
+    // failed. The skipped test is counted as skipped, never as a pass, and is not a problem.
+    const admin = await adminWithModels("stg_deals");
+    function step(kind: "model" | "test", name: string, status: string) {
+      return {
+        uniqueId: `${kind}.undercroft.${name}`,
+        kind,
+        name,
+        status,
+        failures: status === "fail" ? 2 : null,
+        relation: null,
+        message: null,
+        executionMs: 10,
+      };
+    }
+    const steps = [
+      step("model", "stg_deals", "success"),
+      step("test", "not_null_stg_deals_deal_id", "pass"),
+      step("test", "unique_stg_deals_deal_id", "fail"),
+      step("test", "not_null_stg_deals_owner", "skipped"),
+    ];
+    const worker = new InMemoryWorkerClient();
+    worker.builds.answering({
+      ok: true,
+      testsFailed: 1,
+      error: null,
+      steps,
+      rowCounts: [{ name: "stg_deals", rows: 1204 }],
+      preview: null,
+    });
+    const { build } = caller(admin, "a@example.test", "vi", { worker }).models;
+
+    const lean = await build({ tenantId: TENANT, name: "stg_deals" });
+    const whole = await build({ tenantId: TENANT, name: "stg_deals", steps: "all" });
+    if (!(lean.waited && whole.waited)) {
+      throw new Error("a build is waited for unless asked not to be");
+    }
+
+    expect(lean.stepSummary).toEqual({
+      total: 4,
+      byStatus: { model: { success: 1 }, test: { pass: 1, fail: 1, skipped: 1 } },
+      problems: 1,
+    });
+    expect(lean.steps.map((s) => s.name)).toEqual(["unique_stg_deals_deal_id"]);
+    expect([lean.testsFailed, lean.rowCounts]).toEqual([1, [{ name: "stg_deals", rows: 1204 }]]);
+    expect(whole.steps).toHaveLength(4);
   });
 
   it("the reference names the platform's source and its macros for any member", async () => {

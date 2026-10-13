@@ -1,6 +1,6 @@
 /**
- * The worker's transform verbs as the control plane calls them: build one model and read
- * its first rows, and read the rows a failed test stored.
+ * The worker's transform verbs as the control plane calls them: build some models and read
+ * what they hold, and read the rows a failed test stored.
  *
  * `TableResult` is the one shape every tenant-scoped read answers with, here and later for
  * the query runner: columns with their Postgres type names, rows as arrays in column order,
@@ -11,7 +11,7 @@
 
 import { z } from "zod";
 
-import { ModelName } from "./models.ts";
+import { MAX_BUILD_SELECTORS, ModelName, ModelSelector } from "./models.ts";
 
 export const Cell = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 export type Cell = z.infer<typeof Cell>;
@@ -56,13 +56,50 @@ export const RunStepShape = z.object({
   executionMs: z.number().int().nullable(),
 });
 
+/**
+ * Build some of a tenant's models as one run: one `dbt build` over the union of `select`.
+ *
+ * `model` is the one-model request a control plane older than `select` sends. The two deploy
+ * separately, so for a while each may be answered by the other's previous build: the worker
+ * reads `model` as a selection of that one model, and a control plane sends it beside `select`
+ * whenever the selection is exactly one model, so an older worker builds the same thing. A
+ * selection of several is never narrowed to one for an older worker -- that would be a build of
+ * less than was asked, answered as if it were all of it -- and an older worker refuses it.
+ *
+ * With `wait` false the worker answers as soon as the run is open (202, {@link BuildStarted}),
+ * and the build goes on exactly as it would have: the same turn, the same deadline, the same
+ * lock. Who asked then waits on the run itself (`runs.get` with `waitSeconds`).
+ */
 export const BuildModelRequest = z.object({
   tenantId: z.string().min(1),
-  model: ModelName,
+  select: z.array(ModelSelector).min(1).max(MAX_BUILD_SELECTORS).optional(),
+  model: ModelName.optional(),
+  wait: z.boolean().default(true),
   /** An `app_user` uuid, never an address: `ops.run` is readable by the BI role. */
   triggeredBy: z.string().default(""),
 });
 export type BuildModelRequest = z.infer<typeof BuildModelRequest>;
+
+/** What a request asks to build: its `select`, else its one `model`, else nothing it can run. */
+export function buildSelection(request: BuildModelRequest): ModelSelector[] | null {
+  if (request.select !== undefined) {
+    return request.select;
+  }
+  return request.model === undefined ? null : [request.model];
+}
+
+/** A build not waited for: the run that is doing it. */
+export const BuildStarted = z.object({ runId: z.string() });
+export type BuildStarted = z.infer<typeof BuildStarted>;
+
+/**
+ * How many rows a named model's table holds after this build, as the tenant's BI login counts
+ * them. `null` when there is no count to give: the model did not build in this run (its table,
+ * if any, is an earlier build's, and counting it would date an old figure to now), or the count
+ * could not be read in time. Never `0` for either -- an empty table is the only zero.
+ */
+export const ModelRowCount = z.object({ name: ModelName, rows: z.number().int().nullable() });
+export type ModelRowCount = z.infer<typeof ModelRowCount>;
 
 export const BuildModelResponse = z.object({
   runId: z.string(),
@@ -70,7 +107,17 @@ export const BuildModelResponse = z.object({
   testsFailed: z.number().int(),
   error: z.string().nullable(),
   steps: z.array(RunStepShape),
-  /** The model's first rows after a successful build; null when the build failed. */
+  /**
+   * One per model the selection names, in the order named -- not the upstream or downstream a
+   * `+` adds, which a caller did not name and can read from `steps`. Empty from a worker older
+   * than the count, which a reader takes for "not counted", never for "no rows".
+   */
+  rowCounts: z.array(ModelRowCount).default([]),
+  /**
+   * The first rows of the one model a selection names, once this build has built it; null when
+   * it did not build, or when the selection names several -- a page of each is a page nobody
+   * asked for, and the counts say how much each holds.
+   */
   preview: TableResult.nullable(),
 });
 export type BuildModelResponse = z.infer<typeof BuildModelResponse>;

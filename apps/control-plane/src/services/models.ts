@@ -15,12 +15,7 @@
  * changed what", and the SQL is in the table beside it.
  */
 
-import {
-  type BuildModelResponse,
-  type DqFailuresRequest,
-  ModelTests,
-  type TableResult,
-} from "@undercroft/contracts";
+import { type DqFailuresRequest, ModelTests, type TableResult } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   deleteModelUnlessBuilding,
@@ -204,35 +199,6 @@ export async function save(
     });
   }
   return { ok: true, unchanged: result === "unchanged" };
-}
-
-/**
- * Build one model through the worker and wait: the editor is looking. The audit row names
- * the model and the run; the run itself is in the ledger, where the journal reads it.
- */
-export async function build(
-  exec: SqlExecutor,
-  worker: WorkerClient,
-  input: { tenantId: string; name: string; actor: Actor; actorId: string },
-): Promise<WorkerOutcome<BuildModelResponse>> {
-  const outcome = await worker.buildModel({
-    tenantId: input.tenantId,
-    model: input.name,
-    triggeredBy: input.actorId,
-  });
-  if (outcome.ok) {
-    await recordAudit(exec, {
-      tenantId: input.tenantId,
-      actor: input.actor,
-      action: "models.build",
-      detail: JSON.stringify({
-        name: input.name,
-        runId: outcome.value.runId,
-        ok: outcome.value.ok,
-      }),
-    });
-  }
-  return outcome;
 }
 
 /**

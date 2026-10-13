@@ -80,7 +80,8 @@ export const procedureSentences: SentenceTable = {
     "Store a dbt model; runs nothing. The SQL and tests already stored answer unchanged: true and change nothing. Admins.",
   "models.delete":
     "Delete a dbt model with the table it built and the rows its tests stored; deletes nothing if the table could not be dropped. Admins.",
-  "models.build": "Build one model with dbt and wait for the answer. Admins.",
+  "models.build":
+    "Build models in one dbt build: name for one model, or names for up to 20, each name, +name (with the models upstream) or name+ (with those downstream); every name must be one of the customer's models. By default it waits and answers waited true with ok, testsFailed, stepSummary (counts by kind and status), the steps asked for (steps: none, problems by default, or all; narrow with stepStatus, stepKind, stepName; read the next page with runs.get on runId with stepCursor), rowCounts (each named model's rows; null means not counted, never 0) and preview when one model is named. wait false answers at once with waited false and runId; wait on that run with runs.get and waitSeconds. While another build runs it is a CONFLICT naming that run's runId and startedAt. Admins.",
   "models.lineage":
     "Which models read which models and raw lake tables, from the models' and macros' own ref() and source() declarations. name for the part around one model or raw table (raw.records), direction up, down or both, and depth to bound the steps.",
   "models.reference":

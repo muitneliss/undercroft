@@ -34,6 +34,7 @@ import { divisionPath } from "@/lib/divisions.ts";
 import { lineagePath } from "@/lib/lineage.ts";
 import { draftFrom, isDirty, type ModelDraft, testsFor } from "@/lib/modelDraft.ts";
 import { ON_TABLE } from "@/lib/questionDraft.ts";
+import { EVERY_STEP } from "@/lib/runs.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -287,7 +288,8 @@ function EditorBand({
       {build.isError ? (
         <Errata heading={t("models.notBuilt")} live={true} error={build.error} />
       ) : null}
-      {build.isSuccess ? (
+      {/* The editor always waits, so its answer is always one that was waited for. */}
+      {build.isSuccess && build.data.waited ? (
         <BuildPanel tenantId={tenantId} result={build.data} locale={locale} />
       ) : null}
     </div>
@@ -395,7 +397,8 @@ function ModelVerbs({
           title={dirty ? t("models.buildHint") : undefined}
           type="button"
           onClick={(): void => {
-            build.mutate({ tenantId, name });
+            // Every step, on one page: the panel lists the whole build, as the Journal does.
+            build.mutate({ tenantId, name, ...EVERY_STEP });
           }}
         >
           {build.isPending ? t("models.building") : t("models.build")}

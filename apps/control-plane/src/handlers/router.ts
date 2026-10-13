@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { MAX_PREVIEW_ROWS } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
+import { ANSWER_SECONDS } from "./holdOpen.ts";
 import { StepQuery } from "./inputs.ts";
 import * as connections from "../services/connections.ts";
 import * as keys from "../services/keys.ts";
@@ -31,12 +32,6 @@ import { tenantsRouter } from "./tenantsRouter.ts";
 
 /** The most run ids one `runs.list` takes: "where are these runs now", not a bulk export. */
 const MAX_LISTED_RUNS = 50;
-
-/**
- * What a procedure that waits needs beyond its wait to answer: read what it waited for and send
- * it. Part of `holdsOpenSeconds`, so a wait that ran its whole course is never cut as it answers.
- */
-const ANSWER_SECONDS = 10;
 
 /**
  * The control-plane API. The React app imports `AppRouter` as a type only, so the client

@@ -1803,6 +1803,7 @@ export const vi = {
     openInJournal: "Xem trong Nhật ký",
     queryInReports: "Truy vấn trong Báo cáo",
     queryInReportsHint: "Mở một câu hỏi SQL mới trên bảng đã dựng gần nhất.",
+    rowCount_other: "Bảng đã dựng có {{count, number}} dòng.",
     previewHead: "Những dòng đầu",
     previewEmpty: "Bảng đã dựng nhưng chưa có dòng nào.",
     testsHead: "Kiểm thử",

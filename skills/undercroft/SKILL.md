@@ -113,6 +113,12 @@ door with this rule.
   step counted by kind and status -- and lists only the steps that did not pass. Ask for
   `steps: "all"`, or narrow with `stepStatus`, `stepKind` or `stepName`, only when you need
   more, and page with `stepCursor`. A `skipped` step is not a pass.
+- **Build related models in one call.** `models.build` takes `names` (up to 20; `name`, `+name`
+  with its upstream, `name+` with its downstream) and builds them as one run, so never loop over
+  models one call at a time. Its answer is reported like `runs.get`'s, plus `rowCounts` (`null`
+  is not counted, never zero). With `wait: false` it answers with the `runId` at once; wait on it
+  with `runs.get` and `waitSeconds`. A `CONFLICT` names the build already running in `runId` and
+  `startedAt`: wait on that run rather than retrying.
 
 ## Workflows
 

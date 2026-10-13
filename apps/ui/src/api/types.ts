@@ -145,8 +145,15 @@ export type ModelDetail = inferRouterOutputs<AppRouter>["models"]["get"];
 export type ModelLineage = inferRouterOutputs<AppRouter>["models"]["lineage"];
 export type LineageNode = ModelLineage["nodes"][number];
 
-/** What a build answered: the run, its steps, and the model's first rows. */
-export type BuildResult = inferRouterOutputs<AppRouter>["models"]["build"];
+/**
+ * What a build answered once it was waited for: the run, its steps, the named models' row
+ * counts and the model's first rows. A build not waited for answers only its run, and the
+ * editor never asks for one.
+ */
+export type BuildResult = Extract<
+  inferRouterOutputs<AppRouter>["models"]["build"],
+  { readonly waited: true }
+>;
 
 /** A query result as every tenant-scoped read answers it: columns, rows, and whether cut. */
 export type TableResult = BuildResult["preview"] & object;

@@ -9,8 +9,10 @@
  */
 
 import type { Cell, TableResult } from "@undercroft/contracts";
+import { describeError, type Logger } from "@undercroft/core";
 
-import { columnsOf, firstRows } from "../repos/relations.ts";
+import { inReadOnlyTransaction } from "../repos/queries.ts";
+import { columnsOf, countRows, firstRows } from "../repos/relations.ts";
 import type { SessionTarget, TenantSessions } from "./tenantSession.ts";
 
 export function cellOf(value: unknown): Cell {
@@ -48,4 +50,49 @@ export function readRelation(
       truncated: rows.length > target.limit,
     };
   });
+}
+
+/**
+ * How many rows each relation holds, as the tenant's `kind` login counts them -- or `null` for
+ * one it could not count: a login refused, a relation that is not there, a count still running
+ * when the budget ran out. Never `0` for any of those, because a zero is a real answer.
+ *
+ * One session for all of them, and one budget: every count runs in a read-only transaction of
+ * its own whose statement timeout is what is left of `budgetMs`, so a slow table cuts its own
+ * count and the next one still runs, and the whole never takes longer than the budget. A build
+ * names at most twenty models; twenty full-length timeouts would outlast the request waiting.
+ */
+export async function countRelations(
+  sessions: TenantSessions,
+  target: SessionTarget & { schema: string; relations: readonly string[]; budgetMs: number },
+  log?: Logger,
+): Promise<Map<string, number | null>> {
+  const counts = new Map<string, number | null>(target.relations.map((name) => [name, null]));
+  if (target.relations.length === 0) {
+    return counts;
+  }
+  const deadline = Date.now() + target.budgetMs;
+  try {
+    await sessions.as(target, async (exec) => {
+      for (const relation of target.relations) {
+        const left = deadline - Date.now();
+        if (left <= 0) {
+          log?.warn("row_count_unread", { relation, reason: "budget" });
+          continue;
+        }
+        try {
+          const rows = await inReadOnlyTransaction(exec, { timeoutMs: left }, () =>
+            countRows(exec, { schema: target.schema, relation }),
+          );
+          counts.set(relation, rows);
+        } catch (error) {
+          log?.warn("row_count_unread", { relation, ...describeError(error) });
+        }
+      }
+    });
+  } catch (error) {
+    // No session at all -- the login was busy, or refused. Every count stays unread.
+    log?.warn("row_count_unread", { relations: target.relations.length, ...describeError(error) });
+  }
+  return counts;
 }

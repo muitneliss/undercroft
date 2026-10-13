@@ -27,7 +27,7 @@ import { trpc } from "@/trpc.ts";
 /** Which catalogue key names each test kind's column in the tests table. */
 const TEST_HEAD = { not_null: "models.colNotNull", unique: "models.colUnique" } as const;
 
-/** What the build did: its outcome, its steps, and the first rows of the table it made. */
+/** What the build did: its outcome, its steps, its rows counted, and the first of them. */
 export function BuildPanel({
   tenantId,
   result,
@@ -54,6 +54,14 @@ export function BuildPanel({
         <p className="note">{t("models.testsFailed", { count: result.testsFailed })}</p>
       ) : null}
       {result.steps.length > 0 ? <StepsTable steps={result.steps} locale={locale} /> : null}
+      {/* A count the server could not read is null and prints nothing, never a 0. */}
+      {result.rowCounts.map((counted) =>
+        counted.rows === null ? null : (
+          <p className="note" key={counted.name}>
+            {t("models.rowCount", { count: counted.rows })}
+          </p>
+        ),
+      )}
       {result.preview === null ? null : (
         <>
           <span className="label">{t("models.previewHead")}</span>

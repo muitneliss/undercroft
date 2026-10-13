@@ -129,6 +129,7 @@
 - [ADR 0123 A Search Ranks Each Kind's Newest Matches, Found Through the Index by the Owner](sources/adr-0123-a-search-ranks-each-kind-s-newest-matches-found-through-the-index-by-the-owner.md)
 - [ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does](sources/adr-0124-a-procedure-that-waits-holds-its-request-open-to-its-own-cap-and-nothing-else-does.md)
 - [ADR 0125 A Read Names Its Target: Lineage, Schema and Scope Reads Narrow, and Never Guess](sources/adr-0125-a-read-names-its-target-lineage-schema-and-scope-reads-narrow-and-never-guess.md)
+- [ADR 0126 A Build Is Several Models in One Run, and Need Not Be Waited For](sources/adr-0126-a-build-is-several-models-in-one-run-and-need-not-be-waited-for.md)
 - [ADR 0127 Lists Answer Summaries, the Server Hashes What It Stores, and an Identical Save Writes Nothing](sources/adr-0127-lists-answer-summaries-the-server-hashes-what-it-stores-and-an-identical-save-writes-nothing.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)

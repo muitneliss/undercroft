@@ -20,11 +20,11 @@ const TENANT = "CASE-0042";
 const WAIT_SECONDS = 6;
 
 /**
- * The procedures that hold their request open. A procedure added here is a decision ADR 0124
+ * The procedures that hold their request open. A procedure added here is a decision an ADR (0124, 0126)
  * records; one that declares it without a record shows up here first.
  */
 describe("which procedures hold their request open", () => {
-  it("is runs.get alone, for its wait and the answer after it", () => {
+  it("is runs.get, for its wait, and models.build, for the worker's deadline, each with its answer", () => {
     const held = Object.entries(appRouter._def.procedures).flatMap(([path, procedure]) => {
       const seconds: unknown = Reflect.get(
         Reflect.get(procedure, "_def") ?? {},
@@ -33,7 +33,12 @@ describe("which procedures hold their request open", () => {
       return seconds === undefined ? [] : [[path, seconds]];
     });
 
-    expect(held).toEqual([["runs.get", 60]]);
+    // models.build: the control plane's 150 s wait on the worker, plus ten to answer -- under
+    // Bun's 255, and under the CLI's 180 s request timeout, so neither cuts a build it waits on.
+    expect(held).toEqual([
+      ["models.build", 160],
+      ["runs.get", 60],
+    ]);
   });
 });
 
