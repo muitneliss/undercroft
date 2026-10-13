@@ -16,7 +16,6 @@
 import {
   type BrowseListing,
   BrowseScopeResponse,
-  type BuildModelResponse,
   type CredentialInput,
   type DqFailuresRequest,
   DropModelResponse,
@@ -41,6 +40,7 @@ import {
   REFUSAL_BY_STATUS,
   type WorkerFailure,
 } from "./workerRefusals.ts";
+import { type BuildInput, type BuildOutcome, buildOn } from "./workerBuild.ts";
 import { exportOn } from "./workerExport.ts";
 import {
   type Envelope,
@@ -50,6 +50,7 @@ import {
   type WorkerTransport,
 } from "./workerTransport.ts";
 
+export type { BuildAnswer, BuildInput, BuildOutcome } from "./workerBuild.ts";
 export type { InitialiseOutcome } from "./workerRefusals.ts";
 
 /**
@@ -118,12 +119,8 @@ export interface WorkerClient {
     tenantId: string;
     triggeredBy: string;
   }) => Promise<InitialiseOutcome>;
-  /** Build one model and wait for it: the editor is looking. */
-  buildModel: (input: {
-    tenantId: string;
-    model: string;
-    triggeredBy: string;
-  }) => Promise<WorkerOutcome<BuildModelResponse>>;
+  /** Build some models as one run, and wait for it unless asked not to. */
+  buildModels: (input: BuildInput) => Promise<BuildOutcome>;
   /** Drop what a model built, before its row goes; drops nothing when it refuses. */
   dropModel: (input: { tenantId: string; model: string }) => Promise<DropOutcome>;
   /** The rows a failed test stored, as the worker reads them for an admin. */
@@ -170,8 +167,6 @@ export interface HttpWorkerConfig {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-/** A synchronous build: the worker's two-minute deadline, and a little for the rows. */
-const BUILD_DEADLINE_MS = 150_000;
 
 /** How one call is posted; `refusals` is which refusal each status names on that endpoint. */
 interface PostOptions<T> {
@@ -322,9 +317,8 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     revokeConnection: (input) => post("/v1/connections/revoke", input),
     triggerIngest: trigger,
     initialiseDocumentKinds: initialiseOn(t),
-    // The worker's own build deadline plus room for the rows; the default would cut a
-    // build that is legitimately slow and report it as unreachable.
-    buildModel: (input) => post("/v1/models/build", input, { deadlineMs: BUILD_DEADLINE_MS }),
+    // Its own module: the worker's build deadline, and a refusal whose body is read.
+    buildModels: buildOn(t),
     dropModel: drop,
     dqFailures: (input) => post("/v1/dq/failures", input),
     runQuery: (input) => query("/v1/queries/run", input),

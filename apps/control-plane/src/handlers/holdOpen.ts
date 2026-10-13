@@ -18,6 +18,12 @@
 import { liftIdleTimeout } from "@undercroft/core";
 import type { Context } from "./trpc.ts";
 
+/**
+ * What a procedure that waits needs beyond its wait to answer: read what it waited for and send
+ * it. Part of `holdsOpenSeconds`, so a wait that ran its whole course is never cut as it answers.
+ */
+export const ANSWER_SECONDS = 10;
+
 /** What a procedure declares about itself to the router's middleware (`trpc.ts`). */
 export interface ProcedureMeta {
   /**

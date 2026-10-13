@@ -49,10 +49,13 @@ import type {
 import { failure, type Outcome, type Refusal, success } from "../services/output.ts";
 
 /**
- * How long one request may take. Long enough for a model build, which the server waits on;
- * a stalled connection past it is reported as a TIMEOUT an agent may retry, not a hang.
+ * How long one request may take. Longer than the longest a procedure holds its request open
+ * (`holdsOpenSeconds`, ADR 0124): `models.build`'s 160 seconds, the server's wait on the worker's
+ * build plus the time to answer. At 120 the CLI gave up on a build the server was still waiting
+ * for (issue 442). A stalled connection past it is reported as a TIMEOUT an agent may retry,
+ * not a hang.
  */
-export const REQUEST_TIMEOUT_MS = 120_000;
+export const REQUEST_TIMEOUT_MS = 180_000;
 
 export interface Connection {
   readonly url: string;

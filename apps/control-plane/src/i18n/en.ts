@@ -110,6 +110,11 @@ export const en = {
       "A model named {{name}} already exists. Open it to edit, or choose another name.",
     buildInProgress:
       "A build is already running for this customer. Wait for it to finish, then try again.",
+    buildInProgressAs:
+      "A build is already running for this customer: run {{runId}}, started {{startedAt}}. Wait for it to finish, then try again.",
+    buildNamesOne: "Give exactly one of name, for one model, or names, for a list of models.",
+    modelsNotFound:
+      "This customer has no model named {{names}}. Check the names against the list of models; nothing was built.",
     buildNotStarted:
       "The model could not be built. The processing service did not answer; try again in a few minutes.",
     modelNotDeleted:

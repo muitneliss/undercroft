@@ -87,7 +87,8 @@ export const procedureSentences: SentenceTable = {
   "models.save": "Lưu một mô hình dbt; không chạy gì. Quản trị.",
   "models.delete":
     "Xoá một mô hình dbt cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu; không xoá gì nếu chưa gỡ được bảng. Quản trị.",
-  "models.build": "Chạy dbt cho một mô hình và chờ kết quả. Quản trị.",
+  "models.build":
+    "Dựng mô hình bằng một lần dbt build: name cho một mô hình, hoặc names cho tối đa 20, mỗi mục là name, +name (kèm các mô hình phía trên) hoặc name+ (kèm các mô hình phía dưới); mọi tên phải là mô hình của khách hàng. Mặc định chờ kết quả và trả về waited true với ok, testsFailed, stepSummary (đếm theo loại và trạng thái), các bước được hỏi (steps: none, problems là mặc định, hoặc all; lọc bằng stepStatus, stepKind, stepName; trang tiếp đọc bằng runs.get với runId và stepCursor), rowCounts (số dòng của từng mô hình được nêu; null là không đếm được, không phải 0) và preview khi chỉ nêu một mô hình. wait false trả về ngay waited false với runId; chờ lần chạy đó bằng runs.get với waitSeconds. Khi đang có lần dựng khác, CONFLICT nêu runId và startedAt của lần đó. Quản trị.",
   "models.lineage":
     "Mô hình nào đọc mô hình nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro.",
   "models.reference":

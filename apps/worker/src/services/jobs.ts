@@ -19,12 +19,17 @@
  * failure is in the ledger and the log, which is where a reader of "what happened" looks.
  */
 
-import { type BuildModelResponse, MAX_PREVIEW_ROWS, type TableResult } from "@undercroft/contracts";
+import {
+  type BuildModelResponse,
+  MAX_PREVIEW_ROWS,
+  selectedModel,
+  type TableResult,
+} from "@undercroft/contracts";
 import { getRun, type RunTrigger, stepsFor, tenantRolesFor } from "@undercroft/db/repos";
 
 import { RunInProgress, startIngest } from "./ingest.ts";
 import type { RunDeps } from "./runTypes.ts";
-import { readRelation } from "./preview.ts";
+import { countRelations, readRelation } from "./preview.ts";
 import type { Spawn, TransformDeps } from "./transform.ts";
 import { startTransform, type TransformOpening } from "./transformRun.ts";
 import type { SemanticAsk } from "./semantic/definition.ts";
@@ -131,42 +136,97 @@ export async function startTransformJob(
 export const BUILD_TIMEOUT_MS = 120_000;
 
 /**
- * Build one model and look at it, synchronously: the editor is waiting.
- *
- * A run in the ledger like any other transform, with `trigger: build` and `--select` for
- * the one model, so it sits in the journal beside the scheduled builds. What comes back is
- * read from the ledger the run just wrote -- its steps, its error, its failing-test count --
- * plus the model's first rows as the tenant's BI login, which is what proves the relation is
- * there for a dashboard and not only for its author.
+ * How long every row count of one build may take together. Inside the control plane's wait
+ * (150 s) beside the build's own two minutes, with room for the steps and the preview.
  */
-export async function buildModel(
+const ROW_COUNT_BUDGET_MS = 10_000;
+
+/** What a build is asked: some models, as dbt selectors, for someone. */
+export interface BuildInput {
+  readonly tenantId: string;
+  /** `ModelSelector`s -- `name`, `+name`, `name+` -- built as one union. */
+  readonly select: readonly string[];
+  readonly triggeredBy: string;
+}
+
+/**
+ * Open the build's run and start it: a transform with `trigger: build` and `--select` for the
+ * selection, so it sits in the journal beside the scheduled builds, takes an editor's turn and
+ * the editor's deadline, and is refused, before any row exists, while the tenant's build lock is
+ * held. One function for the build that is waited on and the one that is not, so the two can
+ * never differ in anything but who waits.
+ */
+function startBuild(
   deps: JobDeps,
-  input: { tenantId: string; model: string; triggeredBy: string },
-): Promise<BuildModelResponse> {
+  input: BuildInput,
+): Promise<{ runId: string; done: Promise<boolean> }> {
+  return startTransform(deps, {
+    tenantId: input.tenantId,
+    trigger: "build",
+    triggeredBy: input.triggeredBy,
+    select: input.select,
+    timeoutMs: BUILD_TIMEOUT_MS,
+  });
+}
+
+/**
+ * Start a build and answer with its run, leaving it to finish in-process (issue 442): for a
+ * caller that would rather wait on the run than hold a request open for the whole build.
+ */
+export async function startBuildJob(deps: JobDeps, input: BuildInput): Promise<{ runId: string }> {
+  const started = await startBuild(deps, input);
+  track(started.done);
+  return { runId: started.runId };
+}
+
+/**
+ * Build some models and look at them, synchronously: the editor is waiting.
+ *
+ * What comes back is read from the ledger the run just wrote -- its steps, its error, its
+ * failing-test count -- plus, as the tenant's BI login, how many rows each NAMED model now
+ * holds and the first rows of the one named model, which is what proves the relation is there
+ * for a dashboard and not only for its author. A model that did not build in this run is
+ * neither counted nor previewed: its table, if one is left, is an earlier build's.
+ */
+export async function buildModels(deps: JobDeps, input: BuildInput): Promise<BuildModelResponse> {
   const { dbt } = deps;
   if (dbt === undefined) {
     throw new Error("transform is not configured");
   }
-  const started = await startTransform(deps, {
-    tenantId: input.tenantId,
-    trigger: "build",
-    triggeredBy: input.triggeredBy,
-    select: input.model,
-    timeoutMs: BUILD_TIMEOUT_MS,
-  });
+  const started = await startBuild(deps, input);
   const ok = await started.done;
-  const [run, steps] = await Promise.all([
+  const [run, steps, roles] = await Promise.all([
     getRun(deps.exec, input.tenantId, started.runId),
     stepsFor(deps.exec, started.runId),
+    tenantRolesFor(deps.exec, input.tenantId),
   ]);
-  const roles = await tenantRolesFor(deps.exec, input.tenantId);
+  const named = [...new Set(input.select.map(selectedModel))];
+  const built = new Set(
+    steps.filter((s) => s.kind === "model" && s.status === "success").map((s) => s.name),
+  );
+  const countable = named.filter((name) => built.has(name));
+  const counts =
+    roles === null
+      ? new Map<string, number | null>()
+      : await countRelations(
+          dbt.sessions,
+          {
+            tenantId: input.tenantId,
+            kind: "bi",
+            schema: roles.analyticsSchema,
+            relations: countable,
+            budgetMs: ROW_COUNT_BUDGET_MS,
+          },
+          deps.log,
+        );
+  const [only] = named;
   const preview =
-    ok && roles !== null
+    named.length === 1 && only !== undefined && built.has(only) && roles !== null
       ? await readRelation(dbt.sessions, {
           tenantId: input.tenantId,
           kind: "bi",
           schema: roles.analyticsSchema,
-          relation: input.model,
+          relation: only,
           limit: MAX_PREVIEW_ROWS,
         })
       : null;
@@ -176,6 +236,7 @@ export async function buildModel(
     testsFailed: run?.testsFailed ?? 0,
     error: run?.error ?? null,
     steps,
+    rowCounts: named.map((name) => ({ name, rows: counts.get(name) ?? null })),
     preview,
   };
 }

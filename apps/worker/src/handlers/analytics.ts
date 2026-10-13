@@ -8,6 +8,7 @@
 
 import {
   BuildModelRequest,
+  buildSelection,
   DqFailuresRequest,
   DropModelRequest,
   type DropModelResponse,
@@ -15,7 +16,7 @@ import {
   RunQueryRequest,
 } from "@undercroft/contracts";
 import type { Hono } from "hono";
-import { buildModel, dqFailures } from "../services/jobs.ts";
+import { buildModels, dqFailures, startBuildJob } from "../services/jobs.ts";
 import { findRun } from "../services/ledger.ts";
 import { dropModelRelations } from "../services/modelDrop.ts";
 import { readRawSchema, readSchema, runQuery, runRawQuery } from "../services/queryRunner.ts";
@@ -29,10 +30,12 @@ import { registerSemanticRoutes } from "./semantic.ts";
 
 export function registerAnalyticsRoutes(app: Hono, deps: LakeApiDeps): void {
   /**
-   * Build one model and answer with what it did and its first rows. Synchronous, unlike
-   * the two verbs above: the person who pressed Build is looking at the editor, and a run
-   * id they would have to poll is a worse answer than the rows. Bounded by the build's own
-   * deadline. A build already in progress for the tenant is 409 through the boundary.
+   * Build some models and answer with what they did, their row counts and the one model's first
+   * rows. Synchronous by default, unlike the two verbs above: the person who pressed Build is
+   * looking at the editor, and a run id they would have to poll is a worse answer than the rows.
+   * Bounded by the build's own deadline. With `wait: false` it answers 202 with the run as soon
+   * as the run is open, for an agent that waits on the run instead (issue 442). A build already
+   * in progress for the tenant is 409 `run_in_progress` naming it, through the boundary.
    */
 
   /** The rows a failed test stored, for the admin who is looking at the step. */
@@ -76,14 +79,19 @@ function registerModelsBuildRoute(app: Hono, deps: LakeApiDeps): void {
       return c.json(UNAUTHENTICATED, 401);
     }
     const parsed = BuildModelRequest.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) {
+    const select = parsed.success ? buildSelection(parsed.data) : null;
+    if (!parsed.success || select === null) {
       return c.json(
-        { code: "invalid_request", message: "tenantId and model are required", details: [] },
+        { code: "invalid_request", message: "tenantId and select are required", details: [] },
         400,
       );
     }
-    const built = await buildModel(jobDepsFor(deps, "*", deps.specsDir ?? ""), parsed.data);
-    return c.json(built, 200);
+    const jobDeps = jobDepsFor(deps, "*", deps.specsDir ?? "");
+    const input = { tenantId: parsed.data.tenantId, select, triggeredBy: parsed.data.triggeredBy };
+    if (!parsed.data.wait) {
+      return c.json(await startBuildJob(jobDeps, input), 202);
+    }
+    return c.json(await buildModels(jobDeps, input), 200);
   });
 }
 

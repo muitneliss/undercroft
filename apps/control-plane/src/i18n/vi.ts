@@ -184,6 +184,14 @@ export const vi = {
     modelNameTaken: "Đã có một mô hình tên {{name}}. Hãy mở mô hình đó để sửa, hoặc chọn tên khác.",
     buildInProgress:
       "Đang có một lần dựng mô hình cho khách hàng này. Hãy đợi lần đó xong rồi thử lại.",
+    /** The same refusal, naming the run that holds the lock, so it can be waited on (#442). */
+    buildInProgressAs:
+      "Đang có một lần dựng mô hình cho khách hàng này: lần chạy {{runId}}, bắt đầu lúc {{startedAt}}. Hãy đợi lần đó xong rồi thử lại.",
+    buildNamesOne:
+      "Hãy nêu đúng một trong hai: name cho một mô hình, hoặc names cho một danh sách mô hình.",
+    /** `names` is the tenant's own model names, joined; the facts carry them as data. */
+    modelsNotFound:
+      "Khách hàng này không có mô hình nào tên {{names}}. Hãy kiểm tra lại tên bằng danh sách mô hình; chưa có gì được dựng.",
     buildNotStarted:
       "Không dựng được mô hình. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     /**

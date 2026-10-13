@@ -6,13 +6,52 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { MAX_MODEL_SQL_BYTES, ModelName, ModelTests } from "@undercroft/contracts";
+import {
+  MAX_BUILD_SELECTORS,
+  MAX_MODEL_SQL_BYTES,
+  ModelName,
+  ModelSelector,
+  ModelTests,
+} from "@undercroft/contracts";
+import type { Locale } from "@undercroft/core/locale";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
+import { formatWhen } from "../services/alertWording.ts";
+import { type BuildHolder, buildModels } from "../services/modelBuild.ts";
 import * as models from "../services/models.ts";
+import { BUILD_DEADLINE_MS } from "../services/workerBuild.ts";
 import { notRun } from "./answers.ts";
 import { wordCheck } from "./checkWords.ts";
-import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
+import { ANSWER_SECONDS } from "./holdOpen.ts";
+import { StepQuery } from "./inputs.ts";
+import { actorOf, refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
+
+const MS_PER_SECOND = 1000;
+
+/**
+ * A build refused because one is already running: CONFLICT, with the holder's run and start as
+ * facts an agent waits on (`runs.get` with `waitSeconds`) and in the sentence a person reads.
+ * A holder the ledger no longer has -- it finished between the refusal and the read -- is not
+ * named, and the sentence says only that a build was running.
+ */
+function buildHeld(locale: Locale, holder: BuildHolder | null): TRPCError {
+  const t = messages(locale);
+  if (holder === null) {
+    return refusal("CONFLICT", t("error.buildInProgress"), {
+      reason: "BUILD_IN_PROGRESS",
+      runId: null,
+      startedAt: null,
+    });
+  }
+  return refusal(
+    "CONFLICT",
+    t("error.buildInProgressAs", {
+      runId: holder.runId,
+      startedAt: formatWhen(holder.startedAt, locale),
+    }),
+    { reason: "BUILD_IN_PROGRESS", runId: holder.runId, startedAt: holder.startedAt },
+  );
+}
 
 export const modelsRouter = router({
   /** The tenant's models with their last build. Any member may read what is built for them. */
@@ -105,35 +144,61 @@ export const modelsRouter = router({
     }),
 
   /**
-   * Build one model and wait for the answer. Admin-only like save: a build creates the
-   * table a dashboard reads. A build already running for the tenant is a CONFLICT the
-   * person can act on; a worker that did not answer is a precondition they cannot.
+   * Build models as one run: `name` for one, or `names` for up to twenty, each `name`, `+name`
+   * (with its upstream) or `name+` (with its downstream), as one `dbt build` (issue 442).
+   * Admin-only like save: a build creates the table a dashboard reads.
+   *
+   * It waits by default and answers with what the build did, its steps reported as `runs.get`
+   * reports them (the problems unless asked, issue 441). With `wait: false` it answers at once
+   * with the run, for a caller that waits on `runs.get` instead of on this request. Waiting, it
+   * holds its request open for the worker's whole deadline plus the time to answer (ADR 0124).
+   *
+   * A name the tenant has no model of is NOT_FOUND naming it, before anything runs. A build
+   * already running is a CONFLICT naming that run and its start, so it can be waited on; a
+   * worker that did not answer is a precondition nobody at the screen can fix.
    */
   build: requireRole("admin")
-    .input(z.object({ name: ModelName }))
+    .meta({ holdsOpenSeconds: BUILD_DEADLINE_MS / MS_PER_SECOND + ANSWER_SECONDS })
+    .input(
+      StepQuery.omit({ stepCursor: true }).extend({
+        name: ModelName.optional(),
+        names: z.array(ModelSelector).min(1).max(MAX_BUILD_SELECTORS).optional(),
+        wait: z.boolean().default(true),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      if (ctx.worker === null) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: messages(ctx.locale)("error.buildNotStarted"),
-        });
+      const t = messages(ctx.locale);
+      const { tenantId, name, names, wait, ...steps } = input;
+      const select = names ?? (name === undefined ? null : [name]);
+      if (select === null || (name !== undefined && names !== undefined)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: t("error.buildNamesOne") });
       }
-      const outcome = await models.build(ctx.exec, ctx.worker, {
-        tenantId: ctx.tenantId,
-        name: input.name,
+      if (ctx.worker === null) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: t("error.buildNotStarted") });
+      }
+      const outcome = await buildModels(ctx.exec, ctx.worker, {
+        tenantId,
+        select,
+        wait,
+        steps,
         actor: actorOf(ctx),
         actorId: ctx.user.userId,
       });
-      if (!outcome.ok) {
-        if (outcome.reason === "in-progress") {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: messages(ctx.locale)("error.buildInProgress"),
-          });
-        }
-        throw notRun(ctx.locale, outcome.reason, "error.buildNotStarted");
+      if (outcome.ok) {
+        return outcome.value;
       }
-      return outcome.value;
+      switch (outcome.reason) {
+        case "not-found":
+          throw refusal(
+            "NOT_FOUND",
+            t("error.modelsNotFound", { names: outcome.missing.join(", ") }),
+            { reason: "MODEL_NOT_FOUND", missing: outcome.missing.join(",") },
+          );
+        case "in-progress":
+          throw buildHeld(ctx.locale, outcome.holder);
+        default:
+          throw notRun(ctx.locale, outcome.reason, "error.buildNotStarted");
+      }
     }),
 
   /**

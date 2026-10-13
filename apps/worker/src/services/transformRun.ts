@@ -28,7 +28,8 @@ export interface TransformOpening {
   readonly trigger: RunTrigger;
   readonly triggeredBy?: string;
   readonly parentRunId?: string | null;
-  readonly select?: string;
+  /** dbt selectors (`ModelSelector`), built as one union; absent builds every model. */
+  readonly select?: readonly string[];
   /** A build the editor is waiting on gets a shorter deadline than a scheduled one. */
   readonly timeoutMs?: number;
 }
