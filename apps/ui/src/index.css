@@ -3891,9 +3891,14 @@
     cursor: grabbing;
   }
 
-  /* A column's heading: how far it stands from the raw lake, ruled like a table head. */
+  /* A column's heading: how far it stands from the raw lake, ruled like a table head. It is
+   held to its column's width, `CARD_W`: unclipped, a heading longer than a card -- the first
+   column's, which names the raw lake, reference tables and missing dependencies -- ran on over
+   the next column's. The whole heading is its title, and the text list prints it in full. */
   .lineage-head {
     display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
     padding-bottom: var(--s-2);
     border-bottom: var(--hair) solid var(--rule-strong);
     font-family: var(--face-display);
