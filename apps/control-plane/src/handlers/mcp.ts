@@ -41,6 +41,7 @@ import type { Hono } from "hono";
 import { messages } from "../i18n/index.ts";
 import { READ_SCOPE } from "../services/connectedApps.ts";
 import type { BearerRefusal, RefusalReason } from "./context.ts";
+import { holdFor } from "./holdOpen.ts";
 import { answered, refused, refusedBy, toolContent } from "./mcpAnswers.ts";
 import {
   NO_SKILLS,
@@ -142,9 +143,9 @@ function failed(deps: McpDeps, ctx: Context, tool: string, error: unknown): Call
 async function callTool(
   deps: McpDeps,
   ctx: Context,
-  tool: string,
-  args: Record<string, unknown> | undefined,
+  call: { tool: string; args: Record<string, unknown> | undefined; signal: AbortSignal },
 ): Promise<CallToolResult> {
+  const { tool, args } = call;
   const widgets = deps.widgets ?? NO_WIDGETS;
   const t = messages(ctx.locale);
   const spec = await toolNamed(tool);
@@ -165,7 +166,12 @@ async function callTool(
     }
     return refused("WRITES_DISABLED", t("error.writesDisabled"));
   }
-  const procedure = resolveProcedure(appRouter.createCaller(ctx), spec.path);
+  // The exchange's own signal, so a procedure that waits (`runs.get`) stops when the client
+  // hangs up, as it does at `/trpc`, where the adapter hands it the request's.
+  const procedure = resolveProcedure(
+    appRouter.createCaller(ctx, { signal: call.signal }),
+    spec.path,
+  );
   if (procedure === null) {
     throw new Error(`${spec.path}: in the manifest but not on the caller`);
   }
@@ -203,8 +209,12 @@ function serverFor(deps: McpDeps, ctx: Context): Server {
     },
   );
   server.setRequestHandler("tools/list", async () => ({ tools: await listTools(ctx, widgets) }));
-  server.setRequestHandler("tools/call", (request) =>
-    callTool(deps, ctx, request.params.name, request.params.arguments),
+  server.setRequestHandler("tools/call", (request, exchange) =>
+    callTool(deps, ctx, {
+      tool: request.params.name,
+      args: request.params.arguments,
+      signal: exchange.mcpReq.signal,
+    }),
   );
   registerSkills(server, skills, ctx.locale);
   if (readable) {
@@ -269,10 +279,12 @@ function refuse(deps: McpDeps, request: Request, refusal: BearerRefusal): Respon
  */
 export function registerMcpRoute(app: Hono, deps: McpDeps): void {
   app.all("/mcp", async (c) => {
-    const ctx = await deps.admit(c.req.raw.headers);
-    if ("reason" in ctx) {
-      return refuse(deps, c.req.raw, ctx);
+    const admitted = await deps.admit(c.req.raw.headers);
+    if ("reason" in admitted) {
+      return refuse(deps, c.req.raw, admitted);
     }
+    // Held, so a tool that waits on purpose is not cut at ten seconds (ADR 0124).
+    const ctx: Context = { ...admitted, holdOpen: holdFor(c.env, c.req.raw) };
     const handler = createMcpHandler(() => serverFor(deps, ctx), {
       legacy: "stateless",
       onerror: (error) => {

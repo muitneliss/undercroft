@@ -25,6 +25,8 @@ import {
   recordRefusalReasons,
   recordRefusals,
   refusalsFor,
+  RUN_KINDS,
+  type RunFilter,
 } from "./runs.ts";
 
 let db: TestDatabase;
@@ -334,6 +336,98 @@ describe("the ledger pages newest first", () => {
     const second = await listRuns(db, "CASE-0042", { limit: 2, cursor: first.nextCursor });
     expect(second.items.map((r) => r.id)).toEqual(["r1"]);
     expect(second.nextCursor).toBeNull();
+  });
+});
+
+/**
+ * The ledger narrowed (issue 439): each filter narrows, they combine, and a cursor walks a
+ * filtered ledger exactly as it walks the whole one. One run of every kind, at hourly starts.
+ */
+describe("the ledger narrows by what an agent is looking for", () => {
+  beforeEach(async () => {
+    const runs = [
+      { id: "k1", source: "hubspot", verb: "ingest", trigger: "schedule", status: "ok" },
+      { id: "k2", source: "*", verb: "transform", trigger: "schedule", status: "ok", parent: "k1" },
+      { id: "k3", source: "orders", verb: "ingest", trigger: "lake-api", status: "failed" },
+      { id: "k4", source: "gmail", verb: "extract", trigger: "schedule", status: null },
+      { id: "k5", source: "*", verb: "build", trigger: "build", status: "failed" },
+      { id: "k6", source: "gmail", verb: "semantic", trigger: "manual", status: "ok" },
+      { id: "k7", source: "gmail", verb: "semantic-init", trigger: "manual", status: "ok" },
+    ] as const;
+    for (const [at, run] of runs.entries()) {
+      await openRun(db, {
+        id: run.id,
+        tenantId: "CASE-0042",
+        source: run.source,
+        // `build` is a transform the editor started: the verb is `transform`.
+        verb: run.verb === "build" ? "transform" : run.verb,
+        trigger: run.trigger,
+        parentRunId: "parent" in run ? run.parent : null,
+      });
+      if (run.status !== null) {
+        await closeRun(db, run.id, { status: run.status });
+      }
+      await db.asSuperuser((tx) =>
+        tx.query("UPDATE ops.run SET started_at = $2 WHERE id = $1", [
+          run.id,
+          `2026-09-19T0${at + 1}:00:00Z`,
+        ]),
+      );
+    }
+    // Another customer's run, which no filter may reach.
+    await openRun(db, { id: "x1", ...PAIR, tenantId: "CASE-0043" });
+  });
+
+  async function listed(filter: RunFilter): Promise<string[]> {
+    return (await listRuns(db, "CASE-0042", { limit: 50, ...filter })).items.map((r) => r.id);
+  }
+
+  it.each<[string, RunFilter, string[]]>([
+    ["nothing", {}, ["k7", "k6", "k5", "k4", "k3", "k2", "k1"]],
+    ["one kind", { kinds: ["ingest"] }, ["k1"]],
+    ["several kinds", { kinds: ["build", "transform"] }, ["k5", "k2"]],
+    ["the lake API's kind", { kinds: ["lake-api"] }, ["k3"]],
+    ["the reading kinds", { kinds: ["extract", "semantic", "semantic-init"] }, ["k7", "k6", "k4"]],
+    ["status", { status: "failed" }, ["k5", "k3"]],
+    ["running", { status: "running" }, ["k4"]],
+    ["trigger", { trigger: "manual" }, ["k7", "k6"]],
+    ["parent", { parentRunId: "k1" }, ["k2"]],
+    ["chained", { chained: true }, ["k2"]],
+    ["not chained", { chained: false }, ["k7", "k6", "k5", "k4", "k3", "k1"]],
+    [
+      "a window, its start inclusive and its end not",
+      { startedAfter: "2026-09-19T02:00:00Z", startedBefore: "2026-09-19T04:00:00Z" },
+      ["k3", "k2"],
+    ],
+    ["ids, another customer's ignored", { ids: ["k1", "k6", "x1", "nope"] }, ["k6", "k1"]],
+    ["two at once", { kinds: ["transform", "build"], status: "ok" }, ["k2"]],
+    ["nothing matched", { kinds: ["ingest"], status: "failed" }, []],
+  ])("by %s", async (_, filter, ids) => {
+    expect(await listed(filter)).toEqual(ids);
+  });
+
+  it("names each run by the kind it was filtered by", async () => {
+    for (const kind of RUN_KINDS) {
+      const { items } = await listRuns(db, "CASE-0042", { limit: 50, kinds: [kind] });
+      expect(items.map((r) => r.kind)).toEqual(items.map(() => kind));
+    }
+  });
+
+  it("pages a filtered ledger with a cursor that neither skips nor repeats a run", async () => {
+    const filter: RunFilter = { status: "ok" };
+    const walked: string[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 10; page += 1) {
+      const answer = await listRuns(db, "CASE-0042", { limit: 2, cursor, ...filter });
+      walked.push(...answer.items.map((r) => r.id));
+      cursor = answer.nextCursor;
+      if (cursor === null) {
+        break;
+      }
+    }
+
+    expect(walked).toEqual(await listed(filter));
+    expect(walked).toEqual(["k7", "k6", "k2", "k1"]);
   });
 });
 

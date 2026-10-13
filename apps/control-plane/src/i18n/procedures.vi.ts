@@ -118,8 +118,10 @@ export const procedureSentences: SentenceTable = {
     "Xuất mọi dòng của một câu hỏi đã lưu, một định nghĩa hoặc một mô hình dbt thành tệp CSV; trả về một liên kết tải xuống dùng được 15 phút, chỉ cho chính bạn. Mở liên kết trong trình duyệt đã đăng nhập Undercroft, hoặc tải bằng `undercroft bi exports download`. Định nghĩa và mô hình: thành viên trở lên.",
   "bi.exports.get": "Một bản xuất bạn đã yêu cầu và còn hạn: SQL nó chạy và tên tệp.",
   "dq.failures": "Các dòng mà một kiểm thử chất lượng dữ liệu đã lưu khi thất bại. Quản trị.",
-  "runs.list": "Sổ các lần chạy, mới nhất trước; mọi tài khoản, hoặc của một nguồn.",
-  "runs.get": "Một lần chạy, với phạm vi nó đã đọc, các dòng bị từ chối và các bước dbt.",
+  "runs.list":
+    "Sổ các lần chạy, mới nhất trước. Mọi bộ lọc đều tuỳ chọn và kết hợp được với nhau và với con trỏ: một nguồn (source), loại (kind, một hoặc nhiều), trạng thái (status), cách khởi chạy (trigger), lần chạy cha (parentRunId: các lần chạy nối tiếp từ lần đó, như lần dựng sau một lần đọc), chỉ lần chạy được nối tiếp hay không (chained), bắt đầu từ (startedAfter, tính cả mốc) và trước (startedBefore), và tối đa 50 mã (ids). Trang rỗng nghĩa là không có gì khớp.",
+  "runs.get":
+    "Một lần chạy, với phạm vi nó đã đọc và các dòng bị từ chối. Các bước dbt có stepSummary (đếm theo loại và trạng thái; bước skipped vẫn là skipped) cùng các bước được hỏi: steps là none, problems (mặc định: mọi bước không phải success, pass hay skipped) hoặc all; lọc bằng stepStatus, stepKind, stepName (khi có bộ lọc mà không nêu steps thì là all) và sang trang bằng stepCursor với nextStepCursor. waitSeconds (tối đa 50) trả lời ngay khi lần chạy hết running, và với một lần đọc kết thúc ok thì khi lần dựng nối tiếp (childRun) đã có; hết giờ chờ thì vẫn báo running. Dùng nó thay cho việc hỏi lặp.",
   "runs.events": "Những gì worker đang báo về một lần chạy.",
   "runs.trigger": "Chạy ngay việc đọc một nguồn. Quản trị.",
   "config.google": "Nửa công khai của ứng dụng Google, cho trình chọn Drive.",

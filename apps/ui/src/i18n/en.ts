@@ -1291,6 +1291,7 @@ export const en = {
     },
 
     stepsHead: "dbt steps",
+    stepsCut: "Showing {{shown}} of {{total}} steps; this run has more steps than one page holds.",
     colStep: "Step",
     colStatus: "Status",
     colFailures: "Failing rows",

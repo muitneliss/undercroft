@@ -74,6 +74,7 @@ function context(user: SessionUser | null, locale: Locale = DEFAULT_LOCALE): Con
     signInMethods: [],
     channel: "web",
     publicUrl: null,
+    holdOpen: () => undefined,
   };
 }
 

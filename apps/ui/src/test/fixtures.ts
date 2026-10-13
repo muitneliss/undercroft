@@ -43,7 +43,9 @@ export function runDetail(over: Partial<RunDetail> = {}): RunDetail {
     refusals: [],
     reasonCounts: [],
     refusalsPruned: false,
+    stepSummary: { total: 0, byStatus: { model: {}, test: {} }, problems: 0 },
     steps: [],
+    nextStepCursor: null,
     parentRun: null,
     childRun: null,
     // A run from before a run recorded its scope, which is every run older than ADR 0091.

@@ -20,3 +20,11 @@
  * fix for: a count with nothing behind it. `250_run_trace.sql` carries that argument in full.
  */
 export const REFUSAL_RETENTION_DAYS = 7;
+
+/**
+ * The most dbt steps one answer lists (`stepLimit` on `runs.get`). About twice the largest run
+ * measured (1,011 steps), so the web leaf -- which asks for this many -- shows every step of a
+ * real run on one page, and says so when a run outgrows it rather than showing a page as the
+ * whole. The server bounds the page with it; the browser asks for it.
+ */
+export const MAX_STEP_PAGE = 2000;
