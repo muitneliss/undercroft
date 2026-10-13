@@ -137,6 +137,7 @@
 - [ADR 0131 A Build Publishes Only What Passed](sources/adr-0131-a-build-publishes-only-what-passed.md)
 - [ADR 0132 A Model Is Previewed by Compiling It, Not by Building It](sources/adr-0132-a-model-is-previewed-by-compiling-it-not-by-building-it.md)
 - [ADR 0133 The Inventory Reads Page After an Item, and Stay Arrays When No Page Is Asked](sources/adr-0133-the-inventory-reads-page-after-an-item-and-stay-arrays-when-no-page-is-asked.md)
+- [ADR 0134 The CLI Signs In With a Personal Token When Nobody Is at Its Terminal](sources/adr-0134-the-cli-signs-in-with-a-personal-token-when-nobody-is-at-its-terminal.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

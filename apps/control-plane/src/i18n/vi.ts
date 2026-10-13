@@ -157,7 +157,7 @@ export const vi = {
       "Token này chỉ được đọc, nên không làm được thao tác này. Hãy tạo một token có quyền ghi ở trang Tài khoản nếu bạn muốn cho phép.",
     /** A credential-managing procedure reached with a token. Says where it can be done. */
     requiresSession:
-      "Thao tác này chỉ làm được khi đăng nhập bằng trình duyệt (hoặc CLI), không làm được bằng token.",
+      "Thao tác này chỉ làm được khi đăng nhập bằng trình duyệt (hoặc CLI đăng nhập bằng mã email), không làm được bằng token.",
     tenantExists: "Mã khách hàng {{tenantId}} đã được dùng cho một khách hàng khác.",
     /**
      * Every tenant procedure on a deactivated customer (ADR 0110). Says who can undo it, since

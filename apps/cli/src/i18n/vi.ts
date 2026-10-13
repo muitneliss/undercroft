@@ -31,7 +31,7 @@ export const vi = {
    */
   topics: {
     account: "Tài khoản của bạn.",
-    accountTokens: "Token truy cập cá nhân, cho tác tử kết nối qua MCP.",
+    accountTokens: "Token truy cập cá nhân, cho tác tử kết nối qua MCP hoặc qua CLI.",
     accountApps:
       "Các ứng dụng bạn đã cho phép bằng cách đăng nhập và đồng ý, như trình kết nối Claude.",
     auth: "Đăng nhập, đăng xuất và phiên của bạn.",
@@ -58,11 +58,12 @@ export const vi = {
 
   command: {
     authLogin:
-      "Đăng nhập bằng mã một lần gửi tới email, như trên giao diện web. Bản cài trên chính máy này thì đăng nhập luôn, không cần mã.",
-    authLogout: "Đăng xuất: huỷ phiên trên máy chủ rồi xoá phiên đã lưu cho địa chỉ này.",
+      "Đăng nhập bằng mã một lần gửi tới email, như trên giao diện web. Bản cài trên chính máy này thì đăng nhập luôn, không cần mã. Một script hay tác tử không có người ngồi trước terminal thì đăng nhập bằng token truy cập cá nhân trong một biến môi trường: --token-env.",
+    authLogout:
+      "Đăng xuất: huỷ phiên trên máy chủ rồi xoá phiên đã lưu cho địa chỉ này. Với token thì chỉ quên biến chứa nó; token vẫn dùng được cho tới khi bạn thu hồi.",
     authStatus: "Cho biết bạn đang đăng nhập vào máy chủ nào, với địa chỉ nào.",
     configShow:
-      "Hiển thị hồ sơ đang dùng, URL, quyền ghi và nguồn gốc của từng giá trị. Không bao giờ in phiên.",
+      "Hiển thị hồ sơ đang dùng, URL, quyền ghi và nguồn gốc của từng giá trị. Không bao giờ in phiên hay token.",
     configSetProfile: "Tạo hoặc sửa một hồ sơ môi trường có tên.",
     configUse: "Chọn hồ sơ mặc định.",
     describe:
@@ -89,6 +90,8 @@ export const vi = {
     code: "Mã sáu chữ số đã nhận qua email.",
     local:
       "Đăng nhập tại máy này, không cần email hay mã, khi máy chủ chạy trên chính máy này và cho phép cách đó.",
+    tokenEnv:
+      "TÊN biến môi trường chứa token truy cập cá nhân (tạo ở trang Tài khoản), không phải bản thân token. Chỉ tên biến được lưu; token được đọc lại ở mỗi lần gọi.",
     profileUrl: "URL gốc của máy chủ cho hồ sơ này.",
     allowWrites: "Cho phép lệnh ghi trên hồ sơ này. Chỉ người dùng ở terminal mới bật được.",
     profileName: "Tên hồ sơ.",
@@ -112,7 +115,11 @@ export const vi = {
       "Nếu {{email}} có quyền truy cập, một mã đã được gửi tới đó. Chạy lại với --code để đăng nhập.",
     signedIn: "Đã đăng nhập vào {{origin}} với {{email}}.",
     signedInLocally: "Đã đăng nhập vào {{origin}} với {{email}}, tại máy này, không cần mã.",
+    signedInWithToken:
+      "Đã đăng nhập vào {{origin}} với {{email}}, bằng token trong biến {{variable}}. Mỗi lệnh sẽ đọc lại biến này; token không được lưu ở đâu cả.",
     signedOut: "Đã đăng xuất khỏi {{origin}}.",
+    tokenForgotten:
+      "Đã quên cách đăng nhập bằng token vào {{origin}}. Token trong biến {{variable}} vẫn dùng được cho tới khi bạn thu hồi nó ở trang Tài khoản.",
     noRows: "Không có dòng nào.",
     downloaded: "Đã lưu {{bytes}} byte vào {{path}}.",
   },
@@ -174,11 +181,19 @@ export const vi = {
     CONFLICT: "Máy chủ từ chối vì trạng thái hiện tại không cho phép.",
     AUTHENTICATION_REQUIRED: "Chưa đăng nhập vào {{origin}}. Chạy `undercroft auth login`.",
     codeRejected: "Mã không được chấp nhận. Hãy yêu cầu mã mới.",
+    tokenUnset:
+      "Đã đăng nhập vào {{origin}} bằng token trong biến {{variable}}, nhưng biến này chưa được đặt hoặc đang trống. Hãy đặt nó cho tiến trình này.",
+    tokenRefused:
+      "{{origin}} từ chối token trong biến {{variable}}: nó đã bị thu hồi, đã hết hạn, hoặc không phải token của máy chủ này. Hãy tạo token mới ở trang Tài khoản và đặt nó vào biến {{variable}}.",
+    tokenEnvName:
+      "--token-env nhận TÊN của một biến môi trường (chữ, số và dấu gạch dưới), không phải bản thân token.",
     localNotLoopback:
       "Chỉ đăng nhập tại máy này được với máy chủ chạy trên chính máy này (localhost); {{origin}} thì không. Hãy đăng nhập bằng email.",
     noLocalMethod:
       "{{origin}} không cho đăng nhập tại máy này. Hãy đăng nhập bằng email: `undercroft auth login --email <địa chỉ>`.",
     PERMISSION_DENIED: "Bạn không có quyền làm việc này.",
+    tokenReadOnly:
+      "Token trong biến {{variable}} chỉ có quyền đọc, còn lệnh này cần quyền ghi. Hãy tạo một token có quyền ghi ở trang Tài khoản nếu bạn muốn cho phép.",
     WRITES_DISABLED:
       "Hồ sơ “{{profile}}” không cho phép ghi. Người dùng phải bật nó trong terminal: `undercroft config set-profile {{profile}} --allow-writes`.",
     writesNeedProfile: "URL dùng một lần không bao giờ cho phép ghi; hãy dùng một hồ sơ có tên.",

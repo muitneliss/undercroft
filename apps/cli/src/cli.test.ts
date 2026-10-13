@@ -87,16 +87,22 @@ afterAll(() => {
 
 /**
  * Run the bundle. The environment is built from nothing: no `UNDERCROFT_URL` or
- * `UNDERCROFT_PROFILE` from the developer's shell can leak into what a test asserts.
+ * `UNDERCROFT_PROFILE` from the developer's shell can leak into what a test asserts. `env` adds
+ * what one run is given, as a CI job's secret variable would be.
  */
 async function undercroft(
   args: readonly string[],
-  options: { keepStdinOpen?: boolean } = {},
+  options: { keepStdinOpen?: boolean; env?: Readonly<Record<string, string>> } = {},
 ): Promise<Ran> {
   const child = Bun.spawn(["node", bundle, ...args], {
     cwd: work,
-    // biome-ignore lint/style/noProcessEnv: PATH is the one value taken from the suite's own environment, so `node` can be found; everything else the CLI reads is set here.
-    env: { PATH: process.env.PATH ?? "", HOME: work, UNDERCROFT_CLI_HOME: home },
+    env: {
+      ...options.env,
+      // biome-ignore lint/style/noProcessEnv: PATH is the one value taken from the suite's own environment, so `node` can be found; everything else the CLI reads is set here.
+      PATH: process.env.PATH ?? "",
+      HOME: work,
+      UNDERCROFT_CLI_HOME: home,
+    },
     stdin: options.keepStdinOpen === true ? "pipe" : "ignore",
     stdout: "pipe",
     stderr: "pipe",
@@ -629,5 +635,149 @@ describe("signing out", () => {
     expect(Object.keys(JSON.parse(readFileSync(join(home, "credentials.json"), "utf8")))).toEqual(
       [],
     );
+  });
+});
+
+describe("an unattended sign-in with a personal access token (ADR 0134)", () => {
+  /** The variable a CI job would hold the token in. */
+  const VARIABLE = "UC_TOKEN";
+
+  /** A browser session for the operator, through the emailed code as the web page signs in. */
+  async function browserSession(): Promise<string> {
+    function post(path: string, body: unknown): Promise<Response> {
+      return Bun.fetch(`${plane.origin}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: plane.origin },
+        body: JSON.stringify(body),
+      });
+    }
+    await post("/api/auth/email-otp/send-verification-otp", { email: OPERATOR, type: "sign-in" });
+    const otp = /\d{6}/u.exec(plane.sender.last?.text ?? "")?.[0];
+    const signedIn = await post("/api/auth/sign-in/email-otp", { email: OPERATOR, otp });
+    return signedIn.headers
+      .getSetCookie()
+      .map((line) => line.split(";")[0])
+      .join("; ");
+  }
+
+  /** A token minted on the account page, in the person's own browser session. */
+  async function mint(grant: "read" | "write"): Promise<{ token: string; cookie: string }> {
+    const cookie = await browserSession();
+    const minted = await Bun.fetch(`${plane.origin}/trpc/account.tokens.mint`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ label: "nightly", grant, expiresInDays: 30 }),
+    });
+    const body = (await minted.json()) as { result: { data: { token: string } } };
+    return { token: body.result.data.token, cookie };
+  }
+
+  async function logIn(token: string): Promise<Ran> {
+    return await undercroft(["auth", "login", "--token-env", VARIABLE, "--agent"], {
+      env: { [VARIABLE]: token },
+    });
+  }
+
+  function trigger(token: string): Promise<Ran> {
+    return undercroft(
+      ["runs", "trigger", "--tenant-id", OWN, "--source", "hubspot", "--lang", "en", "--agent"],
+      { env: { [VARIABLE]: token } },
+    );
+  }
+
+  it("signs in and reads with the token alone, which no output and no file ever holds", async () => {
+    writeProfile("local", plane.origin, false);
+    const { token } = await mint("read");
+    const env = { [VARIABLE]: token };
+
+    const ran = [
+      // The token itself where its variable's name belongs: refused, and not repeated back.
+      await undercroft(["auth", "login", "--token-env", token, "--agent"], { env }),
+      await logIn(token),
+      await undercroft(["runs", "list", "--tenant-id", OWN, "--agent", "--verbose"], { env }),
+      await undercroft(["auth", "status", "--agent"], { env }),
+      await undercroft(["config", "show", "--agent"], { env }),
+    ];
+
+    expect(ran.map((run) => envelope(run).error?.code ?? "ok")).toEqual([
+      "INVALID_ARGUMENT",
+      "ok",
+      "ok",
+      "ok",
+      "ok",
+    ]);
+    expect(envelope(ran[2] as Ran).data).toEqual({ items: [], nextCursor: null });
+    expect(envelope(ran[3] as Ran).data).toMatchObject({
+      email: OPERATOR,
+      signedInWith: "token",
+      tokenEnv: VARIABLE,
+    });
+    // What is kept is the variable's name and whose it is: no cookie, and no token.
+    expect(JSON.parse(readFileSync(join(home, "credentials.json"), "utf8"))).toEqual({
+      [plane.origin]: { email: OPERATOR, tokenEnv: VARIABLE },
+    });
+    const secret = token.slice(token.indexOf(".") + 1);
+    const everything = [
+      ...ran.flatMap((run) => [run.stdout, run.stderr]),
+      readFileSync(join(home, "credentials.json"), "utf8"),
+      readFileSync(join(home, "config.json"), "utf8"),
+    ].join("\n");
+    expect(everything).not.toContain(secret);
+  });
+
+  it("a read token's write is refused by the server, naming the grant it needs", async () => {
+    // The profile allows writes, so what refuses is the token's own grant.
+    writeProfile("local", plane.origin, true);
+    const { token } = await mint("read");
+    await logIn(token);
+
+    const refused = await trigger(token);
+
+    expect(refused.exitCode).toBe(6);
+    expect(envelope(refused).error).toMatchObject({
+      code: "PERMISSION_DENIED",
+      message: expect.stringContaining(VARIABLE),
+      details: { reason: "WRITES_DISABLED", grant: "read", needs: "write" },
+    });
+    expect(plane.worker.triggered).toHaveLength(0);
+  });
+
+  it("a write token still writes only where a person allowed writes on the profile", async () => {
+    writeProfile("local", plane.origin, false);
+    const { token } = await mint("write");
+    await logIn(token);
+
+    const refused = await trigger(token);
+    writeProfile("local", plane.origin, true);
+    const started = await trigger(token);
+
+    expect(envelope(refused).error?.code).toBe("WRITES_DISABLED");
+    expect(envelope(started)).toEqual({ ok: true, data: { runId: "run-mem-1" } });
+    expect(plane.worker.triggered).toHaveLength(1);
+  });
+
+  it("names the variable when it is unset, and says to mint a new token once it is revoked", async () => {
+    writeProfile("local", plane.origin, false);
+    const { token, cookie } = await mint("read");
+    await logIn(token);
+    const list = ["runs", "list", "--tenant-id", OWN, "--lang", "en", "--agent"];
+
+    const unset = await undercroft(list);
+    await Bun.fetch(`${plane.origin}/trpc/account.tokens.revoke`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ id: token.slice(0, token.indexOf(".")) }),
+    });
+    const revoked = await undercroft(list, { env: { [VARIABLE]: token } });
+
+    expect([unset.exitCode, revoked.exitCode]).toEqual([5, 5]);
+    expect(envelope(unset).error).toMatchObject({
+      code: "AUTHENTICATION_REQUIRED",
+      message: expect.stringContaining(`${VARIABLE}, but that variable is unset`),
+    });
+    expect(envelope(revoked).error).toMatchObject({
+      code: "AUTHENTICATION_REQUIRED",
+      message: expect.stringContaining(`refused the token in ${VARIABLE}`),
+    });
   });
 });

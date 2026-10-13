@@ -89,7 +89,7 @@ export const en = {
     writesDisabled:
       "This token may only read, so it cannot do this. Mint a token that may write on the Account page if you mean to allow it.",
     requiresSession:
-      "This can only be done from a signed-in browser (or the CLI), never with a token.",
+      "This can only be done from a signed-in browser (or the CLI signed in with an emailed code), never with a token.",
     tenantExists: "The tenant ID {{tenantId}} is already in use by another customer.",
     tenantDeactivated:
       "This customer is deactivated. Nothing in it can be used or synced until an admin reactivates it.",

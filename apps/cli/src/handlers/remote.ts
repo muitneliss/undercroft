@@ -1,12 +1,14 @@
 /**
  * The CLI's only way into the platform: HTTP to the same `/trpc` and `/api/auth` the web UI
- * calls, carrying the person's own Better Auth session cookie.
+ * calls, carrying the person's own Better Auth session cookie -- or, signed in unattended, their
+ * own personal access token as `Authorization: Bearer` (ADR 0134).
  *
  * That is the whole reason the CLI is not a backdoor. Every procedure answers here exactly as
  * it answers the browser -- `tenantProcedure`'s authority check, `requireRole`, the
  * 404-not-403 boundary and the localized refusals all run on the server, and none of them is
- * re-implemented or bypassed. There is no DSN, no service token and no second auth path.
- * `.ast-grep/rules/cli-boundary.yml` keeps it that way.
+ * re-implemented or bypassed; a token adds only its grant, which the server enforces too. There
+ * is no DSN, no service token and no second auth path. `.ast-grep/rules/cli-boundary.yml`
+ * keeps it that way.
  *
  * Signing in, which is Better Auth's `/api/auth` rather than tRPC, is `authEndpoints.ts`; this
  * module owns the connection, the tRPC wire and what counts as unreachable, which both share.
@@ -46,6 +48,7 @@ import type {
   ProcedureSpec,
   SurfaceErrorCode,
 } from "../manifest.ts";
+import type { Presented } from "../services/credentials.ts";
 import { failure, type Outcome, type Refusal, success } from "../services/output.ts";
 
 /**
@@ -60,8 +63,8 @@ export const REQUEST_TIMEOUT_MS = 180_000;
 export interface Connection {
   readonly url: string;
   readonly origin: string;
-  /** The session this origin issued, or `null` to call as nobody. */
-  readonly cookie: string | null;
+  /** What this origin is shown -- its session, or a token -- or `null` to call as nobody. */
+  readonly credential: Presented | null;
   readonly locale: Locale;
   readonly fetch: typeof fetch;
   /** Diagnostics for `--verbose`. Never given a header, a cookie or a body. */
@@ -82,12 +85,70 @@ export const CLIENT_HEADERS: Readonly<
   Record<(typeof CLI_HEADER)["name"], (typeof CLI_HEADER)["value"]>
 > = { "x-undercroft-client": "cli" };
 
-function headersFor(connection: Connection): Record<string, string> {
-  return {
-    ...CLIENT_HEADERS,
-    "accept-language": connection.locale,
-    ...(connection.cookie === null ? {} : { cookie: connection.cookie }),
-  };
+/**
+ * Every header a request to this origin carries -- the CLI's name, the language, the credential
+ * -- or the refusal for a token whose variable is unset, decided before anything is sent.
+ *
+ * A token is sent as the bearer and a session as the cookie, never both: a request carrying
+ * `Authorization` is admitted by the bearer alone, so a cookie beside it would be sent for
+ * nothing.
+ */
+export function headersFor(
+  t: Translate,
+  connection: Connection,
+): { readonly ok: true; readonly headers: Readonly<Record<string, string>> } | Refusal {
+  const base = { ...CLIENT_HEADERS, "accept-language": connection.locale };
+  const { credential } = connection;
+  if (credential === null) {
+    return { ok: true, headers: base };
+  }
+  if (credential.kind === "session") {
+    return { ok: true, headers: { ...base, cookie: credential.cookie } };
+  }
+  if (credential.token === null) {
+    return failure(
+      "AUTHENTICATION_REQUIRED",
+      t("error.tokenUnset", { variable: credential.variable, origin: connection.origin }),
+    );
+  }
+  return { ok: true, headers: { ...base, authorization: `Bearer ${credential.token}` } };
+}
+
+/**
+ * The CLI's own sentence for UNAUTHORIZED, which the server leaves unworded on purpose. Only the
+ * CLI knows how it signed in, so only it can say what to do: sign in again, or -- for a token,
+ * which signing in again with the same variable would not fix -- mint a new one.
+ */
+export function signInRequired(t: Translate, connection: Connection): Refusal {
+  const { credential, origin } = connection;
+  return failure(
+    "AUTHENTICATION_REQUIRED",
+    credential?.kind === "token"
+      ? t("error.tokenRefused", { variable: credential.variable, origin })
+      : t("error.AUTHENTICATION_REQUIRED", { origin }),
+  );
+}
+
+/**
+ * A token's grant refusing the call (`WRITES_DISABLED` in the facts, `trpc.ts`'s grant guard),
+ * with the grant it needs beside the one it holds. Always `write`: the guard refuses only a
+ * `read` grant, and only a call that is not a read -- which includes `lake.query` and
+ * `models.preview`, classed `write` for what their SQL could do.
+ */
+function grantRefusal(
+  t: Translate,
+  connection: Connection,
+  message: string,
+  details: Readonly<Record<string, unknown>>,
+): Refusal {
+  const { credential } = connection;
+  return failure(
+    "PERMISSION_DENIED",
+    credential?.kind === "token"
+      ? t("error.tokenReadOnly", { variable: credential.variable })
+      : message,
+    { ...details, needs: "write" },
+  );
 }
 
 function isTimeout(error: unknown): boolean {
@@ -176,12 +237,19 @@ function worded(
     code !== "AUTHENTICATION_REQUIRED" &&
     message !== "" &&
     message !== trpcCode;
+  const details = isRecord(error.data) ? error.data.details : undefined;
+  if (isWorded && isRecord(details) && details.reason === "WRITES_DISABLED") {
+    return grantRefusal(t, connection, message, details);
+  }
   if (isWorded) {
     // With the facts the router named beside its sentence, when it named any: which listing
     // could not be had and what fixes it (`refusal` in the control plane's `trpc.ts`). Passed
     // through verbatim -- re-deriving them here would mean parsing a sentence in whatever
     // language the server answered in.
-    return failure(code, message, isRecord(error.data) ? error.data.details : undefined);
+    return failure(code, message, details);
+  }
+  if (code === "AUTHENTICATION_REQUIRED") {
+    return signInRequired(t, connection);
   }
   return failure(code, t(`error.${code}`, { origin: connection.origin }));
 }
@@ -191,9 +259,10 @@ function trpcRequest(
   connection: Connection,
   spec: Pick<ProcedureSpec, "path" | "type">,
   input: unknown,
+  sent: Readonly<Record<string, string>>,
 ): { readonly url: string; readonly init: RequestInit } {
   const base = `${connection.url}/trpc/${spec.path}`;
-  const headers = { "content-type": "application/json", ...headersFor(connection) };
+  const headers = { "content-type": "application/json", ...sent };
   const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   if (spec.type === "query") {
     const query = input === undefined ? "" : `?input=${encodeURIComponent(JSON.stringify(input))}`;
@@ -215,7 +284,11 @@ export async function callSpec(
   spec: Pick<ProcedureSpec, "path" | "type">,
   input: unknown,
 ): Promise<Outcome> {
-  const { url, init } = trpcRequest(connection, spec, input);
+  const sent = headersFor(t, connection);
+  if (!sent.ok) {
+    return sent;
+  }
+  const { url, init } = trpcRequest(connection, spec, input, sent.headers);
   connection.trace(`${init.method ?? "GET"} ${connection.origin}/trpc/${spec.path}`);
   let body: unknown;
   try {

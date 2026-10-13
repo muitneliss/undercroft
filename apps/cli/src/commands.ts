@@ -148,23 +148,35 @@ function downloadCommand(ctx: Context): LocalCommand {
   };
 }
 
+/** `auth login`, and the four ways in its flags choose between. */
+function loginCommand(ctx: Context): LocalCommand {
+  const { t } = ctx;
+  return {
+    id: "auth:login",
+    description: "command.authLogin",
+    flags: {
+      email: Flags.string({ description: t("flag.email"), exclusive: ["local"] }),
+      code: Flags.string({ description: t("flag.code"), exclusive: ["local"] }),
+      // A desktop install needs no flag: `auth login` signs in on this machine by itself when
+      // that is the only way in the server offers. `--local` is for a stack that offers it
+      // beside a mail key, where the web page shows it as a button (ADR 0094, ADR 0096).
+      local: Flags.boolean({ description: t("flag.local") }),
+      // The variable's NAME, never the token: argv is readable by every process on the machine
+      // and kept in shell history (ADR 0134).
+      "token-env": Flags.string({
+        description: t("flag.tokenEnv"),
+        exclusive: ["email", "code", "local"],
+      }),
+    },
+    run: ({ flags }) => authLogin(ctx, flags),
+  };
+}
+
 function localCommands(ctx: Context, catalogue: () => readonly Described[]): LocalCommand[] {
   const { t } = ctx;
   const name = { name: Args.string({ description: t("flag.profileName"), required: true }) };
   return [
-    {
-      id: "auth:login",
-      description: "command.authLogin",
-      flags: {
-        email: Flags.string({ description: t("flag.email"), exclusive: ["local"] }),
-        code: Flags.string({ description: t("flag.code"), exclusive: ["local"] }),
-        // A desktop install needs no flag: `auth login` signs in on this machine by itself when
-        // that is the only way in the server offers. `--local` is for a stack that offers it
-        // beside a mail key, where the web page shows it as a button (ADR 0094, ADR 0096).
-        local: Flags.boolean({ description: t("flag.local") }),
-      },
-      run: ({ flags }) => authLogin(ctx, flags),
-    },
+    loginCommand(ctx),
     {
       id: "auth:logout",
       description: "command.authLogout",

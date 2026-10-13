@@ -90,7 +90,9 @@ that look harmless are **not** reads: `lake_query` runs SQL an admin wrote again
 agent to change things: an agent reading a customer's mail can be talked into acting by it.
 
 A token lives at most a year (30, 90 or 365 days), is shown **once**, and cannot mint or revoke
-tokens itself -- only your browser session (or the CLI, which signs in the same way) can.
+tokens itself -- only your browser session (or the CLI signed in with an emailed code, which
+signs in the same way) can. The same token also signs the CLI in for a job with nobody at its
+terminal: `undercroft auth login --token-env <VARIABLE>` ([the CLI runbook](cli.md)).
 
 ## Minting one
 

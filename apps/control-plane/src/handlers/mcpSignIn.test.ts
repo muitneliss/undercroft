@@ -248,15 +248,29 @@ describe("a client signed in through OAuth", () => {
     );
     const { tools } = await mcp.listTools();
     await mcp.close();
+    // Issued for `/mcp`, and honoured nowhere else: `/trpc` admits a personal token alone
+    // (ADR 0134), which `trpcToken.test.ts` proves is let in. One registration per test, since
+    // the endpoint's rate limit is counted across the whole file.
+    const me = await Bun.fetch(`${plane.origin}/trpc/session.me`, {
+      headers: { authorization: `Bearer ${client.accessToken()}` },
+    });
+    const atTrpc = (await me.json()) as { error?: { data?: { code?: string } } };
 
     const app = await revokeTheApp(cookie);
 
     expect({
       writes: tools.filter((tool) => tool.annotations?.readOnlyHint !== true).length,
       reads: tools.length > 0,
+      atTrpc: atTrpc.error?.data?.code,
       grant: app?.grant,
       afterRevoke: (await rawList(client.accessToken())).status,
-    }).toEqual({ writes: 0, reads: true, grant: "read", afterRevoke: 401 });
+    }).toEqual({
+      writes: 0,
+      reads: true,
+      atTrpc: "UNAUTHORIZED",
+      grant: "read",
+      afterRevoke: 401,
+    });
   });
 
   it("is refused, naming the scope, when the person granted it neither of ours", async () => {
