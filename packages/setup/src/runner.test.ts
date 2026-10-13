@@ -12,12 +12,15 @@ describe("processRunner's signal", () => {
 
   it("asks a running program to end, and resolves once it has", async () => {
     const stop = new AbortController();
-    const started = Date.now();
     const run = processRunner("sleep", ["30"], { signal: stop.signal });
+    // Timed from the request, not from the spawn: on a loaded machine starting `sleep` can
+    // take seconds of its own, and that is not what is measured. Ending inside the grace is
+    // what tells the SIGTERM apart from the SIGKILL the grace would have sent.
+    const asked = Date.now();
     stop.abort();
     const result = await run;
     expect(result.code).not.toBe(0);
-    expect(Date.now() - started).toBeLessThan(STOP_GRACE_MS);
+    expect(Date.now() - asked).toBeLessThan(STOP_GRACE_MS);
   });
 
   it(
@@ -38,6 +41,8 @@ describe("processRunner's signal", () => {
       expect(result.code).not.toBe(0);
       expect(Date.now() - asked).toBeGreaterThanOrEqual(STOP_GRACE_MS);
     },
-    STOP_GRACE_MS * 3,
+    // The grace itself, plus room for `sh` to start and print on a loaded machine: the wait
+    // for `trapped` comes before the grace and is not bounded by it.
+    STOP_GRACE_MS * 6,
   );
 });
