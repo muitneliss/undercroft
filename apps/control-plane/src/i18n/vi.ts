@@ -401,13 +401,15 @@ export const vi = {
     unknownTool: "Không có công cụ nào tên {{tool}} cho token này.",
     unknownResource: "Không có tài nguyên nào tên {{uri}}.",
     /**
-     * The model reads a bounded text; the whole answer is still in `structuredContent`.
-     * Saying so is the point: rows cut off silently would read as all the rows there are.
+     * What a model reads is bounded, in the text and in `structuredContent` alike (ADR 0122), and
+     * the rest is not in the answer at all. Saying so is the point: rows cut off silently would
+     * read as all the rows there are. `rowsClipped` is carried by both copies; `textClipped`
+     * only by the text, since an answer that big has no structured copy.
      */
     rowsClipped:
-      "Chỉ hiện {{shown}} trên {{total}} mục của {{field}} trong văn bản này. Toàn bộ kết quả nằm trong structuredContent.",
+      "Câu trả lời này chỉ có {{shown}} trên {{total}} mục của {{field}}. Phần còn lại không được gửi kèm: hãy gọi lại với phạm vi hẹp hơn (bộ lọc, limit hoặc cursor, nếu công cụ có) để đọc nó.",
     textClipped:
-      "Văn bản đã bị cắt ở {{kilobytes}} KB. Toàn bộ kết quả nằm trong structuredContent.",
+      "Câu trả lời này đã bị cắt ở {{kilobytes}} KB và không có structuredContent. Phần còn lại không được gửi kèm: hãy gọi lại với phạm vi hẹp hơn (bộ lọc, limit hoặc cursor, nếu công cụ có) để đọc nó.",
   },
 
   /**

@@ -20,6 +20,8 @@ const vi = {
   shown:
     "Hiển thị {{shown}} trên {{total}} dòng. Toàn bộ kết quả nằm trong câu trả lời của công cụ.",
   more: "Máy chủ còn nhiều dòng hơn số đã trả về. Hãy hỏi trang tiếp theo.",
+  unavailable:
+    "Không có gì để hiển thị: câu trả lời quá lớn để gửi trọn, và ứng dụng chủ không chuyển cho widget bản dành cho nó.",
   yes: "có",
   no: "không",
   colKind: "loại",
@@ -57,6 +59,8 @@ const en: Readonly<Record<Key, string>> = {
   refused: "There is nothing to show: {{message}}",
   shown: "Showing {{shown}} of {{total}} rows. The whole result is in the tool's answer.",
   more: "The server has more rows than it returned. Ask for the next page.",
+  unavailable:
+    "There is nothing to draw: the answer was too large to send whole, and this host did not pass the widget its copy.",
   yes: "yes",
   no: "no",
   colKind: "kind",

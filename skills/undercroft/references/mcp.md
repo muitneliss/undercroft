@@ -33,13 +33,18 @@ protocol error (`-32602`), not a refusal to report.
 
 ## Results
 
-A result carries the whole answer in `structuredContent`, with a list wrapped as
-`{ "items": [...] }`, and a JSON text of it for you to read. The text is clipped at 50 items
-per list and 60 KB, and a clipped text says so in a note; the whole answer is still in
-`structuredContent`. Never treat a clipped list as all there is.
+A result carries a JSON text of the answer and the same answer in `structuredContent`, with a
+list wrapped as `{ "items": [...] }`. Both are bounded: at most 50 items of any top-level list,
+and each cut is named in a note -- an extra text block, and in `structuredContent` the field
+`"undercroft/clipped"`. An answer still over 60 KB has its text cut there and no
+`structuredContent` at all. The rest is not in the result anywhere you can read it. Never treat
+a clipped list as all there is: call again with a narrower scope -- a filter, a smaller `limit`,
+the next `cursor`, where the tool takes one -- or, for rows a person wants in a file, an export
+(below).
 
 A query result or a run's status may also render as a widget in the host. The widget shows
-the person the same answer you have; you do not need to repeat every row.
+the person the whole answer, which can be more rows than you were sent; you do not need to
+repeat every row, and you cannot quote a row you were not sent.
 
 ## Exports
 

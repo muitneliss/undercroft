@@ -169,8 +169,13 @@ token as an environment variable, as above, so it stays off every process's comm
   (`tenants_list` names yours).
 - **Descriptions** are in the language the client asks for (`Accept-Language`), Vietnamese by
   default.
-- **Results** are whole in `structuredContent`; the text beside it shows at most 50 items of any
-  list and 60 KB, and says when it was cut.
+- **Results** come as a JSON text and the same answer in `structuredContent`, and both are
+  bounded, because a client may put either in the model's context: at most 50 items of any
+  top-level list, each cut named in a note (the text's extra blocks, `structuredContent`'s
+  `"undercroft/clipped"`). An answer still over 60 KB has its text cut there and no
+  `structuredContent`. The rest is reached through the tool's own filters, limit or cursor. A
+  widget gets the whole answer in the result's `_meta`, which the host keeps from the model.
+  ADR 0122.
 - **Exports.** An answer stops at 5,000 rows. For every row of a saved question, a definition or
   a dbt model as a CSV file, the agent calls `bi_exports_create` and gives the person the link it
   answers with. The link works for 15 minutes and only for that person: open it in a browser

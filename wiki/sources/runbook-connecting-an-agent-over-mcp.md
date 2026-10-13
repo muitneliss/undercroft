@@ -1,12 +1,12 @@
 ---
 title: 'Runbook: Connecting an agent over MCP'
 type: source
-date: 2026-10-10
+date: 2026-10-13
 tags: []
 source: docs/runbook/mcp-setup.md
 source_path: docs/runbook/mcp-setup.md
-source_hash: 79ccf95f52d759366c8c61e42f7a64ce861ec23c914e3899ecff7235b5975012
-ingested: 2026-10-10
+source_hash: bf170ec66108ab8a90edf4dbd9c6cb4324cbef39760e0f2993af45885a5951f0
+ingested: 2026-10-13
 ---
 
 # Runbook: Connecting an agent over MCP
@@ -21,7 +21,7 @@ How a person connects claude.ai, Claude Desktop, Claude Code or any MCP client t
 
 **Tokens.** read vs write per `EFFECTS` in `surface.ts` (`lake_query` and every delete/revoke/disconnect are not reads, and a read grant shows people only to an admin, [[ADR 0119 Who Has Access to a Customer Is Read by Its Admin Alone]]); at most a year; shown once; cannot mint or revoke tokens. `task dev:mcp-smoke` checks the 401 challenge, the tool list split by effect, and whose token it is.
 
-**What the agent sees.** Tool names are paths with `_` for `.`; descriptions in the client's language (vi default); results whole in `structuredContent`, text clipped to 50 items/60 KB with a note; refusals carry a code, sentence, facts and traceId. In hosts that draw MCP Apps, query results render as a table (up to 500 rows, amounts digit for digit) and `runs_trigger`/`runs_get` as a live run status. Account procedures, sign-out, health and the Picker config are not offered.
+**What the agent sees.** Tool names are paths with `_` for `.`; descriptions in the client's language (vi default); results come as a JSON text and `structuredContent`, both bounded because a client may put either in the model's context (Claude Code reads `structuredContent`): at most 50 items per top-level list with each cut named in a note (extra text blocks, and `"undercroft/clipped"` in `structuredContent`), and an answer still over 60 KB has its text cut and no `structuredContent`; the rest is reached through the tool's own filters, limit or cursor, and a widget gets the whole answer in `_meta` ([[ADR 0122 What a Model Reads over MCP Is Bounded in Every Copy]]); refusals carry a code, sentence, facts and traceId. In hosts that draw MCP Apps, query results render as a table (up to 500 rows, amounts digit for digit) and `runs_trigger`/`runs_get` as a live run status. Account procedures, sign-out, health and the Picker config are not offered.
 
 **Troubleshooting.** OAuth: "No access" = not invited; `invalid_redirect_uri` = a loopback callback registered as a web app (update the client); 403 `insufficient_scope` = neither grant chosen (revoke and reconnect); `/.well-known` 404 = public URL is plain HTTP off loopback; 429 = five registrations a minute. Tokens: 401 = revoked/expired/mistyped or access removed (a cookie never works); a client that fails after working for a while usually let its access token expire without renewing it; missing tools or `WRITES_DISABLED` = read token; `NOT_FOUND` = not a member; `PERMISSION_DENIED` = role; `CONFLICT` naming `TENANT_DEACTIVATED` = an admin deactivated the customer (ADR 0110), every tool refuses for it until reactivated, and `tenants_get` still says since when; `INTERNAL_ERROR` = follow the traceId with `task obs:trace`; `-32602` = unknown tool. Every call logs `mcp_call { tool, via, credential, outcome }`, never arguments or results.
 

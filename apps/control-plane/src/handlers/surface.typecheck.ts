@@ -2,7 +2,7 @@
  * The compiler's refusals in `surface.ts`, pinned from the side where they fire.
  *
  * The quiet side is the real tables: `EFFECTS`, the two sentence catalogues, `MCP_EXCLUDED`,
- * `MCP_WIDGETS` and `SESSION_ONLY` compile, and so do the CLI's calls by name and the widgets
+ * `MCP_WIDGETS`, `WIDGET_READS` and `SESSION_ONLY` compile, and so do the CLI's calls by name and the widgets
  * in `apps/mcp-widgets`, which read each answer as `ToolContentOf` says it arrives. This file is
  * the other side. Each fixture below is something a router change would leave behind, and
  * each carries a `@ts-expect-error`; if the mapped types ever stop biting -- `ProcedurePath`

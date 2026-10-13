@@ -3,12 +3,13 @@
  *
  * Draws the seven procedures `MCP_WIDGETS` maps to `grid`. What each cell says is `table.ts`,
  * the web UI's `ResultTable` rules cell for cell; this file is only the page: at most
- * `MAX_ROWS` rows, a banner saying how many were left out, a note when the server itself had
- * more, and a disclosure for a value too long to scan down a column.
+ * `MAX_ROWS` rows of the whole answer (`answerOf`), a banner saying how many were left out, the
+ * door's own notes when the host passed only the model's clipped copy, a note when the server
+ * itself had more, and a disclosure for a value too long to scan down a column.
  */
 
 import type { Locale } from "@undercroft/core/locale";
-import { element, type Host, mount, refusalMessage, type ToolResult } from "./host.ts";
+import { answerOf, element, type Host, mount, refusalMessage, type ToolResult } from "./host.ts";
 import type { Words } from "./i18n.ts";
 import { type Cell, capped, cellText, type Grid, gridOf, MAX_ROWS } from "./table.ts";
 
@@ -62,8 +63,13 @@ function draw(result: ToolResult, host: Host): void {
     );
     return;
   }
+  const answer = answerOf(result);
+  if (answer.content === null) {
+    host.root.replaceChildren(element("p", "note", t("unavailable")));
+    return;
+  }
   const path = host.callOf(result)?.path ?? "";
-  const grid = gridOf(path, result.structuredContent, t);
+  const grid = gridOf(path, answer.content, t);
   if (grid === null || grid.rows.length === 0) {
     host.root.replaceChildren(element("p", "note", t("empty")));
     return;
@@ -82,6 +88,7 @@ function draw(result: ToolResult, host: Host): void {
           ),
         ]
       : []),
+    ...answer.clipped.map((note) => element("p", "note", note)),
     ...(grid.more ? [element("p", "note", t("more"))] : []),
     table(grid, rows, locale, t),
   );
