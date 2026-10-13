@@ -18,6 +18,14 @@ import type { Context, Role } from "./trpc.ts";
 
 const TENANT = "CASE-0042";
 
+/** A list asked no page answers its array (ADR 0133); a page here is the contract broken. */
+function whole<T>(answer: T[] | { readonly items: T[] }): T[] {
+  if (!Array.isArray(answer)) {
+    throw new Error("a page of a list that was asked for no page");
+  }
+  return answer;
+}
+
 let db: TestDatabase;
 
 async function seedMember(email: string, role: Role): Promise<string> {
@@ -100,7 +108,7 @@ describe("macros.save", () => {
 
     await caller(admin, "a@example.test").macros.save(NORMALISE);
 
-    const listed = await caller(viewer, "v@example.test").macros.list({ tenantId: TENANT });
+    const listed = whole(await caller(viewer, "v@example.test").macros.list({ tenantId: TENANT }));
     expect(listed.map((m) => [m.name, m.description, m.params])).toEqual([
       ["normalise_name", "Upper-cases a name and squeezes its spaces.", ["value"]],
     ]);
@@ -186,7 +194,7 @@ describe("macros.delete", () => {
       message:
         "The macro normalise_name was not deleted: it is still called by stg_names. Remove those calls first, then try again.",
     });
-    expect((await as.macros.list({ tenantId: TENANT })).map((m) => m.name)).toEqual([
+    expect(whole(await as.macros.list({ tenantId: TENANT })).map((m) => m.name)).toEqual([
       "normalise_name",
     ]);
   });

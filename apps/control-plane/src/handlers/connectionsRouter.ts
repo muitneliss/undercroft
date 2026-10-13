@@ -12,16 +12,16 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
 import { providerName } from "../services/oauthProviders.ts";
-import { isChoiceRefusal, MAX_CHOICES_PAGE } from "../services/scopeChoices.ts";
+import { isChoiceRefusal } from "../services/scopeChoices.ts";
 import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
 import { tokenRefusalKey } from "./answers.ts";
 import { browseRefusal, cutRefusal } from "./browseRefusal.ts";
-import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
+import { listedOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
 import { scheduleRefusal } from "./scheduleRefusal.ts";
 
 /**
- * The longest `parentId`, `query` or `cursor` worth reading. A Drive id is 33 characters and a
- * cursor a few dozen; this is a bound on what a request may make the server hold, not a format.
+ * The longest `parentId` or `query` worth reading. A Drive id is 33 characters; this is a bound
+ * on what a request may make the server hold, not a format.
  */
 const MAX_CHOICE_TEXT_CHARS = 1024;
 
@@ -124,8 +124,7 @@ export const connectionsRouter = router({
         source: z.string().min(1),
         parentId: z.string().min(1).max(MAX_CHOICE_TEXT_CHARS).nullable().optional(),
         query: z.string().min(1).max(MAX_CHOICE_TEXT_CHARS).optional(),
-        limit: z.number().int().min(1).max(MAX_CHOICES_PAGE).optional(),
-        cursor: z.string().min(1).max(MAX_CHOICE_TEXT_CHARS).optional(),
+        ...PageInput,
       }),
     )
     .query(async ({ ctx, input }) => {

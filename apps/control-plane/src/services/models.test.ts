@@ -198,7 +198,7 @@ describe("list", () => {
     });
 
     const listed = await list(db, TENANT);
-    const items = listed.ok ? listed.items : [];
+    const items = listed.ok && Array.isArray(listed.value) ? listed.value : [];
     expect(items.map((m) => m.name)).toEqual(["stg_contacts", "stg_deals"]);
     expect(items[0]?.lastBuild).toBeNull();
     // A build that failed found no columns, which is "not known", never zero.

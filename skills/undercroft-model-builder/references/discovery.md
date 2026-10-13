@@ -39,6 +39,13 @@ with `parts`; after that, `macros.list` and `macros.get` are the cheaper way to 
 macros. Every list takes `names` (exactly these) and `match` (a fragment of the name,
 case-insensitive); a name that is not there is refused as `NOT_FOUND`, naming it.
 
+A tenant with many models, macros or questions answers more than one result holds: over MCP a
+list is cut at 50 items and says so. Then page: `models.list`, `macros.list` and
+`bi.questions.list` take `limit` and `cursor`, and answer `{ items, nextCursor }`. Ask again with
+`cursor: nextCursor` and the same filters until `nextCursor` is `null`; the inventory is not
+whole before then. A cursor refused as `unknown-cursor` means the list changed under you: start
+again from the first page.
+
 Do not paste what they return. Write the person a short inventory of what bears on the
 request, and keep the rest to yourself:
 
@@ -60,7 +67,8 @@ Read these when the request touches them:
   models that `ref` it read what it builds, and a second model over the same entity is
   often the first sign of a duplicate. Name the model: `name` with `direction: "down"` for
   what reads it, `"up"` for what it reads, and `depth` to stop after a few steps. The whole
-  graph of a large tenant will not fit in your context.
+  graph of a large tenant will not fit in your context; when even the part around a model is
+  cut, page it with `limit` and `cursor`, which answers `{ nodes, edges, nextCursor }`.
 - `macros.get` when a macro's description leaves you unsure what it returns.
 - `seeds.get` for a reference table that might already hold the mapping the request needs:
   its columns with their declared types, and every row.

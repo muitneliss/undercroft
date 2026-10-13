@@ -33,6 +33,7 @@ import { Skeleton } from "@/components/Skeleton.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { LINEAGE_VIEW, lineagePath, VIEW_PARAM } from "@/lib/lineage.ts";
+import { wholeList } from "@/lib/listAnswers.ts";
 import {
   BUILD_STATES,
   type BuildState,
@@ -276,7 +277,7 @@ function ModelList({
   const [params] = useSearchParams();
   const locale = useUiStore((state) => state.locale);
   const draft = useUiStore((state) => state.modelDraft);
-  const models = trpc.models.list.useQuery({ tenantId });
+  const models = trpc.models.list.useQuery({ tenantId }, { select: wholeList });
 
   if (models.isPending) {
     return <Skeleton rows={4} />;

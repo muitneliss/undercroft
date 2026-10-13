@@ -37,7 +37,8 @@ import {
 } from "@undercroft/db/services";
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
-import { mapNarrowed, type NameFilter, type Narrowed, narrowByName } from "./listFilter.ts";
+import { type Listing, listed, mapNarrowed, type NameFilter, narrowByName } from "./listFilter.ts";
+import type { PageRequest } from "./listPage.ts";
 
 export interface MacroItem {
   readonly name: string;
@@ -70,16 +71,23 @@ function item(macro: Macro): MacroItem {
   };
 }
 
-/** The tenant's macros, without their definitions, narrowed by `filter` (`listFilter.ts`). */
+/**
+ * The tenant's macros, without their definitions, narrowed by `filter` and paged by name when
+ * asked (`listFilter.ts`). `listMacros` reads them `ORDER BY name`, and a name is unique.
+ */
 export async function list(
   exec: SqlExecutor,
   tenantId: string,
-  filter: NameFilter = {},
-): Promise<Narrowed<MacroItem>> {
+  filter: NameFilter & PageRequest = {},
+): Promise<Listing<MacroItem>> {
   const macros = await listMacros(exec, tenantId);
-  return mapNarrowed(
-    narrowByName(macros, (macro) => macro.name, filter),
-    item,
+  return listed(
+    mapNarrowed(
+      narrowByName(macros, (macro) => macro.name, filter),
+      item,
+    ),
+    (macro) => macro.name,
+    filter,
   );
 }
 

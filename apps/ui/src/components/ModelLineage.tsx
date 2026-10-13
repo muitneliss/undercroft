@@ -34,6 +34,7 @@ import {
   MODEL_PARAM,
   selectedNode,
 } from "@/lib/lineage.ts";
+import { wholeList } from "@/lib/listAnswers.ts";
 import { formatCount } from "@/lib/money.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -67,7 +68,7 @@ function LineageView({ graph, tenantId }: { graph: Graph; tenantId: string }): R
   const navigate = useNavigate();
   // The last build of every model, for the cards and the details. Absent until it answers,
   // and a card without it prints no build mark rather than guessing one.
-  const list = trpc.models.list.useQuery({ tenantId });
+  const list = trpc.models.list.useQuery({ tenantId }, { select: wholeList });
   const builds = useMemo(
     () => (list.data === undefined ? NO_BUILDS : new Map(list.data.map((m) => [m.name, m]))),
     [list.data],

@@ -86,7 +86,7 @@ export const procedureSentences: SentenceTable = {
   "documentKinds.publish":
     "Publish bản nháp catalogue, để mọi tài liệu được phân loại lại theo nó. Quản trị.",
   "models.list":
-    'Các mô hình dbt của khách hàng kèm lần dựng gần nhất: sqlSha256 và testsSha256 để so một bản sao, và số cột, không kèm SQL. names hoặc match để lọc; include: ["columns"] để lấy các cột của từng lần dựng. lastTests là kết quả kiểm thử của lần dựng đã công bố đang phục vụ các dòng của từng mô hình: passing (đạt), failing (không đạt, failing đếm số kiểm thử) hoặc unknown (chưa có kết quả kiểm thử, không bao giờ coi là đạt); unpublished nêu một lần dựng mới hơn bị giữ lại vì nó hoặc kiểm thử của nó không đạt, và runId null kèm unpublished là mô hình chưa có phiên bản nào đạt.',
+    'Các mô hình dbt của khách hàng kèm lần dựng gần nhất: sqlSha256 và testsSha256 để so một bản sao, và số cột, không kèm SQL. names hoặc match để lọc; include: ["columns"] để lấy các cột của từng lần dựng; limit và cursor để chia trang, khi đó câu trả lời là { items, nextCursor }. lastTests là kết quả kiểm thử của lần dựng đã công bố đang phục vụ các dòng của từng mô hình: passing (đạt), failing (không đạt, failing đếm số kiểm thử) hoặc unknown (chưa có kết quả kiểm thử, không bao giờ coi là đạt); unpublished nêu một lần dựng mới hơn bị giữ lại vì nó hoặc kiểm thử của nó không đạt, và runId null kèm unpublished là mô hình chưa có phiên bản nào đạt.',
   "models.revision":
     "Một mã băm cho các mô hình, macro, bảng tham chiếu và câu hỏi của khách hàng và một mã cho tất cả, tính từ những gì mỗi lần lưu đã ghi: bằng nhau nghĩa là không có gì thay đổi.",
   "models.get":
@@ -98,7 +98,7 @@ export const procedureSentences: SentenceTable = {
   "models.build":
     "Dựng mô hình bằng một lần dbt build: name cho một mô hình, hoặc names cho tối đa 20, mỗi mục là name, +name (kèm các mô hình phía trên) hoặc name+ (kèm các mô hình phía dưới); mọi tên phải là mô hình của khách hàng. Trước khi chạy, các mô hình cha được đọc mà không dựng lại sẽ được kiểm tra: một mô hình cha có lần kiểm thử mới nhất không đạt thì PRECONDITION_FAILED nêu mô hình cha, các kiểm thử và lần chạy (dựng lại nó, hoặc dựng +name); một mô hình cha chưa có kết quả kiểm thử được nêu trong parentTestsUnknown. Mặc định chờ kết quả và trả về waited true với ok, verdict (clean, tests-failing hoặc failed: thành công là clean; ok mà có kiểm thử không đạt là tests-failing), testsFailed, stepSummary (đếm theo loại và trạng thái), các bước được hỏi (steps: none, problems là mặc định, hoặc all; lọc bằng stepStatus, stepKind, stepName; trang tiếp đọc bằng runs.get với runId và stepCursor), rowCounts (số dòng của từng mô hình được nêu; null là không đếm được, không phải 0) và preview khi chỉ nêu một mô hình. Lần dựng ghi vào vùng staging và chỉ công bố cho Báo cáo những gì dựng được, đạt các kiểm thử mức error và có mô hình cha trong lần dựng cũng được công bố; promoted của từng bước mô hình cho biết nó có được công bố không, và mô hình bị giữ lại vẫn phục vụ phiên bản đạt gần nhất, nên rowCounts và preview của nó là null. wait false trả về ngay waited false với runId; chờ lần chạy đó bằng runs.get với waitSeconds. Khi đang có lần dựng khác, CONFLICT nêu runId và startedAt của lần đó. Quản trị.",
   "models.lineage":
-    "Mô hình nào đọc mô hình nào, bảng tham chiếu nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro. name cho phần quanh một mô hình, một bảng tham chiếu hay một bảng thô (raw.records), direction up, down hoặc both và depth để giới hạn số bước.",
+    "Mô hình nào đọc mô hình nào, bảng tham chiếu nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro. name cho phần quanh một mô hình, một bảng tham chiếu hay một bảng thô (raw.records), direction up, down hoặc both và depth để giới hạn số bước; limit và cursor để chia trang, mỗi trang tối đa limit nút và limit cạnh, kèm nextCursor.",
   "models.reference":
     "Tài liệu tham khảo cho người viết mô hình: các nguồn, macro của nền tảng và macro riêng của khách hàng. parts để chỉ lấy một số trong sources, platformMacros và tenantMacros; hai phần đầu giống hệt nhau ở mọi lần gọi.",
   "models.check":
@@ -106,7 +106,7 @@ export const procedureSentences: SentenceTable = {
   "models.preview":
     "Xem một mô hình trả về gì trước khi lưu: dbt biên dịch sql thành mô hình name trong dự án của khách hàng, thay cho mô hình đã lưu cùng tên hoặc đặt cạnh các mô hình khác, rồi chạy SQL đã biên dịch ở chế độ chỉ đọc. Trả về columns, rows, truncated và compiled; có query thì chạy query trên mô hình và gọi mô hình bằng chính tên của nó, chẳng hạn để đếm số dòng hay số khoá khác nhau. Không lưu và không dựng gì. Mô hình không biên dịch được thì BAD_REQUEST kèm nguyên nhân dbt nêu. Quản trị.",
   "macros.list":
-    "Các macro dbt riêng của khách hàng, mỗi macro kèm công dụng, tham số và mã băm của định nghĩa và mô tả, không kèm định nghĩa. names hoặc match để lọc.",
+    "Các macro dbt riêng của khách hàng, mỗi macro kèm công dụng, tham số và mã băm của định nghĩa và mô tả, không kèm định nghĩa. names hoặc match để lọc; limit và cursor để chia trang, khi đó câu trả lời là { items, nextCursor }.",
   "macros.get": "Một macro dbt của khách hàng, định nghĩa của nó và các mã băm.",
   "macros.check":
     "Kiểm tra định nghĩa một macro trước khi lưu, không chạy gì: điều sẽ bị từ chối, điều đáng ngờ, và những gì không kiểm được.",
@@ -128,7 +128,7 @@ export const procedureSentences: SentenceTable = {
   "bi.schema":
     "Các bảng và cột mà báo cáo đọc được; tables cho đúng những bảng đó, match lọc theo một đoạn tên (không phân biệt hoa thường), columns: false chỉ lấy tên bảng.",
   "bi.questions.list":
-    'Các câu hỏi đã lưu: loại, kiểu biểu đồ và definitionSha256, không kèm SQL. names hoặc match để lọc; include: ["definition", "chart"] để lấy đầy đủ từng phần.',
+    'Các câu hỏi đã lưu: loại, kiểu biểu đồ và definitionSha256, không kèm SQL. names hoặc match để lọc; include: ["definition", "chart"] để lấy đầy đủ từng phần; limit và cursor để chia trang, khi đó câu trả lời là { items, nextCursor }.',
   "bi.questions.get": "Một câu hỏi đã lưu.",
   "bi.questions.answer":
     "Câu trả lời của một câu hỏi đã lưu với tham số, kèm qualifiers như bi.answer.",

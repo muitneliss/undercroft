@@ -242,6 +242,12 @@ export const vi = {
     tablesUnknown: "Không có trong các bảng của khách hàng này: {{tables}}.",
     /** A list asked for by `names`, and the names nothing in it carries, comma-joined. */
     namesUnknown: "Không có trong danh sách này của khách hàng: {{names}}.",
+    /**
+     * A page cursor whose item has left what `{{procedure}}` lists, or that it never answered.
+     * The procedure is named as it is typed (`models.list`), never translated.
+     */
+    pageCursorUnknown:
+      "Con trỏ trang này không còn khớp với {{procedure}}: mục mà nó tiếp nối không còn trong danh sách. Hãy đọc lại từ trang đầu, không kèm cursor.",
     /** Postgres's own sentence follows the colon; it quotes the author's SQL and nothing else. */
     noPassingVersion:
       "{{model}} chưa có phiên bản nào đạt kiểm thử: lần dựng ở lần chạy {{runId}} không đạt kiểm thử hoặc không dựng được, nên chưa có gì của nó được công bố cho Báo cáo. Hãy sửa mô hình rồi dựng lại.",
