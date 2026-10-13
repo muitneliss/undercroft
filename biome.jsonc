@@ -1087,6 +1087,7 @@
         "apps/control-plane/src/handlers/macrosRouter.ts",
         "apps/control-plane/src/handlers/modelsRouter.ts",
         "apps/control-plane/src/handlers/peopleRouter.ts",
+        "apps/control-plane/src/handlers/seedsRouter.ts",
         "apps/control-plane/src/handlers/tenantsRouter.ts",
         "apps/control-plane/src/inviteCli.ts",
         "apps/control-plane/src/services/people.ts"

@@ -51,10 +51,9 @@ export class InMemoryWorkerClient implements WorkerClient {
   /** Every catalogue this double was asked to initialise, and did. */
   readonly initialised: { tenantId: string; triggeredBy: string }[] = [];
   #catalogueExists = false;
-  /** Every model whose relations this double was asked to drop, and did. */
-  readonly dropped: { tenantId: string; model: string }[] = [];
-  /** Every seed it was asked to drop the table of, in order. */
-  readonly droppedSeeds: { tenantId: string; seed: string }[] = [];
+  /** Every model and seed whose relations this double was asked to drop, and did, in order. */
+  readonly dropped: ({ tenantId: string; model: string } | { tenantId: string; seed: string })[] =
+    [];
   /** Which listing each browse asked for: the one fact about a browse only its caller decides. */
   readonly browsed: { source: string; tenantId: string; kind: BrowseListing }[] = [];
   #choices: BrowseScopeResponse = { items: [], partial: [] };
@@ -217,12 +216,17 @@ export class InMemoryWorkerClient implements WorkerClient {
     return this;
   }
 
-  /**
-   * Drop nothing and say so. What the worker drops is decided against a real catalogue and is
-   * proven there (`apps/worker/src/handlers/models.test.ts`); this models the answers a caller
-   * has to handle -- dropped, refused with the dependents' names, or not reached at all.
-   */
   dropModel(input: { tenantId: string; model: string }): Promise<DropOutcome> {
+    return this.#drop(input);
+  }
+
+  dropSeed(input: { tenantId: string; seed: string }): Promise<DropOutcome> {
+    return this.#drop(input);
+  }
+
+  // Drop nothing and say so: dropped, refused naming dependents, or not reached. What the worker
+  // drops is proven against a real catalogue (`apps/worker/src/handlers/models.test.ts`).
+  #drop(input: InMemoryWorkerClient["dropped"][number]): Promise<DropOutcome> {
     if (this.#failWith !== null) {
       return this.#fail();
     }
@@ -230,18 +234,6 @@ export class InMemoryWorkerClient implements WorkerClient {
       return Promise.resolve({ ok: false, reason: "depended-on", dependents: this.#dependents });
     }
     this.dropped.push(input);
-    return Promise.resolve({ ok: true, value: { dropped: [] } });
-  }
-
-  /** A seed's drop, answered as a model's is: dropped, refused with dependents, or not reached. */
-  dropSeed(input: { tenantId: string; seed: string }): Promise<DropOutcome> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    if (this.#dependents.length > 0) {
-      return Promise.resolve({ ok: false, reason: "depended-on", dependents: this.#dependents });
-    }
-    this.droppedSeeds.push(input);
     return Promise.resolve({ ok: true, value: { dropped: [] } });
   }
 

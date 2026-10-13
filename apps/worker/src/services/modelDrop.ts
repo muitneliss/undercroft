@@ -111,7 +111,10 @@ export function dropSeedRelations(
   });
 }
 
-type Schemas = { readonly analytics: string; readonly dq: string };
+interface Schemas {
+  readonly analytics: string;
+  readonly dq: string;
+}
 
 /**
  * Drop the relations `pick` chooses from those present in the tenant's two schemas, or refuse
@@ -121,7 +124,11 @@ type Schemas = { readonly analytics: string; readonly dq: string };
 async function dropOwned(
   deps: DropDeps,
   tenantId: string,
-  pick: (models: readonly ModelShape[], present: readonly Relation[], schemas: Schemas) => Relation[],
+  pick: (
+    models: readonly ModelShape[],
+    present: readonly Relation[],
+    schemas: Schemas,
+  ) => Relation[],
 ): Promise<DropOutcome> {
   const roles = await tenantRolesFor(deps.exec, tenantId);
   if (roles === null) {

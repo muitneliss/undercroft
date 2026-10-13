@@ -34,9 +34,10 @@ const BUILDER = "undercroft-model-builder";
 /**
  * What the model builder must read before it may propose a write: the raw lake, and every
  * layer that might already answer the request -- models and how they depend on each other,
- * macros, saved questions and dashboards. A builder that skips one of them cannot tell a new
- * component from a second copy of one the tenant already has (ADR 0114). And the revision,
- * which tells it whether what it read is still what is there (ADR 0127).
+ * macros, reference tables (ADR 0128), saved questions and dashboards. A builder that skips
+ * one of them cannot tell a new component from a second copy of one the tenant already has
+ * (ADR 0114). And the revision, which tells it whether what it read is still what is there
+ * (ADR 0127).
  */
 const DISCOVERY_READS = [
   "lake.summary",
@@ -48,6 +49,7 @@ const DISCOVERY_READS = [
   "models.revision",
   "macros.list",
   "macros.get",
+  "seeds.list",
   "bi.questions.list",
   "bi.questions.get",
   "bi.dashboards.list",

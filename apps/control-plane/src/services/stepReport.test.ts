@@ -52,6 +52,15 @@ describe("the summary", () => {
     });
   });
 
+  it("counts a seed's load under its own kind, and a failed one as a problem (ADR 0128)", () => {
+    const loaded = [step("seed", "account_groups", "success"), step("seed", "codes", "error")];
+    const { stepSummary, steps } = reportSteps([...RUN, ...loaded], { stepLimit: 100 });
+
+    expect(stepSummary.byStatus.seed).toEqual({ success: 1, error: 1 });
+    expect(stepSummary.problems).toBe(4);
+    expect(names(steps)).toContain("codes");
+  });
+
   it("is there for a run with no steps at all, saying so in zeroes it actually counted", () => {
     expect(reportSteps([], { stepLimit: 100 })).toEqual({
       stepSummary: { total: 0, byStatus: { model: {}, test: {}, seed: {} }, problems: 0 },

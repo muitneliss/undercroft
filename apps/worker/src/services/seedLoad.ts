@@ -16,7 +16,8 @@
  *
  * `,` is dbt's intersection and `resource_type` its method, both in dbt 1.9's selector grammar
  * (`graph/cli.py`, `graph/selector_methods.py`). A build with no selection is the whole project,
- * every seed included.
+ * every seed included. A tenant with no seeds gets none of these: `resource_type:seed` matching
+ * nothing is a warning in dbt's log, and the build it would decorate loads nothing anyway.
  *
  * HOW. dbt loads an existing seed table by truncating it and inserting the file's rows. That is
  * right while the table has exactly the declared columns, and wrong the moment it does not: an
@@ -66,7 +67,8 @@ function matches(seed: Seed, standing: readonly Column[]): boolean {
     standing.length === seed.columns.length &&
     seed.columns.every(
       (column, at) =>
-        standing[at]?.name === column.name && standing[at]?.type === (STANDING_TYPE.get(column.type) ?? column.type),
+        standing[at]?.name === column.name &&
+        standing[at]?.type === (STANDING_TYPE.get(column.type) ?? column.type),
     )
   );
 }

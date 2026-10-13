@@ -269,3 +269,43 @@ describe("the part of the graph around one node (issue 443)", () => {
     expect(around("raw:raw.records", "both", null)).toBeNull();
   });
 });
+
+describe("a seed (ADR 0128)", () => {
+  const graph = lineage(
+    {
+      stg_accounts: "select * from {{ ref('account_groups') }} join {{ ref('gone') }} using (code)",
+      mart: "select * from {{ ref('stg_accounts') }}",
+    },
+    {},
+    ["account_groups", "payment_terms"],
+  );
+
+  it("is a node a ref reads like a model's, never a missing dependency", () => {
+    expect(edges(graph)).toEqual(
+      expect.arrayContaining([
+        "seed:account_groups -> model:stg_accounts",
+        "missing:gone -> model:stg_accounts",
+      ]),
+    );
+    expect(graph.nodes.filter((node) => node.kind === "missing").map((node) => node.name)).toEqual([
+      "gone",
+    ]);
+  });
+
+  it("is a node even while nothing reads it, so asking about it is answered", () => {
+    expect(graph.nodes).toContainEqual({
+      kind: "seed",
+      id: "seed:payment_terms",
+      name: "payment_terms",
+    });
+  });
+
+  it("is where a walk down from it starts, reaching every model that reads it", () => {
+    const part = lineageAround(graph, { name: "account_groups", direction: "down", depth: null });
+    expect(part?.nodes.map((node) => node.id)).toEqual([
+      "seed:account_groups",
+      "model:mart",
+      "model:stg_accounts",
+    ]);
+  });
+});

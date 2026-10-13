@@ -1541,6 +1541,10 @@ export const en = {
     tenantMacrosHead: "The customer's macros",
     tenantMacrosNone:
       "This customer has no macros of its own yet. One is saved with macros.save, from the CLI, MCP or an agent.",
+    seedsHead: "The customer's reference tables",
+    seedsNone:
+      "This customer has no reference tables yet. One is saved with seeds.save, from the CLI, MCP or an agent, and a model reads it with ref().",
+    seedSize: "{{columns, number}} columns, {{rows, number}} rows",
     deleteHead: "Delete model",
     deleteLead:
       "Delete {{name}} with the table it built and the rows its tests stored. A report reading that table will find nothing. Models that ref it keep the ref; lineage shows it as a missing dependency.",

@@ -41,7 +41,7 @@ import {
   saveSeed,
   seedExists,
 } from "@undercroft/db/repos";
-import { modelLineage } from "@undercroft/db/services";
+import { checkTests, modelLineage } from "@undercroft/db/services";
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { mapNarrowed, type NameFilter, type Narrowed, narrowByName } from "./listFilter.ts";
@@ -156,8 +156,12 @@ export async function save(
 }
 
 /**
- * The tenant's models that read `seed` by `ref()`, in their own text or through a macro they
- * call, as the lineage reads them -- one reading of "who depends on this", not a second one.
+ * The tenant's models that read `seed`: by `ref()` in their own text or through a macro they
+ * call, as the lineage reads them, or in one of their tests -- a `relationships` to it, a SQL
+ * test that `ref()`s it (ADR 0130) -- as `checkTests` reads them. dbt compiles every test with
+ * the project, so a test naming a deleted seed fails the tenant's whole build, exactly as a
+ * model's `ref()` would. Each is the reading that already decides those questions elsewhere,
+ * never a second one: a test reads the seed when, without it, `checkTests` finds the name unknown.
  */
 async function readersOf(exec: SqlExecutor, tenantId: string, seed: string): Promise<string[]> {
   const [models, macros, seeds] = await Promise.all([
@@ -165,15 +169,28 @@ async function readersOf(exec: SqlExecutor, tenantId: string, seed: string): Pro
     listMacros(exec, tenantId),
     listSeedSummaries(exec, tenantId),
   ]);
-  const graph = modelLineage({ models, macros, seeds: seeds.map((s) => s.name) });
+  const seedNames = seeds.map((s) => s.name);
+  const graph = modelLineage({ models, macros, seeds: seedNames });
   const node = graph.nodes.find((n) => n.kind === "seed" && n.name === seed);
-  if (node === undefined) {
-    return [];
-  }
-  const readers = graph.edges.filter((edge) => edge.from === node.id).map((edge) => edge.to);
-  return graph.nodes
-    .filter((n) => n.kind === "model" && readers.includes(n.id))
+  const readers = new Set(
+    graph.edges.filter((edge) => edge.from === node?.id).map((edge) => edge.to),
+  );
+  const fromText = graph.nodes
+    .filter((n) => n.kind === "model" && readers.has(n.id))
     .map((n) => n.name);
+  const without = {
+    existingModels: models.map((model) => model.name),
+    existingMacros: macros.map((macro) => macro.name),
+    existingSeeds: seedNames.filter((name) => name !== seed),
+  };
+  const fromTests = models
+    .filter((model) =>
+      checkTests({ name: model.name, tests: model.tests, ...without }).some(
+        (found) => found.code === "unknown-ref" && found.subject === seed,
+      ),
+    )
+    .map((model) => model.name);
+  return [...new Set([...fromText, ...fromTests])].sort();
 }
 
 export type RemoveOutcome =

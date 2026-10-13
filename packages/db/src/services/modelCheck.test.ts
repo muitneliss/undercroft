@@ -224,6 +224,17 @@ describe("errors", () => {
     expect(codes(check(sql, { name: "fct_deals", existing: ["stg_deals"] }))).toEqual([]);
   });
 
+  it("unknown-ref: stays quiet on one of the tenant's seeds, which ref() reads like a model (ADR 0128)", () => {
+    const sql = "select * from {{ ref('account_groups') }}";
+    expect(codes(check(sql, { seeds: ["account_groups"] }))).toEqual([]);
+    expect(codes(check(sql))).toEqual(["unknown-ref"]);
+  });
+
+  it("analytics-direct: fires on a seed's table named by its schema, past ref()", () => {
+    const sql = "select * from analytics_case_0042.account_groups";
+    expect(codes(check(sql, { seeds: ["account_groups"] }))).toContain("analytics-direct");
+  });
+
   it("report-parameter: fires on a report question's {{ name }} left in the SQL", () => {
     // A question's parameter and a Jinja variable are spelled alike. dbt renders an unknown
     // name as an empty string, so the filter would vanish from a build that succeeds.

@@ -1834,6 +1834,11 @@ export const vi = {
     tenantMacrosHead: "Macro của khách hàng",
     tenantMacrosNone:
       "Khách hàng này chưa có macro riêng. Macro được lưu bằng macros.save, qua CLI, MCP hoặc một trợ lý.",
+    /** A seed is a reference table a person keeps; a model reads it with ref() (ADR 0128). */
+    seedsHead: "Bảng tham chiếu của khách hàng",
+    seedsNone:
+      "Khách hàng này chưa có bảng tham chiếu nào. Bảng được lưu bằng seeds.save, qua CLI, MCP hoặc một trợ lý, và mô hình đọc nó bằng ref().",
+    seedSize: "{{columns, number}} cột, {{rows, number}} dòng",
     deleteHead: "Xoá mô hình",
     deleteLead:
       "Xoá {{name}} cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu. Báo cáo đang đọc bảng này sẽ không còn dữ liệu. Mô hình nào ref nó vẫn giữ ref; dòng dữ liệu hiện nó là phụ thuộc bị thiếu.",

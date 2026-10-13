@@ -41,8 +41,7 @@ export const seedTable = {
     "too-many-decimals":
       "rows[{{row}}], cột {{column}}: có hơn 4 chữ số sau dấu chấm, mà numeric(18,4) sẽ làm tròn mất. Hãy gửi tối đa 4 chữ số thập phân.",
     "not-boolean": "rows[{{row}}], cột {{column}}: phải là true hoặc false.",
-    "not-date":
-      "rows[{{row}}], cột {{column}}: không phải một ngày có thật, viết dạng YYYY-MM-DD.",
+    "not-date": "rows[{{row}}], cột {{column}}: không phải một ngày có thật, viết dạng YYYY-MM-DD.",
     "not-timestamp":
       "rows[{{row}}], cột {{column}}: không phải một thời điểm dạng YYYY-MM-DDTHH:MM:SS kèm múi giờ, ví dụ 2026-10-13T09:00:00+07:00.",
     "no-offset":

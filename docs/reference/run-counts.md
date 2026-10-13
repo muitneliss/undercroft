@@ -108,6 +108,9 @@ an ingest a script pushed, and `extract`, `semantic` and `semantic-init` are the
 
 `runs get` reports a transform's steps as `stepSummary` -- the total, how many steps of each
 kind ended in each dbt status, and how many are problems -- then the page of steps asked for.
+A step's kind is `model`, `test` or `seed`, the load of a reference table a model reads
+([ADR 0128](../adr/0128-a-tenant-keeps-its-own-reference-tables.md)); a seed that did not load
+fails the run.
 A problem is any step that did not end `success`, `pass` or `skipped`: `fail`, `error`, `warn`,
 or a status the platform does not know, which is listed rather than assumed fine. A `skipped`
 step is counted as `skipped`, never as a pass. `steps` chooses `none`, `problems` (the default)

@@ -22,6 +22,11 @@ Every role check and every refusal the web UI has applies to you unchanged.
   The platform ships a few into every project; a customer's admin can save the customer's
   own with `macros.save`, and every model of that customer can then call it. Reuse one
   (`macros.list`) before writing the same expression into a second model.
+- **Seed**: a reference table a person keeps by hand -- accounts mapped to groups, codes to
+  labels -- that models read with `{{ ref('name') }}` like another model. A customer's admin
+  saves one with `seeds.save`: columns each with a declared type, rows of strings or `null`.
+  Nothing is inferred, and a cell its column cannot hold is refused, naming the row and the
+  column. Keep such a table as a seed (`seeds.list`), never as a `VALUES` list inside a model.
 - **Question** (_câu hỏi_ in Vietnamese): a saved query over the built models, either a
   visual definition or SQL, together with how to draw it as a table or a chart. It is what
   other BI tools call a saved query, a chart or a Look; the name comes from Metabase, the BI
@@ -71,20 +76,21 @@ door with this rule.
    tool list. With the CLI, run `undercroft describe <command> --agent`. Never call an
    operation you have not seen listed, and never invent one.
 2. **Read before you write, and never guess an ID.** Take a tenant ID from `tenants.list`, a
-   run ID from `runs.list`, a model name from `models.list`, a macro name from `macros.list`
-   and a source name from `connections.list`. Tenant IDs look like `CASE-0042`. When an ID is not in what you read,
-   stop and ask the person. Do not construct one.
+   run ID from `runs.list`, a model name from `models.list`, a macro name from `macros.list`,
+   a seed name from `seeds.list` and a source name from `connections.list`. Tenant IDs look
+   like `CASE-0042`. When an ID is not in what you read, stop and ask the person. Do not
+   construct one.
 3. **Name the target of a read.** A whole tenant's lineage, schema or Drive folders is more
-   than your context will hold. `models.lineage` takes a `name` (a model, or a raw table as
-   `raw.records`) with `direction` and `depth`; `bi.schema` and `lake.querySchema` take
+   than your context will hold. `models.lineage` takes a `name` (a model, a seed, or a raw table
+   as `raw.records`) with `direction` and `depth`; `bi.schema` and `lake.querySchema` take
    `tables` or `match`, and `columns: false` for names alone; `connections.browseScope` takes
    `parentId` (`null` for the top level), `query`, `limit` and `cursor`. A name that is not
    there is refused as `NOT_FOUND`, never answered empty; a browse's `partial` still says when
    the listing behind a page was incomplete.
-   The lists answer summaries. `models.list`, `macros.list`, `bi.questions.list` and
-   `connections.list` take `names` or `match`, and leave out each item's body: a question's
-   definition, a connection's chosen names, a build's columns, a macro's definition. Ask
-   `include` for one only when you need it (`include: ["definition", "chart"]`,
+   The lists answer summaries. `models.list`, `macros.list`, `seeds.list`, `bi.questions.list`
+   and `connections.list` take `names` or `match`, and leave out each item's body: a question's
+   definition, a connection's chosen names, a build's columns, a macro's definition, a seed's
+   rows. Ask `include` for one only when you need it (`include: ["definition", "chart"]`,
    `["config"]`, `["columns"]`), or `get` the one item. `models.reference` takes `parts`:
    ask for `["tenantMacros"]` alone, since the other two parts never change.
 4. **Say what you will change, then change it.** Before a `write` or `destructive`

@@ -299,11 +299,10 @@ async function spawnDbt(
     "--project-dir",
     dir,
     // Last, and one argv item per selector: dbt 1.9's `--select` takes every value up to the
-    // next flag and builds their union, so several selectors are one build, not several. The
-    // seeds each one reaches follow it, or a model would read a seed nothing loaded.
+    // next flag and builds their union, so several selectors are one build, not several.
     ...(input.select === undefined || input.select.length === 0
       ? []
-      : ["--select", ...input.select, ...seedSelectors(input.select)]),
+      : ["--select", ...input.select]),
   ];
   const timeoutMs = input.timeoutMs ?? deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const { exitCode, stdout, stderr } = await deps.sessions.withPassword(
@@ -356,7 +355,13 @@ export async function runTransform(
         seeds: loads,
       }),
     );
-    const { exitCode, output } = await spawnDbt(deps, input, dir);
+    // The seeds each selector reaches follow it, or a model would read a seed nothing loaded.
+    // Only for a tenant that has one: `resource_type:seed` matching nothing is a dbt warning.
+    const selected =
+      input.select === undefined || seeds.length === 0
+        ? input
+        : { ...input, select: [...input.select, ...seedSelectors(input.select)] };
+    const { exitCode, output } = await spawnDbt(deps, selected, dir);
     const { steps, testsFailed } = parseRunResults(await readRunResults(dir));
 
     if (exitCode !== 0 && steps.length === 0) {

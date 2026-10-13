@@ -300,11 +300,7 @@ export function checkMacro(input: MacroCheckInput): ModelCheck {
   return {
     findings: distinct([
       ...nameFindings(jinja, defined, "unbound-name"),
-      ...referenceFindings(
-        jinja,
-        new Set([...input.existingModels, ...input.existingSeeds]),
-        null,
-      ),
+      ...referenceFindings(jinja, new Set([...input.existingModels, ...input.existingSeeds]), null),
       ...fragmentFindings(lex(jinja.text)),
     ]),
     unverified: UNVERIFIED,

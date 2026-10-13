@@ -266,3 +266,133 @@ describe("runTransform", () => {
     expect(outcome).toEqual({ ok: true, steps: [], testsFailed: 0, error: null, models: 0 });
   });
 });
+
+describe("runTransform, with the tenant's seeds (ADR 0128)", () => {
+  const SEED_OK = {
+    unique_id: "seed.undercroft.account_groups",
+    status: "success",
+    message: "INSERT 2",
+    failures: null,
+    execution_time: 0.1,
+    relation_name: '"undercroft"."analytics_case_1"."account_groups"',
+  };
+
+  async function plantSeed(tenantId = TENANT): Promise<void> {
+    await db.asSuperuser((tx) =>
+      tx.query("INSERT INTO app.seed (tenant_id, name, columns, rows) VALUES ($1, $2, $3, $4)", [
+        tenantId,
+        "account_groups",
+        JSON.stringify([
+          { name: "code", type: "text" },
+          { name: "budget", type: "numeric(18,4)" },
+        ]),
+        JSON.stringify([
+          ["0511", "12345678901234.5678"],
+          ["642", null],
+        ]),
+      ]),
+    );
+  }
+
+  /** A build that records what dbt was handed and answers with `results`. */
+  function recording(seen: { last: Seen | null }, results: unknown[], exitCode = 0): Spawn {
+    return (cmd, options) => {
+      seen.last = { cmd, options, files: readTree(options.cwd) };
+      writeResults(options.cwd, results);
+      return Promise.resolve({ exitCode, stdout: "", stderr: "" });
+    };
+  }
+
+  it("renders each seed as its CSV with every column typed, and records its load as a step", async () => {
+    await plantSeed();
+    const seen: { last: Seen | null } = { last: null };
+
+    const outcome = await runTransform(deps(recording(seen, [SEED_OK, MODEL_OK])), {
+      tenantId: TENANT,
+      select: ["stg_deals", "+fct_pipeline", "dim_owner+"],
+    });
+
+    expect(outcome.ok).toBe(true);
+    expect(outcome.steps.map((s) => [s.kind, s.name, s.status])).toEqual([
+      ["seed", "account_groups", "success"],
+      ["model", "stg_deals", "success"],
+    ]);
+    const files = seen.last?.files ?? {};
+    // The amount is the text it was stored as, quoted; the NULL is the one unquoted empty field.
+    expect(files["seeds/account_groups.csv"]).toBe(
+      'code,budget\n"0511","12345678901234.5678"\n"642",\n',
+    );
+    expect(files["dbt_project.yml"]).toContain(
+      '    account_groups:\n      +column_types:\n        code: "text"\n        budget: "numeric(18,4)"\n',
+    );
+    // A seed never loaded has no table to compare, so it is created by its first load.
+    expect(files["dbt_project.yml"]).not.toContain("+full_refresh");
+    // Each selector brings the seeds it reaches, or a model would read a seed nothing loaded.
+    const argv = seen.last?.cmd ?? [];
+    expect(argv.slice(argv.indexOf("--select") + 1)).toEqual([
+      "stg_deals",
+      "+fct_pipeline",
+      "dim_owner+",
+      "1+stg_deals,resource_type:seed",
+      "+fct_pipeline,resource_type:seed",
+      "@dim_owner,resource_type:seed",
+    ]);
+  });
+
+  it("a seed that did not load fails the build in dbt's words, though no model broke", async () => {
+    await plantSeed();
+
+    const outcome = await runTransform(
+      deps(
+        recording(
+          { last: null },
+          [
+            { ...SEED_OK, status: "error", message: 'invalid input syntax for type numeric: "x"' },
+            { ...MODEL_OK, status: "skipped", message: null },
+          ],
+          1,
+        ),
+      ),
+      { tenantId: TENANT },
+    );
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toBe('invalid input syntax for type numeric: "x"');
+  });
+
+  it("a tenant with seeds and no models still builds, loading them", async () => {
+    await db.asSuperuser((tx) => tx.query("INSERT INTO ops.tenant (id) VALUES ('CASE-2')"));
+    await plantSeed("CASE-2");
+    const seen: { last: Seen | null } = { last: null };
+
+    const outcome = await runTransform(deps(recording(seen, [SEED_OK])), { tenantId: "CASE-2" });
+
+    expect(seen.last).not.toBeNull();
+    expect(outcome.steps.map((s) => s.kind)).toEqual(["seed"]);
+  });
+
+  it("reloads a seed from scratch only when its standing table no longer has the declared columns", async () => {
+    await plantSeed();
+    async function yml(): Promise<string> {
+      const seen: { last: Seen | null } = { last: null };
+      await runTransform(deps(recording(seen, [SEED_OK])), { tenantId: TENANT });
+      return seen.last?.files["dbt_project.yml"] ?? "";
+    }
+    // The first build provisions the tenant's login; its load made the table, as that login.
+    expect(await yml()).not.toContain("+full_refresh");
+    await db.asRole("undercroft_dbt_case_1", (tx) =>
+      tx.exec("CREATE TABLE analytics_case_1.account_groups (code text, budget numeric(18,4))"),
+    );
+    const matching = await yml();
+    // The declaration changed since: `budget` was text, so a truncate-and-insert would cast every
+    // amount into the old type.
+    await db.asRole("undercroft_dbt_case_1", (tx) =>
+      tx.exec("ALTER TABLE analytics_case_1.account_groups ALTER COLUMN budget TYPE text"),
+    );
+    const changed = await yml();
+
+    expect(matching).not.toContain("+full_refresh");
+    expect(changed).toContain("    account_groups:\n");
+    expect(changed).toContain("      +full_refresh: true\n");
+  });
+});

@@ -770,6 +770,57 @@ describe("POST /v1/models/drop", () => {
   });
 });
 
+describe("POST /v1/seeds/drop (ADR 0128)", () => {
+  withDatabase();
+
+  async function built(sql: string): Promise<void> {
+    await provisionTenantRoles(db, TENANT);
+    await db.asRole("undercroft_dbt_case_1", (tx) => tx.exec(sql));
+  }
+
+  async function tables(): Promise<string[]> {
+    const { rows } = await db.asSuperuser((tx) =>
+      tx.query<{ name: string }>(
+        `SELECT c.relname AS name FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'analytics_case_1' AND c.relkind IN ('r', 'v') ORDER BY 1`,
+      ),
+    );
+    return rows.map((r) => r.name);
+  }
+
+  it("drops the table the seed's loads made, and nothing a model built", async () => {
+    await built(`
+      CREATE TABLE analytics_case_1.account_groups (code text);
+      CREATE TABLE analytics_case_1.stg_deals AS SELECT 1 AS deal_id`);
+
+    const res = await post(api(), "/v1/seeds/drop", { tenantId: TENANT, seed: "account_groups" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      dropped: [{ schema: "analytics_case_1", name: "account_groups", kind: "table" }],
+    });
+    // A name a model holds is never a seed's table to take, whatever the request says.
+    const model = await post(api(), "/v1/seeds/drop", { tenantId: TENANT, seed: "stg_deals" });
+    expect(await model.json()).toEqual({ dropped: [] });
+    expect(await tables()).toEqual(["stg_deals"]);
+  });
+
+  it("refuses, dropping nothing, while a model's view reads from it", async () => {
+    await built(`
+      CREATE TABLE analytics_case_1.account_groups (code text);
+      CREATE VIEW analytics_case_1.stg_accounts AS SELECT code FROM analytics_case_1.account_groups`);
+
+    const res = await post(api(), "/v1/seeds/drop", { tenantId: TENANT, seed: "account_groups" });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      code: "relation_depended_on",
+      details: ["stg_accounts"],
+    });
+    expect(await tables()).toEqual(["account_groups", "stg_accounts"]);
+  });
+});
+
 describe("a build refused before anything runs", () => {
   it("refuses a caller without the service token, and a body with no model", async () => {
     // `noDatabase` refuses every statement, so both refusals are also proven to come first.

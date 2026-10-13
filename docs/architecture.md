@@ -406,6 +406,14 @@ environment, so a model's `env_var()` reads none of the worker's secrets. Models
 in both, as the same login, before its row goes; if the drop does not happen, the row stays
 ([ADR 0077](adr/0077-deleting-a-model-drops-what-it-built.md)).
 
+A small table a person keeps by hand, such as accounts mapped to groups, is a seed: a row in
+`app.seed` with typed columns and rows of strings or nulls, which models read with `ref()`. No
+type is inferred, and a cell its column cannot hold, or one dbt would load as a different
+value, is refused at save. The worker renders every seed into the build's project as a CSV file
+and loads the ones its selection reaches into `analytics_slug`, beside the models; a seed that
+fails to load fails the build
+([ADR 0128](adr/0128-a-tenant-keeps-its-own-reference-tables.md)).
+
 Reports are first-party ([ADR 0020](adr/0020-bi-is-first-party-metabase-leaves-the-stack.md)). A
 question is a saved definition plus a chart. It compiles to SQL in which every identifier and
 literal is quoted, and the worker runs that SQL as the tenant's BI login. Result rows are never

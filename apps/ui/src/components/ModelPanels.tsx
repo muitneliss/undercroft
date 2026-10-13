@@ -161,9 +161,10 @@ export function TestsForm({
 }
 
 /**
- * The platform's source and macros, and the customer's own macros, disclosed on demand.
- * Read-only by construction: a customer's macro is written through `macros.save` (the CLI, MCP
- * or an agent), and this panel only shows what a model here may call (ADR 0086).
+ * The platform's source and macros, and the customer's own macros and reference tables, disclosed
+ * on demand. Read-only by construction: a customer's macro is written through `macros.save` and a
+ * reference table through `seeds.save` (the CLI, MCP or an agent), and this panel only shows what
+ * a model here may call or `ref()` (ADR 0086, ADR 0128).
  */
 export function Reference({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
@@ -201,8 +202,46 @@ export function Reference({ tenantId }: { tenantId: string }): React.JSX.Element
             ))}
           </>
         ) : null}
+        <Seeds tenantId={tenantId} />
       </div>
     </details>
+  );
+}
+
+/** How a model reads the seed `name`: what an author copies into their SQL. */
+function refOf(name: string): string {
+  return `{{ ref('${name}') }}`;
+}
+
+/**
+ * The customer's reference tables, each by the `ref()` a model reads it with and its size -- no
+ * cells: a seed is read whole with `seeds.get`, and this list is for choosing one (ADR 0128).
+ */
+function Seeds({ tenantId }: { tenantId: string }): React.JSX.Element {
+  const { t } = useTranslation();
+  const seeds = trpc.seeds.list.useQuery({ tenantId });
+
+  return (
+    <>
+      <span className="label">{t("models.seedsHead")}</span>
+      {seeds.isPending ? <Skeleton rows={1} /> : null}
+      {seeds.isError ? <Errata heading={t("common.notLoaded")} error={seeds.error} /> : null}
+      {seeds.isSuccess && seeds.data.length === 0 ? (
+        <p className="prose">{t("models.seedsNone")}</p>
+      ) : null}
+      {seeds.isSuccess && seeds.data.length > 0 ? (
+        <ul className="stack stack--tight">
+          {seeds.data.map((seed) => (
+            <li key={seed.name} className="row">
+              <code>{refOf(seed.name)}</code>
+              <span className="note">
+                {t("models.seedSize", { columns: seed.columnCount, rows: seed.rowCount })}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </>
   );
 }
 

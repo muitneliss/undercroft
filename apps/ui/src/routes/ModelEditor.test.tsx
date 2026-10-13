@@ -59,13 +59,28 @@ const LINEAGE = {
     },
     { kind: "model", id: "model:stg_blank", name: "stg_blank", undeclared: [] },
     { kind: "missing", id: "missing:stg_gone", name: "stg_gone" },
+    { kind: "seed", id: "seed:account_groups", name: "account_groups" },
+    { kind: "model", id: "model:stg_accounts", name: "stg_accounts", undeclared: [] },
   ],
   edges: [
+    { from: "seed:account_groups", to: "model:stg_accounts", via: null },
     { from: "raw:raw.records", to: "model:stg_notes", via: "gmail_letters" },
     { from: "missing:stg_gone", to: "model:stg_notes", via: null },
     { from: "model:stg_notes", to: "model:mart_notes", via: null },
   ],
 };
+
+/** One reference table, as `seeds.list` answers: its size and hash, never a cell. */
+const SEEDS = [
+  {
+    name: "account_groups",
+    columnCount: 3,
+    rowCount: 42,
+    updatedBy: "u1",
+    updatedAt: WHEN,
+    sha256: "0".repeat(64),
+  },
+];
 
 afterEach(() => {
   cleanup();
@@ -94,6 +109,14 @@ function mount(name: string): void {
           }
           if (path.endsWith("/models.lineage")) {
             return Promise.resolve(answer(LINEAGE));
+          }
+          if (path.endsWith("/models.reference")) {
+            return Promise.resolve(
+              answer({ sourcesYml: "version: 2\n", macros: [], tenantMacros: [] }),
+            );
+          }
+          if (path.endsWith("/seeds.list")) {
+            return Promise.resolve(answer(SEEDS));
           }
           return Promise.resolve(Response.json({ error: { message: path } }, { status: 500 }));
         },
@@ -179,5 +202,22 @@ describe("the dependencies band", () => {
     mount("stg_blank");
     expect(await screen.findByText("Không khai báo đọc gì.")).toBeDefined();
     expect(screen.queryByText("Thượng nguồn chưa khai báo")).toBeNull();
+  });
+});
+
+describe("a reference table (ADR 0128)", () => {
+  it("is named as one among what a model reads", async () => {
+    mount("stg_accounts");
+    await screen.findByText("Phụ thuộc");
+
+    expect(await screen.findByText("Bảng tham chiếu")).toBeDefined();
+    expect(namesUnder("Đọc")).toEqual(["account_groupsBảng tham chiếu"]);
+  });
+
+  it("is listed in the reference panel by the ref() a model reads it with, and its size", async () => {
+    mount("stg_accounts");
+
+    expect(await screen.findByText("{{ ref('account_groups') }}")).toBeDefined();
+    expect(screen.getByText("3 cột, 42 dòng")).toBeDefined();
   });
 });

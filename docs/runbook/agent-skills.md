@@ -90,7 +90,7 @@ A workflow is named for what a person wants, not for a tool: `undercroft-model-b
    - a workflow the entry skill does not name;
    - an `sql` example `models.check` finds anything in;
    - a model builder that no longer names one of the reads it needs to find what the tenant
-     already has: the lake, models, lineage, macros, questions and dashboards.
+     already has: the lake, models, lineage, macros, seeds, questions and dashboards.
 5. Run `task ci:skill-check` (it needs the network) to see `npx skills` list it. It fails
    on a skill it lists that is not under `skills/`, too.
 

@@ -187,7 +187,7 @@ export const vi = {
     modelNameTaken: "Đã có một mô hình tên {{name}}. Hãy mở mô hình đó để sửa, hoặc chọn tên khác.",
     /** A model may not take a seed's name, nor a seed a model's: `ref()` reads both (ADR 0128). */
     modelNameIsSeed:
-      "Đã có một bảng tham chiếu (seed) tên {{name}}. Mô hình và bảng tham chiếu không được trùng tên, vì cả hai đều được đọc bằng ref('{{name}}'). Hãy chọn tên khác.",
+      "Đã có một bảng tham chiếu (seed) tên {{name}}. Mô hình và bảng tham chiếu không được trùng tên, vì ref() đọc cả hai bằng cùng một tên. Hãy chọn tên khác.",
     modelTestRefused: "Chưa lưu gì. {{reason}} models.check cho thấy mọi phát hiện.",
     buildInProgress:
       "Đang có một lần dựng mô hình cho khách hàng này. Hãy đợi lần đó xong rồi thử lại.",
@@ -217,7 +217,7 @@ export const vi = {
     seedNameTaken:
       "Đã có một bảng tham chiếu tên {{name}}. Hãy lưu không kèm create để thay nó, hoặc chọn tên khác.",
     seedNameIsModel:
-      "Đã có một mô hình tên {{name}}. Bảng tham chiếu và mô hình không được trùng tên, vì cả hai đều được đọc bằng ref('{{name}}'). Hãy chọn tên khác.",
+      "Đã có một mô hình tên {{name}}. Bảng tham chiếu và mô hình không được trùng tên, vì ref() đọc cả hai bằng cùng một tên. Hãy chọn tên khác.",
     /** Dependents are the models that ref() it, by name, or the views that read its table. */
     seedDependedOn:
       "Chưa xoá bảng tham chiếu {{name}}: {{dependents}} vẫn đọc nó. Hãy sửa để chúng không đọc {{name}} nữa, rồi thử lại.",

@@ -112,7 +112,7 @@ export const en = {
     modelNameTaken:
       "A model named {{name}} already exists. Open it to edit, or choose another name.",
     modelNameIsSeed:
-      "A reference table (seed) named {{name}} already exists. A model and a reference table may not share a name, since ref('{{name}}') reads both. Choose another name.",
+      "A reference table (seed) named {{name}} already exists. A model and a reference table may not share a name, since ref() reads either by that name. Choose another name.",
     modelTestRefused: "Nothing was saved. {{reason}} models.check shows every finding.",
     buildInProgress:
       "A build is already running for this customer. Wait for it to finish, then try again.",
@@ -134,7 +134,7 @@ export const en = {
     seedNameTaken:
       "A reference table named {{name}} already exists. Save without create to replace it, or choose another name.",
     seedNameIsModel:
-      "A model named {{name}} already exists. A reference table and a model may not share a name, since ref('{{name}}') reads both. Choose another name.",
+      "A model named {{name}} already exists. A reference table and a model may not share a name, since ref() reads either by that name. Choose another name.",
     seedDependedOn:
       "The reference table {{name}} was not deleted: {{dependents}} still read it. Change them so they no longer read {{name}}, then try again.",
     seedNotDeleted:

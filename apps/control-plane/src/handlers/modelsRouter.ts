@@ -146,9 +146,12 @@ export const modelsRouter = router({
       }
       throw new TRPCError({
         code: "CONFLICT",
-        message: t(outcome.reason === "seed-named" ? "error.modelNameIsSeed" : "error.modelNameTaken", {
-          name: input.name,
-        }),
+        message: t(
+          outcome.reason === "seed-named" ? "error.modelNameIsSeed" : "error.modelNameTaken",
+          {
+            name: input.name,
+          },
+        ),
       });
     }),
 

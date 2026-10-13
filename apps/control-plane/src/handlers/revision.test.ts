@@ -23,6 +23,18 @@ const MACRO_SQL = "{% macro tidy(value) %}\n  trim({{ value }})\n{% endmacro %}\
 const DESCRIPTION = "Bỏ khoảng trắng thừa.";
 const DEFINITION = { kind: "sql" as const, sql: "select 1 as n" };
 const CHART = { type: "table" as const, y: [], options: {} };
+const SEED = {
+  tenantId: TENANT,
+  name: "account_groups",
+  columns: [
+    { name: "code", type: "text" as const },
+    { name: "budget", type: "numeric(18,4)" as const },
+  ],
+  rows: [
+    ["511", "1200.5000"],
+    ["642", null],
+  ],
+};
 /** A time no save in this suite could stamp: what an untouched row still says. */
 const LONG_AGO = "2020-01-01T00:00:00.000Z";
 
@@ -72,7 +84,10 @@ async function audited(action: string): Promise<number> {
 }
 
 /** Back-date a row, as the superuser, so a save that touched it cannot hide inside one ms. */
-async function backdate(table: "app.model" | "app.macro", name: string): Promise<void> {
+async function backdate(
+  table: "app.model" | "app.macro" | "app.seed",
+  name: string,
+): Promise<void> {
   await db.asSuperuser((tx) =>
     tx.query(`UPDATE ${table} SET updated_at = $3 WHERE tenant_id = $1 AND name = $2`, [
       TENANT,
@@ -116,6 +131,7 @@ describe("content hashes", () => {
       description: DESCRIPTION,
       sql: MACRO_SQL,
     });
+    await api.seeds.save(SEED);
     const { id } = await api.bi.questions.save({
       tenantId: TENANT,
       name: "Revenue",
@@ -144,6 +160,18 @@ describe("content hashes", () => {
       sqlSha256: macro.sqlSha256,
       descriptionSha256: macro.descriptionSha256,
     });
+
+    // A seed's hash is over its columns and rows together, as Postgres prints them (ADR 0128).
+    const seed = await api.seeds.get({ tenantId: TENANT, name: "account_groups" });
+    expect(seed.sha256).toBe(
+      sha256(
+        await storedText(
+          "SELECT jsonb_build_array(columns, rows)::text AS text FROM app.seed WHERE name = $1",
+          ["account_groups"],
+        ),
+      ),
+    );
+    expect((await api.seeds.list({ tenantId: TENANT }))[0]?.sha256).toBe(seed.sha256);
 
     const question = await api.bi.questions.get({ tenantId: TENANT, id });
     expect(question.definitionSha256).toBe(
@@ -189,6 +217,15 @@ describe("models.revision", () => {
     await api.macros.delete({ tenantId: TENANT, name: "tidy" });
     expect((await next()).macros).toBe(empty?.macros ?? "");
 
+    await api.seeds.save(SEED);
+    const withSeed = await next();
+    expect(withSeed.seeds).not.toBe(empty?.seeds ?? "");
+    expect(withSeed.models).toBe(edited.models);
+    await api.seeds.save(SEED);
+    expect(await next()).toEqual(withSeed);
+    await api.seeds.save({ ...SEED, rows: [["511", "1200.5001"]] });
+    expect((await next()).seeds).not.toBe(withSeed.seeds);
+
     const { id } = await api.bi.questions.save({
       tenantId: TENANT,
       name: "Revenue",
@@ -215,6 +252,7 @@ describe("models.revision", () => {
         const partsMoved =
           revision.models !== before.models ||
           revision.macros !== before.macros ||
+          revision.seeds !== before.seeds ||
           revision.questions !== before.questions;
         expect(revision.revision !== before.revision).toBe(partsMoved);
       }
@@ -267,6 +305,18 @@ describe("an identical re-save", () => {
       unchanged: false,
     });
     expect(await audited("macros.save")).toBe(rows + 1);
+  });
+
+  it("of a seed answers unchanged and touches nothing (ADR 0128)", async () => {
+    await api.seeds.save(SEED);
+    await backdate("app.seed", "account_groups");
+    const rows = await audited("seeds.save");
+
+    expect(await api.seeds.save(SEED)).toEqual({ ok: true, unchanged: true });
+    expect((await api.seeds.get({ tenantId: TENANT, name: "account_groups" })).updatedAt).toBe(
+      LONG_AGO,
+    );
+    expect(await audited("seeds.save")).toBe(rows);
   });
 
   it("under create is still refused: the name is taken whatever the text", async () => {

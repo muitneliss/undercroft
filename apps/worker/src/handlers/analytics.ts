@@ -1,6 +1,6 @@
 /**
- * The verbs behind a dashboard: build a model and drop what it built, read its test failures,
- * run a question, read a schema, and the run ledger the Journal pages.
+ * The verbs behind a dashboard: build a model and drop what it built (`drops.ts`), read its test
+ * failures, run a question, read a schema, and the run ledger the Journal pages.
  *
  * Split from `lake.ts` because they are the READ side of the platform -- everything here
  * answers a question about what is already landed, and nothing here lands anything.
@@ -10,20 +10,17 @@ import {
   BuildModelRequest,
   buildSelection,
   DqFailuresRequest,
-  DropModelRequest,
-  type DropModelResponse,
-  DropSeedRequest,
   RawSearchRequest,
   RunQueryRequest,
 } from "@undercroft/contracts";
-import type { Context, Hono } from "hono";
+import type { Hono } from "hono";
 import { buildModels, dqFailures, startBuildJob } from "../services/jobs.ts";
 import { findRun } from "../services/ledger.ts";
-import { type DropOutcome, dropModelRelations, dropSeedRelations } from "../services/modelDrop.ts";
 import { readRawSchema, readSchema, runQuery, runRawQuery } from "../services/queryRunner.ts";
 import { searchRaw } from "../services/rawSearch.ts";
 import { listDue, listExtractDue } from "../services/schedule.ts";
 import { UNAUTHENTICATED, jobDepsFor, serviceTokenOk } from "./bearer.ts";
+import { registerDropRoutes } from "./drops.ts";
 import { answerDue } from "./due.ts";
 import { registerExportRoute } from "./exports.ts";
 import type { LakeApiDeps } from "./lake.ts";
@@ -56,8 +53,7 @@ export function registerAnalyticsRoutes(app: Hono, deps: LakeApiDeps): void {
 
   /** One run, by id, for whoever started it. The control plane reads the ledger directly. */
   registerModelsBuildRoute(app, deps);
-  registerModelsDropRoute(app, deps);
-  registerSeedsDropRoute(app, deps);
+  registerDropRoutes(app, deps);
   registerDqFailuresRoute(app, deps);
   registerQueriesRunRoute(app, deps);
   registerExportRoute(app, deps);
@@ -95,84 +91,6 @@ function registerModelsBuildRoute(app: Hono, deps: LakeApiDeps): void {
     }
     return c.json(await buildModels(jobDeps, input), 200);
   });
-}
-
-/**
- * Drop what one model built, as the tenant's dbt login, before the control plane deletes its
- * row. 200 with what was dropped -- nothing, for a model never built. 409 `run_in_progress`
- * while a build of the tenant runs (through the boundary), and 409 `relation_depended_on`
- * naming what reads from it; both drop nothing. ADR 0077.
- */
-function registerModelsDropRoute(app: Hono, deps: LakeApiDeps): void {
-  app.post("/v1/models/drop", async (c) => {
-    if (deps.dbt === undefined) {
-      return c.json(
-        { code: "invalid_request", message: "transform is not configured", details: [] },
-        400,
-      );
-    }
-    if (!serviceTokenOk(deps, c)) {
-      return c.json(UNAUTHENTICATED, 401);
-    }
-    const parsed = DropModelRequest.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) {
-      return c.json(
-        { code: "invalid_request", message: "tenantId and model are required", details: [] },
-        400,
-      );
-    }
-    const outcome = await dropModelRelations(
-      { exec: deps.exec, sessions: deps.dbt.sessions },
-      parsed.data,
-    );
-    return answerDrop(c, outcome, "other relations read from this model");
-  });
-}
-
-/**
- * Drop the table a seed's loads made, as the tenant's dbt login, before the control plane
- * deletes its row: the model route's contract, for a seed (ADR 0128).
- */
-function registerSeedsDropRoute(app: Hono, deps: LakeApiDeps): void {
-  app.post("/v1/seeds/drop", async (c) => {
-    if (deps.dbt === undefined) {
-      return c.json(
-        { code: "invalid_request", message: "transform is not configured", details: [] },
-        400,
-      );
-    }
-    if (!serviceTokenOk(deps, c)) {
-      return c.json(UNAUTHENTICATED, 401);
-    }
-    const parsed = DropSeedRequest.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) {
-      return c.json(
-        { code: "invalid_request", message: "tenantId and seed are required", details: [] },
-        400,
-      );
-    }
-    const outcome = await dropSeedRelations(
-      { exec: deps.exec, sessions: deps.dbt.sessions },
-      parsed.data,
-    );
-    return answerDrop(c, outcome, "other relations read from this seed");
-  });
-}
-
-/** A drop's answer: what went, or 409 `relation_depended_on` naming what reads from it. */
-function answerDrop(c: Context, outcome: DropOutcome, refusal: string): Response {
-  if (!outcome.ok) {
-    return c.json(
-      {
-        code: "relation_depended_on",
-        message: refusal,
-        details: outcome.dependents.map((d) => d.name),
-      },
-      409,
-    );
-  }
-  const body: DropModelResponse = { dropped: outcome.dropped };
-  return c.json(body, 200);
 }
 
 function registerDqFailuresRoute(app: Hono, deps: LakeApiDeps): void {
