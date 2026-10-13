@@ -70,6 +70,10 @@ export type LandRecordsResponse = z.infer<typeof LandRecordsResponse>;
  * `tenant_deactivated` (409) is a run or a batch for a customer an admin has deactivated (ADR
  * 0110). Nothing was started and nothing landed; it starts again once the customer is
  * reactivated, and not before.
+ *
+ * `query_timeout` (504) is a statement Postgres cancelled at its time limit (ADR 0123). Unlike
+ * `tenant_busy` it is NOT worth asking again unchanged: the same question takes the same time.
+ * The remedy is a narrower question, and the caller's sentence says so.
  */
 export const ApiError = z.object({
   code: z.enum([
@@ -93,6 +97,7 @@ export const ApiError = z.object({
     "not_found",
     "tenant_busy",
     "tenant_deactivated",
+    "query_timeout",
     "internal_error",
   ]),
   message: z.string(),

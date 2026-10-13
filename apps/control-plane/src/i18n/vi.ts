@@ -211,6 +211,14 @@ export const vi = {
      */
     searchNotRun: "Không tìm kiếm được. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     /**
+     * The search ran into its time limit and Postgres stopped it (ADR 0123). The service is fine
+     * and the same question will take as long again, so this must not say "try again": it says
+     * how to ask a narrower one. No number of seconds, because the limit is the worker's and a
+     * copy of it here would drift.
+     */
+    searchTimedOut:
+      "Tìm kiếm chạy quá thời gian cho phép nên đã bị dừng; chạy lại y nguyên sẽ lại bị dừng. Hãy thu hẹp: chỉ tìm một loại (bản ghi hoặc tài liệu), thêm từ, hoặc đặt cụm từ trong ngoặc kép.",
+    /**
      * The worker answered, and the customer's database login had no connection free in time --
      * a build holding it, or many queries at once (ADR 0088). Not an outage and not the
      * reader's fault, so it says neither; it says to ask again shortly.

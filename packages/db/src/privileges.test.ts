@@ -321,6 +321,29 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
     });
   });
 
+  it("only a tenant's dbt login may call the search's candidate lookups", async () => {
+    // They are SECURITY DEFINER and run past the row-level policy (ADR 0123), so who may call
+    // them is a boundary: granted in `provision_tenant` and nowhere else.
+    const lookups = [
+      "SELECT * FROM raw.search_record_candidates(current_user, 'n', 1)",
+      "SELECT * FROM raw.search_document_candidates(current_user, 'n', 1)",
+    ];
+    for (const sql of lookups) {
+      await db.asRole("undercroft_dbt_case_0042", (tx) => tx.query(sql));
+      for (const role of [
+        "undercroft_app",
+        "undercroft_worker",
+        "undercroft_dbt",
+        "undercroft_bi",
+        "undercroft_bi_case_0042",
+      ]) {
+        await db.asRole(role, async (tx) => {
+          await expectDenied(() => tx.query(sql));
+        });
+      }
+    }
+  });
+
   it("only the worker may extend a password", async () => {
     const extend = "SELECT ops.extend_tenant_password('CASE-0042', 'bi', interval '2 hours')";
     await db.asRole("undercroft_worker", (tx) => tx.query(extend));

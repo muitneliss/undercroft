@@ -612,11 +612,18 @@ export const en = {
     searchSubmit: "Search",
     searching: "Searching…",
     searchIdle: "Type something and press Search.",
-    searchNotLoaded: "The search could not be run. Try again in a few minutes.",
     searchNothing: "No record or document matches “{{q}}”.",
     searchHits_one: "{{count, number}} result",
     searchHits_other: "{{count, number}} results",
     searchMore: "There are more results. Add a word to narrow it down.",
+    searchCappedRecords_one:
+      "More than {{count, number}} record matches; only the newest {{count, number}} was ranked. Add a word to narrow it down.",
+    searchCappedRecords_other:
+      "More than {{count, number}} records match; only the newest {{count, number}} were ranked. Add a word to narrow it down.",
+    searchCappedDocuments_one:
+      "More than {{count, number}} document matches; only the newest {{count, number}} was ranked. Add a word to narrow it down.",
+    searchCappedDocuments_other:
+      "More than {{count, number}} documents match; only the newest {{count, number}} were ranked. Add a word to narrow it down.",
     searchColWhere: "Where",
     searchColMatch: "What matched",
     searchKindRecord: "Record",

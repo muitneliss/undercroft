@@ -55,7 +55,8 @@ export const procedureSentences: SentenceTable = {
   "lake.records": "An entity's raw records, or the ones a run wrote. Admins.",
   "lake.documents": "A source's raw documents, or the ones a run wrote. Admins.",
   "lake.query": "Run one SELECT over the raw lake. Admins.",
-  "lake.search": "Full-text search over the raw lake. Admins.",
+  "lake.search":
+    "Full-text search over the raw lake. Each kind ranks only its newest matches, and the answer says when that cut any. Admins.",
   "lake.querySchema": "The tables and columns lake query can read. Admins.",
   "documentKinds.list":
     "The customer's catalogue of document kinds, what is published, and how many documents a publish would classify.",
