@@ -91,6 +91,11 @@ function relationDependencies(node: Record<string, unknown>): string[] {
   return [...new Set(nodes.flatMap((id) => relationNodeName(id) ?? []))];
 }
 
+/** Whether dbt inlines this model into each reader as a CTE: it has no relation and no step. */
+function isEphemeral(node: Record<string, unknown>): boolean {
+  return isRecord(node.config) && node.config.materialized === "ephemeral";
+}
+
 /**
  * What a build's graph says promotion needs to know (ADR 0131), from dbt's manifest:
  *
@@ -100,6 +105,12 @@ function relationDependencies(node: Record<string, unknown>): string[] {
  * - `testReads`: each test, by unique id, with the models and seeds it reads -- the nodes a
  *   failing test the attribution could not place may be about.
  *
+ * An EPHEMERAL model is read through, not named: dbt pastes it into each reader as a CTE, so
+ * it builds no relation and leaves no step in `run_results.json`. Named as a parent, it is one
+ * no build ever contains, and a child reading a held table through it would be published over
+ * that table's failed staging rows. So a node's parents are the relations it reads, each
+ * ephemeral model on the way replaced by what that model reads, transitively.
+ *
  * A node the manifest does not list is absent, which the promotion reads as "not known", never
  * as "has no parents". A manifest that is not dbt's shape gives two empty maps.
  */
@@ -108,20 +119,45 @@ export function buildGraph(manifest: unknown): {
   readonly testReads: Map<string, string[]>;
 } {
   const nodes = isRecord(manifest) && isRecord(manifest.nodes) ? manifest.nodes : {};
-  const parents = new Map<string, string[]>();
-  const testReads = new Map<string, string[]>();
+  const direct = new Map<string, string[]>();
+  const ephemeral = new Set<string>();
+  const testDirect = new Map<string, string[]>();
   for (const [uniqueId, node] of Object.entries(nodes)) {
     if (!isRecord(node)) {
       continue;
     }
     if (uniqueId.startsWith("test.")) {
-      testReads.set(uniqueId, relationDependencies(node));
+      testDirect.set(uniqueId, relationDependencies(node));
       continue;
     }
     const name = relationNodeName(uniqueId);
     if (name !== null) {
-      parents.set(name, relationDependencies(node));
+      direct.set(name, relationDependencies(node));
+      if (isEphemeral(node)) {
+        ephemeral.add(name);
+      }
     }
   }
+  function throughEphemeral(names: readonly string[]): string[] {
+    const reached = new Set<string>();
+    const seen = new Set<string>();
+    const queue = [...names];
+    for (let name = queue.pop(); name !== undefined; name = queue.pop()) {
+      if (seen.has(name)) {
+        continue;
+      }
+      seen.add(name);
+      if (ephemeral.has(name)) {
+        queue.push(...(direct.get(name) ?? []));
+      } else {
+        reached.add(name);
+      }
+    }
+    return [...reached].sort();
+  }
+  const parents = new Map([...direct].map(([name, read]) => [name, throughEphemeral(read)]));
+  const testReads = new Map(
+    [...testDirect].map(([uniqueId, read]) => [uniqueId, throughEphemeral(read)]),
+  );
   return { parents, testReads };
 }

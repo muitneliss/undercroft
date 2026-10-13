@@ -7,6 +7,7 @@
 import { describe, expect, test as it } from "bun:test";
 
 import type { RunStep } from "../repos/runs.ts";
+import { buildGraph } from "./dbtManifest.ts";
 import { promotable } from "./promotion.ts";
 
 function node(name: string, status = "success", kind: "model" | "seed" = "model"): RunStep {
@@ -86,6 +87,28 @@ describe("promotable", () => {
     };
     expect(promotable([node("a"), node("b")], unknown)).toEqual(new Set(["a", "b"]));
     expect(promotable([node("a"), node("b", "error")], unknown)).toEqual(new Set());
+  });
+
+  // dbt inlines an ephemeral model into its readers and reports no step for it, so a child
+  // reading a held table through one must still be held with that table.
+  it("reads through an ephemeral model to the table under it, held or published", () => {
+    const graph = buildGraph({
+      nodes: {
+        "model.undercroft.base": { depends_on: { nodes: [] }, config: { materialized: "table" } },
+        "model.undercroft.inlined": {
+          depends_on: { nodes: ["model.undercroft.base"] },
+          config: { materialized: "ephemeral" },
+        },
+        "model.undercroft.report": {
+          depends_on: { nodes: ["model.undercroft.inlined"] },
+          config: { materialized: "table" },
+        },
+      },
+    });
+    expect(graph.parents.get("report")).toEqual(["base"]);
+    const steps = [node("base"), node("report")];
+    expect(promotable(steps, graph, new Set(["base"]))).toEqual(new Set());
+    expect(promotable(steps, graph)).toEqual(new Set(["base", "report"]));
   });
 
   it("holds what the caller holds, and the children built over it", () => {

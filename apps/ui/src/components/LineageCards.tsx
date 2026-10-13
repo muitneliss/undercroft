@@ -148,7 +148,11 @@ export function Card({ data }: NodeProps<CardNode>): React.JSX.Element {
 }
 
 export function Head({ data }: NodeProps<HeadNode>): React.JSX.Element {
-  return <span className="lineage-head">{data.label}</span>;
+  return (
+    <span className="lineage-head" title={data.label}>
+      {data.label}
+    </span>
+  );
 }
 
 export function Wire({

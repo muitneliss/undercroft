@@ -204,14 +204,14 @@ tasks:
       UNDERCROFT_XERO_CLIENT_ID: "{{.UNDERCROFT_XERO_CLIENT_ID}}"
       UNDERCROFT_XERO_CLIENT_SECRET: "{{.UNDERCROFT_XERO_CLIENT_SECRET}}"
       UNDERCROFT_TYPESAFE_API_KEY: "{{.UNDERCROFT_TYPESAFE_API_KEY}}"
-      # Set directly rather than `export ... &&`-prefixing the command below: a compound
-      # shell statement runs bun as a child of Task's shell interpreter instead of the
-      # command it directly execs, which is what triggers a spurious EADDRINUSE from
-      # `bun --watch`'s hot-reload bookkeeping the moment it boots. A single plain command
-      # (this one) doesn't have that problem.
-      PATH: "{{.DBT_VENV}}/bin:{{.PATH}}"
     cmds:
-      - bun run --filter '@undercroft/worker' dev
+      # dbt is put on PATH by `env`, not by an `env: PATH:` entry above: Task lets a variable
+      # the shell already has win over the Taskfile's, and every shell has a PATH, so that
+      # entry was silently dropped and a build failed with `dbt` not found. `env` execs bun
+      # in its place, so this stays one plain command -- not an `export ... &&` compound
+      # statement, which runs bun as a child of Task's shell interpreter and trips a spurious
+      # EADDRINUSE from `bun --watch`'s hot-reload bookkeeping the moment it boots.
+      - env PATH="{{.DBT_VENV}}/bin:$PATH" bun run --filter '@undercroft/worker' dev
 
   ui:
     desc: Run the UI dev server (Vite; hot module reload already built in).

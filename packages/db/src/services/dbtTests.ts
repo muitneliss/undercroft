@@ -29,7 +29,12 @@ const TEST_NAME_KEPT = 30;
 /** What dbt 1.9 replaces, a run at a time, in an argument it puts in a test's name. */
 const NOT_IN_A_TEST_NAME = /[^0-9a-zA-Z_]+/gu;
 
-/** A YAML scalar, double-quoted: JSON's string syntax is YAML's. */
+/**
+ * A YAML scalar, double-quoted: JSON's string syntax is YAML's. Every name written into
+ * `schema.yml` goes through it, as a key's value or a value: dbt reads YAML 1.1, where a bare
+ * `on`, `no`, `yes`, `off`, `true` or `null` -- each a valid model or column name -- is a boolean
+ * or nothing, and the model or column it names would silently stop being the one tested.
+ */
 function yamlString(value: string): string {
   return JSON.stringify(value);
 }
@@ -81,7 +86,7 @@ function columnTestLines(test: ColumnTestJson): string[] {
       return [
         head,
         `${argument}to: ${yamlString(refOf(test.to ?? ""))}`,
-        `${argument}field: ${test.field ?? ""}`,
+        `${argument}field: ${yamlString(test.field ?? "")}`,
         ...severityLines(test.severity, argument),
       ];
     default: {
@@ -101,10 +106,10 @@ function schemaYml(models: readonly TestedModel[]): string {
     }))
     .filter((model) => model.columns.length > 0);
   for (const model of tested) {
-    lines.push(`  - name: ${model.name}`, "    columns:");
+    lines.push(`  - name: ${yamlString(model.name)}`, "    columns:");
     for (const [column, tests] of model.columns) {
       lines.push(
-        `      - name: ${column}`,
+        `      - name: ${yamlString(column)}`,
         "        data_tests:",
         ...tests.flatMap(columnTestLines),
       );

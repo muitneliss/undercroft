@@ -18,6 +18,13 @@ const OPERATOR = "operator@example.test";
 const TENANT = "CASE-0042";
 /** Long enough that a request nobody lifted is cut, at a one-second idle timeout. */
 const WAIT_SECONDS = 6;
+/**
+ * Room for what surrounds the wait: starting a control plane over PGlite runs every migration,
+ * and the test signs in, mints a token and connects an MCP client before it waits. On a loaded
+ * machine each takes seconds, and the default ten would fail the test for the machine rather
+ * than for the property. The wait itself is still measured exactly.
+ */
+const SETUP_MS = 30_000;
 
 /**
  * The procedures that hold their request open. A procedure added here is a decision an ADR (0124, 0126)
@@ -62,7 +69,7 @@ describe("a wait at either door", () => {
 
   beforeEach(async () => {
     plane = await startControlPlane({ devSignInAs: OPERATOR, seed, idleTimeout: 1 });
-  });
+  }, SETUP_MS);
 
   afterEach(async () => {
     await plane.stop();
@@ -125,6 +132,6 @@ describe("a wait at either door", () => {
       // It did wait: an answer that came back at once proves nothing about the timeout.
       expect(Date.now() - started).toBeGreaterThanOrEqual(WAIT_SECONDS * 1000);
     },
-    (WAIT_SECONDS + 10) * 1000,
+    WAIT_SECONDS * 1000 + SETUP_MS,
   );
 });

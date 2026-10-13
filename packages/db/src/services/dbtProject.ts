@@ -134,6 +134,25 @@ const GENERATE_SCHEMA_NAME = `{#
 {%- endmacro %}
 `;
 
+const GENERATE_ALIAS_NAME = `{#
+    What a node's relation is called. A model or a seed is called by its own name, whatever
+    alias its config names: the platform finds a build's relations by name -- to promote them
+    (ADR 0131), to record their columns, to drop them with the model (ADR 0077) -- and an
+    aliased model would build a table none of them looks for, held back from analytics on every
+    build, with every child built over it. Any other node is named as dbt names it, by its name
+    or its own alias -- the failing-rows tables of tests are named so (\`dbtTests.ts\`). Model
+    versions, the one other case dbt's default handles, are not offered here.
+#}
+{% macro generate_alias_name(custom_alias_name=none, node=none) -%}
+    {%- if custom_alias_name is none or node.resource_type == 'model'
+          or node.resource_type == 'seed' -%}
+        {{ node.name }}
+    {%- else -%}
+        {{ custom_alias_name | trim }}
+    {%- endif -%}
+{%- endmacro %}
+`;
+
 /** The project variable the `ref()` override reads the published schema from. */
 const PUBLISHED_VAR = "undercroft_published_schema";
 
@@ -347,6 +366,7 @@ ${excelSerialTimestampSql("{{ value }}", "{{ date1904 }}")}
 export const MACROS: readonly { name: string; sql: string }[] = [
   { name: "parse_amount", sql: PARSE_AMOUNT },
   { name: "generate_schema_name", sql: GENERATE_SCHEMA_NAME },
+  { name: "generate_alias_name", sql: GENERATE_ALIAS_NAME },
   { name: "gmail_letters", sql: GMAIL_LETTERS },
   { name: "excel_serial_date", sql: EXCEL_SERIAL_DATE },
   { name: "excel_serial_timestamp", sql: EXCEL_SERIAL_TIMESTAMP },
@@ -475,10 +495,12 @@ function profilesYml(slug: string, database: DatabaseAddress): string {
  * Every file of the tenant's project, keyed by path relative to the project root.
  *
  * Model, macro, seed and column names have been validated against the contract's identifier
- * rule before they reach a row, and the slug is Postgres's own folding; nothing here is quoted
- * for YAML except the values that come from configuration and the seeds block (`seedsYml`). A
- * tenant's macro has its own directory, so its file can never be one of the platform's whatever it is named -- and a name
- * that would override one of the platform's macros never reaches a row (`macroDefinition.ts`).
+ * rule before they reach a row, and the slug is Postgres's own folding. A valid identifier can
+ * still be a YAML 1.1 boolean or null (`on`, `no`, `null`), so every name written as YAML -- the
+ * seeds block (`seedsYml`) and `schema.yml` (`dbtTests.ts`) -- is a quoted string, as are the
+ * values that come from configuration. A tenant's macro has its own directory, so its file can
+ * never be one of the platform's whatever it is named -- and a name that would override one of
+ * the platform's macros never reaches a row (`macroDefinition.ts`).
  */
 export function renderProject(input: ProjectInput): Record<string, string> {
   const files: Record<string, string> = {
