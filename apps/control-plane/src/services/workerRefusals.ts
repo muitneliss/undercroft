@@ -4,8 +4,9 @@
  * The control plane deliberately never reads a refusal's body into a failure -- a request to
  * the worker can carry a live refresh token, and a refusal can echo it -- so the status line is
  * the entire vocabulary for "why not", and which status means what is a contract rather than a
- * detail. It is written down once, here, and `workerClient.ts` speaks it. The two calls whose
- * body IS read (a run already in progress, a query Postgres refused) say why beside the call.
+ * detail. It is written down once, here, and `workerClient.ts` speaks it. The calls whose body
+ * IS read (a run already in progress, a query Postgres refused, a drop's dependents, a build's
+ * holder) say why beside the call.
  *
  * Status meaning is per-endpoint, as it is in HTTP: a browse starts no run, so its 409 names
  * the credential rather than a run in progress. `BROWSE_REFUSALS` is that endpoint's reading.
@@ -56,6 +57,10 @@ export type WorkerFailure =
    */
   | "timed-out";
 
+/** A build the worker answered after it ran. */
+export const OK = 200;
+/** A build the worker started and did not wait for: the body is its run. */
+export const ACCEPTED = 202;
 /** The worker's answer for SQL that did not run, whose body names why. */
 export const BAD_REQUEST = 400;
 /** The worker's answer for a credential Google refused. Every other status is a refusal. */

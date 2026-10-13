@@ -279,7 +279,7 @@ async function recordColumns(
  */
 async function spawnDbt(
   deps: TransformDeps,
-  input: { tenantId: string; select?: string; timeoutMs?: number },
+  input: { tenantId: string; select?: readonly string[]; timeoutMs?: number },
   dir: string,
 ): Promise<{ exitCode: number; output: string }> {
   const spawn = deps.spawn ?? realSpawn;
@@ -292,7 +292,11 @@ async function spawnDbt(
     dir,
     "--project-dir",
     dir,
-    ...(input.select === undefined ? [] : ["--select", input.select]),
+    // Last, and one argv item per selector: dbt 1.9's `--select` takes every value up to the
+    // next flag and builds their union, so several selectors are one build, not several.
+    ...(input.select === undefined || input.select.length === 0
+      ? []
+      : ["--select", ...input.select]),
   ];
   const timeoutMs = input.timeoutMs ?? deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const { exitCode, stdout, stderr } = await deps.sessions.withPassword(
@@ -304,7 +308,7 @@ async function spawnDbt(
 }
 
 /**
- * Build the tenant's models, or the one `select` names, and report step by step.
+ * Build the tenant's models, or the ones `select` names, and report step by step.
  *
  * Raises only when dbt could not run at all -- no binary, no results -- with dbt's own
  * account of why as the cause. A build that ran and failed is an outcome, not an exception:
@@ -312,7 +316,7 @@ async function spawnDbt(
  */
 export async function runTransform(
   deps: TransformDeps,
-  input: { tenantId: string; select?: string; timeoutMs?: number },
+  input: { tenantId: string; select?: readonly string[]; timeoutMs?: number },
 ): Promise<TransformOutcome> {
   await provisionTenantRoles(deps.exec, input.tenantId);
   const roles = await tenantRolesFor(deps.exec, input.tenantId);

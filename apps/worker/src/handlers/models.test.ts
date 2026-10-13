@@ -16,7 +16,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createStampSource, TestClock } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { getModel, openRun, provisionTenantRoles, saveModel } from "@undercroft/db/repos";
+import {
+  getModel,
+  openRun,
+  provisionTenantRoles,
+  saveModel,
+  tenantRolesFor,
+} from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
@@ -153,10 +159,10 @@ function withDatabase(): void {
 describe("POST /v1/models/build", () => {
   withDatabase();
 
-  it("builds the model as the tenant and answers with the run, its steps and the first rows", async () => {
+  it("builds the model as the tenant and answers with the run, its steps, its rows counted and the first of them", async () => {
     const res = await post(api(), "/v1/models/build", {
       tenantId: TENANT,
-      model: "stg_deals",
+      select: ["stg_deals"],
       triggeredBy: "u-1",
     });
     expect(res.status).toBe(200);
@@ -165,11 +171,14 @@ describe("POST /v1/models/build", () => {
       ok: boolean;
       testsFailed: number;
       steps: { kind: string; name: string; status: string }[];
+      rowCounts: { name: string; rows: number | null }[];
       preview: { columns: { name: string; type: string }[]; rows: unknown[][]; truncated: boolean };
     };
 
     expect(body.ok).toBe(true);
     expect(body.testsFailed).toBe(1);
+    // Counted as the BI login, which is what a dashboard reads as.
+    expect(body.rowCounts).toEqual([{ name: "stg_deals", rows: 2 }]);
     expect(body.steps.map((s) => [s.kind, s.name, s.status])).toEqual([
       ["model", "stg_deals", "success"],
       ["test", "not_null_stg_deals_deal_name", "fail"],
@@ -253,6 +262,202 @@ describe("POST /v1/models/build", () => {
 
     expect(body.error?.length).toBe(500);
     expect(body.error).toContain("Encountered an error:\nCompilation Error\nin macro trimmed");
+  });
+});
+
+/** A spawn that keeps each command it is given and then does what `spawn` does. */
+function recording(spawn: Spawn): { spawn: Spawn; commands: (readonly string[])[] } {
+  const commands: (readonly string[])[] = [];
+  return {
+    spawn: (cmd, options) => {
+      commands.push(cmd);
+      return spawn(cmd, options);
+    },
+    commands,
+  };
+}
+
+/** What dbt's `--select` was handed, as argv items: everything after the flag. */
+function selection(cmd: readonly string[] | undefined): readonly string[] {
+  return cmd === undefined ? [] : cmd.slice(cmd.indexOf("--select") + 1);
+}
+
+// Issue 442: N related models were N calls, each taking the tenant's build lock in turn, and a
+// slow build outlived the caller's request with its run id never sent.
+describe("POST /v1/models/build, several models and not waiting", () => {
+  withDatabase();
+
+  beforeEach(async () => {
+    for (const name of ["fct_pipeline", "dim_owner"]) {
+      await db.asSuperuser((tx) =>
+        saveModel(tx, TENANT, {
+          name,
+          sql: "select 1 as id",
+          tests: { columns: {} },
+          updatedBy: "u-1",
+        }),
+      );
+    }
+  });
+
+  it("several selectors are ONE dbt build and one run, each selector its own argv item", async () => {
+    const dbt = recording(fakeDbt);
+
+    const res = await post(api(dbt.spawn), "/v1/models/build", {
+      tenantId: TENANT,
+      select: ["stg_deals", "+fct_pipeline", "dim_owner+"],
+    });
+    const body = (await res.json()) as {
+      rowCounts: { name: string; rows: number | null }[];
+      preview: unknown;
+    };
+
+    expect(res.status).toBe(200);
+    expect(dbt.commands.length).toBe(1);
+    expect(selection(dbt.commands[0])).toEqual(["stg_deals", "+fct_pipeline", "dim_owner+"]);
+    const { rows } = await db.query("SELECT 1 FROM ops.run WHERE tenant_id = $1", [TENANT]);
+    expect(rows.length).toBe(1);
+    // Each NAMED model, in the order named. The fake built only stg_deals, so the other two
+    // have no count -- null, never 0 -- and several named means no preview of any one.
+    expect(body.rowCounts).toEqual([
+      { name: "stg_deals", rows: 2 },
+      { name: "fct_pipeline", rows: null },
+      { name: "dim_owner", rows: null },
+    ]);
+    expect(body.preview).toBeNull();
+  });
+
+  it("a control plane older than `select` sends `model`, and it is that one model's build", async () => {
+    const dbt = recording(fakeDbt);
+
+    const res = await post(api(dbt.spawn), "/v1/models/build", {
+      tenantId: TENANT,
+      model: "stg_deals",
+    });
+
+    expect(res.status).toBe(200);
+    expect(selection(dbt.commands[0])).toEqual(["stg_deals"]);
+  });
+
+  it("a request naming nothing, or a selector that is more than a name and a `+`, never reaches dbt", async () => {
+    const dbt = recording(fakeDbt);
+
+    const refused = await Promise.all(
+      [
+        {},
+        { select: [] },
+        { select: ["stg_deals --full-refresh"] },
+        { select: ["+stg_deals+"] },
+        { select: ["tag:finance"] },
+      ].map(async (asked) => {
+        const res = await post(api(dbt.spawn), "/v1/models/build", { tenantId: TENANT, ...asked });
+        return res.status;
+      }),
+    );
+
+    expect(refused).toEqual([400, 400, 400, 400, 400]);
+    expect(dbt.commands).toEqual([]);
+  });
+
+  it("`wait: false` answers 202 with the run while it is still running, and the build goes on", async () => {
+    const dbt = heldDbt();
+    const app = api(dbt.spawn);
+
+    const res = await post(app, "/v1/models/build", {
+      tenantId: TENANT,
+      select: ["stg_deals+"],
+      wait: false,
+    });
+
+    expect(res.status).toBe(202);
+    const { runId } = (await res.json()) as { runId: string };
+    await until(() => dbt.started() === 1);
+    expect((await runOf(runId)).status).toBe("running");
+
+    dbt.release();
+    await drainJobs();
+    const { rows } = await db.query<{ status: string; trigger: string }>(
+      "SELECT status, trigger FROM ops.run WHERE id = $1",
+      [runId],
+    );
+    expect(rows[0]).toEqual({ status: "ok", trigger: "build" });
+  });
+
+  it("a build while another holds the tenant's lock is 409 naming the holder, and starts nothing", async () => {
+    const dbt = heldDbt();
+    const app = api(dbt.spawn);
+    const first = await post(app, "/v1/models/build", {
+      tenantId: TENANT,
+      select: ["stg_deals"],
+      wait: false,
+    });
+    const { runId: holder } = (await first.json()) as { runId: string };
+    await until(() => dbt.started() === 1);
+
+    const second = await post(app, "/v1/models/build", {
+      tenantId: TENANT,
+      select: ["fct_pipeline"],
+    });
+
+    expect(second.status).toBe(409);
+    expect(await second.json()).toMatchObject({ code: "run_in_progress", details: [holder] });
+    expect(dbt.started()).toBe(1);
+    dbt.release();
+  });
+});
+
+// Rule 2: a count that cannot be read is not a count, and an earlier build's table is not this
+// build's -- either printed as a figure would be a wrong value that looks exactly like a right one.
+describe("POST /v1/models/build, a row count it cannot give", () => {
+  withDatabase();
+
+  it("a model that failed to build is not counted, though an earlier build's table is still there", async () => {
+    const app = api();
+    await post(app, "/v1/models/build", { tenantId: TENANT, select: ["stg_deals"] });
+    const broken: Spawn = (_cmd, options) => {
+      writeResults(options.cwd, [
+        {
+          unique_id: "model.undercroft.stg_deals",
+          status: "error",
+          message: 'column "nope" does not exist',
+          failures: null,
+          execution_time: 0.1,
+          relation_name: null,
+        },
+      ]);
+      return Promise.resolve({ exitCode: 1, stdout: "Database Error", stderr: "" });
+    };
+
+    const res = await post(api(broken), "/v1/models/build", {
+      tenantId: TENANT,
+      select: ["stg_deals"],
+    });
+
+    expect(((await res.json()) as { rowCounts: unknown }).rowCounts).toEqual([
+      { name: "stg_deals", rows: null },
+    ]);
+  });
+
+  it("a table the BI login may not read is counted as null, never as 0", async () => {
+    const roles = await db.asSuperuser((tx) =>
+      provisionTenantRoles(tx, TENANT).then(() => tenantRolesFor(tx, TENANT)),
+    );
+    const unreadable: Spawn = async (cmd, options) => {
+      const done = await fakeDbt(cmd, options);
+      await db.asRole("undercroft_dbt_case_1", (tx) =>
+        tx.exec(`REVOKE ALL ON analytics_case_1.stg_deals FROM ${roles?.biRole ?? "nobody"}`),
+      );
+      return done;
+    };
+
+    const res = await post(api(unreadable), "/v1/models/build", {
+      tenantId: TENANT,
+      select: ["stg_deals"],
+    });
+    const body = (await res.json()) as { ok: boolean; rowCounts: unknown };
+
+    expect(body.ok).toBe(true);
+    expect(body.rowCounts).toEqual([{ name: "stg_deals", rows: null }]);
   });
 });
 

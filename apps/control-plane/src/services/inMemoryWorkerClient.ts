@@ -9,7 +9,6 @@
 import {
   type BrowseListing,
   type BrowseScopeResponse,
-  type BuildModelResponse,
   CSV_BOM,
   type ExportQueryRequest,
   type RawSearchResponse,
@@ -22,6 +21,8 @@ import {
 import type { SqlExecutor } from "@undercroft/db";
 import { upsertConnection } from "@undercroft/db/repos";
 import type {
+  BuildInput,
+  BuildOutcome,
   DropOutcome,
   QueryInput,
   SearchInput,
@@ -31,6 +32,7 @@ import type {
   WorkerClient,
   WorkerOutcome,
 } from "./workerClient.ts";
+import { InMemoryBuilds } from "./inMemoryBuilds.ts";
 import type { WorkerFailure } from "./workerRefusals.ts";
 
 /**
@@ -44,7 +46,8 @@ export class InMemoryWorkerClient implements WorkerClient {
   readonly stored: StoreCredentialInput[] = [];
   readonly revoked: { source: string; tenantId: string }[] = [];
   readonly triggered: { source: string; tenantId: string; triggeredBy: string }[] = [];
-  readonly built: { tenantId: string; model: string; triggeredBy: string }[] = [];
+  /** The builds this double ran, and what a waited one answers (`inMemoryBuilds.ts`). */
+  readonly builds = new InMemoryBuilds();
   /** Every catalogue this double was asked to initialise, and did. */
   readonly initialised: { tenantId: string; triggeredBy: string }[] = [];
   #catalogueExists = false;
@@ -65,7 +68,7 @@ export class InMemoryWorkerClient implements WorkerClient {
     return this;
   }
 
-  /** Answer every trigger with "already running as `runId`", the worker's 409. */
+  /** Answer every trigger and build with "already running as `runId`", the worker's 409. */
   runningAs(runId: string): this {
     this.#runningAs = runId;
     return this;
@@ -189,27 +192,21 @@ export class InMemoryWorkerClient implements WorkerClient {
     return Promise.resolve({ ok: true, runId: `run-mem-${String(this.triggered.length)}` });
   }
 
-  /** A build that succeeded with nothing to show: no steps, an empty relation. */
-  buildModel(input: {
-    tenantId: string;
-    model: string;
-    triggeredBy: string;
-  }): Promise<WorkerOutcome<BuildModelResponse>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
+  /**
+   * A build: refused when `failing` says so; refused as running when `runningAs` says so, naming
+   * that run as the worker's 409 does (`failing("in-progress")` names none); and otherwise run
+   * by `builds`, which keeps what it was asked and answers with what it was given.
+   */
+  buildModels(input: BuildInput): Promise<BuildOutcome> {
+    const failure = this.#failWith;
+    if (failure !== null && failure !== "in-progress") {
+      return Promise.resolve({ ok: false, reason: failure });
     }
-    this.built.push(input);
-    return Promise.resolve({
-      ok: true,
-      value: {
-        runId: `run-mem-build-${String(this.built.length)}`,
-        ok: true,
-        testsFailed: 0,
-        error: null,
-        steps: [],
-        preview: { columns: [], rows: [], truncated: false },
-      },
-    });
+    const held = failure === "in-progress" ? "" : this.#runningAs;
+    if (held !== null) {
+      return Promise.resolve({ ok: false, reason: "in-progress", runId: held });
+    }
+    return Promise.resolve(this.builds.run(input));
   }
 
   /** Refuse every drop because these relations read from the model, as the worker's 409 does. */

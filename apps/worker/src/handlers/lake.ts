@@ -347,7 +347,7 @@ function registerRunRoutes(app: Hono, deps: LakeApiDeps): void {
       tenantId: body.tenantId,
       trigger: body.trigger === "manual" ? "manual" : "schedule",
       triggeredBy: typeof body.triggeredBy === "string" ? body.triggeredBy : "",
-      ...(typeof body.select === "string" ? { select: body.select } : {}),
+      ...(typeof body.select === "string" ? { select: [body.select] } : {}),
     });
     return c.json(started, 202);
   });

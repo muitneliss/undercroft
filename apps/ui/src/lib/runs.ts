@@ -33,7 +33,8 @@ import { TICK_MINUTES } from "@/lib/cadence.ts";
 import { formatDateTime } from "@/lib/when.ts";
 
 /**
- * What a screen that reads a run's steps asks `runs.get` for: every step, on one page.
+ * What a screen that reads a run's steps asks `runs.get` -- or `models.build`, which reports its
+ * steps the same way -- for: every step, on one page.
  *
  * `runs.get` lists only the steps that did not pass unless asked (issue 441), which is right for an
  * agent and wrong here: the leaf's table, its stage map and the village all read the passing steps

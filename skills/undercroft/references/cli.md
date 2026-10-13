@@ -162,7 +162,7 @@ No envelope ever holds a cookie, a header, an environment value or a stack trace
 | 6    | `WRITES_DISABLED`           | no          | This profile does not allow writes, or a one-off `--url` was used.             |
 | 6    | `HUMAN_REQUIRED`            | no          | Only a person at a terminal may do this.                                       |
 | 7    | `NETWORK_ERROR`             | yes         | The server could not be reached, or did not answer as Undercroft.              |
-| 7    | `TIMEOUT`                   | yes         | No answer within 120 seconds.                                                  |
+| 7    | `TIMEOUT`                   | yes         | No answer within 180 seconds.                                                  |
 | 8    | `VALIDATION_FAILED`         | yes         | The server refused the input, or `--dry-run` found a shape problem.            |
 | 10   | `INTERNAL_ERROR`            | no          | The server failed. The detail stays on the server.                             |
 | 130  | `CANCELLED`                 | no          | A person pressed Ctrl-C at a prompt. Never seen in agent mode.                 |

@@ -1508,6 +1508,8 @@ export const en = {
     openInJournal: "Open in Journal",
     queryInReports: "Query in Reports",
     queryInReportsHint: "Open a new SQL question on the table the last build made.",
+    rowCount_one: "The table built holds {{count, number}} row.",
+    rowCount_other: "The table built holds {{count, number}} rows.",
     previewHead: "First rows",
     previewEmpty: "The table was built but holds no rows yet.",
     testsHead: "Tests",

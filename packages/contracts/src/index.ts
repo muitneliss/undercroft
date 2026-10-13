@@ -111,11 +111,14 @@ export {
 } from "./lakeApi.ts";
 export { parseSpec, SpecError } from "./loadSpec.ts";
 export {
+  MAX_BUILD_SELECTORS,
   MAX_IDENTIFIER_CHARS,
   MAX_MODEL_SQL_BYTES,
   MODEL_NAME,
   ModelName,
+  ModelSelector,
   ModelTests,
+  selectedModel,
   TEST_KINDS,
   TestKind,
 } from "./models.ts";
@@ -133,6 +136,8 @@ export {
 export {
   BuildModelRequest,
   BuildModelResponse,
+  BuildStarted,
+  buildSelection,
   Cell,
   DEFAULT_QUERY_ROWS,
   DqFailuresRequest,
@@ -144,6 +149,7 @@ export {
   MAX_PREVIEW_ROWS,
   MAX_QUERY_ROWS,
   MAX_QUERY_SQL_BYTES,
+  ModelRowCount,
   RunQueryRequest,
   RunStepShape,
   SchemaResponse,

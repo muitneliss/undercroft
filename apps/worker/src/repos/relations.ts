@@ -57,6 +57,27 @@ export async function firstRows(
   return rows.map((row) => target.columns.map((c) => row[c.name]));
 }
 
+/**
+ * How many rows the relation holds. Raises when the login cannot read it, or when the caller's
+ * statement timeout cuts the count -- a count that did not finish is not a smaller count.
+ *
+ * Read as text and parsed as an integer: `count(*)` is a `bigint`, which the pinned parsers
+ * hand over as a string, and a table holding more rows than a double counts exactly is not one
+ * this platform will meet.
+ */
+export async function countRows(
+  exec: SqlExecutor,
+  target: { schema: string; relation: string },
+): Promise<number> {
+  const from = `${quoteIdent(target.schema)}.${quoteIdent(target.relation)}`;
+  const { rows } = await exec.query<{ rows: string }>(`SELECT count(*)::text AS rows FROM ${from}`);
+  const [row] = rows;
+  if (row === undefined) {
+    throw new Error(`count(*) over ${from} returned no row`);
+  }
+  return Number.parseInt(row.rows, 10);
+}
+
 /** The kinds of relation that hold rows, as `DROP` spells them. */
 export type RelationKind = "table" | "view" | "materialized view";
 

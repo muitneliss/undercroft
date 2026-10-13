@@ -62,7 +62,9 @@ These hold for the whole workflow. None of them bends because the person is in a
    named X is to be replaced. A question or dashboard saved with an `id` replaces that one
    whole: read it first, and show the person what changes.
 9. **The person says yes to the build, separately.** A build replaces the table every report
-   on it reads. Ask again before `models.build`, even after the save was agreed.
+   on it reads. Ask again before `models.build`, even after the save was agreed. When several
+   models changed, ask once for the set and build them in one call with `names` -- naming each,
+   and saying when a `+` brings in the models upstream (`+name`) or downstream (`name+`) too.
 10. **Never delete.** This workflow does not call `models.delete` or `macros.delete`, and
     never removes a report or a dashboard. If the person wants a model gone, tell them it is a
     separate, destructive act -- it drops the table the model built and the failing rows its
@@ -73,9 +75,10 @@ These hold for the whole workflow. None of them bends because the person is in a
     one, for example by running the model's SQL through `lake.query` instead. A `CONFLICT`
     is reported, not looped: a deactivated customer refuses every operation until an admin
     reactivates it, and that is not yours to do.
-12. **Success is the platform's answer.** The model exists when `models.build` says `ok` with
-    its tests passed; a question exists when `bi.questions.save` returned its id. Until then,
-    say what happened, not what you hoped.
+12. **Success is the platform's answer.** The model exists when `models.build` (or, after
+    `wait: false`, `runs.get` on its run) says `ok` with its tests passed; a question exists when
+    `bi.questions.save` returned its id. Until then, say what happened, not what you hoped. A
+    row count of `null` is "not counted", never zero rows.
 13. **Ask one decision at a time, through the host's question tool when it has one** --
     Claude Code's `AskUserQuestion`, for example -- and otherwise as numbered options in
     text. The evidence, the plan or the SQL goes in the message; the tool carries the
@@ -243,9 +246,22 @@ guardrail 8. On success, the model is stored and nothing has run yet: say exactl
 ### M6. Confirm the build, then build
 
 Ask whether to build it now, and say that a build replaces the table any report on it reads.
-On a yes, call `models.build` and wait for its answer.
+When the change touched several models, or models read from the one you changed, ask once for
+the set: `names` takes up to 20, each `name`, `+name` (with everything upstream) or `name+`
+(with everything downstream), and builds them as one run. Every name must be a saved model.
 
-- `ok` true and `testsFailed` 0: the table is built. Show the first rows from `preview`.
+On a yes, call `models.build`. It waits for dbt by default, up to about two and a half minutes.
+If your host gives up on a tool call sooner, pass `wait: false`: the answer is `waited: false`
+with the `runId` at once, and `runs.get` with that `runId` and `waitSeconds` (at most 50 a call)
+waits for it instead. Never call `models.build` again to find out how a build went.
+
+A waited answer leads with `stepSummary` (every step counted by kind and status) and lists only
+the steps that did not pass. Read those; ask for `steps: "all"` only when the person wants every
+step, and page further with `runs.get` on the same `runId` and its `stepCursor`.
+
+- `ok` true and `testsFailed` 0: the table is built. Say how many rows each model has from
+  `rowCounts` and, for one model, show the first rows from `preview`. A count of `null` was
+  not read: say so, never "0 rows".
 - `testsFailed` above 0: the table is built, and a test found rows that break it. For each
   failing step, read the rows with `dq.failures`, using the build's `runId` and the step's
   id. Show the person the count and a few rows, and ask whether the model or the test is
@@ -253,7 +269,10 @@ On a yes, call `models.build` and wait for its answer.
   else, the plan file included.
 - `ok` false: the build failed. Show `error`, fix the SQL with the person, and go back to
   M3. A save of the fix is again a save the person agrees to.
-- `CONFLICT`: a build is already running for this customer. Tell the person; build again
-  only when they ask.
+- `NOT_FOUND`: a name is not a saved model; the message and `missing` in the details name it.
+  Nothing was built. Fix the name, or save the model first.
+- `CONFLICT`: a build is already running for this customer, often your own earlier one. The
+  details name its `runId` and `startedAt`. Tell the person, and with their yes wait on that run
+  with `runs.get` and `waitSeconds`; build again only when it has ended and they ask.
 
 Then return to step 9.
