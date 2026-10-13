@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.76.0](https://github.com/muitneliss/undercroft/compare/v1.75.2...v1.76.0) (2026-10-13)
+
+
+### Features
+
+* **models:** a build publishes only what passed: write, audit, publish (ADR 0131) ([#463](https://github.com/muitneliss/undercroft/issues/463)) ([6408542](https://github.com/muitneliss/undercroft/commit/640854288d69054b49478a4687cc491eeaae1d5b)), closes [#459](https://github.com/muitneliss/undercroft/issues/459)
+* **models:** a failing test is visible wherever the figure is read, and a single-model build checks its parents (ADR 0129) ([#461](https://github.com/muitneliss/undercroft/issues/461)) ([1b071a4](https://github.com/muitneliss/undercroft/commit/1b071a4fe17bca9b705f8f4cce4b8d34870ce054))
+* **models:** build several models in one run, return the run without waiting, and lead with a summary ([#454](https://github.com/muitneliss/undercroft/issues/454)) ([6e03df2](https://github.com/muitneliss/undercroft/commit/6e03df2980b6d2f8dc7325b28eeddae7e5b4480a))
+* **models:** declare accepted_values, relationships, SQL tests and severity as data tests (ADR 0130) ([#460](https://github.com/muitneliss/undercroft/issues/460)) ([1d634fe](https://github.com/muitneliss/undercroft/commit/1d634fe4e40e15d0427d17ddbb0d7719a5afd42c)), closes [#458](https://github.com/muitneliss/undercroft/issues/458)
+* **models:** lists answer summaries, content hashes, a project revision, and no-op saves (ADR 0127) ([#455](https://github.com/muitneliss/undercroft/issues/455)) ([0647f72](https://github.com/muitneliss/undercroft/commit/0647f725e51967409265f565a5bf62261f0acb61))
+* **reads:** name the target on lineage, schema and scope reads (ADR 0125) ([#449](https://github.com/muitneliss/undercroft/issues/449)) ([8cd6bdd](https://github.com/muitneliss/undercroft/commit/8cd6bdd732e0fbc30a1639f5b0e66f1e2a2337cf)), closes [#443](https://github.com/muitneliss/undercroft/issues/443)
+* **runs:** filter runs.list, wait in runs.get, and lead runs.get with a step summary ([#451](https://github.com/muitneliss/undercroft/issues/451)) ([e7de7cf](https://github.com/muitneliss/undercroft/commit/e7de7cfb5be47d53d9acbe2756719e370961dbe4))
+* **seeds:** tenant reference tables as dbt seeds, typed by their author (ADR 0128) ([#462](https://github.com/muitneliss/undercroft/issues/462)) ([757c9a4](https://github.com/muitneliss/undercroft/commit/757c9a4b3cee1942a65d41b5a7b432d14360b8a4))
+
+
+### Bug Fixes
+
+* **mcp:** bound structuredContent like the text, and give widgets the whole answer in _meta (ADR 0122) ([#448](https://github.com/muitneliss/undercroft/issues/448)) ([083e134](https://github.com/muitneliss/undercroft/commit/083e1347842a0214a8d87e4ce591565a39883c38)), closes [#438](https://github.com/muitneliss/undercroft/issues/438)
+* **search:** rank each kind's newest matches through the index, and name a timeout (ADR 0123) ([#452](https://github.com/muitneliss/undercroft/issues/452)) ([a12663f](https://github.com/muitneliss/undercroft/commit/a12663f4e140a587f041dc52ca36def9e3ec02e7)), closes [#447](https://github.com/muitneliss/undercroft/issues/447)
+* the final pass over [#448](https://github.com/muitneliss/undercroft/issues/448)–[#463](https://github.com/muitneliss/undercroft/issues/463) — visual baselines, YAML 1.1 names, promotion of aliased and ephemeral models ([#464](https://github.com/muitneliss/undercroft/issues/464)) ([e0769aa](https://github.com/muitneliss/undercroft/commit/e0769aa2c0d97aaf4d7b042c1215990114f45a60))
+
 ## [1.75.2](https://github.com/muitneliss/undercroft/compare/v1.75.1...v1.75.2) (2026-10-11)
 
 
