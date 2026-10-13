@@ -11,7 +11,7 @@ export const en = {
 
   topics: {
     account: "Your own account.",
-    accountTokens: "Personal access tokens, for an agent connecting over MCP.",
+    accountTokens: "Personal access tokens, for an agent connecting over MCP or through the CLI.",
     accountApps: "The apps you let in by signing in and consenting, such as a Claude connector.",
     auth: "Signing in and out, and your session.",
     bi: "Reports: questions, dashboards and the schema.",
@@ -37,11 +37,12 @@ export const en = {
 
   command: {
     authLogin:
-      "Sign in with a one-time code sent to your email, as the web UI does. An install on this machine signs you in at once, with no code.",
-    authLogout: "Sign out: end the session on the server, then forget it for this origin.",
+      "Sign in with a one-time code sent to your email, as the web UI does. An install on this machine signs you in at once, with no code. A script or an agent with nobody at its terminal signs in with a personal access token held in an environment variable: --token-env.",
+    authLogout:
+      "Sign out: end the session on the server, then forget it for this origin. For a token, only the variable holding it is forgotten; the token works until you revoke it.",
     authStatus: "Say which server you are signed in to, and as which address.",
     configShow:
-      "Show the profile in use, its URL, whether it allows writes, and where each value came from. Never prints the session.",
+      "Show the profile in use, its URL, whether it allows writes, and where each value came from. Never prints the session or a token.",
     configSetProfile: "Create or change a named environment profile.",
     configUse: "Choose the default profile.",
     describe:
@@ -68,6 +69,8 @@ export const en = {
     code: "The six-digit code from the email.",
     local:
       "Sign in on this machine, with no email and no code, when the server runs on this machine and offers it.",
+    tokenEnv:
+      "The NAME of the environment variable holding a personal access token (minted on the Account page), never the token itself. Only the name is kept; the token is read again at every call.",
     profileUrl: "The server's base URL for this profile.",
     allowWrites:
       "Allow write commands on this profile. Only a person at a terminal can turn it on.",
@@ -92,7 +95,11 @@ export const en = {
       "If {{email}} has access, a code has been sent to it. Run again with --code to sign in.",
     signedIn: "Signed in to {{origin}} as {{email}}.",
     signedInLocally: "Signed in to {{origin}} as {{email}}, on this machine, with no code.",
+    signedInWithToken:
+      "Signed in to {{origin}} as {{email}}, with the token in {{variable}}. Every command reads that variable again; the token is stored nowhere.",
     signedOut: "Signed out of {{origin}}.",
+    tokenForgotten:
+      "Forgot the token sign-in for {{origin}}. The token in {{variable}} still works until you revoke it on the Account page.",
     noRows: "No rows.",
     downloaded: "Saved {{bytes}} bytes to {{path}}.",
   },
@@ -147,11 +154,19 @@ export const en = {
     CONFLICT: "The server refused because of its current state.",
     AUTHENTICATION_REQUIRED: "Not signed in to {{origin}}. Run `undercroft auth login`.",
     codeRejected: "The code was not accepted. Request a new one.",
+    tokenUnset:
+      "Signed in to {{origin}} with the token in {{variable}}, but that variable is unset or empty. Set it for this process.",
+    tokenRefused:
+      "{{origin}} refused the token in {{variable}}: it was revoked, it expired, or it is not one of this server's. Mint a new one on the Account page and put it in {{variable}}.",
+    tokenEnvName:
+      "--token-env takes the NAME of an environment variable (letters, digits and underscores), never the token itself.",
     localNotLoopback:
       "Signing in on this machine works only with a server on this machine (localhost), and {{origin}} is not one. Sign in with your email.",
     noLocalMethod:
       "{{origin}} does not offer signing in on this machine. Sign in with your email: `undercroft auth login --email <address>`.",
     PERMISSION_DENIED: "You do not have permission to do this.",
+    tokenReadOnly:
+      "The token in {{variable}} may only read, and this command needs the write grant. Mint a token that may write on the Account page if you mean to allow it.",
     WRITES_DISABLED:
       "Profile “{{profile}}” does not allow writes. A person has to turn it on at a terminal: `undercroft config set-profile {{profile}} --allow-writes`.",
     writesNeedProfile: "A one-off URL never allows writes; use a named profile.",

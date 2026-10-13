@@ -89,7 +89,7 @@ export const en = {
     writesDisabled:
       "This token may only read, so it cannot do this. Mint a token that may write on the Account page if you mean to allow it.",
     requiresSession:
-      "This can only be done from a signed-in browser (or the CLI), never with a token.",
+      "This can only be done from a signed-in browser (or the CLI signed in with an emailed code), never with a token.",
     tenantExists: "The tenant ID {{tenantId}} is already in use by another customer.",
     tenantDeactivated:
       "This customer is deactivated. Nothing in it can be used or synced until an admin reactivates it.",
@@ -149,6 +149,8 @@ export const en = {
       "This customer's lineage has no model or table named {{name}}. A raw table is written as schema.table, such as raw.records.",
     tablesUnknown: "Not among this customer's tables: {{tables}}.",
     namesUnknown: "Not in this list of the customer's: {{names}}.",
+    pageCursorUnknown:
+      "This page cursor no longer matches {{procedure}}: the item it continues after is no longer listed. Read again from the first page, without a cursor.",
     noPassingVersion:
       "{{model}} has no passing version yet: its build in run {{runId}} failed its tests or did not build, so nothing of it is published for Reports. Fix the model and build it again.",
     queryFailed: "The query did not run: {{message}}",

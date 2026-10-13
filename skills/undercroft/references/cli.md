@@ -84,6 +84,17 @@ code agrees with the code.
   address: when signing in on this machine is the only way in the server offers, that is what
   it does, and there is no second step. It never turns on writes. A `PERMISSION_DENIED` names
   the exact address to use, because `localhost` and `127.0.0.1` are two; tell the person.
+- **Sign in unattended, with a token.** When nobody can read an emailed code -- a CI job, a
+  scheduled script -- the person mints a personal access token on the Account page and gives
+  the job an environment variable holding it. Run
+  `undercroft auth login --token-env <VARIABLE> --agent` with the variable's NAME. Never put a
+  token itself in a command, a file or your output: the CLI keeps only the name and reads the
+  variable at every call. `auth status` says `signedInWith: "token"`. An
+  `AUTHENTICATION_REQUIRED` that names the variable means it is unset for this process, or the
+  token was revoked or expired; either way tell the person, who mints a new one -- signing in
+  again does not help. A `read` token cannot write, and a `write` token still writes only
+  through a profile with `allowWrites`. `auth logout` forgets the variable and does not revoke
+  the token.
 - **Allow writes.** Each environment profile has `allowWrites`, off by default, and only a
   person at a terminal can turn it on. When you get `WRITES_DISABLED`, tell the person which
   profile it named. Never try to change the profile yourself: in agent mode that returns
@@ -143,7 +154,11 @@ Failure:
   `retry-later`, `omit-parent`, `restart` or `none`). `credential-expired` means the stored
   credential could not be refreshed and the connection now reads `expired`: reconnect it, with
   nothing new to grant. `--parent-id <id>` browses one level; the top level is `parentId: null`,
-  which only JSON can spell: `--input-json '{"parentId": null}'`. A refused `bi schema` or
+  which only JSON can spell: `--input-json '{"parentId": null}'`. A refused page of
+  `models list`, `macros list`, `bi questions list` or `models lineage` gives `procedure`,
+  `reason: "unknown-cursor"` and `remedy: "restart"` when the item its `--cursor` continues
+  after is gone: read again without `--cursor`. With `--limit` or `--cursor`, each answers
+  `{ items, nextCursor }` (the lineage `{ nodes, edges, nextCursor }`) rather than its table. A refused `bi schema` or
   `lake query-schema` names the tables it does not hold in `tables`. A HubSpot `connections set-scope` has no size limit: every
   property of every object may be chosen at once. A refused `connections set-cadence` gives
   `source` and `reason`: `cron-fields`, `cron-invalid`, `cron-never` or `cron-too-frequent`
@@ -151,7 +166,9 @@ Failure:
   closer than five minutes), or `cron-without-custom` for a `--cron` sent with a cadence
   other than `custom`. A refused `connections set-resync` (how often a source's lists are read
   in full again, off by default) gives the same reasons, or `not-resyncable` for a source
-  that reads no list through a change filter, such as HubSpot.
+  that reads no list through a change filter, such as HubSpot. A command refused by a token's
+  grant is `PERMISSION_DENIED` with `reason: "WRITES_DISABLED"`, the `grant` the token holds
+  (`read`) and the one the command `needs` (`write`).
 - `traceId` is present when a server answered the refusal: the 32-hex trace id of that
   request. It is opaque and never translated. Quote it in a bug report; the operator uses
   it to find the server's side of the failure. A refusal the CLI made by itself, or a
@@ -172,8 +189,8 @@ No envelope ever holds a cookie, a header, an environment value or a stack trace
 | 2    | `CONFIRMATION_REQUIRED`     | yes         | A destructive command without `--yes`. Ask the person.                         |
 | 3    | `NOT_FOUND`                 | no          | Not there, or not yours to see; deliberately the same answer.                  |
 | 4    | `CONFLICT`                  | no          | The platform's state refused it; the message says which state.                 |
-| 5    | `AUTHENTICATION_REQUIRED`   | no          | Not signed in to this origin, the session ended, or the code was rejected.     |
-| 6    | `PERMISSION_DENIED`         | no          | Signed in, but your role does not allow it.                                    |
+| 5    | `AUTHENTICATION_REQUIRED`   | no          | Not signed in here, the session ended, the code or the token was refused.      |
+| 6    | `PERMISSION_DENIED`         | no          | Signed in, but your role, or your token's grant, does not allow it.            |
 | 6    | `WRITES_DISABLED`           | no          | This profile does not allow writes, or a one-off `--url` was used.             |
 | 6    | `HUMAN_REQUIRED`            | no          | Only a person at a terminal may do this.                                       |
 | 7    | `NETWORK_ERROR`             | yes         | The server could not be reached, or did not answer as Undercroft.              |
@@ -241,4 +258,5 @@ and `ids`, through `--input-json '{"kind":["build"],"ids":["run-1"]}'`.
 - **Where the files live.** `$UNDERCROFT_CLI_HOME`, then `$XDG_CONFIG_HOME/undercroft`, then
   `~/.config/undercroft`: `config.json` and `credentials.json` (mode 0600).
 - **Sessions.** A session is keyed by the origin that issued it and is never sent to another,
-  so `http://localhost:3000` and `http://127.0.0.1:3000` are two origins.
+  so `http://localhost:3000` and `http://127.0.0.1:3000` are two origins. A token sign-in is
+  kept the same way, as the variable's name, and its token is sent only to that origin.

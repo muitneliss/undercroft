@@ -9,7 +9,9 @@
  * them in `server.ts` while `createContext` lived here would have made the two files import each
  * other.
  *
- * `server.ts` is now routing and static files. This file is the caller.
+ * `server.ts` is now routing and static files. This file is the caller. What each credential
+ * proves before it is anybody here -- a cookie, a bearer, or why a bearer proves nothing -- is
+ * `identity.ts`.
  *
  * Both the locale and the caller are read from the request and carried on the context: two
  * concurrent requests in two languages must not answer each other's.
@@ -17,14 +19,8 @@
 
 import { type EmailSender, type Locale, type Logger, negotiateLocale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import {
-  admit,
-  type Grant,
-  isPersonalToken,
-  type Refused as TokenRefused,
-} from "../services/accessTokens.ts";
+import type { Grant } from "../services/accessTokens.ts";
 import { recordTokenRefusal } from "../services/audit.ts";
-import { grantFor } from "../services/connectedApps.ts";
 import { appUserForEmail } from "../services/invite.ts";
 import { type GoogleIngestConfig, type ProviderConfig, startConsent } from "../services/oauth.ts";
 import { invitationMessage } from "../services/people.ts";
@@ -34,9 +30,16 @@ import type { WorkerClient } from "../services/workerClient.ts";
 import type { Assistant } from "../services/assistant/agent.ts";
 import type { Judge } from "../services/assistant/judge.ts";
 import type { Auth } from "./auth.ts";
-import { type OAuthRefused, oauthCredential } from "./mcpAccessToken.ts";
 import type { ImageFiles } from "./imageFiles.ts";
 import { channelOf } from "./channel.ts";
+import {
+  type BearerRefusal,
+  type Bearers,
+  type Door,
+  type Presented,
+  resolveBearer,
+  sessionIdentity,
+} from "./identity.ts";
 import type { Context, SessionUser, Via } from "./trpc.ts";
 
 /** What the server is built from: its configuration, plus what the image carries. */
@@ -140,120 +143,6 @@ async function sendInvitation(
   }
 }
 
-/**
- * Which credential a door reads. `/trpc` and the assistant read the session cookie a browser
- * holds; `/mcp` reads `Authorization: Bearer` and NEVER the cookie, so a page open in the same
- * browser cannot lend its session to a model-context client, and a bearer cannot ride on one.
- */
-export type Door = "cookie" | "bearer";
-
-/**
- * An authenticated address and what it presented, before it is anybody here.
- *
- * Both doors produce one of these and nothing else, so everything after -- who the address is
- * on this platform, whether it holds platform authority -- is decided once, in `callerFor`,
- * for every kind of credential there is and will be.
- */
-interface Presented {
-  readonly email: string;
-  readonly credentialId: string;
-  readonly grant: Grant;
-}
-
-/**
- * The cookie door. Better Auth verifies the signed cookie and reads its session row -- the
- * database read that makes a revoked session stop working at once. A browser session is its
- * owner at their own screen, so it always holds `write`.
- */
-async function sessionIdentity(deps: ServerDeps, headers: Headers): Promise<Presented | null> {
-  if (deps.auth === undefined) {
-    return null;
-  }
-  const resolved = await deps.auth.api.getSession({ headers });
-  if (resolved === null) {
-    return null;
-  }
-  return { email: resolved.user.email, credentialId: resolved.session.id, grant: "write" };
-}
-
-/** RFC 6750's `Authorization: Bearer <token>`, the scheme matched case-insensitively. */
-const BEARER = /^Bearer[ \t]+(?<token>\S+)[ \t]*$/iu;
-
-/**
- * Why the bearer door let nobody in -- for the operator's log, never for the client.
- *
- * - `missing`: no `Authorization: Bearer` at all. A client's first contact, before it has
- *   signed in, is exactly this.
- * - `malformed`, `unknown`: not a credential this server issued for this door (`OAuthRefused`
- *   in `mcpAccessToken.ts` and `Refused` in `accessTokens.ts` say which cases each covers).
- * - `expired`, `revoked`: a real credential that has died, by its clock or by its person.
- * - `no_person`: a live credential whose person is nobody here any more.
- * - `insufficient_scope`: a live OAuth token whose person granted neither of our scopes.
- *
- * The client is told only what RFC 6750 lets it act on, decided in one place (`mcp.ts`):
- * `insufficient_scope` is a 403 naming the scope to ask for, and every other reason is the
- * same 401 -- a caller holding a dead credential is owed no account of how it died.
- */
-export type RefusalReason =
-  | "missing"
-  | TokenRefused["reason"]
-  | OAuthRefused["reason"]
-  | "no_person"
-  | "insufficient_scope";
-
-/**
- * A refused bearer: why, and whose it was when that is proven -- `upat_<id>` for a personal
- * token whose row was found, `oauth:<clientId>` for a JWT whose signature verified, and `owner`,
- * the address of the person it belongs to, where an account was read for it. Never the token,
- * nor any part of its secret.
- */
-export interface BearerRefusal {
-  readonly reason: RefusalReason;
-  readonly credentialId?: string | undefined;
-  readonly owner?: string | undefined;
-}
-
-/** Nothing to verify a JWT with: no authorization server runs here (plain HTTP off loopback). */
-const NO_ISSUER: OAuthRefused = { ok: false, reason: "unknown" };
-
-/**
- * The bearer door: `Authorization: Bearer` and nothing else.
- *
- * A personal access token (`upat_…`) is admitted by digest, and holds the grant its owner chose
- * when minting it. Anything else is an OAuth access token or nothing: a JWT a model-context
- * client obtained by signing its person in (ADR 0061), verified by the authorization server
- * against the consent as it stands NOW, and granted the lesser of what the token and the
- * consent say (`grantFor`). Both kinds yield the same `Presented`, so nothing after this
- * function learns which kind of bearer it was.
- */
-async function resolveBearer(
-  deps: ServerDeps,
-  headers: Headers,
-): Promise<Presented | BearerRefusal> {
-  const bearer = BEARER.exec(headers.get("authorization") ?? "")?.groups?.token;
-  if (bearer === undefined) {
-    return { reason: "missing" };
-  }
-  if (isPersonalToken(bearer)) {
-    const admitted = await admit(deps.exec, bearer);
-    return admitted.ok
-      ? { email: admitted.email, credentialId: admitted.id, grant: admitted.grant }
-      : { reason: admitted.reason, credentialId: admitted.id, owner: admitted.email };
-  }
-  const admission = (await deps.auth?.mcp?.admit(bearer)) ?? NO_ISSUER;
-  if (!admission.ok) {
-    const { clientId } = admission;
-    const credentialId = clientId === undefined ? undefined : oauthCredential(clientId);
-    return { reason: admission.reason, credentialId, owner: admission.email };
-  }
-  const credentialId = oauthCredential(admission.clientId);
-  const grant = grantFor(admission.tokenScopes, admission.consentScopes);
-  if (grant === null) {
-    return { reason: "insufficient_scope", credentialId, owner: admission.email };
-  }
-  return { email: admission.email, credentialId, grant };
-}
-
 /** Who is calling, as every door answers it. */
 export interface Caller {
   readonly user: SessionUser | null;
@@ -277,37 +166,39 @@ export interface Caller {
  * `superadmin` is false whenever `user` is null, because a caller the platform cannot identify
  * must not carry authority over it.
  *
- * Nobody's grant is the door's own: `write` at the cookie door, so an anonymous call to `/trpc`
- * is refused by `authedProcedure` as UNAUTHORIZED -- what it is -- rather than by the grant
- * guard as a write it may not make. At the bearer door nobody reaches a procedure at all.
+ * Nobody holds `write`, at either door, so an anonymous call -- a revoked token at `/trpc`
+ * included -- is refused by `authedProcedure` as UNAUTHORIZED, which is what it is, rather than
+ * by the grant guard as a write it may not make. That lends nobody anything: every procedure but
+ * the public ones refuses them first, and a public one is open to a request with no credential.
  */
 async function callerFor(
   deps: ServerDeps,
   presented: Presented | null,
   door: Door,
 ): Promise<Caller> {
-  const via: Via = door === "cookie" ? "session" : "token";
-  const nobody: Caller = {
-    user: null,
-    credentialId: "",
-    via,
-    grant: door === "cookie" ? "write" : "read",
-    superadmin: false,
-  };
   if (presented === null) {
-    return nobody;
+    return nobodyAt(door);
   }
   const appUser = await appUserForEmail(deps.exec, presented.email);
   if (appUser === null) {
-    return nobody;
+    return nobodyAt(door);
   }
   return {
     user: { userId: appUser.appUserId, email: appUser.email },
     credentialId: presented.credentialId,
-    via,
+    via: viaOf(door),
     grant: presented.grant,
     superadmin: isSuperadmin(deps.superadmins ?? NO_SUPERADMINS, appUser.email),
   };
+}
+
+function viaOf(door: Door): Via {
+  return door === "cookie" ? "session" : "token";
+}
+
+/** The caller who is nobody here: see `callerFor` for why their grant is `write`. */
+function nobodyAt(door: Door): Caller {
+  return { user: null, credentialId: "", via: viaOf(door), grant: "write", superadmin: false };
 }
 
 /** Who is calling through `door`: its identity step, then the shared tail. */
@@ -319,7 +210,7 @@ export async function resolveCaller(
   if (door === "cookie") {
     return callerFor(deps, await sessionIdentity(deps, headers), door);
   }
-  const presented = await resolveBearer(deps, headers);
+  const presented = await resolveBearer(deps, headers, "any");
   return callerFor(deps, "reason" in presented ? null : presented, door);
 }
 
@@ -339,9 +230,9 @@ export async function createContext(
 /**
  * The bearer door's context, or why there is none.
  *
- * What every door that reads a bearer asks -- `/mcp`, and an export's download sent with one --
- * rather than `createContext`: a model-context client that is nobody is answered before any MCP
- * message is read, and HOW it is answered depends on why -- see {@link RefusalReason}.
+ * What every door that reads a bearer asks -- `/mcp`, an export's download and `/trpc` sent with
+ * one -- rather than `createContext`: a model-context client that is nobody is answered before
+ * any MCP message is read, and HOW it is answered depends on why (`RefusalReason`, `identity.ts`).
  *
  * And the one place a refused bearer reaches the audit log (ADR 0120), so a door added tomorrow
  * that admits through here records its refusals without knowing it does.
@@ -349,8 +240,9 @@ export async function createContext(
 export async function bearerContext(
   deps: ServerDeps,
   headers: Headers,
+  bearers: Bearers,
 ): Promise<Context | BearerRefusal> {
-  const presented = await resolveBearer(deps, headers);
+  const presented = await resolveBearer(deps, headers, bearers);
   if ("reason" in presented) {
     return await recorded(deps, presented);
   }
@@ -363,6 +255,27 @@ export async function bearerContext(
         owner: presented.email,
       })
     : contextFor(deps, headers, "bearer", caller);
+}
+
+/**
+ * `/trpc`'s caller (ADR 0134): the browser's session cookie, or -- for the CLI signed in with a
+ * personal access token -- `Authorization: Bearer`, chosen by the request.
+ *
+ * A request carrying `Authorization` is the bearer door's and ONLY its, as at an export's
+ * download: a cookie that came with a bearer that failed does not rescue it, so a revoked token
+ * stops at its next call whatever else the request carries. A bearer refused here is nobody, and
+ * the router answers nobody UNAUTHORIZED like any anonymous call -- the client is owed no account
+ * of how the credential died, and the operator has its row from `bearerContext`.
+ *
+ * The header chooses, which a page elsewhere cannot use: a cross-origin request carrying
+ * `Authorization` needs a CORS preflight this server never answers, so it is never sent.
+ */
+export async function apiContext(deps: ServerDeps, headers: Headers): Promise<Context> {
+  if (!headers.has("authorization")) {
+    return createContext(deps, headers, "cookie");
+  }
+  const admitted = await bearerContext(deps, headers, "personal");
+  return "reason" in admitted ? contextFor(deps, headers, "bearer", nobodyAt("bearer")) : admitted;
 }
 
 /**

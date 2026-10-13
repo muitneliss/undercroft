@@ -42,6 +42,12 @@ a clipped list as all there is: call again with a narrower scope -- a filter, a 
 the next `cursor`, where the tool takes one -- or, for rows a person wants in a file, an export
 (below).
 
+`models_list`, `macros_list`, `bi_questions_list`, `models_lineage` and
+`connections_browseScope` take `limit` and `cursor`. Given either, the answer carries
+`nextCursor`: pass it back as `cursor`, with the same filters, until it is `null`. A page of 50
+or fewer is never clipped by count. A cursor whose item has left the list is refused with
+`reason: "unknown-cursor"` and `remedy: "restart"`: read again from the first page.
+
 `runs_get` with `waitSeconds` holds the call until the run ends or the wait runs out, at most
 50 seconds. If your host gives a tool call less time than that, ask for a shorter wait.
 

@@ -26,7 +26,21 @@ import {
   updateQuestion,
 } from "../repos/biQuestions.ts";
 import type { SaveOutcome } from "./bi.ts";
-import { type ListRequest, mapNarrowed, type Narrowed, narrowByName } from "./listFilter.ts";
+import {
+  type Listing,
+  listed,
+  mapNarrowed,
+  narrowByName,
+  type PagedListRequest,
+} from "./listFilter.ts";
+import { DEFAULT_PAGE } from "./listPage.ts";
+
+/**
+ * The page a reader gets who asks the definitions and sends a cursor and no limit: 32 questions
+ * with their SQL were 59 KB (issue 444), at the edge of what an MCP answer carries (ADR 0122),
+ * so a page of 50 of them would be cut by size rather than arrive whole.
+ */
+const DEFAULT_PAGE_WITH_DEFINITIONS = 20;
 
 /** What a reader chooses a question by, and no SQL: what `bi.questions.list` answers. */
 export interface QuestionSummary {
@@ -88,19 +102,29 @@ function questionItem(view: QuestionView, include: readonly QuestionInclude[]): 
 
 /**
  * The tenant's questions, narrowed by `filter` (`listFilter.ts`; names need not be unique, and a
- * name admits every question carrying it). Summaries unless `include` names more: 32 questions'
- * SQL was 59 KB of a 69 KB list that a reader asked of only to choose one (issue 444). Every row
- * is still parsed, so a row an older contract wrote is refused on the list as on `get`.
+ * name admits every question carrying it) and paged when asked. Summaries unless `include` names
+ * more: 32 questions' SQL was 59 KB of a 69 KB list that a reader asked of only to choose one
+ * (issue 444). Every row is still parsed, so a row an older contract wrote is refused on the list
+ * as on `get`.
+ *
+ * A page is keyed by id, never by name, which two questions may share: `listQuestions` reads
+ * them `ORDER BY name, id`, so the id places a question exactly in that order.
  */
 export async function listQuestionViews(
   exec: SqlExecutor,
   tenantId: string,
-  request: ListRequest<QuestionInclude> = {},
-): Promise<Narrowed<QuestionItem>> {
+  request: PagedListRequest<QuestionInclude> = {},
+): Promise<Listing<QuestionItem>> {
   const views = (await listQuestions(exec, tenantId)).map(questionView);
-  return mapNarrowed(
-    narrowByName(views, (view) => view.name, request),
-    (view) => questionItem(view, request.include ?? []),
+  const include = request.include ?? [];
+  return listed(
+    mapNarrowed(
+      narrowByName(views, (view) => view.name, request),
+      (view) => questionItem(view, include),
+    ),
+    (question) => question.id,
+    request,
+    include.includes("definition") ? DEFAULT_PAGE_WITH_DEFINITIONS : DEFAULT_PAGE,
   );
 }
 

@@ -23,7 +23,13 @@ import { NO_SUPERADMINS } from "../services/superadmin.ts";
 import { unavailableJudge } from "../services/assistant/judge.ts";
 import { registerAssistantRoutes } from "./chat.ts";
 import { registerCliRoute } from "./cli.ts";
-import { bearerContext, createContext, resolveCaller, type ServerDeps } from "./context.ts";
+import {
+  apiContext,
+  bearerContext,
+  createContext,
+  resolveCaller,
+  type ServerDeps,
+} from "./context.ts";
 import { holdFor } from "./holdOpen.ts";
 import { registerExportRoute } from "./exports.ts";
 import { registerMcpRoute } from "./mcp.ts";
@@ -61,16 +67,15 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 /**
- * The tRPC endpoint. The caller and the locale come from `createContext`, which the assistant
- * route also calls -- one definition of who is asking.
+ * The tRPC endpoint. The caller and the locale come from `apiContext` -- the browser's cookie, or
+ * the CLI's personal access token (ADR 0134) -- over the same `createContext` and `bearerContext`
+ * the assistant and `/mcp` call: one definition of who is asking.
  */
 function registerTrpcRoute(app: Hono, deps: ServerDeps): void {
   app.all("/trpc/*", async (c) => {
-    // The cookie door, and only the cookie: a bearer is `/mcp`'s, and a browser's own API must
-    // not start answering to one because a header happened to be set.
     // Held, so a procedure that waits on purpose is not cut at ten seconds (ADR 0124).
     const context = {
-      ...(await createContext(deps, c.req.raw.headers, "cookie")),
+      ...(await apiContext(deps, c.req.raw.headers)),
       holdOpen: holdFor(c.env, c.req.raw),
     };
     return await fetchRequestHandler({
@@ -196,7 +201,7 @@ function registerExportDownload(app: Hono, deps: ServerDeps): void {
   registerExportRoute(app, {
     admit: (headers) =>
       headers.has("authorization")
-        ? bearerContext(deps, headers)
+        ? bearerContext(deps, headers, "any")
         : createContext(deps, headers, "cookie"),
     ...(deps.log === undefined ? {} : { log: deps.log }),
   });
@@ -234,7 +239,7 @@ export function createServer(deps: ServerDeps): Hono {
   // The model-context door (ADR 0060): a bearer, never the cookie. Before the catch-all for the
   // same reason as the two above -- a client's GET here must not be answered with the app shell.
   registerMcpRoute(app, {
-    admit: (headers) => bearerContext(deps, headers),
+    admit: (headers) => bearerContext(deps, headers, "any"),
     ...(deps.publicUrl === undefined ? {} : { publicUrl: deps.publicUrl }),
     ...(deps.release === undefined ? {} : { release: deps.release }),
     ...(deps.log === undefined ? {} : { log: deps.log }),

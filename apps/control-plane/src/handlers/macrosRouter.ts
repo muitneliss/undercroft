@@ -13,7 +13,7 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as macros from "../services/macros.ts";
 import { findingSentence, wordCheck } from "./checkWords.ts";
-import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
+import { listingOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
 import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
 
 const definition = z.string().max(MAX_MACRO_SQL_BYTES);
@@ -21,12 +21,17 @@ const definition = z.string().max(MAX_MACRO_SQL_BYTES);
 export const macrosRouter = router({
   /**
    * The tenant's macros with what each is for and the hashes of their text, so a reader can
-   * choose one to reuse or tell its copy is current. No definitions: `get` has one.
+   * choose one to reuse or tell its copy is current. No definitions: `get` has one. `limit` or
+   * `cursor` answers a page, `{ items, nextCursor }`, rather than the array (ADR 0133).
    */
   list: tenantProcedure
-    .input(z.object(NameFilterInput))
+    .input(z.object({ ...NameFilterInput, ...PageInput }))
     .query(async ({ ctx, input }) =>
-      listedOrRefusal(ctx.locale, await macros.list(ctx.exec, input.tenantId, input)),
+      listingOrRefusal(
+        ctx.locale,
+        "macros.list",
+        await macros.list(ctx.exec, input.tenantId, input),
+      ),
     ),
 
   get: tenantProcedure.input(z.object({ name: MacroName })).query(async ({ ctx, input }) => {

@@ -6,10 +6,14 @@
  * added -- forgetting the stored session, reporting which server it belongs to. Both
  * procedures also exist as `session sign-out` and `session me`, because the command surface
  * mirrors the router one to one; these are the names a person looks for first.
+ *
+ * Signed in with a personal access token (`tokenSignIn.ts`, ADR 0134) there is no session to
+ * end: logging out forgets which variable to read, and the token lives until its owner revokes
+ * it on `/account` -- which the note says, so nobody takes forgetting it for revoking it.
  */
 
 import type { Effect, JsonSchema } from "../manifest.ts";
-import { forgetCredential, saveCredential } from "../services/credentials.ts";
+import { type Credential, forgetCredential, saveCredential } from "../services/credentials.ts";
 import { failure, fromFailure, isFailure, success } from "../services/output.ts";
 import { planProfileChange, resolveTarget, writeConfig } from "../services/profiles.ts";
 import { requestCode, signIn } from "./authEndpoints.ts";
@@ -26,6 +30,7 @@ import { type Noted, noted } from "./noted.ts";
 import { askText, CANCELLED } from "./prompts.ts";
 import { callProcedure } from "./remote.ts";
 import { signInAtTerminal } from "./terminalSignIn.ts";
+import { signInWithToken } from "./tokenSignIn.ts";
 
 function missing(ctx: Context, names: string): Noted {
   return noted(
@@ -47,7 +52,8 @@ async function valueOrAsk(
 }
 
 /**
- * Sign in: on this machine when the server is a desktop install, else with an emailed code.
+ * Sign in: with the token in `--token-env`'s variable when one is named, on this machine when
+ * the server is a desktop install, else with an emailed code.
  *
  * On this machine when `--local` says so, or when neither `--email` nor `--code` was given and
  * the server offers nothing else (`handlers/localSignIn.ts`). An address given is a person
@@ -63,6 +69,10 @@ export async function authLogin(ctx: Context, flags: ParsedFlags): Promise<Noted
     return noted(connected);
   }
   const { connection } = connected;
+  const tokenEnv = stringFlag(flags, "token-env");
+  if (tokenEnv !== undefined) {
+    return await signInWithToken(ctx, connection, tokenEnv);
+  }
   const code = stringFlag(flags, "code");
   const local =
     booleanFlag(flags, "local") ||
@@ -123,6 +133,18 @@ export async function authLogout(ctx: Context, flags: ParsedFlags): Promise<Note
   if (credential === null) {
     return noted(success({ origin: connection.origin, signedOut: false }), note);
   }
+  if ("tokenEnv" in credential) {
+    const forgotten = forgetCredential(ctx.t, ctx.home, connection.origin);
+    return forgotten === null
+      ? noted(
+          success({ origin: connection.origin, signedOut: true }),
+          ctx.t("note.tokenForgotten", {
+            origin: connection.origin,
+            variable: credential.tokenEnv,
+          }),
+        )
+      : noted(fromFailure(forgotten));
+  }
   const ended = await callProcedure(
     ctx.t,
     connection,
@@ -164,10 +186,27 @@ export async function authStatus(ctx: Context, flags: ParsedFlags): Promise<Note
     return noted(me);
   }
   const session = typeof me.data === "object" && me.data !== null ? me.data : {};
-  return noted(success({ origin: connection.origin, profile: target.profile, ...session }));
+  return noted(
+    success({
+      origin: connection.origin,
+      profile: target.profile,
+      ...session,
+      ...signedInWith(credential),
+    }),
+  );
 }
 
-/** The effective environment and where each part of it came from. Never the session itself. */
+/** How this CLI is signed in to an origin: a session, or the variable a token is in. */
+function signedInWith(credential: Credential): {
+  readonly signedInWith: "session" | "token";
+  readonly tokenEnv?: string;
+} {
+  return "tokenEnv" in credential
+    ? { signedInWith: "token", tokenEnv: credential.tokenEnv }
+    : { signedInWith: "session" };
+}
+
+/** The effective environment and where each part of it came from. Never the session or a token. */
 export function configShow(ctx: Context, flags: ParsedFlags): Noted {
   const connected = connect(ctx, flags);
   if ("ok" in connected) {
@@ -186,6 +225,7 @@ export function configShow(ctx: Context, flags: ParsedFlags): Noted {
       allowWrites: target.allowWrites,
       signedIn: credential !== null,
       email: credential?.email ?? null,
+      ...(credential === null ? {} : signedInWith(credential)),
     }),
   );
 }

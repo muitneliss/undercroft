@@ -16,6 +16,14 @@ import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";
 
 const TENANT = "CASE-0042";
+
+/** A list asked no page answers its array (ADR 0133); a page here is the contract broken. */
+function whole<T>(answer: T[] | { readonly items: T[] }): T[] {
+  if (!Array.isArray(answer)) {
+    throw new Error("a page of a list that was asked for no page");
+  }
+  return answer;
+}
 /** Non-ASCII on purpose: a hash of UTF-16 or of Latin-1 would differ here. */
 const MODEL_SQL = "select 1 as id -- doanh thu theo tháng\n";
 const TESTS = { columns: { id: ["not_null" as const] } };
@@ -148,7 +156,7 @@ describe("content hashes", () => {
         ]),
       ),
     );
-    expect((await api.models.list({ tenantId: TENANT }))[0]).toMatchObject({
+    expect(whole(await api.models.list({ tenantId: TENANT }))[0]).toMatchObject({
       sqlSha256: model.sqlSha256,
       testsSha256: model.testsSha256,
     });
@@ -156,7 +164,7 @@ describe("content hashes", () => {
     const macro = await api.macros.get({ tenantId: TENANT, name: "tidy" });
     expect(macro.sqlSha256).toBe(sha256(MACRO_SQL));
     expect(macro.descriptionSha256).toBe(sha256(DESCRIPTION));
-    expect((await api.macros.list({ tenantId: TENANT }))[0]).toMatchObject({
+    expect(whole(await api.macros.list({ tenantId: TENANT }))[0]).toMatchObject({
       sqlSha256: macro.sqlSha256,
       descriptionSha256: macro.descriptionSha256,
     });
@@ -181,7 +189,7 @@ describe("content hashes", () => {
         ]),
       ),
     );
-    expect((await api.bi.questions.list({ tenantId: TENANT }))[0]?.definitionSha256).toBe(
+    expect(whole(await api.bi.questions.list({ tenantId: TENANT }))[0]?.definitionSha256).toBe(
       question.definitionSha256,
     );
   });

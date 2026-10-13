@@ -19,6 +19,14 @@ import { type Context, type Role, refusalFacts } from "./trpc.ts";
 
 const TENANT = "CASE-0042";
 
+/** A list asked no page answers its array (ADR 0133); a page here is the contract broken. */
+function wholeList<T>(answer: T[] | { readonly items: T[] }): T[] {
+  if (!Array.isArray(answer)) {
+    throw new Error("a page of a list that was asked for no page");
+  }
+  return answer;
+}
+
 let db: TestDatabase;
 
 async function seedMember(email: string, role: Role): Promise<string> {
@@ -84,6 +92,21 @@ async function refusal(fn: () => Promise<unknown>): Promise<{ code: string; mess
   throw new Error("expected a refusal");
 }
 
+/** The refusal's code, sentence and facts, as an agent at either door receives them. */
+async function refusedWith(
+  fn: () => Promise<unknown>,
+): Promise<{ code: string; message: string; facts: unknown }> {
+  try {
+    await fn();
+  } catch (error) {
+    if (error instanceof TRPCError) {
+      return { code: error.code, message: error.message, facts: refusalFacts(error) };
+    }
+    throw error;
+  }
+  throw new Error("expected a refusal");
+}
+
 const DRAFT = { tenantId: TENANT, name: "stg_deals", sql: "select 1", tests: { columns: {} } };
 
 beforeEach(async () => {
@@ -109,7 +132,9 @@ describe("models.save", () => {
 
     await caller(admin, "a@example.test").models.save({ ...DRAFT, create: true });
 
-    const listed = await caller(viewer, "v@example.test").models.list({ tenantId: TENANT });
+    const listed = wholeList(
+      await caller(viewer, "v@example.test").models.list({ tenantId: TENANT }),
+    );
     expect(listed.map((m) => m.name)).toEqual(["stg_deals"]);
     const full = await caller(viewer, "v@example.test").models.get({
       tenantId: TENANT,
@@ -215,21 +240,6 @@ describe("models.build", () => {
       await caller(admin, "a@example.test").models.save({ ...DRAFT, name, create: true });
     }
     return admin;
-  }
-
-  /** The refusal's code, sentence and facts, as an agent at either door receives them. */
-  async function refusedWith(
-    fn: () => Promise<unknown>,
-  ): Promise<{ code: string; message: string; facts: unknown }> {
-    try {
-      await fn();
-    } catch (error) {
-      if (error instanceof TRPCError) {
-        return { code: error.code, message: error.message, facts: refusalFacts(error) };
-      }
-      throw error;
-    }
-    throw new Error("expected a refusal");
   }
 
   async function buildTrail(): Promise<{ outcome: string; detail: unknown }[]> {
@@ -558,7 +568,7 @@ describe("a model's latest tests (issue 456)", () => {
     );
     const { models } = caller(admin, "a@example.test");
 
-    const listed = await models.list({ tenantId: TENANT });
+    const listed = wholeList(await models.list({ tenantId: TENANT }));
     expect(Object.fromEntries(listed.map((m) => [m.name, m.lastTests]))).toEqual({
       dim_owner: {
         state: "unknown",
@@ -620,21 +630,6 @@ describe("a model's latest tests (issue 456)", () => {
     const after = await models.get({ tenantId: TENANT, name: "stg_deals" });
     expect([after.lastTests.state, after.lastTests.runId]).toEqual(["passing", "run-3"]);
   });
-
-  /** The refusal's code, sentence and facts, as an agent at either door receives them. */
-  async function refusedWith(
-    fn: () => Promise<unknown>,
-  ): Promise<{ code: string; message: string; facts: unknown }> {
-    try {
-      await fn();
-    } catch (error) {
-      if (error instanceof TRPCError) {
-        return { code: error.code, message: error.message, facts: refusalFacts(error) };
-      }
-      throw error;
-    }
-    throw new Error("expected a refusal");
-  }
 
   it("issue 457: building a model alone over a parent whose tests failed is refused, naming them", async () => {
     const admin = await adminWithProject();
@@ -807,7 +802,9 @@ describe("models.preview (ADR 0132)", () => {
 
     expect(await api.models.preview(PREVIEW)).toEqual(SAMPLE);
     expect((await api.models.get({ tenantId: TENANT, name: "stg_deals" })).sql).toBe("select 1");
-    expect((await api.models.list({ tenantId: TENANT })).map((m) => m.name)).toEqual(["stg_deals"]);
+    expect(wholeList(await api.models.list({ tenantId: TENANT })).map((m) => m.name)).toEqual([
+      "stg_deals",
+    ]);
   });
 
   it("an outer query goes to the worker with the draft, and its answer comes back", async () => {
@@ -902,7 +899,9 @@ describe("models.delete", () => {
     const got = await refusal(() => api.models.delete({ tenantId: TENANT, name: "stg_deals" }));
     expect(got.code).toBe("CONFLICT");
     expect(got.message).toContain("fct_pipeline");
-    expect((await api.models.list({ tenantId: TENANT })).map((m) => m.name)).toEqual(["stg_deals"]);
+    expect(wholeList(await api.models.list({ tenantId: TENANT })).map((m) => m.name)).toEqual([
+      "stg_deals",
+    ]);
   });
 });
 
@@ -962,6 +961,87 @@ describe("models.lineage", () => {
         { kind: "model", id: "model:stg_deals", name: "stg_deals", undeclared: [] },
       ],
       edges: [{ from: "model:stg_deals", to: "model:mart", via: null }],
+    });
+  });
+
+  /** A lineage's answer: the graph when no page was asked, else one page of it. */
+  type Graph = Awaited<ReturnType<ReturnType<typeof caller>["models"]["lineage"]>>;
+
+  /** Every page of a lineage read, each asked after the last until `nextCursor` is null. */
+  async function everyPage(read: (cursor: string | undefined) => Promise<Graph>): Promise<Graph[]> {
+    const pages: Graph[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await read(cursor);
+      if (!("nextCursor" in page)) {
+        throw new Error("the whole graph, though a page was asked");
+      }
+      pages.push(page);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined && pages.length < 20);
+    return pages;
+  }
+
+  function atCursor(cursor: string | undefined): { cursor?: string } {
+    return cursor === undefined ? {} : { cursor };
+  }
+
+  it("a page at a time, around a name: every node and edge once, then no cursor", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const api = caller(admin, "a@example.test");
+    const base = "select * from {{ ref('base') }}";
+    await api.models.save({ ...DRAFT, name: "base", create: true });
+    await api.models.save({ ...DRAFT, name: "stg_a", sql: base, create: true });
+    await api.models.save({ ...DRAFT, name: "stg_b", sql: base, create: true });
+    await api.models.save({
+      ...DRAFT,
+      name: "mart",
+      sql: "select * from {{ ref('base') }}, {{ ref('stg_a') }}, {{ ref('stg_b') }}, {{ ref('gone') }}",
+      create: true,
+    });
+    // Outside the part around mart: a page that dropped the name would carry it.
+    await api.models.save({ ...DRAFT, name: "lone", sql: base, create: true });
+    const around = { tenantId: TENANT, name: "mart", direction: "up" as const };
+
+    const part = await api.models.lineage(around);
+    const pages = await everyPage((cursor) =>
+      api.models.lineage({ ...around, limit: 1, ...atCursor(cursor) }),
+    );
+
+    // Five nodes and six edges: the nodes run out a page before the edges do.
+    expect([part.nodes.length, part.edges.length]).toEqual([5, 6]);
+    expect(pages.map((page) => [page.nodes.length, page.edges.length])).toEqual([
+      [1, 1],
+      [1, 1],
+      [1, 1],
+      [1, 1],
+      [1, 1],
+      [0, 1],
+    ]);
+    expect(pages.flatMap((page) => page.nodes)).toEqual([...part.nodes]);
+    expect(pages.flatMap((page) => page.edges)).toEqual([...part.edges]);
+  });
+
+  it("a cursor whose node has left the graph is refused, never restarted from the top", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const api = caller(admin, "a@example.test", "en", { worker: new InMemoryWorkerClient() });
+    for (const name of ["alpha", "beta", "gamma"]) {
+      await api.models.save({ ...DRAFT, name, create: true });
+    }
+    const first = await api.models.lineage({ tenantId: TENANT, limit: 1 });
+    const cursor = "nextCursor" in first ? (first.nextCursor ?? undefined) : undefined;
+    await api.models.delete({ tenantId: TENANT, name: "alpha" });
+
+    const got = await refusedWith(() =>
+      api.models.lineage({ tenantId: TENANT, ...atCursor(cursor) }),
+    );
+
+    expect(first.nodes.map((node) => node.name)).toEqual(["alpha"]);
+    expect(got.code).toBe("BAD_REQUEST");
+    expect(got.facts).toEqual({
+      procedure: "models.lineage",
+      reason: "unknown-cursor",
+      remedy: "restart",
     });
   });
 

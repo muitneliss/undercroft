@@ -157,7 +157,7 @@ export const vi = {
       "Token này chỉ được đọc, nên không làm được thao tác này. Hãy tạo một token có quyền ghi ở trang Tài khoản nếu bạn muốn cho phép.",
     /** A credential-managing procedure reached with a token. Says where it can be done. */
     requiresSession:
-      "Thao tác này chỉ làm được khi đăng nhập bằng trình duyệt (hoặc CLI), không làm được bằng token.",
+      "Thao tác này chỉ làm được khi đăng nhập bằng trình duyệt (hoặc CLI đăng nhập bằng mã email), không làm được bằng token.",
     tenantExists: "Mã khách hàng {{tenantId}} đã được dùng cho một khách hàng khác.",
     /**
      * Every tenant procedure on a deactivated customer (ADR 0110). Says who can undo it, since
@@ -242,6 +242,12 @@ export const vi = {
     tablesUnknown: "Không có trong các bảng của khách hàng này: {{tables}}.",
     /** A list asked for by `names`, and the names nothing in it carries, comma-joined. */
     namesUnknown: "Không có trong danh sách này của khách hàng: {{names}}.",
+    /**
+     * A page cursor whose item has left what `{{procedure}}` lists, or that it never answered.
+     * The procedure is named as it is typed (`models.list`), never translated.
+     */
+    pageCursorUnknown:
+      "Con trỏ trang này không còn khớp với {{procedure}}: mục mà nó tiếp nối không còn trong danh sách. Hãy đọc lại từ trang đầu, không kèm cursor.",
     /** Postgres's own sentence follows the colon; it quotes the author's SQL and nothing else. */
     noPassingVersion:
       "{{model}} chưa có phiên bản nào đạt kiểm thử: lần dựng ở lần chạy {{runId}} không đạt kiểm thử hoặc không dựng được, nên chưa có gì của nó được công bố cho Báo cáo. Hãy sửa mô hình rồi dựng lại.",

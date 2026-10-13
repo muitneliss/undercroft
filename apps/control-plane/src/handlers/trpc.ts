@@ -65,8 +65,9 @@ export interface SessionUser {
 
 /**
  * Which door the caller came through: a person's browser session (the cookie `/trpc` and the
- * assistant read), or a bearer credential (`/mcp`). A procedure never branches on it except to
- * refuse -- `sessionProcedure` below -- and the grant is what carries its consequence.
+ * assistant read), or a bearer credential (`/mcp`, and `/trpc` sent one). A procedure never
+ * branches on it except to refuse -- `sessionProcedure` below -- and the grant is what carries
+ * its consequence.
  */
 export type Via = "session" | "token";
 
@@ -80,9 +81,10 @@ export interface Context {
   readonly credentialId: string;
   readonly via: Via;
   /**
-   * The door as the audit log names it (ADR 0113): `mcp` for a bearer, `cli` for a session the
-   * CLI says it is sending, `assistant` for the assistant's own caller, otherwise `web`. Like
-   * `via` it is for reading, never for authority -- the CLI's header is its own word.
+   * The door as the audit log names it (ADR 0113): `cli` for a caller the CLI says it is sending,
+   * session or token alike, `mcp` for any other bearer, `assistant` for the assistant's own
+   * caller, otherwise `web`. Like `via` it is for reading, never for authority -- the CLI's header
+   * is its own word.
    */
   readonly channel: Channel;
   /**

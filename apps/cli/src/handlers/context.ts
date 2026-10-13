@@ -10,7 +10,7 @@
 import type { Readable, Writable } from "node:stream";
 import type { Locale } from "@undercroft/core/locale";
 import type { Translate } from "../i18n/index.ts";
-import { type Credential, credentialFor } from "../services/credentials.ts";
+import { type Credential, credentialFor, presented } from "../services/credentials.ts";
 import type { RuntimeMode } from "../services/mode.ts";
 import { fromFailure, isFailure, type Refusal } from "../services/output.ts";
 import {
@@ -65,7 +65,10 @@ export interface Connected {
   readonly connection: Connection;
 }
 
-/** The server this invocation addresses and the session it holds there, if any. */
+/**
+ * The server this invocation addresses and the credential it holds there, if any. A token is
+ * read from its variable here, once per invocation, and never kept anywhere but the connection.
+ */
 export function connect(ctx: Context, flags: ParsedFlags): Connected | Refusal {
   const config = loadConfig(ctx);
   if ("ok" in config) {
@@ -90,7 +93,7 @@ export function connect(ctx: Context, flags: ParsedFlags): Connected | Refusal {
     connection: {
       url: target.url,
       origin: target.origin,
-      cookie: credential?.cookie ?? null,
+      credential: credential === null ? null : presented(credential, ctx.env),
       locale: ctx.locale,
       fetch: ctx.fetch,
       trace: ctx.trace,

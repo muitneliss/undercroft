@@ -30,23 +30,21 @@ import {
   insertModel,
   type LastBuild,
   lastBuildPerModel,
-  listMacros,
   listModels,
-  listSeedSummaries,
   type Model,
   saveModel,
   seedExists,
 } from "@undercroft/db/repos";
-import {
-  type Finding,
-  type Lineage,
-  type LineageTarget,
-  lineageAround,
-  modelLineage,
-} from "@undercroft/db/services";
+import type { Finding } from "@undercroft/db/services";
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
-import { type ListRequest, mapNarrowed, type Narrowed, narrowByName } from "./listFilter.ts";
+import {
+  type Listing,
+  listed,
+  mapNarrowed,
+  narrowByName,
+  type PagedListRequest,
+} from "./listFilter.ts";
 import { refusedTest } from "./modelChecks.ts";
 import {
   readTestStates,
@@ -142,33 +140,39 @@ function summaryOf(
   if (built === undefined) {
     return { ...facts(model), lastBuild: null, lastTests };
   }
-  const { columns: listed, ...summary } = buildOf(model, built);
+  const { columns: found, ...summary } = buildOf(model, built);
   return {
     ...facts(model),
-    lastBuild: columns ? { ...summary, columns: listed } : summary,
+    lastBuild: columns ? { ...summary, columns: found } : summary,
     lastTests,
   };
 }
 
 /**
- * The tenant's models with their last build, narrowed by `filter` (`listFilter.ts`). Each says
- * how many columns its build found; which ones only when `include` names `columns`, because 176
- * models' column lists were most of a list that overflowed its client (issue 444).
+ * The tenant's models with their last build, narrowed by `filter` and paged by name when asked
+ * (`listFilter.ts`). Each says how many columns its build found; which ones only when `include`
+ * names `columns`, because 176 models' column lists were most of a list that overflowed its
+ * client (issue 444).
  */
 export async function list(
   exec: SqlExecutor,
   tenantId: string,
-  request: ListRequest<ModelInclude> = {},
-): Promise<Narrowed<ModelItem>> {
+  request: PagedListRequest<ModelInclude> = {},
+): Promise<Listing<ModelItem>> {
   const [models, builds, tests] = await Promise.all([
     listModels(exec, tenantId),
     lastBuildPerModel(exec, tenantId),
     readTestStates(exec, tenantId),
   ]);
   const columns = request.include?.includes("columns") ?? false;
-  return mapNarrowed(
-    narrowByName(models, (m) => m.name, request),
-    (m) => summaryOf(m, builds.get(m.name), tests(m.name), columns),
+  // `listModels` reads them `ORDER BY name`, and a model's name is unique: the page's key.
+  return listed(
+    mapNarrowed(
+      narrowByName(models, (m) => m.name, request),
+      (m) => summaryOf(m, builds.get(m.name), tests(m.name), columns),
+    ),
+    (item) => item.name,
+    request,
   );
 }
 
@@ -253,30 +257,6 @@ export async function save(
     });
   }
   return { ok: true, unchanged: result === "unchanged" };
-}
-
-/**
- * Which of the tenant's models read which, and which raw lake tables and seeds, read from the
- * saved models' and macros' own declarations and from nothing else (`modelLineage.ts`, ADR 0092).
- * Computed on every call rather than stored: a stored graph would be one more thing a save
- * could leave stale, and the text it is read from is already here.
- *
- * With a `target`, only the part around the node it names (`lineageAround`), or `null` when
- * the tenant's graph has no such node. The whole graph is read either way: which models reach
- * a node is only known once every model's declarations are.
- */
-export async function lineage(
-  exec: SqlExecutor,
-  tenantId: string,
-  target: LineageTarget | null = null,
-): Promise<Lineage | null> {
-  const [models, macros, seeds] = await Promise.all([
-    listModels(exec, tenantId),
-    listMacros(exec, tenantId),
-    listSeedSummaries(exec, tenantId),
-  ]);
-  const graph = modelLineage({ models, macros, seeds: seeds.map((seed) => seed.name) });
-  return target === null ? graph : lineageAround(graph, target);
 }
 
 /** The rows a failed test stored, through the worker; nothing here decides who may look. */

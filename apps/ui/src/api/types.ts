@@ -130,10 +130,17 @@ export type RunWrites = inferRouterOutputs<AppRouter>["lake"]["records"]["ofRun"
 export type RawSearchHit = inferRouterOutputs<AppRouter>["lake"]["search"]["hits"][number];
 
 /**
+ * An answer as the browser asks for it: whole. `models.list`, `macros.list`, `bi.questions.list`
+ * and `models.lineage` answer one page, with `nextCursor`, when asked a `limit` or a `cursor`,
+ * which only an agent asks (ADR 0133). See `@/lib/listAnswers`.
+ */
+type Whole<Answer> = Exclude<Answer, { readonly nextCursor: unknown }>;
+
+/**
  * One model on the list, as `models.list` returns it: its name, its hashes and its last build
  * with a column count. No SQL, and the columns only when asked for, which no screen does.
  */
-export type ModelItem = inferRouterOutputs<AppRouter>["models"]["list"][number];
+export type ModelItem = Whole<inferRouterOutputs<AppRouter>["models"]["list"]>[number];
 
 /** One model in full, as `models.get` returns it: the item plus its SQL and tests. */
 export type ModelDetail = inferRouterOutputs<AppRouter>["models"]["get"];
@@ -142,7 +149,7 @@ export type ModelDetail = inferRouterOutputs<AppRouter>["models"]["get"];
  * What the models declare they read (ADR 0092): a node per model, raw lake table read and
  * missing dependency, and an edge per declaration. Nothing in it is inferred.
  */
-export type ModelLineage = inferRouterOutputs<AppRouter>["models"]["lineage"];
+export type ModelLineage = Whole<inferRouterOutputs<AppRouter>["models"]["lineage"]>;
 export type LineageNode = ModelLineage["nodes"][number];
 
 /**
@@ -172,7 +179,10 @@ export type QuestionView = inferRouterOutputs<AppRouter>["bi"]["questions"]["get
  * One saved question on the list, as `bi.questions.list` returns it: its kind and chart type,
  * and its definition and chart only when asked for (ADR 0127). See `@/lib/listAnswers`.
  */
-export type QuestionItem = inferRouterOutputs<AppRouter>["bi"]["questions"]["list"][number];
+export type QuestionItem = Whole<QuestionListAnswer>[number];
+
+/** Either answer `bi.questions.list` gives: the array, or one page of it. */
+export type QuestionListAnswer = inferRouterOutputs<AppRouter>["bi"]["questions"]["list"];
 
 /** The modelling reference whole, as the editor's panel asks for it: no `parts`. */
 export type ModelReference = Exclude<
