@@ -205,6 +205,8 @@ export const vi = {
       "Lineage của khách hàng này không có mô hình hay bảng nào tên {{name}}. Bảng thô được ghi dạng schema.bảng, ví dụ raw.records.",
     /** Every name asked for and not held, comma-joined; worded so one or many reads the same. */
     tablesUnknown: "Không có trong các bảng của khách hàng này: {{tables}}.",
+    /** A list asked for by `names`, and the names nothing in it carries, comma-joined. */
+    namesUnknown: "Không có trong danh sách này của khách hàng: {{names}}.",
     /** Postgres's own sentence follows the colon; it quotes the author's SQL and nothing else. */
     queryFailed: "Câu truy vấn không chạy được: {{message}}",
     queryNotRun:

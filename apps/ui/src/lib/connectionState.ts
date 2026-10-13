@@ -43,7 +43,7 @@
 import { MULTI_ACCOUNT_KINDS } from "@undercroft/contracts/sources";
 import type { TFunction } from "i18next";
 
-import type { Connection, Source } from "@/api/types.ts";
+import type { Connection, ConnectionConfig, Source } from "@/api/types.ts";
 import { nameXeroEntities, XERO_ENTITIES } from "@/lib/xeroEntities.ts";
 
 export type CardState = "not_connected" | "connected" | "needs_scope" | "needs_reconnect";
@@ -207,7 +207,7 @@ export function ungrantedNotes(t: TFunction, connection: Connection): string[] {
  * run. A selection of loose documents with no folder in it gets its own sentence rather than
  * "0 selected folders". ADR 0031.
  */
-function driveScope(t: TFunction, config: Connection["config"]): string | null {
+function driveScope(t: TFunction, config: ConnectionConfig): string | null {
   const picks = config.files ?? [];
   const folders = picks.filter((pick) => pick.kind === "folder");
 
@@ -241,8 +241,12 @@ function driveScope(t: TFunction, config: Connection["config"]): string | null {
 export function scopeSummary(
   t: TFunction,
   kind: Source,
-  config: Connection["config"],
+  config: ConnectionConfig | undefined,
 ): string | null {
+  // A card listed without its config (`include: ["config"]`) has a scope nobody here can name.
+  if (config === undefined) {
+    return null;
+  }
   const labels = config.labels ?? [];
   const entities = config.entities ?? [];
 

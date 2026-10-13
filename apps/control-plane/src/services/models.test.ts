@@ -45,7 +45,7 @@ describe("save", () => {
       tests: { columns: { deal_id: ["not_null", "unique"] } },
       create: true,
     });
-    expect(outcome).toEqual({ ok: true });
+    expect(outcome).toEqual({ ok: true, unchanged: false });
 
     const model = await get(db, TENANT, "stg_deals");
     expect(model?.sql).toBe(SQL);
@@ -197,10 +197,12 @@ describe("list", () => {
       await closeRun(tx, "t-2", { status: "failed", error: "dbt build exited 1" });
     });
 
-    const items = await list(db, TENANT);
+    const listed = await list(db, TENANT);
+    const items = listed.ok ? listed.items : [];
     expect(items.map((m) => m.name)).toEqual(["stg_contacts", "stg_deals"]);
     expect(items[0]?.lastBuild).toBeNull();
-    expect(items[1]?.lastBuild).toMatchObject({ runId: "t-2", status: "error", columns: [] });
+    // A build that failed found no columns, which is "not known", never zero.
+    expect(items[1]?.lastBuild).toMatchObject({ runId: "t-2", status: "error", columnCount: null });
     expect(items[1]?.lastBuild?.endedAt).not.toBeNull();
   });
 });

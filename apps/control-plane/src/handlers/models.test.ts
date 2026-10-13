@@ -183,6 +183,9 @@ describe("models.build", () => {
   it("the reference names the platform's source and its macros for any member", async () => {
     const viewer = await seedMember("v@example.test", "viewer");
     const reference = await caller(viewer, "v@example.test").models.reference({ tenantId: TENANT });
+    if ("parts" in reference) {
+      throw new Error("asked for no parts, answered with some");
+    }
     expect(reference.sourcesYml).toContain("name: undercroft");
     expect(reference.macros.map((m) => m.name)).toEqual([
       "parse_amount",

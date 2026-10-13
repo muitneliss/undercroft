@@ -33,7 +33,7 @@ import {
   stepsFor,
 } from "@undercroft/db/repos";
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
-import { type ConnectionCardView, configOf } from "./connections.ts";
+import { type ConnectionConfig, configOf } from "./connections.ts";
 import type { TriggerOutcome, WorkerClient } from "./workerClient.ts";
 
 export type RunKind =
@@ -118,7 +118,7 @@ export interface RunDetail extends RunView {
    * would date today's answer to the past (ADR 0039). `{}` is a scope too: a HubSpot connection
    * nobody had scoped, which read the spec's own properties.
    */
-  readonly scope: ConnectionCardView["config"] | null;
+  readonly scope: ConnectionConfig | null;
 }
 
 /**

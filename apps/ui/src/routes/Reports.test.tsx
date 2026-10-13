@@ -18,15 +18,24 @@ import { mountRoute } from "@/test/mountRoute.tsx";
 
 const TENANT = "CASE-0042";
 const WHEN = "2026-09-30T03:12:53.210Z";
-const CHART = { type: "line", y: [], options: {} };
-const SQL = { kind: "sql", sql: "select 1 as n" };
+const SHA256 = "0".repeat(64);
 
-/** Synthetic names; two questions and one dashboard mention revenue ("doanh thu"). */
+/**
+ * Synthetic names; two questions and one dashboard mention revenue ("doanh thu"). As the list
+ * answers them: summaries, with no definition and no chart.
+ */
 const QUESTIONS = [
-  { id: "q1", name: "Doanh thu theo tháng", definition: SQL, chart: CHART },
-  { id: "q2", name: "Doanh thu theo nhóm", definition: SQL, chart: CHART },
-  { id: "q3", name: "Công nợ", definition: SQL, chart: CHART },
-].map((question) => ({ ...question, updatedAt: WHEN, updatedBy: "u1" }));
+  { id: "q1", name: "Doanh thu theo tháng" },
+  { id: "q2", name: "Doanh thu theo nhóm" },
+  { id: "q3", name: "Công nợ" },
+].map((question) => ({
+  ...question,
+  kind: "sql",
+  chartType: "line",
+  definitionSha256: SHA256,
+  updatedAt: WHEN,
+  updatedBy: "u1",
+}));
 
 const DASHBOARDS = [
   { id: "d1", name: "Doanh thu tổng quan", layout: { tiles: [] }, filters: [] },

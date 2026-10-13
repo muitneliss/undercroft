@@ -124,6 +124,7 @@ export const en = {
     lineageNameUnknown:
       "This customer's lineage has no model or table named {{name}}. A raw table is written as schema.table, such as raw.records.",
     tablesUnknown: "Not among this customer's tables: {{tables}}.",
+    namesUnknown: "Not in this list of the customer's: {{names}}.",
     queryFailed: "The query did not run: {{message}}",
     queryNotRun:
       "The query could not be run. The processing service did not answer; try again in a few minutes.",

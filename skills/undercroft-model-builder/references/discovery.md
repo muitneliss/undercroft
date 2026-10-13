@@ -19,16 +19,24 @@ Read the tenant before you ask the person anything detailed. The point is to giv
 interview real choices: "this tenant has Xero invoices and HubSpot deals" is a question a
 person can answer; "which source do you want?" is not.
 
-Read all six, once, at the start:
+Read all six, once, at the start. The lists answer summaries -- names, kinds, hashes and
+counts, never an item's body -- so reading all six is cheap; take a body from `get`, or ask a
+list for it with `include`, only for the items that bear on the request.
 
-| Read                 | What it tells you                                                              |
-| -------------------- | ------------------------------------------------------------------------------ |
-| `models.list`        | The models that exist, so the concepts the tenant has already defined.         |
-| `macros.list`        | The customer's own macros and what each is for.                                |
-| `models.reference`   | The sources a model can read and every macro, the platform's and the tenant's. |
-| `lake.summary`       | The sources and entities the lake holds, how many records each, how fresh.     |
-| `bi.questions.list`  | The saved questions, each with its definition, so the models it reads.         |
-| `bi.dashboards.list` | The dashboards, and which questions sit on each.                               |
+| Read                 | What it tells you                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `models.list`        | The models that exist, each with its last build and how many columns it found.      |
+| `macros.list`        | The customer's own macros, what each is for and its parameters; no definitions.     |
+| `models.reference`   | The sources a model can read and the platform's macros: `parts`, once (see below).  |
+| `lake.summary`       | The sources and entities the lake holds, how many records each, how fresh.          |
+| `bi.questions.list`  | The saved questions: kind and chart type. `include: ["definition"]` for the models. |
+| `bi.dashboards.list` | The dashboards, and which questions sit on each.                                    |
+
+`models.reference` returns three parts: `sources` and `platformMacros`, which are the same on
+every call, and `tenantMacros`, the customer's own with their text. Read it whole once, or
+with `parts`; after that, `macros.list` and `macros.get` are the cheaper way to the tenant's
+macros. Every list takes `names` (exactly these) and `match` (a fragment of the name,
+case-insensitive); a name that is not there is refused as `NOT_FOUND`, naming it.
 
 Do not paste what they return. Write the person a short inventory of what bears on the
 request, and keep the rest to yourself:
@@ -44,7 +52,8 @@ Dashboards:  Finance overview (3 questions)
 Read these when the request touches them:
 
 - `models.get` for a model that might already own the concept: its SQL, its tests, the
-  columns of its last build.
+  columns of its last build. `models.list` with `include: ["columns"]` gives the columns of
+  every build at once, when you are comparing several.
 - `models.lineage` before you propose to change a model, or to build one beside it: the
   models that `ref` it read what it builds, and a second model over the same entity is
   often the first sign of a duplicate. Name the model: `name` with `direction: "down"` for
@@ -60,6 +69,24 @@ Read these when the request touches them:
   and attachments a source landed.
 - `lake.querySchema` and `lake.query` for a count or a distribution (section 3). Narrow
   `lake.querySchema` with `tables` the way you narrow `bi.schema`.
+
+### Is what you read still current?
+
+A session that read the tenant an hour ago, or keeps the customer's SQL in a repository, does
+not need to read it all again to know whether it changed.
+
+- `models.revision` answers one hash each for the models, the macros and the questions, and
+  one over all three. Equal to the one you kept means nothing a save writes has changed since;
+  different means something did, and the part that moved says which kind. Read it before a
+  plan you made earlier is carried out, and again before each save if time has passed.
+- Each model carries `sqlSha256` and `testsSha256`, each macro `sqlSha256` and
+  `descriptionSha256`, each question `definitionSha256`, on the list and on `get`. A `*Sha256`
+  of text (a model's or a macro's SQL, a description) is the SHA-256 of its UTF-8 bytes: hash
+  your local file the same way, and equal means the server holds exactly your text, with no
+  need to fetch it. `testsSha256` and `definitionSha256` are of the JSON as the server stores
+  it, which you cannot reproduce: compare them only with a hash the server gave you before.
+- Saving a model or a macro with exactly what is stored answers `unchanged: true` and changes
+  nothing, `updatedAt` included. It is safe, but it is not a write: do not report it as one.
 
 ## 2. The interview: the outcome before the implementation
 

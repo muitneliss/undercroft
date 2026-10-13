@@ -9,7 +9,13 @@
 
 import { sourceKind } from "@undercroft/contracts/sources";
 
-import { type Connection, isSource, type RunDetail, type RunView } from "@/api/types.ts";
+import {
+  type Connection,
+  type ConnectionWithConfig,
+  isSource,
+  type RunDetail,
+  type RunView,
+} from "@/api/types.ts";
 import type { LastRun } from "@/lib/runs.ts";
 
 /** One line of the journal: an ingest that landed, a little before the when-tests' `NOW`. */
@@ -85,7 +91,7 @@ export function lastRun(over: Partial<LastRun> = {}): LastRun {
  * (`gmail.3fa9c1d2e0ab`). Its `kind` is read off the source the way the server derives it, so
  * a fixture cannot claim a Drive source is a Gmail connection.
  */
-export function connection(source: string, over: Partial<Connection> = {}): Connection {
+export function connection(source: string, over: Partial<Connection> = {}): ConnectionWithConfig {
   const kind = sourceKind(source);
   if (!isSource(kind)) {
     throw new Error(`fixture: ${source} is not an account of any kind the schedule lists`);
@@ -98,6 +104,7 @@ export function connection(source: string, over: Partial<Connection> = {}): Conn
     externalAccountId: "",
     externalAccountLabel: "",
     scopes: [],
+    chosen: null,
     config: {},
     cadence: "daily",
     cron: null,

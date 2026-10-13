@@ -36,6 +36,7 @@ import {
 } from "@undercroft/db/services";
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
+import { mapNarrowed, type NameFilter, type Narrowed, narrowByName } from "./listFilter.ts";
 
 export interface MacroItem {
   readonly name: string;
@@ -47,6 +48,10 @@ export interface MacroItem {
   readonly params: readonly string[] | null;
   readonly updatedBy: string;
   readonly updatedAt: string;
+  /** Hex SHA-256 of the stored definition's UTF-8 bytes: the same text hashes the same anywhere. */
+  readonly sqlSha256: string;
+  /** Hex SHA-256 of the stored description's UTF-8 bytes. */
+  readonly descriptionSha256: string;
 }
 
 export type MacroDetail = MacroItem & { readonly sql: string };
@@ -59,11 +64,22 @@ function item(macro: Macro): MacroItem {
     params: definition.ok ? definition.params : null,
     updatedBy: macro.updatedBy,
     updatedAt: macro.updatedAt,
+    sqlSha256: macro.sqlSha256,
+    descriptionSha256: macro.descriptionSha256,
   };
 }
 
-export async function list(exec: SqlExecutor, tenantId: string): Promise<MacroItem[]> {
-  return (await listMacros(exec, tenantId)).map(item);
+/** The tenant's macros, without their definitions, narrowed by `filter` (`listFilter.ts`). */
+export async function list(
+  exec: SqlExecutor,
+  tenantId: string,
+  filter: NameFilter = {},
+): Promise<Narrowed<MacroItem>> {
+  const macros = await listMacros(exec, tenantId);
+  return mapNarrowed(
+    narrowByName(macros, (macro) => macro.name, filter),
+    item,
+  );
 }
 
 export async function get(
@@ -96,7 +112,7 @@ export async function check(
 }
 
 export type SaveOutcome =
-  | { readonly ok: true }
+  | { readonly ok: true; readonly unchanged: boolean }
   | { readonly ok: false; readonly reason: "name-taken" }
   | {
       readonly ok: false;
@@ -107,7 +123,8 @@ export type SaveOutcome =
 
 /**
  * Store the macro, if its definition is one a tenant may have. With `create`, a name already in
- * use is refused and nothing is written.
+ * use is refused and nothing is written. The description and definition already stored are
+ * `unchanged`, written and recorded nowhere, as a model's are (`models.ts`, ADR 0127).
  */
 export async function save(
   exec: SqlExecutor,
@@ -136,20 +153,23 @@ export async function save(
     sql: input.sql,
     updatedBy: input.actorId,
   };
-  if (input.create) {
-    if (!(await insertMacro(exec, input.tenantId, macro))) {
-      return { ok: false, reason: "name-taken" };
-    }
-  } else {
-    await saveMacro(exec, input.tenantId, macro);
+  const result = input.create
+    ? (await insertMacro(exec, input.tenantId, macro))
+      ? "written"
+      : "name-taken"
+    : await saveMacro(exec, input.tenantId, macro);
+  if (result === "name-taken") {
+    return { ok: false, reason: "name-taken" };
   }
-  await recordAudit(exec, {
-    tenantId: input.tenantId,
-    actor: input.actor,
-    action: "macros.save",
-    detail: JSON.stringify({ name: input.name, created: input.create }),
-  });
-  return { ok: true };
+  if (result === "written") {
+    await recordAudit(exec, {
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "macros.save",
+      detail: JSON.stringify({ name: input.name, created: input.create }),
+    });
+  }
+  return { ok: true, unchanged: result === "unchanged" };
 }
 
 export type RemoveOutcome =

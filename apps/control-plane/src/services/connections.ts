@@ -50,6 +50,7 @@ import {
 } from "@undercroft/db/repos";
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
+import { type ListRequest, type Narrowed, narrowByName } from "./listFilter.ts";
 import { missingScopes, requestedScopeFor } from "./oauth.ts";
 import {
   type ChoiceFilter,
@@ -133,29 +134,17 @@ export interface ConnectionCardView {
   readonly externalAccountId: string;
   readonly externalAccountLabel: string;
   readonly scopes: string[];
-  readonly config: {
-    labels?: string[];
-    /**
-     * What was picked in Drive: id, name, and WHICH KIND each pick is.
-     *
-     * The kind is load-bearing rather than decorative. This used to be `folderIds: string[]`,
-     * and the scope picker rebuilt its draft from it as `{ id, name: id, kind: "folder" }` --
-     * so a directly-picked FILE was read back as a folder, and an admin who re-saved without
-     * re-picking turned it into a folder pick that lists nothing and refuses. The names are
-     * the ones the picker showed at pick time and stay inside `app`, which no BI role has
-     * USAGE on; `raw` sees none of this.
-     */
-    files?: { id: string; name: string; kind: "folder" | "file" }[];
-    /** Whether a picked Drive folder is read to the bottom. ADR 0031. */
-    recurse?: boolean;
-    entities?: string[];
-    fileTypes?: string[];
-    /**
-     * HubSpot: the properties each object reads beyond its spec's own, by internal name --
-     * what the picker re-ticks and the card counts. Absent when nobody has chosen any.
-     */
-    properties?: Record<string, string[]>;
-  };
+  /**
+   * How much the recorded scope chose, in counts -- what a reader picks a connection by, without
+   * the 87 property names or 42 Drive picks behind them (issue 444). `null` when no scope that
+   * can be read is recorded: an unknown count is not zero.
+   */
+  readonly chosen: ChosenCounts | null;
+  /**
+   * The recorded scope itself, every chosen name: only when the list is asked for it
+   * (`include: ["config"]`), as the scope picker and the card's summary ask.
+   */
+  readonly config?: ConnectionConfig;
   /**
    * When this GRANT lapses -- the date after which the customer has to consent again.
    *
@@ -199,6 +188,49 @@ export interface ConnectionCardView {
    * nothing to re-sync, and the card offers no schedule for it.
    */
   readonly resync: ResyncView | null;
+}
+
+/** A stored selection in the shape `scopeSummary` in the UI reads (`configOf`). */
+export interface ConnectionConfig {
+  labels?: string[];
+  /**
+   * What was picked in Drive: id, name, and WHICH KIND each pick is.
+   *
+   * The kind is load-bearing rather than decorative. This used to be `folderIds: string[]`,
+   * and the scope picker rebuilt its draft from it as `{ id, name: id, kind: "folder" }` --
+   * so a directly-picked FILE was read back as a folder, and an admin who re-saved without
+   * re-picking turned it into a folder pick that lists nothing and refuses. The names are
+   * the ones the picker showed at pick time and stay inside `app`, which no BI role has
+   * USAGE on; `raw` sees none of this.
+   */
+  files?: { id: string; name: string; kind: "folder" | "file" }[];
+  /** Whether a picked Drive folder is read to the bottom. ADR 0031. */
+  recurse?: boolean;
+  entities?: string[];
+  fileTypes?: string[];
+  /**
+   * HubSpot: the properties each object reads beyond its spec's own, by internal name --
+   * what the picker re-ticks and the card counts. Absent when nobody has chosen any.
+   */
+  properties?: Record<string, string[]>;
+}
+
+/**
+ * What a recorded scope chose, counted. Each field is a count for the kind it belongs to and
+ * `null` for every other kind, so `0` is only ever a recorded zero -- for Gmail the whole
+ * mailbox, for Xero every list the spec declares, for HubSpot the spec's own properties.
+ */
+export interface ChosenCounts {
+  /** Gmail: the labels read. */
+  readonly labels: number | null;
+  /** Drive: the folders picked. */
+  readonly folders: number | null;
+  /** Drive: the documents picked one by one. */
+  readonly files: number | null;
+  /** Xero: the lists read. */
+  readonly entities: number | null;
+  /** HubSpot: the properties each object reads beyond its spec's own, by object. */
+  readonly properties: Readonly<Record<string, number>> | null;
 }
 
 export interface ResyncView {
@@ -381,21 +413,29 @@ export async function list(
   exec: SqlExecutor,
   tenantId: string,
   specs: SpecReads,
-  now: Date = new Date(),
-): Promise<ConnectionCardView[]> {
+  request: ListRequest<ConnectionInclude> & { readonly now?: Date } = {},
+): Promise<Narrowed<ConnectionCardView>> {
+  const now = request.now ?? new Date();
   const rows = await listConnectionViews(exec, tenantId);
   const wholeReads = await listWholeReads(exec, tenantId);
+  const config = request.include?.includes("config") ?? false;
 
-  return KNOWN_SOURCES.flatMap((kind): ConnectionCardView[] => {
+  const cards = KNOWN_SOURCES.flatMap((kind): ConnectionCardView[] => {
     const accounts = accountsOf(rows, kind);
     return accounts.length === 0
-      ? [unconnected(kind)]
+      ? [{ ...unconnected(kind), ...(config ? { config: {} } : {}) }]
       : accounts.map((row) => ({
           ...presentCard(kind, row, specs, now),
+          ...(config ? { config: configOf(row.source, row.selectionJson) } : {}),
           resync: presentResync(row, specs, wholeReads),
         }));
   });
+  // A card is named by its `source`, the id every per-connection procedure takes.
+  return narrowByName(cards, (card) => card.source, request);
 }
+
+/** What `list` adds to each card beyond its summary. */
+export type ConnectionInclude = "config";
 
 /**
  * The lists of this connection a re-sync reads whole: the ones it reads, as its scope and grant
@@ -457,7 +497,7 @@ function unconnected(kind: KnownSource): ConnectionCardView {
     externalAccountId: "",
     externalAccountLabel: "",
     scopes: [],
-    config: {},
+    chosen: null,
     expiresAt: null,
     lastRun: null,
     cadence: "daily",
@@ -482,7 +522,7 @@ function presentCard(
     externalAccountLabel: row.accountLabel,
     // Google returns what it granted as one space-delimited string.
     scopes: row.scope === "" ? [] : row.scope.split(" "),
-    config: configOf(row.source, row.selectionJson),
+    chosen: chosenOf(row.source, row.selectionJson),
     // Not `row.credentialExpiresAt`. See the field.
     expiresAt: null,
     lastRun: row.lastRun,
@@ -805,12 +845,47 @@ function chosenCount(scope: ConnectionScope): number {
 }
 
 /**
+ * A stored selection counted (`ChosenCounts`), or `null` when none that can be read is recorded.
+ * The counts of exactly what `configOf` names, so the summary and the names cannot disagree.
+ */
+export function chosenOf(source: string, selectionJson: string): ChosenCounts | null {
+  const scope = parseScope(source, selectionJson);
+  if (scope === null) {
+    return null;
+  }
+  const none = { labels: null, folders: null, files: null, entities: null, properties: null };
+  switch (scope.kind) {
+    case "gmail":
+      return { ...none, labels: scope.labels.length };
+    case "drive":
+      return {
+        ...none,
+        folders: scope.files.filter((pick) => pick.kind === "folder").length,
+        files: scope.files.filter((pick) => pick.kind === "file").length,
+      };
+    case "xero":
+      return { ...none, entities: scope.entities.length };
+    case "hubspot":
+      return {
+        ...none,
+        properties: Object.fromEntries(
+          Object.entries(scope.properties).map(([object, names]) => [object, names.length]),
+        ),
+      };
+    default: {
+      const exhaustive: never = scope;
+      throw new Error(`unhandled scope ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
  * A stored selection in the shape `scopeSummary` in the UI reads.
  *
  * One reading for the card's scope and for the scope a run recorded (`runs.get`, ADR 0091), so
  * the two can only differ by the selection they were given, never by how it was summarised.
  */
-export function configOf(source: string, selectionJson: string): ConnectionCardView["config"] {
+export function configOf(source: string, selectionJson: string): ConnectionConfig {
   const scope = parseScope(source, selectionJson);
   if (scope === null) {
     return {};

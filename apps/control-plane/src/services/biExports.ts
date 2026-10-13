@@ -34,7 +34,7 @@ import {
   findLiveExport,
   insertExport,
 } from "../repos/biExports.ts";
-import { getQuestionView } from "./bi.ts";
+import { getQuestionView } from "./biQuestions.ts";
 
 export type { ExportKind, ExportRow } from "../repos/biExports.ts";
 

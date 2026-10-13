@@ -4,9 +4,13 @@
  * Shared between the control plane, which saves, lists and deletes them, and the worker, which
  * reads every macro of a tenant to write a build's project directory. Whether a definition may
  * be stored at all is decided one layer up (`macroDefinition.ts`); this only reads and writes.
+ *
+ * Each read carries the SHA-256 of what is stored, computed by Postgres over the bytes it holds,
+ * as `app.model`'s reads do (`models.ts`, ADR 0127).
  */
 
 import type { SqlExecutor } from "../executor.ts";
+import type { SaveResult } from "./models.ts";
 
 export interface Macro {
   readonly name: string;
@@ -15,6 +19,10 @@ export interface Macro {
   readonly updatedBy: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** Hex SHA-256 of the stored definition's UTF-8 bytes. */
+  readonly sqlSha256: string;
+  /** Hex SHA-256 of the stored description's UTF-8 bytes. */
+  readonly descriptionSha256: string;
 }
 
 interface MacroRow {
@@ -24,6 +32,8 @@ interface MacroRow {
   updated_by: string;
   created_at: Date | string;
   updated_at: Date | string;
+  sql_sha256: string;
+  description_sha256: string;
 }
 
 export interface MacroWrite {
@@ -33,7 +43,11 @@ export interface MacroWrite {
   readonly updatedBy: string;
 }
 
-const COLUMNS = "name, description, sql, updated_by, created_at, updated_at";
+/** What a save writes, hashed where it is stored: see `CONTENT_HASHES` in `models.ts`. */
+const CONTENT_HASHES = `encode(sha256(convert_to(sql, 'UTF8')), 'hex') AS sql_sha256,
+  encode(sha256(convert_to(description, 'UTF8')), 'hex') AS description_sha256`;
+
+const COLUMNS = `name, description, sql, updated_by, created_at, updated_at, ${CONTENT_HASHES}`;
 
 function toMacro(r: MacroRow): Macro {
   return {
@@ -43,6 +57,8 @@ function toMacro(r: MacroRow): Macro {
     updatedBy: r.updated_by,
     createdAt: new Date(r.created_at).toISOString(),
     updatedAt: new Date(r.updated_at).toISOString(),
+    sqlSha256: r.sql_sha256,
+    descriptionSha256: r.description_sha256,
   };
 }
 
@@ -87,22 +103,52 @@ export async function insertMacro(
   return rows.length === 1;
 }
 
-/** Write the macro, creating it if absent. `saveModel`'s deliberate overwrite. */
+/**
+ * Write the macro, creating it if absent: `saveModel`'s deliberate overwrite, and like it
+ * `unchanged`, touching nothing, when the description and definition stored are the ones given.
+ */
 export async function saveMacro(
   exec: SqlExecutor,
   tenantId: string,
   macro: MacroWrite,
-): Promise<void> {
-  await exec.query(
-    `INSERT INTO app.macro (tenant_id, name, description, sql, updated_by)
+): Promise<SaveResult> {
+  const { rows } = await exec.query<{ name: string }>(
+    `INSERT INTO app.macro AS stored (tenant_id, name, description, sql, updated_by)
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (tenant_id, name) DO UPDATE SET
        description = EXCLUDED.description,
        sql = EXCLUDED.sql,
        updated_by = EXCLUDED.updated_by,
-       updated_at = now()`,
+       updated_at = now()
+     WHERE stored.description IS DISTINCT FROM EXCLUDED.description
+        OR stored.sql IS DISTINCT FROM EXCLUDED.sql
+     RETURNING name`,
     [tenantId, macro.name, macro.description, macro.sql, macro.updatedBy],
   );
+  return rows.length === 1 ? "written" : "unchanged";
+}
+
+/** One macro's name and the hashes of what a save writes, for a revision (ADR 0127). */
+export interface MacroHashes {
+  readonly name: string;
+  readonly sqlSha256: string;
+  readonly descriptionSha256: string;
+}
+
+/** Every macro's hashes, by name, without reading a definition out of Postgres. */
+export async function listMacroHashes(exec: SqlExecutor, tenantId: string): Promise<MacroHashes[]> {
+  const { rows } = await exec.query<{
+    name: string;
+    sql_sha256: string;
+    description_sha256: string;
+  }>(`SELECT name, ${CONTENT_HASHES} FROM app.macro WHERE tenant_id = $1 ORDER BY name`, [
+    tenantId,
+  ]);
+  return rows.map((r) => ({
+    name: r.name,
+    sqlSha256: r.sql_sha256,
+    descriptionSha256: r.description_sha256,
+  }));
 }
 
 /** Remove the macro; `false` when there was none to remove. */

@@ -13,13 +13,21 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as macros from "../services/macros.ts";
 import { findingSentence, wordCheck } from "./checkWords.ts";
+import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
 import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
 
 const definition = z.string().max(MAX_MACRO_SQL_BYTES);
 
 export const macrosRouter = router({
-  /** The tenant's macros with what each is for, so a reader can choose one to reuse. */
-  list: tenantProcedure.query(({ ctx, input }) => macros.list(ctx.exec, input.tenantId)),
+  /**
+   * The tenant's macros with what each is for and the hashes of their text, so a reader can
+   * choose one to reuse or tell its copy is current. No definitions: `get` has one.
+   */
+  list: tenantProcedure
+    .input(z.object(NameFilterInput))
+    .query(async ({ ctx, input }) =>
+      listedOrRefusal(ctx.locale, await macros.list(ctx.exec, input.tenantId, input)),
+    ),
 
   get: tenantProcedure.input(z.object({ name: MacroName })).query(async ({ ctx, input }) => {
     const macro = await macros.get(ctx.exec, input.tenantId, input.name);
@@ -69,7 +77,7 @@ export const macrosRouter = router({
         actorId: ctx.user.userId,
       });
       if (outcome.ok) {
-        return { ok: true };
+        return outcome;
       }
       throw outcome.reason === "name-taken"
         ? new TRPCError({

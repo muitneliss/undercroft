@@ -264,22 +264,10 @@ function ModelFacts({
         )}
       </div>
 
-      <section className="stack stack--tight">
-        <h3 className="label">
-          {built === null
-            ? t("lineage.columnsHead")
-            : t("lineage.columnsCounted", { count: built.columns.length })}
-        </h3>
-        {built === null ? (
-          <p className="datum datum--quiet">{t("lineage.columnsUnknown")}</p>
-        ) : (
-          <ul className="lineage-schema">
-            {built.columns.map((column) => (
-              <li key={column}>{column}</li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <BuiltColumns
+        count={built?.columnCount ?? null}
+        columns={model.data?.lastBuild?.columns ?? null}
+      />
 
       <details className="lineage-detail__sql">
         <summary className="label">{t("lineage.sqlHead")}</summary>
@@ -290,5 +278,42 @@ function ModelFacts({
         ) : null}
       </details>
     </>
+  );
+}
+
+/**
+ * What the last successful build found: how many columns, from the list's row, and which, from
+ * the model in full -- the list carries the count alone (ADR 0127), and this panel already reads
+ * the model for its SQL. `null` columns while that read is on its way.
+ */
+function BuiltColumns({
+  count,
+  columns,
+}: {
+  count: number | null;
+  columns: readonly string[] | null;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  if (count === null) {
+    return (
+      <section className="stack stack--tight">
+        <h3 className="label">{t("lineage.columnsHead")}</h3>
+        <p className="datum datum--quiet">{t("lineage.columnsUnknown")}</p>
+      </section>
+    );
+  }
+  return (
+    <section className="stack stack--tight">
+      <h3 className="label">{t("lineage.columnsCounted", { count })}</h3>
+      {columns === null ? (
+        <Skeleton rows={2} />
+      ) : (
+        <ul className="lineage-schema">
+          {columns.map((column) => (
+            <li key={column}>{column}</li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

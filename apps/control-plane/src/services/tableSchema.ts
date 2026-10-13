@@ -21,6 +21,7 @@
 
 import type { SchemaResponse } from "@undercroft/contracts";
 
+import { narrowByName } from "./listFilter.ts";
 import type { WorkerOutcome } from "./workerClient.ts";
 
 /** The most table names one read may name. A reader naming more wants the whole schema. */
@@ -54,18 +55,14 @@ export type NarrowedSchema =
  * filter at all it is the schema, unchanged.
  */
 export function narrowSchema(schema: SchemaResponse, filter: SchemaFilter): NarrowedSchema {
-  const held = new Set(schema.tables.map((table) => table.name));
-  const missing = [...new Set(filter.tables ?? [])].filter((name) => !held.has(name));
-  if (missing.length > 0) {
-    return { ok: false, missing };
+  const narrowed = narrowByName(schema.tables, (table) => table.name, {
+    names: filter.tables,
+    match: filter.match,
+  });
+  if (!narrowed.ok) {
+    return narrowed;
   }
-  const named = filter.tables === undefined ? null : new Set(filter.tables);
-  const fragment = filter.match?.toLowerCase();
-  const tables = schema.tables.filter(
-    (table) =>
-      (named === null || named.has(table.name)) &&
-      (fragment === undefined || table.name.toLowerCase().includes(fragment)),
-  );
+  const tables = narrowed.items;
   if (filter.columns === false) {
     return { ok: true, value: { columns: false, tables: tables.map(({ name }) => ({ name })) } };
   }

@@ -462,6 +462,7 @@ export const en = {
       models_get: "Read a model",
       models_lineage: "Read the models' lineage",
       models_reference: "Read the modelling reference",
+      models_revision: "Read the models' revision",
       models_check: "Checked a model",
       models_save: "Saved a model",
       models_build: "Built a model",

@@ -58,7 +58,8 @@ sample does not have is a question for the person, not a column.
 **6. Amounts and missing values**
 
 - Which columns are amounts, and in which currency? An amount is read with the macro
-  `models.reference` lists for it, never cast by hand, and never becomes a float.
+  `models.reference` lists for it (its `platformMacros` part), never cast by hand, and never
+  becomes a float.
 - When a value is missing, it stays `NULL`. Ask only if the person wants something else,
   and write down what and why.
 

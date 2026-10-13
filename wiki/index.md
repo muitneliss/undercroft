@@ -127,6 +127,7 @@
 - [ADR 0121 Dokploy Clones the Private Repository over SSH, with a Read-Only Deploy Key](sources/adr-0121-dokploy-clones-the-private-repository-over-ssh-with-a-read-only-deploy-key.md)
 - [ADR 0122 What a Model Reads over MCP Is Bounded in Every Copy](sources/adr-0122-what-a-model-reads-over-mcp-is-bounded-in-every-copy.md)
 - [ADR 0125 A Read Names Its Target: Lineage, Schema and Scope Reads Narrow, and Never Guess](sources/adr-0125-a-read-names-its-target-lineage-schema-and-scope-reads-narrow-and-never-guess.md)
+- [ADR 0127 Lists Answer Summaries, the Server Hashes What It Stores, and an Identical Save Writes Nothing](sources/adr-0127-lists-answer-summaries-the-server-hashes-what-it-stores-and-an-identical-save-writes-nothing.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

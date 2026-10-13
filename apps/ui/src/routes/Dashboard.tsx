@@ -31,6 +31,7 @@ import {
   newDashboardDraft,
 } from "@/lib/dashboardDraft.ts";
 import { divisionPath } from "@/lib/divisions.ts";
+import { bodiesListed } from "@/lib/listAnswers.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -82,7 +83,11 @@ export function Dashboard({ tenantId }: { tenantId: string }): React.JSX.Element
   const utils = trpc.useUtils();
 
   const tenant = trpc.tenants.get.useQuery({ tenantId });
-  const questions = trpc.bi.questions.list.useQuery({ tenantId });
+  // The tiles draw each question's chart from its definition, so this list asks for both.
+  const questions = trpc.bi.questions.list.useQuery(
+    { tenantId, include: ["definition", "chart"] },
+    { select: bodiesListed },
+  );
   const dashboard = trpc.bi.dashboards.get.useQuery({ tenantId, id }, { enabled: !isNew });
   const held = useDashboardDraft(tenantId, id, isNew);
 

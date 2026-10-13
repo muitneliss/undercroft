@@ -25,7 +25,8 @@ export const procedureSentences: SentenceTable = {
     "Deactivate a customer: every member loses access and every sync stops until it is reactivated. Nothing is deleted. Tenant admins.",
   "tenants.reactivate":
     "Reactivate a deactivated customer: access and sync schedules return as they were. Tenant admins.",
-  "connections.list": "A customer's sources and how each is connected.",
+  "connections.list":
+    'A customer\'s sources and how each is connected, with how much each scope chose, counted. names (sources) or match to narrow; include: ["config"] for every chosen name.',
   "connections.get": "One source and how it is connected.",
   "connections.startOAuth": "Begin an OAuth grant; returns the URL to open in a browser. Admins.",
   "connections.browseScope":
@@ -69,31 +70,37 @@ export const procedureSentences: SentenceTable = {
     "Draw the catalogue's first kinds from a sample of the customer's documents, as a run; publishes nothing. Admins.",
   "documentKinds.publish":
     "Publish the catalogue's draft, so every document is classified against it again. Admins.",
-  "models.list": "The customer's dbt models.",
-  "models.get": "One dbt model and its SQL.",
-  "models.save": "Store a dbt model; runs nothing. Admins.",
+  "models.list":
+    "The customer's dbt models with their last build: sqlSha256 and testsSha256 to compare a copy, and the column count, no SQL. names or match to narrow; include: [\"columns\"] for each build's columns.",
+  "models.revision":
+    "One hash for each of the customer's models, macros and questions and one over all of them, from what each save wrote: equal means nothing changed.",
+  "models.get": "One dbt model, its SQL and tests, with their hashes.",
+  "models.save":
+    "Store a dbt model; runs nothing. The SQL and tests already stored answer unchanged: true and change nothing. Admins.",
   "models.delete":
     "Delete a dbt model with the table it built and the rows its tests stored; deletes nothing if the table could not be dropped. Admins.",
   "models.build": "Build one model with dbt and wait for the answer. Admins.",
   "models.lineage":
     "Which models read which models and raw lake tables, from the models' and macros' own ref() and source() declarations. name for the part around one model or raw table (raw.records), direction up, down or both, and depth to bound the steps.",
   "models.reference":
-    "Reference material for a model's author: the sources, the platform's macros and the customer's own.",
+    "Reference material for a model's author: the sources, the platform's macros and the customer's own. parts for only some of sources, platformMacros and tenantMacros; the first two are the same text on every call.",
   "models.check":
     "Check a model's SQL before saving it, running nothing: certain errors, suspicions, and what could not be checked.",
-  "macros.list": "The customer's own dbt macros, each with what it is for and its parameters.",
-  "macros.get": "One of the customer's dbt macros and its definition.",
+  "macros.list":
+    "The customer's own dbt macros, each with what it is for, its parameters and the hashes of its definition and description, no definition. names or match to narrow.",
+  "macros.get": "One of the customer's dbt macros, its definition and their hashes.",
   "macros.check":
     "Check a macro's definition before saving it, running nothing: what would be refused, suspicions, and what could not be checked.",
   "macros.save":
-    "Store a dbt macro, one whole {% macro %} definition that every model can call; runs nothing. Admins.",
+    "Store a dbt macro, one whole {% macro %} definition that every model can call; runs nothing. The definition and description already stored answer unchanged: true and change nothing. Admins.",
   "macros.delete": "Delete a dbt macro; refused while a model or another macro calls it. Admins.",
   "bi.answer": "Answer a question definition. Members and above.",
   "bi.runQuestion": "Run a saved question with parameters.",
   "bi.compile": "Compile a question definition to SQL. Members and above.",
   "bi.schema":
     "The tables and columns reports can read; tables for exactly those, match for names containing a fragment (case-insensitive), columns: false for table names alone.",
-  "bi.questions.list": "The saved questions.",
+  "bi.questions.list":
+    'The saved questions: kind, chart type and definitionSha256, no SQL. names or match to narrow; include: ["definition", "chart"] for either in full.',
   "bi.questions.get": "One saved question.",
   "bi.questions.answer": "A saved question's answer under parameters.",
   "bi.questions.save": "Save a question. Members and above.",

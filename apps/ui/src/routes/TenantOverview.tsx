@@ -51,6 +51,7 @@ import {
   failedReturnFrom,
 } from "@/lib/consentFailure.ts";
 import { divisionPath } from "@/lib/divisions.ts";
+import { configListed } from "@/lib/listAnswers.ts";
 import { chosenAccount, useUiStore } from "@/store.ts";
 import { type Actions, pendingFor } from "@/lib/sourceActions.ts";
 import { narrowSchedule, type ScheduleRow, scheduleFilter } from "@/lib/sourceSchedule.ts";
@@ -61,9 +62,12 @@ const RUNNING_POLL_MS = 5000;
 export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const [params] = useSearchParams();
+  // Each card says what its scope reads, by name -- the labels, the lists -- so the schedule
+  // asks for the config the list leaves out by default.
   const connections = trpc.connections.list.useQuery(
-    { tenantId },
+    { tenantId, include: ["config"] },
     {
+      select: configListed,
       // Live only while something is live: a run in progress is the one state on this page
       // that changes without anybody pressing anything, so the list polls while one exists
       // and stops the moment it ends. Run now therefore has a visible consequence.

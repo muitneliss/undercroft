@@ -12,7 +12,11 @@ how to find one to reuse, when to propose a new one, and what a definition must 
   macro the plan relies on in its reuse map (`references/discovery.md`).
 - `macros.get` gives one macro's whole definition. Read it before you call a macro whose
   description leaves you unsure what it returns.
-- `models.reference` gives the platform's macros and the customer's, with their text.
+- `models.reference` gives the platform's macros and the customer's, with their text. Ask it
+  for `parts: ["platformMacros"]` or `["tenantMacros"]` rather than the whole: the platform's
+  part is the same on every call.
+- `sqlSha256` and `descriptionSha256` on `macros.list` say whether the server's macro is the
+  text you hold, without fetching it (`references/discovery.md`).
 
 When a macro's description says it does what the brief needs, call it. Do not write the same
 expression again beside it: two copies of one rule drift apart, and then two tables disagree

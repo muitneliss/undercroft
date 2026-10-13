@@ -30,6 +30,9 @@ const SAVED: QuestionView = {
     limit: 100,
   },
   chart: { type: "table", y: [], options: {} },
+  kind: "visual",
+  chartType: "table",
+  definitionSha256: "0".repeat(64),
   updatedAt: "2026-09-17T10:00:00.000Z",
   updatedBy: "u-1",
 };

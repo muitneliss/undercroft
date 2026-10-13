@@ -15,6 +15,8 @@ const MODEL: ModelDetail = {
   tests: { columns: { deal_id: ["not_null", "unique"] } },
   updatedAt: "2026-09-17T10:00:00.000Z",
   updatedBy: "u-1",
+  sqlSha256: "0".repeat(64),
+  testsSha256: "0".repeat(64),
   lastBuild: null,
 };
 

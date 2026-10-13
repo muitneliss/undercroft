@@ -76,8 +76,17 @@ export const SOURCE_ACCESS: Record<
  *
  * `kind` is what the connection is and `source` is which one; see `Source` above. The list
  * carries one of these per ACCOUNT, so a kind with two mailboxes appears twice.
+ *
+ * `config` -- every name the scope chose -- is there only when the list was asked for it
+ * (ADR 0127); without it a card carries `chosen`, the counts. See `ConnectionWithConfig`.
  */
 export type Connection = inferRouterOutputs<AppRouter>["connections"]["list"][number];
+
+/** A recorded scope by every name it chose: a card's `config`, and the scope a run recorded. */
+export type ConnectionConfig = NonNullable<Connection["config"]>;
+
+/** A card read with `include: ["config"]`, as the scope picker and the schedule ask for it. */
+export type ConnectionWithConfig = Connection & { readonly config: ConnectionConfig };
 
 export type ConnectionStatus = Connection["status"];
 
@@ -120,7 +129,10 @@ export type RunWrites = inferRouterOutputs<AppRouter>["lake"]["records"]["ofRun"
  */
 export type RawSearchHit = inferRouterOutputs<AppRouter>["lake"]["search"]["hits"][number];
 
-/** One model on the list, as `models.list` returns it: its name and its last build. */
+/**
+ * One model on the list, as `models.list` returns it: its name, its hashes and its last build
+ * with a column count. No SQL, and the columns only when asked for, which no screen does.
+ */
 export type ModelItem = inferRouterOutputs<AppRouter>["models"]["list"][number];
 
 /** One model in full, as `models.get` returns it: the item plus its SQL and tests. */
@@ -142,8 +154,20 @@ export type TableResult = BuildResult["preview"] & object;
 /** One saved question in full, as `bi.questions.get` returns it. */
 export type QuestionView = inferRouterOutputs<AppRouter>["bi"]["questions"]["get"];
 
-/** One saved question on the list, as `bi.questions.list` returns it: no SQL, no rows. */
+/**
+ * One saved question on the list, as `bi.questions.list` returns it: its kind and chart type,
+ * and its definition and chart only when asked for (ADR 0127). See `@/lib/listAnswers`.
+ */
 export type QuestionItem = inferRouterOutputs<AppRouter>["bi"]["questions"]["list"][number];
+
+/** The modelling reference whole, as the editor's panel asks for it: no `parts`. */
+export type ModelReference = Exclude<
+  inferRouterOutputs<AppRouter>["models"]["reference"],
+  { readonly parts: readonly string[] }
+>;
+
+/** Either answer `models.reference` gives: whole, or only the `parts` an agent named. */
+export type ModelReferenceAnswer = inferRouterOutputs<AppRouter>["models"]["reference"];
 
 /** One dashboard in full, as `bi.dashboards.get` returns it. */
 export type DashboardView = inferRouterOutputs<AppRouter>["bi"]["dashboards"]["get"];

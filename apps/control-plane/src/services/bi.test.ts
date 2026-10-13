@@ -11,15 +11,8 @@
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
-import {
-  answerQuestion,
-  getDashboardView,
-  getQuestionView,
-  listQuestionViews,
-  removeQuestion,
-  saveDashboard,
-  saveQuestion,
-} from "./bi.ts";
+import { answerQuestion, getDashboardView, saveDashboard } from "./bi.ts";
+import { getQuestionView, listQuestionViews, removeQuestion, saveQuestion } from "./biQuestions.ts";
 import { InMemoryWorkerClient } from "./inMemoryWorkerClient.ts";
 import type { Actor } from "../repos/auditLog.ts";
 
@@ -102,7 +95,7 @@ describe("questions", () => {
     expect(
       await removeQuestion(db, { tenantId: OTHER, id: saved.id, actor: asActor("x@example.test") }),
     ).toBe(false);
-    expect((await listQuestionViews(db, OTHER)).length).toBe(0);
+    expect(await listQuestionViews(db, OTHER)).toEqual({ ok: true, items: [] });
     expect(await removeQuestion(db, { tenantId: TENANT, id: saved.id, actor: ACTOR.actor })).toBe(
       true,
     );

@@ -18,6 +18,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import {
+  type ConnectionCardView,
   disconnect,
   KNOWN_SOURCES,
   list,
@@ -59,6 +60,18 @@ const XERO_EVERY_LIST = xeroChoosing([]);
 const SPECS = loadSpecReads();
 
 let db: TestDatabase;
+
+/** Every card of the tenant, its config included -- the cards these tests read the scope of. */
+async function everyCard(now?: Date): Promise<ConnectionCardView[]> {
+  const listed = await list(db, TENANT, SPECS, {
+    include: ["config"],
+    ...(now === undefined ? {} : { now }),
+  });
+  if (!listed.ok) {
+    throw new Error(`no filter was given, yet ${listed.missing.join(", ")} is missing`);
+  }
+  return listed.items;
+}
 
 /**
  * A database per test, called inside each describe that reads one rather than at the top of
@@ -291,7 +304,7 @@ describe("the schedule", () => {
   it("a tenant with nothing connected still sees every source", async () => {
     // The schedule IS the product: the screen a new customer lands on is the one an
     // established one uses, and an empty list gave it nothing to show.
-    const rows = await list(db, TENANT, SPECS);
+    const rows = await everyCard();
 
     expect(rows.map((r) => r.source)).toEqual([...KNOWN_SOURCES]);
     expect(rows.every((r) => r.status === "disconnected")).toBe(true);
@@ -310,7 +323,11 @@ describe("the schedule", () => {
       db,
       TENANT,
       "gmail",
-      { accessToken: "at", refreshToken: "rt", expiresAt: "2099-01-01T00:00:00.000Z" },
+      {
+        accessToken: "access-token-1",
+        refreshToken: "refresh-token-1",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      },
       { env: ENV },
     );
     await writeConnectionDetail(db, {
@@ -319,12 +336,14 @@ describe("the schedule", () => {
       selectionJson: GMAIL_SCOPE,
     });
 
-    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
+    const gmail = (await everyCard()).find((r) => r.source === "gmail");
 
     expect(gmail?.expiresAt).toBeNull();
     expect(JSON.stringify(gmail)).not.toContain("2099-01-01T00:00:00.000Z");
     expect(JSON.stringify(gmail)).not.toContain("ciphertext");
-    expect(JSON.stringify(gmail)).not.toContain("rt");
+    // Tokens no card field could contain by accident: "rt" alone is inside "properties".
+    expect(JSON.stringify(gmail)).not.toContain("access-token-1");
+    expect(JSON.stringify(gmail)).not.toContain("refresh-token-1");
   });
 
   it("each mailbox is a card of its own, with its own status", async () => {
@@ -353,7 +372,7 @@ describe("the schedule", () => {
       accountLabel: "billing@acme.test",
     });
 
-    const gmail = (await list(db, TENANT, SPECS)).filter((r) => r.kind === "gmail");
+    const gmail = (await everyCard()).filter((r) => r.kind === "gmail");
 
     expect(
       gmail.map((r) => ({ source: r.source, account: r.externalAccountLabel, status: r.status })),
@@ -376,7 +395,7 @@ describe("the schedule", () => {
       selectionJson: GMAIL_SCOPE,
     });
 
-    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
+    const gmail = (await everyCard()).find((r) => r.source === "gmail");
 
     expect(gmail?.scopes).toEqual(["openid", "https://www.googleapis.com/auth/gmail.readonly"]);
   });
@@ -397,10 +416,9 @@ describe("the schedule", () => {
       verb: "ingest",
       trigger: "schedule",
     });
-    const startedAt = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot")?.lastRun
-      ?.startedAt;
+    const startedAt = (await everyCard()).find((r) => r.source === "hubspot")?.lastRun?.startedAt;
 
-    const hubspot = (await list(db, TENANT, SPECS, new Date("2026-03-01T10:00:00.000Z"))).find(
+    const hubspot = (await everyCard(new Date("2026-03-01T10:00:00.000Z"))).find(
       (r) => r.source === "hubspot",
     );
     expect(hubspot?.cadence).toBe("hourly");
@@ -419,7 +437,7 @@ describe("the schedule", () => {
     });
     await upsertConnection(db, { tenantId: TENANT, source: "gmail", status: "connected" });
 
-    const cards = await list(db, TENANT, SPECS);
+    const cards = await everyCard();
     expect(cards.find((r) => r.source === "hubspot")?.nextRunAt).toBeNull();
     expect(cards.find((r) => r.source === "gmail")?.nextRunAt).toBeNull();
     // A source nobody has connected reads the default and will not run.
@@ -446,7 +464,7 @@ describe("the schedule", () => {
     });
     const now = new Date("2026-09-28T02:00:00.000Z");
 
-    const xero = (await list(db, TENANT, SPECS, now)).find((r) => r.source === "xero");
+    const xero = (await everyCard(now)).find((r) => r.source === "xero");
 
     expect(xero?.status).toBe("connected");
     expect(xero?.nextRunAt).toBe(now.toISOString());
@@ -486,7 +504,7 @@ describe("re-syncing a connection's lists whole", () => {
 
   it("is off until an admin turns it on, then shows on the card and in the trail", async () => {
     await connectXero(["invoices"]);
-    const before = await list(db, TENANT, SPECS);
+    const before = await everyCard();
     expect(before.find((card) => card.source === "xero")?.resync?.cadence).toBe("paused");
 
     const result = await setResync(db, SPECS, {
@@ -498,7 +516,7 @@ describe("re-syncing a connection's lists whole", () => {
     });
 
     expect(result).toEqual({ ok: true });
-    const after = await list(db, TENANT, SPECS);
+    const after = await everyCard();
     expect(after.find((card) => card.source === "xero")?.resync).toMatchObject({
       cadence: "custom",
       cron: "0 2 * * 0",
@@ -532,7 +550,7 @@ describe("re-syncing a connection's lists whole", () => {
       ),
     );
 
-    const cards = await list(db, TENANT, SPECS);
+    const cards = await everyCard();
 
     expect(cards.find((card) => card.source === "xero")?.resync).toMatchObject({
       days: 2,
@@ -592,7 +610,7 @@ describe("choosing a cadence", () => {
     expect(JSON.stringify(rows[0]?.detail)).toContain('"cron":"30 7 * * 1-5"');
     // The run just opened started "now", so the next fire is the first weekday 07:30 SGT
     // after it -- whatever day the suite runs on, it is in the future and on a weekday.
-    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
+    const hubspot = (await everyCard()).find((r) => r.source === "hubspot");
     expect(hubspot).toMatchObject({ cadence: "custom", cron: "30 7 * * 1-5" });
     const next = new Date(hubspot?.nextRunAt ?? "");
     expect(next.getTime()).toBeGreaterThan(Date.now());
@@ -615,7 +633,7 @@ describe("choosing a cadence", () => {
     });
     await setCadence(db, { tenantId: TENANT, source: "hubspot", cadence: "daily", actor });
 
-    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
+    const hubspot = (await everyCard()).find((r) => r.source === "hubspot");
     expect(hubspot).toMatchObject({ cadence: "daily", cron: null });
   });
 
@@ -642,7 +660,7 @@ describe("choosing a cadence", () => {
       }),
     ).toEqual({ ok: false, reason: "cron-without-custom" });
 
-    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
+    const hubspot = (await everyCard()).find((r) => r.source === "hubspot");
     expect(hubspot).toMatchObject({ cadence: "daily", cron: null });
     const { rows } = await db.query("SELECT 1 FROM ops.audit_log");
     expect(rows).toEqual([]);
@@ -666,9 +684,9 @@ describe("choosing a scope", () => {
     });
 
     expect(result.ok).toBe(true);
-    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
+    const gmail = (await everyCard()).find((r) => r.source === "gmail");
     expect(gmail?.status).toBe("connected");
-    expect(gmail?.config.labels).toEqual(["Invoices"]);
+    expect(gmail?.config?.labels).toEqual(["Invoices"]);
   });
 
   it("a scope saved with no file types defaults to PDF only", async () => {
@@ -682,8 +700,8 @@ describe("choosing a scope", () => {
       actorId: "u1",
     });
 
-    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
-    expect(gmail?.config.fileTypes).toEqual(["application/pdf"]);
+    const gmail = (await everyCard()).find((r) => r.source === "gmail");
+    expect(gmail?.config?.fileTypes).toEqual(["application/pdf"]);
   });
 
   it("a scope's file types are surfaced on the card", async () => {
@@ -698,8 +716,8 @@ describe("choosing a scope", () => {
       actorId: "u1",
     });
 
-    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
-    expect(gmail?.config.fileTypes).toEqual(["application/vnd.ms-excel", "text/csv"]);
+    const gmail = (await everyCard()).find((r) => r.source === "gmail");
+    expect(gmail?.config?.fileTypes).toEqual(["application/vnd.ms-excel", "text/csv"]);
   });
 
   it("a selection that does not match the source is refused", async () => {
@@ -731,12 +749,12 @@ describe("choosing a scope", () => {
     });
 
     expect(result.ok).toBe(true);
-    const xero = (await list(db, TENANT, SPECS)).find((r) => r.source === "xero");
+    const xero = (await everyCard()).find((r) => r.source === "xero");
     expect(xero?.status).toBe("connected");
     // The id is what a run sends as `xero-tenant-id`; the name is what a person reads.
     expect(xero?.externalAccountId).toBe("org-9f2a");
     expect(xero?.externalAccountLabel).toBe("Acme Pte Ltd");
-    expect(xero?.config.entities).toEqual(["invoices", "contacts"]);
+    expect(xero?.config?.entities).toEqual(["invoices", "contacts"]);
   });
 
   it("a HubSpot choice is stored and read back by internal name, and the card stays connected", async () => {
@@ -753,9 +771,9 @@ describe("choosing a scope", () => {
     });
 
     expect(result.ok).toBe(true);
-    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
+    const hubspot = (await everyCard()).find((r) => r.source === "hubspot");
     expect(hubspot?.status).toBe("connected");
-    expect(hubspot?.config.properties).toEqual({
+    expect(hubspot?.config?.properties).toEqual({
       companies: ["annualrevenue", "x_onboarding_stage"],
     });
   });
@@ -780,8 +798,8 @@ describe("choosing a scope", () => {
     });
 
     expect(result.ok).toBe(true);
-    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
-    expect(hubspot?.config.properties).toEqual({ companies: ["city"], contacts: names });
+    const hubspot = (await everyCard()).find((r) => r.source === "hubspot");
+    expect(hubspot?.config?.properties).toEqual({ companies: ["city"], contacts: names });
   });
 
   it("the audit entry counts what was chosen and never names it", async () => {
@@ -823,7 +841,7 @@ describe("connecting with a pasted token", () => {
       validate: true,
       externalAccountId: "",
     });
-    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
+    const hubspot = (await everyCard()).find((r) => r.source === "hubspot");
     expect(hubspot?.status).toBe("connected");
     const { rows } = await db.query<{ action: string; detail: unknown }>(
       "SELECT action, detail FROM ops.audit_log",
@@ -873,7 +891,7 @@ describe("disconnecting", () => {
     expect(result.revokedUpstream).toBe(true);
     expect(worker.revoked).toEqual([{ tenantId: TENANT, source: "gmail" }]);
 
-    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
+    const gmail = (await everyCard()).find((r) => r.source === "gmail");
     expect(gmail?.status).toBe("disconnected");
     // A stored scope for a connection nobody may use is a record of what a customer once
     // shared, kept past the moment they asked us to stop.
@@ -892,7 +910,7 @@ describe("disconnecting", () => {
     });
 
     expect(result.revokedUpstream).toBe(false);
-    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
+    const gmail = (await everyCard()).find((r) => r.source === "gmail");
     expect(gmail?.status).toBe("disconnected");
   });
 });

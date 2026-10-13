@@ -9,9 +9,18 @@ import { TRPCError } from "@trpc/server";
 import { MAX_MODEL_SQL_BYTES, ModelName, ModelTests } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
+import {
+  REFERENCE_PARTS,
+  type Reference,
+  type ReferenceParts,
+  reference,
+  referenceParts,
+} from "../services/modelReference.ts";
 import * as models from "../services/models.ts";
+import { revision } from "../services/revision.ts";
 import { notRun } from "./answers.ts";
 import { wordCheck } from "./checkWords.ts";
+import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
 import { actorOf, refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
 
 /**
@@ -21,8 +30,29 @@ import { actorOf, refusal, requireRole, router, tenantProcedure } from "./trpc.t
 const MAX_LINEAGE_NAME_CHARS = 255;
 
 export const modelsRouter = router({
-  /** The tenant's models with their last build. Any member may read what is built for them. */
-  list: tenantProcedure.query(({ ctx, input }) => models.list(ctx.exec, input.tenantId)),
+  /**
+   * The tenant's models with their last build: names, hashes and column counts, no SQL. Any
+   * member may read what is built for them. `include: ["columns"]` adds each build's columns.
+   */
+  list: tenantProcedure
+    .input(
+      z.object({
+        ...NameFilterInput,
+        include: z
+          .array(z.enum(["columns"]))
+          .min(1)
+          .optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      listedOrRefusal(ctx.locale, await models.list(ctx.exec, input.tenantId, input)),
+    ),
+
+  /**
+   * One hash per kind of authored content -- models, macros, questions -- and one over all of
+   * them, so a client learns whether anything changed without reading any of it (ADR 0127).
+   */
+  revision: tenantProcedure.query(({ ctx, input }) => revision(ctx.exec, input.tenantId)),
 
   get: tenantProcedure.input(z.object({ name: ModelName })).query(async ({ ctx, input }) => {
     const model = await models.get(ctx.exec, input.tenantId, input.name);
@@ -62,7 +92,7 @@ export const modelsRouter = router({
           message: messages(ctx.locale)("error.modelNameTaken", { name: input.name }),
         });
       }
-      return { ok: true };
+      return outcome;
     }),
 
   /**
@@ -203,7 +233,16 @@ export const modelsRouter = router({
 
   /**
    * The sources and macros every project carries, and the tenant's own macros, for the
-   * editor's reference panel and for an agent choosing what to call.
+   * editor's reference panel and for an agent choosing what to call. Whole without `parts`;
+   * with them, only those, marked with what was asked -- the platform's two parts are the same
+   * text on every call, so an agent asks for `tenantMacros` alone.
    */
-  reference: tenantProcedure.query(({ ctx, input }) => models.reference(ctx.exec, input.tenantId)),
+  reference: tenantProcedure
+    .input(z.object({ parts: z.array(z.enum(REFERENCE_PARTS)).min(1).optional() }))
+    .query(
+      async ({ ctx, input }): Promise<Reference | ReferenceParts> =>
+        input.parts === undefined
+          ? await reference(ctx.exec, input.tenantId)
+          : await referenceParts(ctx.exec, input.tenantId, input.parts),
+    ),
 });

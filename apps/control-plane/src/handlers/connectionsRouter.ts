@@ -6,112 +6,18 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { type BrowseListing, Cadence } from "@undercroft/contracts";
+import { Cadence } from "@undercroft/contracts";
 import type { Locale } from "@undercroft/core";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
 import { providerName } from "../services/oauthProviders.ts";
-import { type ChoiceRefusal, isChoiceRefusal, MAX_CHOICES_PAGE } from "../services/scopeChoices.ts";
-import type { WorkerFailure } from "../services/workerRefusals.ts";
-import { actorOf, refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
+import { isChoiceRefusal, MAX_CHOICES_PAGE } from "../services/scopeChoices.ts";
+import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
 import { tokenRefusalKey } from "./answers.ts";
+import { browseRefusal, cutRefusal } from "./browseRefusal.ts";
+import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
 import { scheduleRefusal } from "./scheduleRefusal.ts";
-
-/**
- * Why a browse was refused, and what the person or agent reading it can do about it.
- *
- * Five answers, because the remedies have nothing in common. One message for all of them
- * told an administrator whose Gmail grant Google had refused that "the processing service is
- * not responding" -- on the very screen where the remedy was a reconnect they could do
- * themselves, and about a service that was answering perfectly. The sentence is worded for
- * the reader; `details` carries the same verdict as codes an agent matches on, since the
- * sentence alone left one guessing what could not be listed (issue 177).
- */
-function browseRefusal(
-  locale: Locale,
-  at: { source: string; listing: BrowseListing | null },
-  reason: WorkerFailure | "unsupported",
-): TRPCError {
-  const t = messages(locale);
-  const facts = { source: at.source, listing: at.listing };
-  switch (reason) {
-    // A source with nothing to choose from. The request will never succeed, so BAD_REQUEST;
-    // the facts say so, which is what keeps an agent from "fixing the input" and retrying.
-    case "unsupported":
-      return refusal("BAD_REQUEST", t("error.browseUnsupported", { source: at.source }), {
-        ...facts,
-        reason: "unsupported",
-        remedy: "none",
-      });
-    // Google refused the grant, or the recorded grant lacks the scope -- a Drive grant from
-    // before ADR 0047 is `drive.file`, which Google answers with an empty list rather than a
-    // refusal, so the worker refuses it by the recorded scope instead. HubSpot's token is a
-    // private app's, and its remedy is worded for that: there is no consent screen to tick.
-    case "scope-insufficient":
-      return refusal(
-        "PRECONDITION_FAILED",
-        at.listing === "properties"
-          ? t("error.propertiesInsufficient")
-          : t("error.scopeInsufficient", { source: at.source }),
-        { ...facts, reason: "scope-insufficient", remedy: "reconnect" },
-      );
-    // The credential itself is dead -- lapsed with nothing to refresh it, or its refresh token
-    // refused -- and the connection now reads `expired`. Worded apart from the case above: there
-    // is no permission to tick, only a source to connect again. Worded apart from the catch-all
-    // below, which is what it used to be, and which named no remedy at all (issue 213).
-    case "credential-expired":
-      return refusal("PRECONDITION_FAILED", t("error.credentialExpired", { source: at.source }), {
-        ...facts,
-        reason: "credential-expired",
-        remedy: "reconnect",
-      });
-    case "unreachable":
-      return refusal("PRECONDITION_FAILED", t("error.workerUnavailable"), {
-        ...facts,
-        reason: "worker-unreachable",
-        remedy: "retry-later",
-      });
-    default:
-      return refusal("BAD_REQUEST", t("error.browseRefused", { source: at.source }), {
-        ...facts,
-        reason: "refused",
-        remedy: "none",
-      });
-  }
-}
-
-/**
- * Why a listing could not be cut as asked (issue 443, ADR 0125). Each is the request's fault,
- * and the facts say what to change -- leave the parent out, name an id the listing holds, start
- * the pages again -- never "retry", which would only be refused the same way.
- */
-function cutRefusal(
-  locale: Locale,
-  at: { source: string; listing: BrowseListing; parentId: string | null | undefined },
-  reason: ChoiceRefusal,
-): TRPCError {
-  const t = messages(locale);
-  const facts = { source: at.source, listing: at.listing, reason };
-  switch (reason) {
-    case "not-a-tree":
-      return refusal("BAD_REQUEST", t("error.browseNotTree", { source: at.source }), {
-        ...facts,
-        remedy: "omit-parent",
-      });
-    case "unknown-parent":
-      return refusal(
-        "NOT_FOUND",
-        t("error.browseParentUnknown", { source: at.source, parentId: at.parentId ?? "" }),
-        { ...facts, parentId: at.parentId ?? null, remedy: "none" },
-      );
-    default:
-      return refusal("BAD_REQUEST", t("error.browseCursorUnknown", { source: at.source }), {
-        ...facts,
-        remedy: "restart",
-      });
-  }
-}
 
 /**
  * The longest `parentId`, `query` or `cursor` worth reading. A Drive id is 33 characters and a
@@ -128,9 +34,27 @@ function scopeRefusal(locale: Locale, source: string): TRPCError {
 }
 
 export const connectionsRouter = router({
-  list: tenantProcedure.query(({ ctx, input }) =>
-    connections.list(ctx.exec, input.tenantId, ctx.specReads),
-  ),
+  /**
+   * The tenant's connections as cards: status, schedule, last run, and how much each scope
+   * chose, counted. `include: ["config"]` adds every chosen name, which the scope picker reads.
+   * `names` are sources, as every per-connection procedure takes them.
+   */
+  list: tenantProcedure
+    .input(
+      z.object({
+        ...NameFilterInput,
+        include: z
+          .array(z.enum(["config"]))
+          .min(1)
+          .optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      listedOrRefusal(
+        ctx.locale,
+        await connections.list(ctx.exec, input.tenantId, ctx.specReads, input),
+      ),
+    ),
 
   get: tenantProcedure
     .input(z.object({ source: z.string().min(1) }))

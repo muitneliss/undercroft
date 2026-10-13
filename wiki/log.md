@@ -363,3 +363,6 @@
 ## [2026-10-13] ingest | Runbook: Connecting an agent over MCP
 ## [2026-10-13] ingest | ADR 0122 What a Model Reads over MCP Is Bounded in Every Copy
 ## [2026-10-13] ingest | ADR 0125 A Read Names Its Target: Lineage, Schema and Scope Reads Narrow, and Never Guess
+## [2026-10-13] ingest | ADR 0126 Lists Answer Summaries, the Server Hashes What It Stores, and an Identical Save Writes Nothing
+## [2026-10-13] remove | ADR 0126 Lists Answer Summaries, the Server Hashes What It Stores, and an Identical Save Writes Nothing
+## [2026-10-13] ingest | ADR 0127 Lists Answer Summaries, the Server Hashes What It Stores, and an Identical Save Writes Nothing

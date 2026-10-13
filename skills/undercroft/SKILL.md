@@ -81,6 +81,12 @@ door with this rule.
    `parentId` (`null` for the top level), `query`, `limit` and `cursor`. A name that is not
    there is refused as `NOT_FOUND`, never answered empty; a browse's `partial` still says when
    the listing behind a page was incomplete.
+   The lists answer summaries. `models.list`, `macros.list`, `bi.questions.list` and
+   `connections.list` take `names` or `match`, and leave out each item's body: a question's
+   definition, a connection's chosen names, a build's columns, a macro's definition. Ask
+   `include` for one only when you need it (`include: ["definition", "chart"]`,
+   `["config"]`, `["columns"]`), or `get` the one item. `models.reference` takes `parts`:
+   ask for `["tenantMacros"]` alone, since the other two parts never change.
 4. **Say what you will change, then change it.** Before a `write` or `destructive`
    operation, tell the person what it will do and to what. With the CLI, run it with
    `--dry-run` first.

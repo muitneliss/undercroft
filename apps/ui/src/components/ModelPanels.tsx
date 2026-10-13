@@ -18,6 +18,7 @@ import { ResultTable } from "@/components/ResultTable.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StepsTable } from "@/components/StepsTable.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
+import { wholeReference } from "@/lib/listAnswers.ts";
 import type { ModelDraft } from "@/lib/modelDraft.ts";
 import { isModelName } from "@/lib/modelName.ts";
 import { useUiStore } from "@/store.ts";
@@ -158,7 +159,7 @@ export function TestsForm({
  */
 export function Reference({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
-  const reference = trpc.models.reference.useQuery({ tenantId });
+  const reference = trpc.models.reference.useQuery({ tenantId }, { select: wholeReference });
 
   return (
     <details className="tokenform">

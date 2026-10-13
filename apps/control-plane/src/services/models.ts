@@ -38,41 +38,109 @@ import {
   type Lineage,
   type LineageTarget,
   lineageAround,
-  MACROS,
   type ModelCheck,
   modelLineage,
-  SOURCES_YML,
 } from "@undercroft/db/services";
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
+import { type ListRequest, mapNarrowed, type Narrowed, narrowByName } from "./listFilter.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 
 export type { LastBuild, Model } from "@undercroft/db/repos";
 
-export interface ModelItem {
+/** A model's last build as a list shows it: how many columns it found, not which. */
+export interface BuildSummary extends LastBuild {
+  /**
+   * How many columns the last SUCCESSFUL build found, or `null` while none has. Never `0`: a
+   * SELECT yields at least one column, so an empty record means "not known yet", and a model
+   * whose only build failed must not read as a table with no columns.
+   */
+  readonly columnCount: number | null;
+  /** The columns themselves, on `get` always and on the list only when asked (`include`). */
+  readonly columns?: readonly string[];
+}
+
+/** A build with its columns, as `get` always answers it. Empty until a build has succeeded. */
+export interface BuildWithColumns extends BuildSummary {
+  readonly columns: readonly string[];
+}
+
+interface ModelFacts {
   readonly name: string;
   readonly updatedAt: string;
   readonly updatedBy: string;
-  readonly lastBuild: (LastBuild & { columns: string[] }) | null;
+  /**
+   * Hex SHA-256 of the stored SQL's UTF-8 bytes, so a client can tell whether its file is the
+   * server's copy without fetching it: the same text hashes the same anywhere (ADR 0127).
+   */
+  readonly sqlSha256: string;
+  /**
+   * Hex SHA-256 of the stored tests as Postgres prints them. Compare it with one this platform
+   * gave before, never with a hash of a local file: `jsonb` normalises key order and spacing.
+   */
+  readonly testsSha256: string;
 }
 
-export type ModelDetail = ModelItem & { readonly sql: string; readonly tests: ModelTests };
+/** One model on the list: what a reader chooses one by, and no SQL. */
+export interface ModelItem extends ModelFacts {
+  readonly lastBuild: BuildSummary | null;
+}
 
-function item(model: Model, built: LastBuild | undefined): ModelItem {
+/** One model in full: its SQL, its tests and the columns its last build found. */
+export interface ModelDetail extends ModelFacts {
+  readonly lastBuild: BuildWithColumns | null;
+  readonly sql: string;
+  readonly tests: ModelTests;
+}
+
+/** What `list` adds to each model beyond its summary. */
+export type ModelInclude = "columns";
+
+function facts(model: Model): ModelFacts {
   return {
     name: model.name,
     updatedAt: model.updatedAt,
     updatedBy: model.updatedBy,
-    lastBuild: built === undefined ? null : { ...built, columns: model.columns },
+    sqlSha256: model.sqlSha256,
+    testsSha256: model.testsSha256,
   };
 }
 
-export async function list(exec: SqlExecutor, tenantId: string): Promise<ModelItem[]> {
+function buildOf(model: Model, built: LastBuild): BuildWithColumns {
+  return {
+    ...built,
+    columnCount: model.columns.length === 0 ? null : model.columns.length,
+    columns: model.columns,
+  };
+}
+
+function summaryOf(model: Model, built: LastBuild | undefined, columns: boolean): ModelItem {
+  if (built === undefined) {
+    return { ...facts(model), lastBuild: null };
+  }
+  const { columns: listed, ...summary } = buildOf(model, built);
+  return { ...facts(model), lastBuild: columns ? { ...summary, columns: listed } : summary };
+}
+
+/**
+ * The tenant's models with their last build, narrowed by `filter` (`listFilter.ts`). Each says
+ * how many columns its build found; which ones only when `include` names `columns`, because 176
+ * models' column lists were most of a list that overflowed its client (issue 444).
+ */
+export async function list(
+  exec: SqlExecutor,
+  tenantId: string,
+  request: ListRequest<ModelInclude> = {},
+): Promise<Narrowed<ModelItem>> {
   const [models, builds] = await Promise.all([
     listModels(exec, tenantId),
     lastBuildPerModel(exec, tenantId),
   ]);
-  return models.map((m) => item(m, builds.get(m.name)));
+  const columns = request.include?.includes("columns") ?? false;
+  return mapNarrowed(
+    narrowByName(models, (m) => m.name, request),
+    (m) => summaryOf(m, builds.get(m.name), columns),
+  );
 }
 
 export async function get(
@@ -84,9 +152,10 @@ export async function get(
   if (model === null) {
     return null;
   }
-  const builds = await lastBuildPerModel(exec, tenantId);
+  const built = (await lastBuildPerModel(exec, tenantId)).get(name);
   return {
-    ...item(model, builds.get(name)),
+    ...facts(model),
+    lastBuild: built === undefined ? null : buildOf(model, built),
     sql: model.sql,
     // Re-validated on the way out rather than asserted: the row's shape is the contract's
     // by construction, and a parse says so where an assertion would only claim it.
@@ -94,10 +163,16 @@ export async function get(
   };
 }
 
-export type SaveOutcome = { ok: true } | { ok: false; reason: "name-taken" };
+export type SaveOutcome =
+  | { readonly ok: true; readonly unchanged: boolean }
+  | { readonly ok: false; readonly reason: "name-taken" };
 
 /**
  * Store the model. With `create`, a name already in use is refused and nothing is written.
+ *
+ * Saving exactly the SQL and tests already stored is `unchanged`: the row keeps its
+ * `updatedAt` and `updatedBy`, and no audit row is written, because nothing took effect
+ * (ADR 0113, ADR 0127). The repo decides it in the upsert itself, not by a read first.
  */
 export async function save(
   exec: SqlExecutor,
@@ -112,21 +187,23 @@ export async function save(
   },
 ): Promise<SaveOutcome> {
   const model = { name: input.name, sql: input.sql, tests: input.tests, updatedBy: input.actorId };
-  if (input.create) {
-    const created = await insertModel(exec, input.tenantId, model);
-    if (!created) {
-      return { ok: false, reason: "name-taken" };
-    }
-  } else {
-    await saveModel(exec, input.tenantId, model);
+  const result = input.create
+    ? (await insertModel(exec, input.tenantId, model))
+      ? "written"
+      : "name-taken"
+    : await saveModel(exec, input.tenantId, model);
+  if (result === "name-taken") {
+    return { ok: false, reason: "name-taken" };
   }
-  await recordAudit(exec, {
-    tenantId: input.tenantId,
-    actor: input.actor,
-    action: "models.save",
-    detail: JSON.stringify({ name: input.name, created: input.create }),
-  });
-  return { ok: true };
+  if (result === "written") {
+    await recordAudit(exec, {
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "models.save",
+      detail: JSON.stringify({ name: input.name, created: input.create }),
+    });
+  }
+  return { ok: true, unchanged: result === "unchanged" };
 }
 
 /**
@@ -201,28 +278,6 @@ export async function lineage(
   ]);
   const graph = modelLineage({ models, macros });
   return target === null ? graph : lineageAround(graph, target);
-}
-
-export interface Reference {
-  readonly sourcesYml: string;
-  /** What the platform ships into every project. */
-  readonly macros: { name: string; sql: string }[];
-  /** The tenant's own macros, which any of its models may call too (ADR 0086). */
-  readonly tenantMacros: { name: string; description: string; sql: string }[];
-}
-
-/** What a model of this tenant can read and call, for the editor's reference panel. */
-export async function reference(exec: SqlExecutor, tenantId: string): Promise<Reference> {
-  const tenantMacros = await listMacros(exec, tenantId);
-  return {
-    sourcesYml: SOURCES_YML,
-    macros: MACROS.map((m) => ({ name: m.name, sql: m.sql })),
-    tenantMacros: tenantMacros.map((m) => ({
-      name: m.name,
-      description: m.description,
-      sql: m.sql,
-    })),
-  };
 }
 
 /** The rows a failed test stored, through the worker; nothing here decides who may look. */
