@@ -68,6 +68,10 @@ describe("renderProject", () => {
     expect(PROJECT["macros/generate_schema_name.sql"]).toContain(
       "custom_schema_name is none or node.resource_type != 'test'",
     );
+    // Nor a name: promotion finds a model's relation by the model's name.
+    expect(PROJECT["macros/generate_alias_name.sql"]).toContain(
+      "{%- if custom_alias_name is none or node.resource_type == 'model'\n          or node.resource_type == 'seed' -%}\n        {{ node.name }}",
+    );
   });
 
   it("reads the password from the environment; no file carries it", () => {

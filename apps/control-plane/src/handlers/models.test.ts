@@ -474,6 +474,7 @@ describe("models.build", () => {
     expect(reference.macros.map((m) => m.name)).toEqual([
       "parse_amount",
       "generate_schema_name",
+      "generate_alias_name",
       "gmail_letters",
       "excel_serial_date",
       "excel_serial_timestamp",
