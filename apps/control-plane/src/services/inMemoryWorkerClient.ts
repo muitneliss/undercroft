@@ -243,7 +243,7 @@ export class InMemoryWorkerClient implements WorkerClient {
   readonly searches: SearchInput[] = [];
   #answer: TableResult = { columns: [], rows: [], truncated: false };
   /** Nothing found, which is a real answer rather than an absent one. */
-  #found: RawSearchResponse = { hits: [], truncated: false };
+  #found: RawSearchResponse = { hits: [], truncated: false, capped: [] };
   #refusal: string | null = null;
 
   /** Answer every query with `result`. */

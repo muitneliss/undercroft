@@ -28,6 +28,7 @@ import {
   UnknownTenant,
 } from "../services/ingest.ts";
 import { QueryFailed } from "../services/queryRunner.ts";
+import { QueryTimedOut } from "../services/queryTimeout.ts";
 import { TenantBusy } from "../services/tenantBusy.ts";
 import { TenantNotProvisioned } from "../services/tenantSession.ts";
 
@@ -39,7 +40,7 @@ const INTERNAL: Failure = {
 };
 
 export interface Failure {
-  readonly status: 400 | 404 | 409 | 502 | 503 | 500;
+  readonly status: 400 | 404 | 409 | 502 | 503 | 504 | 500;
   readonly code: ApiError["code"];
   readonly message: string;
   /** Structured detail a caller acts on -- the id of the run in progress -- never a payload. */
@@ -62,6 +63,12 @@ export function failureOf(error: unknown): Failure {
   // the control plane says "busy, try again" rather than that the request or the worker broke.
   if (error instanceof TenantBusy) {
     return { status: 503, code: "tenant_busy", message: error.message, details: [] };
+  }
+  // Postgres cancelled the statement at its time limit (ADR 0123). A 504 and not a 503: the
+  // worker's own upstream ran out of time, and unlike a busy login, asking again unchanged
+  // takes exactly as long. The message is ours and states the limit; it quotes nothing.
+  if (error instanceof QueryTimedOut) {
+    return { status: 504, code: "query_timeout", message: error.message, details: [] };
   }
   // The id of the run in progress rides in `details`, so a caller can watch it without
   // parsing a sentence.

@@ -120,6 +120,12 @@ BEGIN
              raw.record_tsv(jsonb), raw.search_query(text),
              raw.search_excerpt(text, text, integer) TO %I',
         v_dbt);
+    -- The search's candidate lookups (530, ADR 0123): SECURITY DEFINER, and they answer only
+    -- with keys of the calling login's own rows, so they widen nothing the policy allows.
+    EXECUTE format(
+        'GRANT EXECUTE ON FUNCTION raw.search_record_candidates(name, text, integer),
+             raw.search_document_candidates(name, text, integer) TO %I',
+        v_dbt);
 
     -- bi reads the tenant's analytics: what is there now, and what dbt creates later.
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I', v_analytics, v_bi);

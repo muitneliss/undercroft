@@ -249,6 +249,11 @@ describe("a payload or a document too large to index whole", () => {
 });
 
 describe("the indexes are live", () => {
+  // AS THE SUPERUSER, which bypasses the row-level policy -- so these prove the expression ON
+  // the index and the expression IN a statement are the same one, and nothing about what the
+  // tenant's login can use. As that login the policy stops `@@` reaching the index at all; the
+  // describe below pins that, and pins the functions that go round it (ADR 0123).
+  //
   // Seeded once: both tests only ask the planner. `enable_seqscan = off` is what makes an
   // unusable index visible -- with it on, a tiny table is scanned and the plan proves nothing.
   sharedDatabase(async () => {
@@ -349,5 +354,196 @@ describe("a tenant's login searches its own rows and no other", () => {
       );
       expect(rows[0]?.n).toBe(0);
     });
+  });
+});
+
+/**
+ * The search's candidate lookups (530, ADR 0123), as the logins that call them.
+ *
+ * A database per test: one test changes the session's own user, which nothing restores.
+ */
+describe("the candidate lookups reach the index as a tenant's login, and only its rows", () => {
+  const OWN = "undercroft_dbt_case_0042";
+  const OTHER = "undercroft_dbt_case_0043";
+
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042'), ('CASE-0043')");
+    await db.query("SELECT ops.provision_tenant('CASE-0042')");
+    await db.query("SELECT ops.provision_tenant('CASE-0043')");
+    await db.exec("CREATE TABLE raw.records_demo PARTITION OF raw.records FOR VALUES IN ('demo')");
+    // Forty invoices a day apart for one tenant, one for the other, and one rare word: "the
+    // newest n" has an order to be checked against, and a common word is common.
+    await db.exec(
+      `INSERT INTO raw.records (source, tenant_id, entity, source_record_id, payload,
+         content_sha256, observed_at, lake_key, lake_stamp, run_id)
+       SELECT 'demo', 'CASE-0042', 'invoices', g::text,
+              jsonb_build_object('note', 'invoice ' || g || CASE WHEN g = 7 THEN ' zebra' ELSE '' END),
+              repeat('0', 64), timestamptz '2026-01-01' + g * interval '1 day', 'k', 's', 'r'
+       FROM generate_series(1, 40) g;
+       INSERT INTO raw.records (source, tenant_id, entity, source_record_id, payload,
+         content_sha256, observed_at, lake_key, lake_stamp, run_id)
+       VALUES ('demo', 'CASE-0043', 'invoices', 'x', '{"note":"invoice zebra"}'::jsonb,
+               repeat('0', 64), now(), 'k', 's', 'r');
+       INSERT INTO raw.document_text (source, tenant_id, document_id, source_sha256, method,
+         text, chars, extracted_at, run_id)
+       SELECT 'demo', 'CASE-0042', 'd' || g, repeat('0', 64), 'pdf_text',
+              'Invoice number ' || g || CASE WHEN g = 3 THEN ' zebra' ELSE '' END, 20,
+              timestamptz '2026-01-01' + g * interval '1 day', 'r'
+       FROM generate_series(1, 40) g;
+       ANALYZE raw.records; ANALYZE raw.document_text;`,
+    );
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  /** How many scans each relation took while `role` ran `sql`; Postgres's own counters. */
+  async function scansDuring(
+    role: string,
+    sql: string,
+    relations: readonly string[],
+  ): Promise<Record<string, number>> {
+    function counts(): Promise<number[]> {
+      return Promise.all(
+        relations.map((relation) =>
+          one<number>("SELECT pg_stat_get_xact_numscans($1::regclass)::int AS v", [relation]),
+        ),
+      );
+    }
+    // One transaction, so the counters are this session's and nothing flushes them between.
+    await db.exec("BEGIN");
+    try {
+      const before = await counts();
+      await db.asRole(role, (tx) => tx.query(sql));
+      const after = await counts();
+      return Object.fromEntries(
+        relations.map((relation, i) => [relation, (after[i] ?? 0) - (before[i] ?? 0)]),
+      );
+    } finally {
+      await db.exec("ROLLBACK");
+    }
+  }
+
+  it("as the tenant's login, a plain `@@` cannot use the index -- the reason they exist", async () => {
+    // `@@` is not leakproof, and under a row-level policy Postgres will not make it an index
+    // condition. If that ever changes, this fails, and the functions may no longer be needed.
+    const plan = await db.asRole(OWN, async (tx) => {
+      await tx.exec("SET enable_seqscan = off");
+      const { rows } = await tx.query<Record<string, string>>(
+        "EXPLAIN SELECT 1 FROM raw.records WHERE raw.record_tsv(payload) @@ raw.search_query($1)",
+        ["zebra"],
+      );
+      return rows.map((r) => Object.values(r).join(" ")).join("\n");
+    });
+    expect(plan).not.toContain("record_tsv_idx");
+    // And the counters the tests below read do say so: this is their quiet side.
+    const scans = await scansDuring(
+      OWN,
+      "SELECT 1 FROM raw.records WHERE raw.record_tsv(payload) @@ raw.search_query('zebra')",
+      ["raw.records_demo_record_tsv_idx"],
+    );
+    expect(scans["raw.records_demo_record_tsv_idx"]).toBe(0);
+  });
+
+  for (const word of ["zebra", "invoice"]) {
+    it(`finds records through the GIN index for "${word}", reading no row by a scan`, async () => {
+      const scans = await scansDuring(
+        OWN,
+        `SELECT * FROM raw.search_record_candidates(current_user, '${word}', 5)`,
+        ["raw.records_demo_record_tsv_idx", "raw.records_demo"],
+      );
+      expect(scans["raw.records_demo_record_tsv_idx"]).toBe(1);
+      expect(scans["raw.records_demo"]).toBe(0);
+    });
+
+    it(`finds documents through the GIN index for "${word}", reading no row by a scan`, async () => {
+      const scans = await scansDuring(
+        OWN,
+        `SELECT * FROM raw.search_document_candidates(current_user, '${word}', 5)`,
+        ["raw.document_text_search", "raw.document_text"],
+      );
+      expect(scans["raw.document_text_search"]).toBe(1);
+      expect(scans["raw.document_text"]).toBe(0);
+    });
+  }
+
+  it("answers its own rows' keys, newest first, numbered, and at most n of them", async () => {
+    const found = await db.asRole(OWN, (tx) =>
+      tx.query<{ source_record_id: string; ordinal: number }>(
+        `SELECT source_record_id, ordinal::int AS ordinal
+         FROM raw.search_record_candidates(current_user, 'invoice', 3)`,
+      ),
+    );
+    expect(found.rows).toEqual([
+      { source_record_id: "40", ordinal: 1 },
+      { source_record_id: "39", ordinal: 2 },
+      { source_record_id: "38", ordinal: 3 },
+    ]);
+    const documents = await db.asRole(OWN, (tx) =>
+      tx.query<{ document_id: string }>(
+        "SELECT document_id FROM raw.search_document_candidates(current_user, 'invoice', 2)",
+      ),
+    );
+    expect(documents.rows.map((r) => r.document_id)).toEqual(["d40", "d39"]);
+  });
+
+  /** As the LOGIN, not a `SET ROLE` of the superuser: membership is checked on `session_user`. */
+  async function asLogin<T>(login: string, sql: string): Promise<T[]> {
+    await db.exec("BEGIN");
+    try {
+      await db.exec(`SET LOCAL SESSION AUTHORIZATION ${login}`);
+      return (await db.query<T>(sql)).rows;
+    } finally {
+      await db.exec("ROLLBACK");
+    }
+  }
+
+  it("a login naming another tenant's role is answered with nothing", async () => {
+    const rows = await asLogin<{ n: number }>(
+      OTHER,
+      `SELECT (SELECT count(*)::int FROM raw.search_record_candidates('${OWN}', 'invoice', 50))
+            + (SELECT count(*)::int FROM raw.search_document_candidates('${OWN}', 'invoice', 50)) AS n`,
+    );
+    expect(rows).toEqual([{ n: 0 }]);
+  });
+
+  it("the same login naming its own role is answered with its own rows", async () => {
+    // The quiet side: a lookup that answered nobody would pass the test above.
+    const rows = await asLogin<{ source_record_id: string }>(
+      OTHER,
+      `SELECT source_record_id FROM raw.search_record_candidates('${OTHER}', 'zebra', 50)`,
+    );
+    expect(rows).toEqual([{ source_record_id: "x" }]);
+  });
+
+  it("run as an owner the policy does not bind, with the search path pinned", async () => {
+    // The whole design leans on this: the owner is the one the policy does not stop, so `@@`
+    // reaches the index. A table that FORCED its policy on its owner would put it back.
+    const { rows } = await db.query<{ proname: string; ok: boolean; config: string[] }>(
+      `SELECT p.proname, p.prosecdef AND bool_and(p.proowner = c.relowner AND NOT c.relforcerowsecurity) AS ok,
+              p.proconfig AS config
+       FROM pg_proc p
+       CROSS JOIN (VALUES ('raw.records'::regclass), ('raw.document_text'::regclass),
+                          ('raw.documents'::regclass)) AS t(rel)
+       JOIN pg_class c ON c.oid = t.rel
+       WHERE p.pronamespace = 'raw'::regnamespace
+         AND p.proname IN ('search_record_candidates', 'search_document_candidates')
+       GROUP BY p.proname, p.prosecdef, p.proconfig
+       ORDER BY p.proname`,
+    );
+    expect(rows).toEqual([
+      {
+        proname: "search_document_candidates",
+        ok: true,
+        config: ["search_path=pg_catalog, raw", "enable_seqscan=off"],
+      },
+      {
+        proname: "search_record_candidates",
+        ok: true,
+        config: ["search_path=pg_catalog, raw", "enable_seqscan=off"],
+      },
+    ]);
   });
 });

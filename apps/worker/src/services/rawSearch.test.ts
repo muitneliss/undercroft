@@ -8,11 +8,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { MAX_SEARCH_HITS } from "@undercroft/contracts";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import type { QueryDeps } from "./queryRunner.ts";
-import { searchRaw } from "./rawSearch.ts";
-import { sessionsBySetRole } from "./tenantSession.ts";
+import { QUERY_TIMEOUT_MS } from "./queryRunner.ts";
+import { QueryTimedOut } from "./queryTimeout.ts";
+import { RANKED_PER_KIND, searchRaw } from "./rawSearch.ts";
+import { sessionsBySetRole, type TenantSessions } from "./tenantSession.ts";
 
 const TENANT = "CASE-1";
 const OTHER = "CASE-2";
@@ -188,6 +191,9 @@ describe("paging and tombstones", () => {
     });
     expect(found.hits).toHaveLength(2);
     expect(found.truncated).toBe(true);
+    // The quiet side of the cap: five matches are all ranked, and the answer does not say
+    // otherwise.
+    expect(found.capped).toEqual([]);
   });
 
   it("says the last page was not cut", async () => {
@@ -252,5 +258,110 @@ describe("a tenant that was never provisioned", () => {
         offset: 0,
       }),
     ).rejects.toThrow(/no roles/u);
+  });
+});
+
+// #447, ADR 0123. A common word matched tens of thousands of rows and each was ranked and
+// excerpted, so the search ran into its time limit. Each kind now ranks its newest matches
+// only, and the answer says when that cut any.
+describe("a word that matches more than a search ranks", () => {
+  const CAP = RANKED_PER_KIND.document;
+
+  beforeEach(async () => {
+    // One more document than the cap, a day apart, so "the newest" has one right answer: every
+    // one but `d1`.
+    await db.asSuperuser(async (tx) => {
+      await tx.query(
+        `INSERT INTO raw.documents (source, tenant_id, document_id, lake_key, sha256, byte_length,
+           observed_at, run_id)
+         SELECT 'demo', $1, 'd' || g, 'k', repeat('0', 64), 10,
+                timestamptz '2026-01-01' + g * interval '1 day', 'r'
+         FROM generate_series(1, $2::int) g`,
+        [TENANT, CAP + 1],
+      );
+      await tx.query(
+        `INSERT INTO raw.document_text (source, tenant_id, document_id, source_sha256, method,
+           text, chars, truncated, extracted_at, run_id)
+         SELECT 'demo', $1, 'd' || g, repeat('0', 64), 'pdf_text', 'Hợp đồng số ' || g, 12, false,
+                timestamptz '2026-01-01' + g * interval '1 day', 'r'
+         FROM generate_series(1, $2::int) g`,
+        [TENANT, CAP + 1],
+      );
+    });
+  });
+
+  it("ranks the newest, says so, and pages over them without skipping or repeating one", async () => {
+    const seen: string[] = [];
+    for (let offset = 0; offset <= CAP; offset += MAX_SEARCH_HITS) {
+      const page = await searchRaw(deps, {
+        tenantId: TENANT,
+        q: "hop dong",
+        kinds: ["document"],
+        limit: MAX_SEARCH_HITS,
+        offset,
+      });
+      // Every page says it, the empty one past the end included: that is the page on which
+      // "no more hits" would otherwise be read as "nothing else matched".
+      expect(page.capped).toEqual([{ kind: "document", ranked: CAP }]);
+      seen.push(...page.hits.map((h) => (h.kind === "document" ? h.documentId : "")));
+    }
+    expect(seen).toHaveLength(CAP);
+    expect(new Set(seen).size).toBe(CAP);
+    expect(seen).not.toContain("d1");
+  });
+
+  it("names only the kind that was cut", async () => {
+    await landRecord(TENANT, "r1", '{"note":"Hợp đồng thuê nhà"}');
+    const found = await searchRaw(deps, {
+      tenantId: TENANT,
+      q: "hop dong",
+      kinds: ["record", "document"],
+      limit: 5,
+      offset: 0,
+    });
+    expect(found.capped).toEqual([{ kind: "document", ranked: CAP }]);
+  });
+});
+
+describe("a search Postgres stopped at its time limit", () => {
+  /** A session seam whose statement fails as the driver reports `error`. */
+  function failingWith(error: Error): QueryDeps {
+    const sessions: TenantSessions = {
+      as: () => Promise.reject(error),
+      withPassword: () => Promise.reject(error),
+    };
+    return { exec: db, sessions };
+  }
+
+  /** What `pg` raises for a server error: Postgres's sentence, and its SQLSTATE as `code`. */
+  function serverError(message: string, code: string): Error {
+    return Object.assign(new Error(message), { code });
+  }
+
+  const question = {
+    tenantId: TENANT,
+    q: "invoice",
+    kinds: ["record" as const],
+    limit: 2,
+    offset: 0,
+  };
+
+  it("is named a timeout, carrying the limit it ran into", async () => {
+    const refusal = await searchRaw(
+      failingWith(serverError("canceling statement due to statement timeout", "57014")),
+      question,
+    ).catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(QueryTimedOut);
+    expect((refusal as QueryTimedOut).limitMs).toBe(QUERY_TIMEOUT_MS);
+  });
+
+  it("is not confused with a statement cancelled by hand, which shares its code", async () => {
+    // The quiet side. 57014 is also `pg_cancel_backend`; telling that reader to narrow a
+    // question that never ran into any limit would be a guess dressed as a fact.
+    const cancelled = serverError("canceling statement due to user request", "57014");
+    const refusal = await searchRaw(failingWith(cancelled), question).catch(
+      (error: unknown) => error,
+    );
+    expect(refusal).toBe(cancelled);
   });
 });
