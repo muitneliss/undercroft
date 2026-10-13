@@ -23,6 +23,7 @@ import { NO_SUPERADMINS } from "../services/superadmin.ts";
 import { unavailableJudge } from "../services/assistant/judge.ts";
 import { registerAssistantRoutes } from "./chat.ts";
 import { bearerContext, createContext, resolveCaller, type ServerDeps } from "./context.ts";
+import { holdFor } from "./holdOpen.ts";
 import { registerExportRoute } from "./exports.ts";
 import { registerMcpRoute } from "./mcp.ts";
 import { registerOAuthRoutes } from "./oauth.ts";
@@ -66,7 +67,11 @@ function registerTrpcRoute(app: Hono, deps: ServerDeps): void {
   app.all("/trpc/*", async (c) => {
     // The cookie door, and only the cookie: a bearer is `/mcp`'s, and a browser's own API must
     // not start answering to one because a header happened to be set.
-    const context = await createContext(deps, c.req.raw.headers, "cookie");
+    // Held, so a procedure that waits on purpose is not cut at ten seconds (ADR 0124).
+    const context = {
+      ...(await createContext(deps, c.req.raw.headers, "cookie")),
+      holdOpen: holdFor(c.env, c.req.raw),
+    };
     return await fetchRequestHandler({
       endpoint: "/trpc",
       req: c.req.raw,

@@ -42,6 +42,9 @@ a clipped list as all there is: call again with a narrower scope -- a filter, a 
 the next `cursor`, where the tool takes one -- or, for rows a person wants in a file, an export
 (below).
 
+`runs_get` with `waitSeconds` holds the call until the run ends or the wait runs out, at most
+50 seconds. If your host gives a tool call less time than that, ask for a shorter wait.
+
 A query result or a run's status may also render as a widget in the host. The widget shows
 the person the whole answer, which can be more rows than you were sent; you do not need to
 repeat every row, and you cannot quote a row you were not sent.

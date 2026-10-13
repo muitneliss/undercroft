@@ -13,6 +13,7 @@
  * printing a time that already went by.
  */
 
+import { MAX_STEP_PAGE } from "@undercroft/contracts/runs";
 import { parseSourceInstance } from "@undercroft/contracts/sources";
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
@@ -30,6 +31,16 @@ import { divisionPath } from "@/lib/divisions.ts";
 import { MISSING } from "@/lib/money.ts";
 import { TICK_MINUTES } from "@/lib/cadence.ts";
 import { formatDateTime } from "@/lib/when.ts";
+
+/**
+ * What a screen that reads a run's steps asks `runs.get` for: every step, on one page.
+ *
+ * `runs.get` lists only the steps that did not pass unless asked (issue 441), which is right for an
+ * agent and wrong here: the leaf's table, its stage map and the village all read the passing steps
+ * too. One page of the most the server allows, which holds every step of a real run; a run that
+ * outgrows it says so (`nextStepCursor`) and the leaf prints that rather than a page as the whole.
+ */
+export const EVERY_STEP = { steps: "all", stepLimit: MAX_STEP_PAGE } as const;
 
 export type LastRun = NonNullable<Connection["lastRun"]>;
 export type RunStatus = LastRun["status"];

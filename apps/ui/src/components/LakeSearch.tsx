@@ -140,11 +140,10 @@ function Results({ tenantId, query }: { tenantId: string; query: string }): Reac
     return <Skeleton rows={3} />;
   }
   if (found.isError) {
-    return (
-      <Errata heading={t("common.notLoaded")} live={true}>
-        {t("lake.searchNotLoaded")}
-      </Errata>
-    );
+    // The server's own sentence, not a fixed "try again later": a search that ran into its time
+    // limit says to narrow it, and telling that reader to wait and retry sends them round the
+    // same question that will stop again (#447).
+    return <Errata heading={t("common.notLoaded")} live={true} error={found.error} />;
   }
   if (found.data.hits.length === 0) {
     // Absence worded as absence. "Nothing matched" is an answer; an empty table is not.
@@ -154,6 +153,15 @@ function Results({ tenantId, query }: { tenantId: string; query: string }): Reac
     <div className="stack">
       <Hits hits={found.data.hits} query={query} />
       {found.data.truncated ? <p className="note">{t("lake.searchMore")}</p> : null}
+      {/* A kind with more matches than a search ranks (ADR 0123). Said, because the hits above
+          are the best of its newest matches and not of all of them. */}
+      {found.data.capped.map((cut) => (
+        <p className="note" key={cut.kind}>
+          {cut.kind === "record"
+            ? t("lake.searchCappedRecords", { count: cut.ranked })
+            : t("lake.searchCappedDocuments", { count: cut.ranked })}
+        </p>
+      ))}
     </div>
   );
 }

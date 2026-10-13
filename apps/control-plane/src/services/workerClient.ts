@@ -39,6 +39,7 @@ import {
   type InitialiseOutcome,
   initialiseRefusalOf,
   REFUSAL_BY_STATUS,
+  SEARCH_REFUSALS,
   type WorkerFailure,
 } from "./workerRefusals.ts";
 import { exportOn } from "./workerExport.ts";
@@ -336,7 +337,8 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     runRawQuery: (input) => query("/v1/queries/raw/run", input),
     readRawSchema: (input) => post("/v1/queries/raw/schema", input),
     // Plain `post`, not `query`: there is no author's SQL here to quote back, so there is no
-    // refusal body worth reading. A search that did not run is a refusal like any other.
-    searchRaw: (input) => post("/v1/queries/raw/search", input),
+    // refusal body worth reading. Its one refusal of its own -- the statement timeout, a 504 --
+    // is named by the status alone (ADR 0123).
+    searchRaw: (input) => post("/v1/queries/raw/search", input, { refusals: SEARCH_REFUSALS }),
   };
 }

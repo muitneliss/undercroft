@@ -126,6 +126,8 @@
 - [ADR 0120 An Agent's Reads, and Every Sign-In Event, Are on the Record](sources/adr-0120-an-agent-s-reads-and-every-sign-in-event-are-on-the-record.md)
 - [ADR 0121 Dokploy Clones the Private Repository over SSH, with a Read-Only Deploy Key](sources/adr-0121-dokploy-clones-the-private-repository-over-ssh-with-a-read-only-deploy-key.md)
 - [ADR 0122 What a Model Reads over MCP Is Bounded in Every Copy](sources/adr-0122-what-a-model-reads-over-mcp-is-bounded-in-every-copy.md)
+- [ADR 0123 A Search Ranks Each Kind's Newest Matches, Found Through the Index by the Owner](sources/adr-0123-a-search-ranks-each-kind-s-newest-matches-found-through-the-index-by-the-owner.md)
+- [ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does](sources/adr-0124-a-procedure-that-waits-holds-its-request-open-to-its-own-cap-and-nothing-else-does.md)
 - [ADR 0125 A Read Names Its Target: Lineage, Schema and Scope Reads Narrow, and Never Guess](sources/adr-0125-a-read-names-its-target-lineage-schema-and-scope-reads-narrow-and-never-guess.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)

@@ -10,13 +10,16 @@
  * WHO IT RUNS AS is the whole of the access control. Every statement here is issued on an
  * executor that already IS `undercroft_dbt_<slug>` (`../services/tenantSession.ts`), so the
  * row-level policy on `raw` -- keyed on `raw.tenant_of(current_user)`, the one thing a session
- * cannot change -- shows it one customer's rows. The explicit `tenant_id = $2` beside it is
- * belt and braces and a hint to the planner, not the boundary; deleting it would not widen what
- * a login can read, and it is written out so that a reader does not have to take that on faith.
+ * cannot change -- shows it one customer's rows. The candidate functions are told the same
+ * `current_user` and decide by the same function (530's header). The explicit `tenant_id = $2`
+ * in the joins is belt and braces and a hint to the planner, not the boundary; deleting it would
+ * not widen what a login can read, and it is written out so that a reader does not have to take
+ * that on faith.
  *
- * The matching, folding and excerpting are `raw.*` functions from `190_raw_search.sql`, not
- * expressions written here: the index is built on those functions, and an expression spelled a
- * second way in application code is an index that quietly stops being used.
+ * The matching, folding and excerpting are `raw.*` functions from `190_raw_search.sql` and
+ * `530_raw_search_candidates.sql`, not expressions written here: the index is built on those
+ * functions, and an expression spelled a second way in application code is an index that
+ * quietly stops being used.
  */
 
 import type { RawSearchHit, SearchKind } from "@undercroft/contracts";
@@ -37,9 +40,19 @@ export interface SearchScope {
    * long, and how long is a decision, which belongs one layer up beside the console's.
    */
   readonly timeoutMs: number;
+  /**
+   * How many of each kind's matches are ranked, newest first. A decision for the same reason
+   * the timeout is: it is the budget that keeps a common word inside it.
+   */
+  readonly caps: Readonly<Record<SearchKind, number>>;
 }
 
-interface HitRow {
+/** Which kinds had matches past their cap; on every row, and the only column of an empty page. */
+interface CappedColumn {
+  capped: SearchKind[];
+}
+
+interface HitRow extends CappedColumn {
   kind: SearchKind;
   source: string;
   entity: string | null;
@@ -52,6 +65,11 @@ interface HitRow {
   truncated: boolean | null;
 }
 
+/** The page had no hit: the `LEFT JOIN` gave the `capped` row nothing to join. */
+interface EmptyPageRow extends CappedColumn {
+  kind: null;
+}
+
 function iso(value: Date | string): string {
   return new Date(value).toISOString();
 }
@@ -61,87 +79,146 @@ function isoOrNull(value: Date | string | null): string | null {
 }
 
 /**
- * A record's payload is searched by value and excerpted from its text form.
+ * One page of hits, ranked among each kind's newest matches. ADR 0123 amends ADR 0026 here.
  *
- * The excerpt therefore carries the JSON punctuation around the match -- `"deal_name":"Hợp đồng
- * thuê nhà"` rather than the sentence alone. That is information, not noise: it names the field
- * the match was in, which for a record is most of what a reader wants to know.
+ * WHICH ROWS ARE RANKED. Ranking a row means rebuilding its folded tsvector -- the GIN index
+ * answers `@@` and stores no vector -- so ranking every match made a common word cost the whole
+ * lake. Each kind's matches are found first by `raw.search_*_candidates` (530), through the
+ * index and without ranking, newest first; at most `caps[kind]` of them are ranked. The function
+ * is asked for one more than the cap, so the answer can SAY a kind was cut rather than rank a
+ * subset and present it as everything: `capped` names those kinds, and an empty page still
+ * carries it, which is when it matters most -- "no more hits" and "no more RANKED hits" are
+ * different answers.
  *
- * `rank` is `::float8`, so it arrives as a number. The pinned `numeric`/`int8` parsers answer in
- * strings to keep MONEY out of floats (`.claude/rules/money.md`); a relevance score is an
- * ordering key and nothing else, and the cast says so at the one place it happens.
- */
-const RECORD_BRANCH = `
-  SELECT 'record'::text           AS kind,
-         r.source                 AS source,
-         r.entity                 AS entity,
-         r.source_record_id       AS id,
-         ts_rank_cd(raw.record_tsv(r.payload), raw.search_query($1))::float8 AS rank,
-         raw.search_excerpt(r.payload::text, $1) AS excerpt,
-         r.observed_at            AS observed_at,
-         r.deleted_at             AS deleted_at,
-         NULL::text               AS method,
-         NULL::boolean            AS truncated
-  FROM raw.records r
-  WHERE r.tenant_id = $2
-    AND raw.record_tsv(r.payload) @@ raw.search_query($1)`;
-
-/**
- * A document is matched on its extracted text and dated by the catalogue row beside it.
+ * WHY THE FUNCTIONS, NOT A `WHERE ... @@` HERE. This statement runs as the tenant's login, under
+ * the row-level policy, and under a policy Postgres will not use an index for a non-leakproof
+ * operator such as `@@`; the functions run as their owner and answer with keys only (530's
+ * header). Everything shown -- rank, dates, excerpt -- is read HERE, as the tenant, by joining
+ * those keys back under the policy. The `@@` itself is spelled once, in 530, beside the indexes
+ * it has to match.
  *
- * LEFT JOIN, and `coalesce` to `extracted_at`: a text row whose catalogue entry has gone would
- * otherwise vanish from the results entirely. The date would be missing, which is a smaller
- * wrong than the hit being missing, and `extracted_at` is a real instant rather than a guess.
- */
-const DOCUMENT_BRANCH = `
-  SELECT 'document'::text         AS kind,
-         t.source                 AS source,
-         NULL::text               AS entity,
-         t.document_id            AS id,
-         ts_rank_cd(raw.search_tsv(t.text), raw.search_query($1))::float8 AS rank,
-         raw.search_excerpt(t.text, $1) AS excerpt,
-         coalesce(d.observed_at, t.extracted_at) AS observed_at,
-         d.deleted_at             AS deleted_at,
-         t.method                 AS method,
-         t.truncated              AS truncated
-  FROM raw.document_text t
-  LEFT JOIN raw.documents d
-         ON d.source = t.source AND d.tenant_id = t.tenant_id AND d.document_id = t.document_id
-  WHERE t.tenant_id = $2
-    AND raw.search_tsv(t.text) @@ raw.search_query($1)`;
-
-/**
- * One page of hits, best match first.
+ * WHERE THE EXCERPT IS CUT. `raw.search_excerpt` folds the body again and scans it once per
+ * term, so it is computed in the outermost SELECT, over the page and nothing else: a target
+ * list above a LIMIT is evaluated for the rows the LIMIT lets through.
  *
- * `rank DESC` orders WITHIN a kind honestly; ACROSS the two it is a heuristic, because
+ * A record's excerpt is cut from its payload's text form, so it carries the JSON punctuation
+ * around the match -- `"deal_name":"Hợp đồng thuê nhà"` rather than the sentence alone. That
+ * is information, not noise: it names the field the match was in.
+ *
+ * ORDER. `rank DESC` orders WITHIN a kind honestly; ACROSS the two it is a heuristic, because
  * `ts_rank_cd` over a short JSON payload and over twenty pages of contract are not measuring the
- * same thing. The remaining three keys are there so that the order is TOTAL: without them
- * `OFFSET` counts against an order Postgres is free to vary, and a hit can appear on two pages
- * or on neither.
+ * same thing. The remaining three keys make the order TOTAL: without them `OFFSET` counts
+ * against an order Postgres is free to vary, and a hit can appear on two pages or on neither.
+ * The candidate order is total too, so every page of one search ranks the same set.
  *
- * Asks for `limit + 1` so the caller can say the page was cut rather than infer it from a full
+ * `rank` is `::float8`, so it arrives as a number. The pinned `numeric`/`int8` parsers answer
+ * in strings to keep MONEY out of floats (`.claude/rules/money.md`); a relevance score is an
+ * ordering key and nothing else, and the cast says so at the one place it happens.
+ *
+ * `$3` is `limit + 1`, so the caller can say the page was cut rather than infer it from a full
  * one -- "twenty hits" and "twenty of many" are different answers to "is what I want in here".
+ *
+ * A document is dated by the catalogue row beside it, LEFT JOINed and `coalesce`d to
+ * `extracted_at`: a text row whose catalogue entry has gone would otherwise vanish from the
+ * results. The date would be missing, which is a smaller wrong than the hit being missing.
+ *
+ * Exported for one reader besides `searchLake`: the test that asks Postgres for this
+ * statement's plan, so that what it proves is about the statement that runs and not a copy.
  */
-export function searchLake(exec: SqlExecutor, scope: SearchScope): Promise<RawSearchHit[]> {
-  const branches: string[] = [];
-  if (scope.kinds.includes("record")) {
-    branches.push(RECORD_BRANCH);
-  }
-  if (scope.kinds.includes("document")) {
-    branches.push(DOCUMENT_BRANCH);
-  }
-  if (branches.length === 0) {
-    return Promise.resolve([]);
+export const SEARCH_STATEMENT = `
+  WITH record_candidate AS MATERIALIZED (
+         SELECT c.source, c.entity, c.source_record_id, c.ordinal
+         FROM raw.search_record_candidates(current_user, $1, $5 + 1) c
+         WHERE 'record' = ANY($7::text[])),
+       document_candidate AS MATERIALIZED (
+         SELECT c.source, c.document_id, c.ordinal
+         FROM raw.search_document_candidates(current_user, $1, $6 + 1) c
+         WHERE 'document' = ANY($7::text[])),
+       hit AS (
+         SELECT 'record'::text           AS kind,
+                r.source                 AS source,
+                r.entity                 AS entity,
+                r.source_record_id       AS id,
+                ts_rank_cd(raw.record_tsv(r.payload), raw.search_query($1))::float8 AS rank,
+                r.payload::text          AS body,
+                r.observed_at            AS observed_at,
+                r.deleted_at             AS deleted_at,
+                NULL::text               AS method,
+                NULL::boolean            AS truncated
+         FROM record_candidate c
+         JOIN raw.records r
+           ON r.source = c.source AND r.tenant_id = $2
+          AND r.entity = c.entity AND r.source_record_id = c.source_record_id
+         WHERE c.ordinal <= $5
+         UNION ALL
+         SELECT 'document'::text,
+                t.source,
+                NULL::text,
+                t.document_id,
+                ts_rank_cd(raw.search_tsv(t.text), raw.search_query($1))::float8,
+                t.text,
+                coalesce(d.observed_at, t.extracted_at),
+                d.deleted_at,
+                t.method,
+                t.truncated
+         FROM document_candidate c
+         JOIN raw.document_text t
+           ON t.source = c.source AND t.tenant_id = $2 AND t.document_id = c.document_id
+         LEFT JOIN raw.documents d
+           ON d.source = t.source AND d.tenant_id = t.tenant_id AND d.document_id = t.document_id
+         WHERE c.ordinal <= $6),
+       page AS (
+         SELECT * FROM hit
+         ORDER BY rank DESC, kind, source, id
+         LIMIT $3 OFFSET $4)
+  SELECT p.kind, p.source, p.entity, p.id, p.rank,
+         raw.search_excerpt(p.body, $1) AS excerpt,
+         p.observed_at, p.deleted_at, p.method, p.truncated,
+         cut.kinds AS capped
+  FROM (SELECT array_remove(ARRAY[
+          CASE WHEN EXISTS (SELECT 1 FROM record_candidate WHERE ordinal > $5) THEN 'record' END,
+          CASE WHEN EXISTS (SELECT 1 FROM document_candidate WHERE ordinal > $6) THEN 'document' END
+        ], NULL) AS kinds) cut
+  LEFT JOIN page p ON true
+  ORDER BY p.rank DESC, p.kind, p.source, p.id`;
+
+/** A page of hits, and which kinds had more matches than were ranked. */
+export interface SearchPage {
+  /** Up to `limit + 1` hits, best first. */
+  readonly hits: RawSearchHit[];
+  readonly capped: SearchKind[];
+}
+
+export function searchLake(exec: SqlExecutor, scope: SearchScope): Promise<SearchPage> {
+  if (scope.kinds.length === 0) {
+    return Promise.resolve({ hits: [], capped: [] });
   }
   return inReadOnlyTransaction(exec, { timeoutMs: scope.timeoutMs }, async () => {
-    const { rows } = await exec.query<HitRow>(
-      `${branches.join("\n  UNION ALL\n")}
-       ORDER BY rank DESC, kind, source, id
-       LIMIT $3 OFFSET $4`,
-      [scope.q, scope.tenantId, scope.limit + 1, scope.offset],
-    );
-    return rows.map(toHit);
+    const { rows } = await exec.query<HitRow | EmptyPageRow>(SEARCH_STATEMENT, [
+      scope.q,
+      scope.tenantId,
+      scope.limit + 1,
+      scope.offset,
+      scope.caps.record,
+      scope.caps.document,
+      scope.kinds,
+    ]);
+    // An empty page is still one row -- the `capped` row with nothing joined to it -- so the
+    // cut is reported when there is nothing left to show, which is exactly when it matters.
+    // No row at all contradicts the statement, and is refused rather than read as "not cut".
+    const [first] = rows;
+    if (first === undefined) {
+      throw new Error("the search answered no row, though its `capped` row is always there");
+    }
+    return {
+      hits: rows.flatMap((row) => (isHit(row) ? [toHit(row)] : [])),
+      capped: first.capped,
+    };
   });
+}
+
+function isHit(row: HitRow | EmptyPageRow): row is HitRow {
+  return row.kind !== null;
 }
 
 function toHit(row: HitRow): RawSearchHit {

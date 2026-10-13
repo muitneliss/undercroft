@@ -160,7 +160,8 @@ function follow(host: Host, tenantId: string, runId: string, first: Run | null):
     paused = false;
     const args = { tenantId, runId };
     const [got, fed] = await Promise.all([
-      host.app.callServerTool({ name: RUNS_GET, arguments: args }),
+      // No steps: the page draws none, and it asks again every two seconds.
+      host.app.callServerTool({ name: RUNS_GET, arguments: { ...args, steps: "none" } }),
       host.app.callServerTool({ name: RUNS_EVENTS, arguments: args }),
     ]);
     if (got.isError === true) {
