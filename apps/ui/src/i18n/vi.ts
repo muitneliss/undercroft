@@ -1814,6 +1814,8 @@ export const vi = {
       "Dựng chạy dbt cho riêng mô hình này, với bản đã lưu. Hãy lưu hoặc bỏ thay đổi trước.",
     notBuilt: "Chưa dựng được",
     buildOkHead: "Dựng thành công",
+    /** `ok`, and its tests found rows that break them: built and served, not a success (ADR 0129). */
+    buildTestsFailingHead: "Đã dựng, nhưng có kiểm thử không đạt",
     buildFailedHead: "Dựng thất bại",
     testsFailed_other: "{{count, number}} kiểm thử không đạt. Xem từng bước trong Nhật ký.",
     openInJournal: "Xem trong Nhật ký",

@@ -1517,6 +1517,7 @@ export const en = {
       "Build runs dbt for this model alone, from the saved version. Save or discard the draft first.",
     notBuilt: "Not built",
     buildOkHead: "Build succeeded",
+    buildTestsFailingHead: "Built, but some tests are failing",
     buildFailedHead: "Build failed",
     testsFailed_one: "{{count, number}} test failed. See each step in the Journal.",
     testsFailed_other: "{{count, number}} tests failed. See each step in the Journal.",

@@ -4,12 +4,14 @@
  * way the answer is asked is `useQuestionAnswer`'s.
  *
  * The chart is drawn from the result's own columns, with `raw` values a reader may read, and
- * every role gets the rows that drew it and a CSV of them (`ResultReading`).
+ * every role gets the rows that drew it and a CSV of them (`ResultReading`). Above them, the
+ * answer's qualifiers: each table it read whose tests fail or have no record (ADR 0129).
  */
 
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 
+import { AnswerQualifiers } from "@/components/AnswerQualifiers.tsx";
 import { ChartOptions } from "@/components/ChartOptions.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { DefinitionFacts } from "@/components/QuestionDefinition.tsx";
@@ -70,13 +72,16 @@ function ReadingPane({
     return reading.running ? <Skeleton rows={4} /> : null;
   }
   return (
-    <ResultReading
-      result={reading.result}
-      chart={draft.chart}
-      locale={locale}
-      name={draft.name === "" ? t("bi.untitled") : draft.name}
-      pane={pane}
-    />
+    <>
+      <AnswerQualifiers qualifiers={reading.result.qualifiers} />
+      <ResultReading
+        result={reading.result}
+        chart={draft.chart}
+        locale={locale}
+        name={draft.name === "" ? t("bi.untitled") : draft.name}
+        pane={pane}
+      />
+    </>
   );
 }
 
@@ -110,6 +115,7 @@ export function ResultLeaf({
       ) : (
         <>
           <ChartOptions columns={result.columns} chart={draft.chart} onChange={setQuestionChart} />
+          <AnswerQualifiers qualifiers={result.qualifiers} />
           <ResultReading
             result={result}
             chart={draft.chart}

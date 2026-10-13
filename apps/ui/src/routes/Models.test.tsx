@@ -33,7 +33,12 @@ const PIPELINE_COLUMNS = ["deal_id", "stage", "amount"];
  * One model as `models.list` answers it: how many columns its build found, never which, and
  * `null` for a count the server does not know.
  */
-function built(name: string, status: string | null, columnCount: number | null = null): unknown {
+function built(
+  name: string,
+  status: string | null,
+  columnCount: number | null = null,
+  failing: number | null = null,
+): unknown {
   return {
     name,
     updatedAt: WHEN,
@@ -41,12 +46,23 @@ function built(name: string, status: string | null, columnCount: number | null =
     sqlSha256: SHA256,
     testsSha256: SHA256,
     lastBuild: status === null ? null : { runId: "run-7", status, endedAt: WHEN, columnCount },
+    // `null` failing is no test record: unknown, never passing (ADR 0129).
+    lastTests:
+      failing === null
+        ? { state: "unknown", failing: null, warnings: null, runId: null, endedAt: null }
+        : {
+            state: failing > 0 ? "failing" : "passing",
+            failing,
+            warnings: 0,
+            runId: "run-7",
+            endedAt: WHEN,
+          },
   };
 }
 
 const MODELS = [
-  built("mart_pipeline", "success", PIPELINE_COLUMNS.length),
-  built("stg_deals", "success"),
+  built("mart_pipeline", "success", PIPELINE_COLUMNS.length, 2),
+  built("stg_deals", "success", null, 0),
   built("stg_files", "error"),
   built("stg_notes", null),
   built("stg_legacy", null),
@@ -119,6 +135,18 @@ function mount(url: string): ReturnType<typeof createMemoryRouter> {
                   endedAt: WHEN,
                   columnCount: PIPELINE_COLUMNS.length,
                   columns: PIPELINE_COLUMNS,
+                },
+                lastTests: {
+                  state: "failing",
+                  failing: 2,
+                  warnings: 0,
+                  runId: "run-7",
+                  endedAt: WHEN,
+                  failingTests: [
+                    { name: "not_null_mart_pipeline_amount", uniqueId: "t1", status: "fail", failures: 3 },
+                    { name: "unique_mart_pipeline_deal_id", uniqueId: "t2", status: "fail", failures: 1 },
+                  ],
+                  warningTests: [],
                 },
                 sql: "select * from {{ ref('stg_deals') }}",
                 tests: { columns: {} },
@@ -253,6 +281,21 @@ describe("a row's last build", () => {
     expect(rowOf("stg_deals")[3]).toBe(MISSING);
     // Never built: no run and no columns.
     expect(rowOf("stg_notes").slice(2, 4)).toEqual([MISSING, MISSING]);
+  });
+
+  it("says what the tests of that build found: a build with failing tests is not read as fine", async () => {
+    // Issue 456: mart_pipeline built successfully and two of its tests failed.
+    mount(`/tenants/${TENANT}/models`);
+    await screen.findByRole("table");
+    expect(rowOf("mart_pipeline").slice(1, 5)).toEqual([
+      "Dựng thành công",
+      "run-7",
+      "3",
+      "2 không đạt",
+    ]);
+    expect(rowOf("stg_deals")[4]).toBe("Đạt");
+    // No test record is not a pass.
+    expect(rowOf("stg_notes")[4]).toBe("Chưa có kết quả kiểm thử");
   });
 });
 

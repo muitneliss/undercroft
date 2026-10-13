@@ -84,18 +84,23 @@ function served(role: string): Record<string, Answer> {
       columns: [{ name: "month", type: "text" }],
       rows: [["2026-09"]],
       truncated: false,
+      qualifiers: [],
     }),
     "bi.dashboards.save": () => ({ id: DASHBOARD }),
     "bi.dashboards.list": () => [],
   };
 }
 
-function mount(url: string, role: string): ReturnType<typeof mountRoute> {
+function mount(
+  url: string,
+  role: string,
+  over: Record<string, Answer> = {},
+): ReturnType<typeof mountRoute> {
   return mountRoute({
     pattern: "/tenants/:tenantId/reports/dashboards/:id",
     url,
     element: <Dashboard tenantId={TENANT} />,
-    answers: served(role),
+    answers: { ...served(role), ...over },
   });
 }
 
@@ -166,6 +171,40 @@ describe("a tile's foot", () => {
     // The SQL question reads mart_ledger, and the foot does not claim to know it.
     expect(within(ledger).queryByText(/mart_ledger/u)).toBeNull();
     expect(within(ledger).getByRole("link", { name: "Xem số liệu →" })).toBeDefined();
+  });
+});
+
+describe("a tile read from a table whose tests fail (issue 456)", () => {
+  it("draws its rows and says so in words; a tile over passing tables says nothing", async () => {
+    mount(PATH, "viewer", {
+      "bi.questions.answer": (input: unknown) => ({
+        columns: [{ name: "month", type: "text" }],
+        rows: [["2026-09"]],
+        truncated: false,
+        qualifiers:
+          (input as { id?: string }).id === LEDGER
+            ? [
+                {
+                  table: "mart_ledger",
+                  state: "failing",
+                  failing: 2,
+                  failingTests: ["unique_mart_ledger_id", "not_null_mart_ledger_month"],
+                  runId: "run-9",
+                  endedAt: WHEN,
+                },
+              ]
+            : [],
+      }),
+    });
+    const ledger = await screen.findByRole("region", { name: "Sổ công nợ" });
+    expect(
+      await within(ledger).findByText(
+        "Kiểm thử không đạt trên bảng mart_ledger từ lần chạy run-9. Kiểm thử không đạt: unique_mart_ledger_id, not_null_mart_ledger_month.",
+      ),
+    ).toBeDefined();
+    expect(within(ledger).getByText("2026-09")).toBeDefined();
+    const revenue = screen.getByRole("region", { name: "Doanh thu" });
+    expect(within(revenue).queryByText(/Kiểm thử không đạt/u)).toBeNull();
   });
 });
 

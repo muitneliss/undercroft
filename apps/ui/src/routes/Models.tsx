@@ -54,6 +54,7 @@ import { isModelName } from "@/lib/modelName.ts";
 import { modelTemplate } from "@/lib/modelTemplate.ts";
 import { formatCount, MISSING } from "@/lib/money.ts";
 import { journalPath } from "@/lib/runs.ts";
+import { testsLabel, testsMark } from "@/lib/testState.ts";
 import { relativeTime } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -325,6 +326,7 @@ function ModelList({
               <th className="num" scope="col">
                 {t("models.colColumns")}
               </th>
+              <th scope="col">{t("models.colTests")}</th>
               <th scope="col">{t("models.colUpdated")}</th>
             </tr>
           </thead>
@@ -364,6 +366,14 @@ function ModelList({
                     ) : (
                       formatCount(columns, locale)
                     )}
+                  </td>
+                  <td>
+                    {/* What the build serving its rows tested, beside a status that alone would
+                        read a build with failing tests as a success (ADR 0129). */}
+                    <StatusMark
+                      mark={testsMark(model.lastTests.state)}
+                      label={testsLabel(t, locale, model.lastTests)}
+                    />
                   </td>
                   <td className="datum datum--quiet">{relativeTime(model.updatedAt, locale)}</td>
                 </tr>

@@ -45,7 +45,11 @@ export function BuildPanel({
       <span className="hinge__punch hinge__punch--a" aria-hidden="true" />
       <span className="hinge__punch hinge__punch--b" aria-hidden="true" />
       <span className="label">
-        {result.ok ? t("models.buildOkHead") : t("models.buildFailedHead")}
+        {result.verdict === "clean"
+          ? t("models.buildOkHead")
+          : result.verdict === "tests-failing"
+            ? t("models.buildTestsFailingHead")
+            : t("models.buildFailedHead")}
       </span>
       {result.error === null ? null : (
         <Errata heading={t("models.buildFailedHead")}>{result.error}</Errata>
@@ -53,6 +57,12 @@ export function BuildPanel({
       {result.testsFailed > 0 ? (
         <p className="note">{t("models.testsFailed", { count: result.testsFailed })}</p>
       ) : null}
+      {/* A parent read without being rebuilt that has no test record: not a pass (ADR 0129). */}
+      {result.parentTestsUnknown.length === 0 ? null : (
+        <p className="note">
+          {t("models.parentTestsUnknown", { models: result.parentTestsUnknown.join(", ") })}
+        </p>
+      )}
       {result.steps.length > 0 ? <StepsTable steps={result.steps} locale={locale} /> : null}
       {/* A count the server could not read is null and prints nothing, never a 0. */}
       {result.rowCounts.map((counted) =>
