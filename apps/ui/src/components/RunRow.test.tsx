@@ -1,7 +1,7 @@
 /**
  * What one line of the journal promises: a run in progress prints no figure, a finished
- * one prints its figures in the reader's language, and a count of failed tests is worded
- * in that language's grammar rather than in English's.
+ * one prints its figures in the reader's language, and a run whose verdict is tests failing
+ * says so beside its status, in that language's grammar rather than in English's.
  *
  * No mocks: the real row, the real i18next instance, the real catalogues, and the store
  * that owns the language.
@@ -56,18 +56,34 @@ describe("the figures", () => {
   });
 });
 
-describe("failed tests", () => {
-  it("English pluralises, Vietnamese does not", () => {
-    render(row({ kind: "transform", source: null, entities: [], testsFailed: 2 }));
+describe("a run whose tests fail", () => {
+  const build = { kind: "transform" as const, source: null, entities: [] };
+
+  it("reads as tests failing beside its status, pluralised in English and not in Vietnamese", () => {
+    // `ok` with failing tests is the `tests-failing` verdict (ADR 0129): its tables are served,
+    // and "succeeded" alone would read as clean.
+    render(row({ ...build, testsFailed: 2 }));
+    expect(screen.getByText("Thành công")).toBeDefined();
     expect(screen.getByText("2 kiểm thử không đạt")).toBeDefined();
     cleanup();
 
     useUiStore.setState({ locale: "en" });
-    render(row({ kind: "transform", source: null, entities: [], testsFailed: 2 }));
-    expect(screen.getByText("2 tests failed")).toBeDefined();
+    render(row({ ...build, testsFailed: 2 }));
+    expect(screen.getByText("2 tests failing")).toBeDefined();
     cleanup();
 
-    render(row({ kind: "transform", source: null, entities: [], testsFailed: 1 }));
-    expect(screen.getByText("1 test failed")).toBeDefined();
+    render(row({ ...build, testsFailed: 1 }));
+    expect(screen.getByText("1 test failing")).toBeDefined();
+  });
+
+  it("says nothing more when the verdict is the status: clean, or the run itself failed", () => {
+    render(row({ ...build, testsFailed: 0 }));
+    expect(screen.queryByText(/kiểm thử không đạt/u)).toBeNull();
+    cleanup();
+
+    // A failed run's own word already says it; a count beside it would read as the cause.
+    render(row({ ...build, status: "failed", testsFailed: 2 }));
+    expect(screen.getByText("Thất bại")).toBeDefined();
+    expect(screen.queryByText(/kiểm thử không đạt/u)).toBeNull();
   });
 });

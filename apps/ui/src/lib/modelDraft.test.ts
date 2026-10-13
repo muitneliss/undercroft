@@ -7,6 +7,7 @@
 import { describe, expect, test as it } from "bun:test";
 
 import type { ModelDetail } from "@/api/types.ts";
+import { NO_TEST_RECORD } from "@/test/fixtures.ts";
 import { draftFrom, isDirty, testsFor } from "./modelDraft.ts";
 
 const MODEL: ModelDetail = {
@@ -18,6 +19,7 @@ const MODEL: ModelDetail = {
   sqlSha256: "0".repeat(64),
   testsSha256: "0".repeat(64),
   lastBuild: null,
+  lastTests: NO_TEST_RECORD,
 };
 
 describe("modelDraft", () => {

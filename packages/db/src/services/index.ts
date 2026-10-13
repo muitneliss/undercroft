@@ -19,6 +19,7 @@ export {
   SOURCES_YML,
   testRelationPrefix,
 } from "./dbtProject.ts";
+export { testedModels } from "./dbtManifest.ts";
 export { grantExpiryFor } from "./grantExpiry.ts";
 export {
   callersOf,

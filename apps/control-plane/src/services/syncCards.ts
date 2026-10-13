@@ -89,20 +89,29 @@ export function recoveredRunCard(input: {
   runId: string;
   endedAt: string;
   failingSince: string;
+  testsFailed: number | null;
   publicUrl: string;
   account: string;
 }): LarkNotice {
+  // A build that runs again with failing tests serves rows its tests refused: ok, and not
+  // "working again" (ADR 0129). The group reads that apart from a clean recovery.
+  const failing = input.testsFailed !== null && input.testsFailed > 0 ? input.testsFailed : null;
+  const facts: [label: string, value: string][] = [
+    ...runFacts(input),
+    [CARD("syncCard.failingSince"), formatWhen(input.failingSince, DEFAULT_LOCALE)],
+    [CARD("email.when"), formatWhen(input.endedAt, DEFAULT_LOCALE)],
+  ];
+  if (failing !== null) {
+    facts.push([CARD("syncCard.testsFailing"), String(failing)]);
+  }
   return {
-    title: runTitle("✅", input, {
+    title: runTitle(failing === null ? "✅" : "⚠️", input, {
       sync: "syncCard.recovered",
-      models: "syncCard.modelsRecovered",
+      models:
+        failing === null ? "syncCard.modelsRecovered" : "syncCard.modelsRecoveredTestsFailing",
     }),
-    tone: "green",
-    facts: [
-      ...runFacts(input),
-      [CARD("syncCard.failingSince"), formatWhen(input.failingSince, DEFAULT_LOCALE)],
-      [CARD("email.when"), formatWhen(input.endedAt, DEFAULT_LOCALE)],
-    ],
+    tone: failing === null ? "green" : "orange",
+    facts,
     body: "",
     links: journalLink(input.publicUrl, input),
   };

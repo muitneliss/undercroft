@@ -128,6 +128,37 @@ afterEach(async () => {
 });
 
 describe("runs.list", () => {
+  it("derives each run's verdict: a build whose tests fail is ok and tests-failing, never clean", async () => {
+    // ADR 0129: the ledger keeps its three statuses (ADR 0051); the verdict is read off them.
+    for (const [id, status, testsFailed] of [
+      ["r-build-clean", "ok", 0],
+      ["r-build-tests", "ok", 2],
+      ["r-build-failed", "failed", 0],
+    ] as const) {
+      await openRun(db, {
+        id,
+        tenantId: "CASE-0042",
+        source: "*",
+        verb: "transform",
+        trigger: "build",
+      });
+      await closeRun(db, id, { status, testsFailed });
+    }
+    const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
+    const { runs } = caller(viewer, "v@example.test");
+
+    const { items } = await runs.list({ tenantId: "CASE-0042", limit: 10 });
+    expect(Object.fromEntries(items.map((r) => [r.id, [r.status, r.verdict]]))).toEqual({
+      "r-build-clean": ["ok", "clean"],
+      "r-build-tests": ["ok", "tests-failing"],
+      "r-build-failed": ["failed", "failed"],
+      "r-ok": ["ok", "clean"],
+      "r-running": ["running", "running"],
+    });
+    const one = await runs.get({ tenantId: "CASE-0042", runId: "r-build-tests" });
+    expect([one.status, one.testsFailed, one.verdict]).toEqual(["ok", 2, "tests-failing"]);
+  });
+
   it("a viewer reads the tenant's ledger, newest first, with entities and counts", async () => {
     const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
     const page = await caller(viewer, "v@example.test").runs.list({ tenantId: "CASE-0042" });

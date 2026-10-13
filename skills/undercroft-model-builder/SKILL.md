@@ -75,10 +75,14 @@ These hold for the whole workflow. None of them bends because the person is in a
     one, for example by running the model's SQL through `lake.query` instead. A `CONFLICT`
     is reported, not looped: a deactivated customer refuses every operation until an admin
     reactivates it, and that is not yours to do.
-12. **Success is the platform's answer.** The model exists when `models.build` (or, after
-    `wait: false`, `runs.get` on its run) says `ok` with its tests passed; a question exists when
-    `bi.questions.save` returned its id. Until then, say what happened, not what you hoped. A
-    row count of `null` is "not counted", never zero rows.
+12. **Success is the platform's answer.** A build succeeded when `models.build` (or, after
+    `wait: false`, `runs.get` on its run) says `verdict: "clean"`, and the model is trustworthy
+    when `models.get` says `lastTests.state` is `passing`. `ok` with `verdict: "tests-failing"` is
+    a table built and served with rows its tests refused, not a success; `lastTests.state`
+    `unknown` is no test record, never a pass. A question exists when `bi.questions.save`
+    returned its id, and an answer whose `qualifiers` name a table is a figure to qualify when
+    you show it. Until then, say what happened, not what you hoped. A row count of `null` is
+    "not counted", never zero rows.
 13. **Ask one decision at a time, through the host's question tool when it has one** --
     Claude Code's `AskUserQuestion`, for example -- and otherwise as numbered options in
     text. The evidence, the plan or the SQL goes in the message; the tool carries the
@@ -263,10 +267,12 @@ A waited answer leads with `stepSummary` (every step counted by kind and status)
 the steps that did not pass. Read those; ask for `steps: "all"` only when the person wants every
 step, and page further with `runs.get` on the same `runId` and its `stepCursor`.
 
-- `ok` true and `testsFailed` 0: the table is built. Say how many rows each model has from
-  `rowCounts` and, for one model, show the first rows from `preview`. A count of `null` was
-  not read: say so, never "0 rows".
-- `testsFailed` above 0: the table is built, and a test found rows that break it. For each
+- `verdict: "clean"`: the table is built and no test of the run failed. Say how many rows each
+  model has from `rowCounts` and, for one model, show the first rows from `preview`. A count of
+  `null` was not read: say so, never "0 rows". If `parentTestsUnknown` names a parent, say its
+  rows went in untested: it has no test record, which is not a pass.
+- `verdict: "tests-failing"` (`ok` true, `testsFailed` above 0): the table is built, and Reports
+  is serving it, but a test found rows that break it. Do not call it a success. For each
   failing step, read the rows with `dq.failures`, using the build's `runId` and the step's
   id. Show the person the count and a few rows, and ask whether the model or the test is
   wrong. These rows are the customer's data: show them to the person and put them nowhere
@@ -275,6 +281,11 @@ step, and page further with `runs.get` on the same `runId` and its `stepCursor`.
   M3. A save of the fix is again a save the person agrees to.
 - `NOT_FOUND`: a name is not a saved model; the message and `missing` in the details name it.
   Nothing was built. Fix the name, or save the model first.
+- `PRECONDITION_FAILED` with `reason: "PARENT_TESTS_FAILING"`: a parent this build reads without
+  rebuilding failed its latest tests, and building now would copy those rows. The details name
+  the `parent`, its failing `tests` and the `runId`. Nothing was built. Offer the two ways the
+  message gives: fix and rebuild the parent, or build with its parents as `+name`, which rebuilds
+  and tests them first in the same run.
 - `CONFLICT`: a build is already running for this customer, often your own earlier one. The
   details name its `runId` and `startedAt`. Tell the person, and with their yes wait on that run
   with `runs.get` and `waitSeconds`; build again only when it has ended and they ask.

@@ -80,6 +80,31 @@ describe("runQuery", () => {
     expect(result.truncated).toBe(false);
   });
 
+  it("names the tables its plan read, as the BI login: through a CTE and a join, never a name in a string", async () => {
+    // Issue 456: the control plane qualifies an answer by what it read, so this must be exact.
+    await db.asRole("undercroft_dbt_case_1", (tx) =>
+      tx.exec(
+        "CREATE TABLE analytics_case_1.dim_owner AS SELECT 1 AS deal_id, 'Ada'::text AS owner",
+      ),
+    );
+    const joined = await runQuery(deps, {
+      tenantId: TENANT,
+      sql: `with d as (select deal_id from stg_deals where deal_id > 0)
+            select d.deal_id, o.owner, 'fct_pipeline' as named_not_read
+            from d join dim_owner o using (deal_id)`,
+      limit: 10,
+    });
+    expect(joined.rows).toEqual([[1, "Ada", "fct_pipeline"]]);
+    expect(joined.relations).toEqual(["dim_owner", "stg_deals"]);
+
+    const nothing = await runQuery(deps, {
+      tenantId: TENANT,
+      sql: "select 'stg_deals' as name",
+      limit: 1,
+    });
+    expect(nothing.relations).toEqual([]);
+  });
+
   it("cuts the page at the limit and says so", async () => {
     const result = await runQuery(deps, {
       tenantId: TENANT,

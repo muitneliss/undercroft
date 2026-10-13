@@ -111,6 +111,10 @@ export const vi = {
     recovered: "Đồng bộ {{source}} cho {{tenantId}} đã chạy lại bình thường",
     /** Its own whole sentence, for the reason `runFailed.modelsSubject` is one. */
     modelsRecovered: "Dựng mô hình cho {{tenantId}} đã chạy lại bình thường",
+    /** The build ran again but its tests fail: its tables are served with suspect rows. */
+    modelsRecoveredTestsFailing:
+      "Dựng mô hình cho {{tenantId}} đã chạy lại, nhưng có kiểm thử không đạt",
+    testsFailing: "Kiểm thử không đạt",
   },
 
   grantExpiring: {
@@ -196,6 +200,12 @@ export const vi = {
       "Khách hàng này không có mô hình nào tên {{names}}. Hãy kiểm tra lại tên bằng danh sách mô hình; chưa có gì được dựng.",
     buildNotStarted:
       "Không dựng được mô hình. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
+    /**
+     * A build refused because a parent it would read without rebuilding has failing tests
+     * (#457, ADR 0129). Names the parent, its failing tests and the run, and the two ways on.
+     */
+    buildParentTestsFailing:
+      "Chưa dựng {{model}}: lần kiểm thử mới nhất của mô hình cha {{parent}} không đạt ({{tests}}, lần chạy {{runId}}), nên dựng {{model}} lúc này sẽ chép các dòng không đạt đó sang. Hãy sửa và dựng lại {{parent}}, hoặc dựng kèm các mô hình cha bằng +{{model}}.",
     /**
      * The row is kept whenever the tables it built were not dropped (ADR 0077), so the
      * sentence says the model is still there: "not deleted" alone would leave the reader

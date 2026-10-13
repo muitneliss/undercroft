@@ -131,6 +131,7 @@
 - [ADR 0125 A Read Names Its Target: Lineage, Schema and Scope Reads Narrow, and Never Guess](sources/adr-0125-a-read-names-its-target-lineage-schema-and-scope-reads-narrow-and-never-guess.md)
 - [ADR 0126 A Build Is Several Models in One Run, and Need Not Be Waited For](sources/adr-0126-a-build-is-several-models-in-one-run-and-need-not-be-waited-for.md)
 - [ADR 0127 Lists Answer Summaries, the Server Hashes What It Stores, and an Identical Save Writes Nothing](sources/adr-0127-lists-answer-summaries-the-server-hashes-what-it-stores-and-an-identical-save-writes-nothing.md)
+- [ADR 0129 A Failing Test Is Visible Wherever the Figure Is Read](sources/adr-0129-a-failing-test-is-visible-wherever-the-figure-is-read.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

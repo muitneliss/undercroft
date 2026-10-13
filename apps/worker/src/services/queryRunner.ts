@@ -17,11 +17,11 @@
  * parsers in `@undercroft/db`, all the way through.
  */
 
-import type { SchemaResponse, TableResult } from "@undercroft/contracts";
+import type { QueryAnswer, SchemaResponse, TableResult } from "@undercroft/contracts";
 import { UndercroftError } from "@undercroft/core";
 import { tenantRolesFor } from "@undercroft/db/repos";
 
-import { runFramed, schemaColumns, typeNames } from "../repos/queries.ts";
+import { runFramed, runFramedWithRelations, schemaColumns, typeNames } from "../repos/queries.ts";
 import { cellOf } from "./preview.ts";
 import { TenantNotProvisioned, type TenantSessions } from "./tenantSession.ts";
 
@@ -49,19 +49,24 @@ export function queryFailedBy(error: unknown): QueryFailed {
   return new QueryFailed(messageOf(error), { cause: error });
 }
 
-/** Run one SELECT as the tenant's BI login and answer with up to `limit` rows. */
+/**
+ * Run one SELECT as the tenant's BI login and answer with up to `limit` rows, and with the
+ * tables of its analytics schema the statement read, from Postgres's plan of it
+ * (`runFramedWithRelations`, ADR 0129) -- which the control plane, which may read the run
+ * ledger where this login may not, turns into a qualifier for each table whose tests fail.
+ */
 export async function runQuery(
   deps: QueryDeps,
   input: { tenantId: string; sql: string; limit: number },
-): Promise<TableResult> {
+): Promise<QueryAnswer> {
   const roles = await tenantRolesFor(deps.exec, input.tenantId);
   if (roles === null) {
     throw new TenantNotProvisioned(input.tenantId);
   }
   return deps.sessions.as({ tenantId: input.tenantId, kind: "bi" }, async (exec) => {
-    let framed: Awaited<ReturnType<typeof runFramed>>;
+    let framed: Awaited<ReturnType<typeof runFramedWithRelations>>;
     try {
-      framed = await runFramed(exec, {
+      framed = await runFramedWithRelations(exec, {
         schema: roles.analyticsSchema,
         sql: input.sql,
         limit: input.limit,
@@ -81,7 +86,12 @@ export async function runQuery(
     const rows = framed.rows
       .slice(0, input.limit)
       .map((row) => columns.map((column) => cellOf(row[column.name])));
-    return { columns, rows, truncated: framed.rows.length > input.limit };
+    return {
+      columns,
+      rows,
+      truncated: framed.rows.length > input.limit,
+      relations: framed.relations,
+    };
   });
 }
 

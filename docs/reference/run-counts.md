@@ -115,6 +115,44 @@ or `all`; `stepStatus`, `stepKind` and `stepName` narrow it (a filter given with
 reads all of them); `stepLimit` (at most 2,000) and `stepCursor` page it. The Journal asks for
 every step.
 
+## A run's verdict, and a model's tests
+
+A run's status is `running`, `ok` or `failed`. A build whose tests find rows that break them is
+`ok`, because its tables were written and Reports serves them. So every run also carries a
+`verdict`, read off its status and its failing-test count and never stored:
+
+| `verdict`       | When                                                      |
+| --------------- | --------------------------------------------------------- |
+| `running`       | the run has not finished                                  |
+| `failed`        | the run failed                                            |
+| `tests-failing` | it finished `ok`, and at least one test failed or errored |
+| `clean`         | it finished `ok`, and no test failed                      |
+
+A build has succeeded when its verdict is `clean`. The Journal shows "tests failing" beside such
+a run, and `models build` answers with the same `verdict`. ADR 0129.
+
+Each model on `models list` and `models get` carries `lastTests`: what the tests of the build
+serving its rows found. That build is the newest one in which the model built successfully,
+since a later failed build leaves its table in place. `lastTests.state` is `failing` when any
+of those tests failed or errored, `passing` when at least one passed or warned and none failed,
+and `unknown` otherwise: the model never built, has no tests, or its tests were not attributed
+to it. `unknown` is never a pass. A `warn` does not fail a model but is counted in `warnings`.
+A test belongs to the model that dbt's own manifest attaches it to, never to a guess from the
+test's name. Builds recorded before this existed attribute no tests, so their models read
+`unknown` until their next build.
+
+A Reports answer (`bi answer`, `bi run-question`, `bi questions answer`) carries `qualifiers`,
+one for each table the query read whose `lastTests` are `failing` or `unknown`, with the run. The
+tables read are the ones Postgres's plan of the query scanned, read as the reports login, never
+the names in its SQL. The rows are always served. `qualifiers` is `null` when which tables were
+read is not known.
+
+Building one model without its parents (`name` or `name+`) is refused when a parent it reads
+without rebuilding has failing tests, because the build would copy those rows. The refusal names
+the parent, its failing tests and the run. Rebuild the parent, or build `+name`, which rebuilds
+and tests the parents first in the same run. A parent with no test record does not refuse the
+build and is named in `parentTestsUnknown`.
+
 ## Where the numbers come from
 
 The worker decides each record's column when it writes the record to the raw lake, in

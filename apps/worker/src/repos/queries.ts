@@ -21,6 +21,12 @@ export interface Framed {
   readonly fields: readonly QueryField[];
 }
 
+/** A framed answer, with the relations of `relationsIn` its plan read (`readRelations`). */
+export interface FramedWithRelations extends Framed {
+  /** Table names, deduplicated and sorted; `null` when the plan could not be read. */
+  readonly relations: string[] | null;
+}
+
 const TRAILING_SEMICOLONS = /;+\s*$/u;
 
 /** A trailing semicolon, and whitespace around the whole. What an editor leaves behind. */
@@ -39,19 +45,90 @@ export function runFramed(
   exec: SqlExecutor,
   frame: { schema: string; sql: string; limit: number; offset?: number; timeoutMs: number },
 ): Promise<Framed> {
+  return inReadOnlyTransaction(exec, frame, () => selectFramed(exec, frame));
+}
+
+/** The author's SELECT under our LIMIT and OFFSET, as one statement. */
+function framedSql(frame: { sql: string; limit: number; offset?: number }): string {
+  // Both numbers are integers this module validated, spliced rather than bound so the
+  // author's own `$1`, if any, is not silently satisfied by one of them.
+  return `SELECT * FROM (\n${trimSql(frame.sql)}\n) AS _q LIMIT ${String(frame.limit + 1)} OFFSET ${String(Math.trunc(frame.offset ?? 0))}`;
+}
+
+async function selectFramed(
+  exec: SqlExecutor,
+  frame: { sql: string; limit: number; offset?: number },
+): Promise<Framed> {
+  // The empty parameter list keeps the extended protocol, which refuses a second statement.
+  const result = await exec.query<Record<string, unknown>>(framedSql(frame), []);
+  return { rows: result.rows, fields: result.fields ?? [] };
+}
+
+/**
+ * `runFramed`, and which tables of `relationsIn` the statement read, from Postgres's own plan
+ * of it (issue 456, ADR 0129).
+ *
+ * WHY THE PLAN AND NOT THE TEXT. The text names what the author wrote -- a CTE, an alias, a
+ * table in a string, a name `search_path` resolves -- and reading tables out of it is a guess.
+ * `EXPLAIN (VERBOSE, FORMAT JSON)` of the very statement that ran, in the same transaction and
+ * snapshot, as the same login, is the planner's account of every relation it scans: each scan
+ * node carries `Relation Name` and, under VERBOSE, `Schema`. A relation the planner proved it
+ * need not read (`WHERE false`) is not listed, and none of its rows were served either.
+ *
+ * Planning only -- EXPLAIN without ANALYZE executes nothing -- and after the rows, so a query
+ * that failed is refused exactly as before. A plan that cannot be read gives `null`, which the
+ * control plane words as "not known" rather than as "read nothing".
+ */
+export function runFramedWithRelations(
+  exec: SqlExecutor,
+  frame: { schema: string; sql: string; limit: number; offset?: number; timeoutMs: number },
+): Promise<FramedWithRelations> {
   return inReadOnlyTransaction(exec, frame, async () => {
-    // The limit is an integer we validated, spliced rather than bound so that the author's
-    // own `$1`, if any, is not silently satisfied by it. The empty parameter list keeps the
-    // extended protocol, which refuses a second statement.
-    const result = await exec.query<Record<string, unknown>>(
-      // Both numbers are integers this module validated, spliced rather than bound so the
-      // author's own `$1`, if any, is not silently satisfied by one of them. The empty
-      // parameter list keeps the extended protocol, which refuses a second statement.
-      `SELECT * FROM (\n${trimSql(frame.sql)}\n) AS _q LIMIT ${String(frame.limit + 1)} OFFSET ${String(Math.trunc(frame.offset ?? 0))}`,
-      [],
-    );
-    return { rows: result.rows, fields: result.fields ?? [] };
+    const framed = await selectFramed(exec, frame);
+    return { ...framed, relations: await planRelations(exec, framedSql(frame), frame.schema) };
   });
+}
+
+/** Every `Relation Name` in `schema` among a JSON plan's nodes, walked through `Plans`. */
+export function relationsInPlan(plan: unknown, schema: string): string[] {
+  const found = new Set<string>();
+  function visit(node: unknown): void {
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    if (typeof node !== "object" || node === null) {
+      return;
+    }
+    const name: unknown = Reflect.get(node, "Relation Name");
+    if (typeof name === "string" && Reflect.get(node, "Schema") === schema) {
+      found.add(name);
+    }
+    visit(Reflect.get(node, "Plan"));
+    visit(Reflect.get(node, "Plans"));
+  }
+  visit(plan);
+  return [...found].sort();
+}
+
+async function planRelations(
+  exec: SqlExecutor,
+  sql: string,
+  schema: string,
+): Promise<string[] | null> {
+  const { rows } = await exec.query<{ "QUERY PLAN": unknown }>(
+    `EXPLAIN (VERBOSE, FORMAT JSON) ${sql}`,
+    [],
+  );
+  const raw = rows[0]?.["QUERY PLAN"];
+  if (raw === undefined) {
+    return null;
+  }
+  try {
+    return relationsInPlan(typeof raw === "string" ? JSON.parse(raw) : raw, schema);
+  } catch {
+    return null;
+  }
 }
 
 /** The one cursor an export holds. Transaction-scoped, so the frame's ROLLBACK closes it. */

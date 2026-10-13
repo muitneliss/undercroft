@@ -17,6 +17,7 @@
 
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@undercroft/control-plane/router";
+import { runVerdict } from "@undercroft/contracts/runs";
 
 import type { Answers } from "@/test/visual.tsx";
 
@@ -156,7 +157,7 @@ export const CONNECTIONS: Connection[] = [
 
 /** An ingest run of the ledger, ended forty seconds after it started. */
 function ingest(id: string, source: string, at: string, over: Partial<Run> = {}): Run {
-  return {
+  const line: Omit<Run, "verdict"> & Partial<Pick<Run, "verdict">> = {
     id,
     kind: "ingest",
     source,
@@ -173,6 +174,7 @@ function ingest(id: string, source: string, at: string, over: Partial<Run> = {})
     pendingBefore: null,
     ...over,
   };
+  return { ...line, verdict: over.verdict ?? runVerdict(line.status, line.testsFailed) };
 }
 
 const XERO_READ = ingest(XERO_RUN, "xero", "2026-09-29T08:39:00Z", {

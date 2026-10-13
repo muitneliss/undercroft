@@ -18,6 +18,7 @@ import {
   recoverStaleChunk,
 } from "@/lib/staleChunk.ts";
 import { holdsUnsavedWork, useUiStore } from "@/store.ts";
+import { NO_TEST_RECORD } from "@/test/fixtures.ts";
 
 const RELOADED_AT = "undercroft.staleChunkReloadedAt";
 
@@ -160,6 +161,7 @@ describe("holdsUnsavedWork", () => {
         sqlSha256: "0".repeat(64),
         testsSha256: "0".repeat(64),
         lastBuild: null,
+        lastTests: NO_TEST_RECORD,
       }),
     });
 
@@ -176,6 +178,7 @@ describe("holdsUnsavedWork", () => {
       sqlSha256: "0".repeat(64),
       testsSha256: "0".repeat(64),
       lastBuild: null,
+      lastTests: NO_TEST_RECORD,
     });
     useUiStore.setState({ modelDraft: { ...seeded, sql: "select 2 as deal_id" } });
 

@@ -80,37 +80,97 @@ const LAST_BUILD_MINUTE = 50;
 /** A stand-in for a content hash: the visual tier compares pictures, never hashes. */
 const FIXTURE_SHA256 = "0".repeat(64);
 
+/** One test of a fixture build that did not simply pass, as `models.get` lists it. */
+function testStep(
+  name: string,
+  status: "fail" | "warn",
+  failures: number,
+): ModelDetail["lastTests"]["failingTests"][number] {
+  return { name, uniqueId: `test.demo.${name}`, status, failures };
+}
+
+/**
+ * What each built model's tests found: one model served with failing tests, one passing with a
+ * warning, the rest passing. A model whose last build did not succeed has no test record, and
+ * says so -- `unknown`, never passing (ADR 0129).
+ */
+const TESTS_FOUND: Readonly<
+  Record<string, Pick<ModelDetail["lastTests"], "failingTests" | "warningTests">>
+> = {
+  ar_open_items: {
+    failingTests: [
+      testStep("not_null_ar_open_items_due", "fail", 3),
+      testStep("unique_ar_open_items_id", "fail", 1),
+    ],
+    warningTests: [],
+  },
+  revenue_monthly: {
+    failingTests: [],
+    warningTests: [testStep("not_null_revenue_monthly_segment", "warn", 2)],
+  },
+};
+
+function lastTestsOf(
+  name: string,
+  build: { readonly runId: string; readonly status: string; readonly endedAt: string } | null,
+): ModelDetail["lastTests"] {
+  if (build === null || build.status !== "success") {
+    return {
+      state: "unknown",
+      failing: null,
+      warnings: null,
+      runId: null,
+      endedAt: null,
+      failingTests: [],
+      warningTests: [],
+    };
+  }
+  const found = TESTS_FOUND[name] ?? { failingTests: [], warningTests: [] };
+  return {
+    state: found.failingTests.length > 0 ? "failing" : "passing",
+    failing: found.failingTests.length,
+    warnings: found.warningTests.length,
+    runId: build.runId,
+    endedAt: build.endedAt,
+    ...found,
+  };
+}
+
 /** Each model as `models.get` answers it, but for its SQL and tests. */
 const IN_FULL: readonly Omit<ModelDetail, "sql" | "tests">[] = MODELS.map(
   ([name, status], index) => {
     const columns = columnNames(FIRST_COLUMNS + index);
+    const lastBuild =
+      status === null
+        ? null
+        : {
+            runId: `run-mg4k${String(FIRST_RUN + index).padStart(4, "0")}-5e1f0a42`,
+            status,
+            endedAt: `2026-09-29T08:${String(LAST_BUILD_MINUTE - index).padStart(2, "0")}:00Z`,
+            columnCount: columns.length,
+            columns,
+          };
     return {
       name,
       updatedAt: `2026-09-${String(LAST_UPDATED_DAY - (index % UPDATE_SPREAD))}T08:00:00Z`,
       updatedBy: AUTHOR,
       sqlSha256: FIXTURE_SHA256,
       testsSha256: FIXTURE_SHA256,
-      lastBuild:
-        status === null
-          ? null
-          : {
-              runId: `run-mg4k${String(FIRST_RUN + index).padStart(4, "0")}-5e1f0a42`,
-              status,
-              endedAt: `2026-09-29T08:${String(LAST_BUILD_MINUTE - index).padStart(2, "0")}:00Z`,
-              columnCount: columns.length,
-              columns,
-            },
+      lastBuild,
+      lastTests: lastTestsOf(name, lastBuild),
     };
   },
 );
 
 /** The list as `models.list` answers it: each build's column count, and not its columns. */
-export const MODEL_LIST: readonly ModelItem[] = IN_FULL.map(({ lastBuild, ...model }) => {
+export const MODEL_LIST: readonly ModelItem[] = IN_FULL.map(({ lastBuild, lastTests, ...model }) => {
+  // The list carries each model's test state and counts, and not the tests themselves.
+  const { failingTests: _failing, warningTests: _warned, ...testSummary } = lastTests;
   if (lastBuild === null) {
-    return { ...model, lastBuild };
+    return { ...model, lastBuild, lastTests: testSummary };
   }
   const { columns: _listedOnRequest, ...summary } = lastBuild;
-  return { ...model, lastBuild: summary };
+  return { ...model, lastBuild: summary, lastTests: testSummary };
 });
 
 function modelDetail(name: string): ModelDetail | undefined {

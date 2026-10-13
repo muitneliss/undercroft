@@ -56,7 +56,7 @@ export const biRouter = router({
           message: messages(ctx.locale)("error.workerUnavailable"),
         });
       }
-      const outcome = await bi.answer(ctx.worker, {
+      const outcome = await bi.answer(ctx.exec, ctx.worker, {
         tenantId: ctx.tenantId,
         definition: input.definition,
         params: input.params,
