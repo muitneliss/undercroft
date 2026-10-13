@@ -5,7 +5,7 @@ date: 2026-10-13
 tags: []
 source: docs/runbook/cli.md
 source_path: docs/runbook/cli.md
-source_hash: 606d6aae9b401532088af2d685231ab7385d10de155b65bfa47755598b7538fd
+source_hash: c25bd3df1cfaedddabd08d54cb916f0b71e48128973d17cd08857bc223025a52
 ingested: 2026-10-13
 ---
 

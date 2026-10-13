@@ -399,3 +399,4 @@
 ## [2026-10-13] ingest | Runbook: Connecting an agent over MCP
 ## [2026-10-13] ingest | Runbook: The undercroft CLI
 ## [2026-10-13] ingest | Architecture
+## [2026-10-13] ingest | Runbook: The undercroft CLI

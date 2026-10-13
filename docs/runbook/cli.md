@@ -196,20 +196,20 @@ the token itself.
 
 ## When it goes wrong
 
-| Symptom                                                    | Cause                                                                                                                                     |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `CONFIG_REQUIRED`                                          | No `--profile`, `--url` or default profile, a profile that does not exist, or an unreadable config file. Run `config set-profile`.        |
-| `AUTHENTICATION_REQUIRED` right after signing in           | A different origin: `localhost` and `127.0.0.1` are two. Check `config show`.                                                             |
-| `WRITES_DISABLED`                                          | The profile does not allow writes, or you used `--url`. A person turns it on at a terminal.                                               |
-| `PERMISSION_DENIED` from `auth login` on a desktop install | The profile says `127.0.0.1` and the install is at `localhost`, or the other way round. The message names the address to use.             |
-| `INVALID_ARGUMENT` from `auth login --local`               | The URL is not on this machine. Signing in without a code works only on loopback; use `--email`.                                          |
-| `auth login` asks for an email on a desktop install        | The server offers the emailed code as well, or is too old to say what it offers. Pass `--local`.                                          |
-| `CONFLICT` with `TENANT_DEACTIVATED` in its details        | An admin deactivated the customer. Every command on it is refused until an admin reactivates it, on the web or with `tenants reactivate`. |
-| `AUTHENTICATION_REQUIRED` naming a variable that is unset  | Signed in with `--token-env`, and this process was not given the variable. Set it for the job.                                            |
-| `AUTHENTICATION_REQUIRED` saying the token was refused     | The token was revoked, expired, or its person lost access. Mint a new one on the Account page and put it in the same variable.            |
-| `PERMISSION_DENIED` with `needs: "write"` in its details   | The token holds the `read` grant. Mint a `write` token if this job is meant to change anything.                                           |
-| `INVALID_ARGUMENT` from `auth login --token-env`           | The value is not a variable's name, most likely the token itself. Pass the name of the variable that holds it.                            |
-| `NETWORK_ERROR` against a URL that is up                   | Nothing there answers `/trpc` as tRPC. Use the control plane's origin, or the Vite dev server that proxies to it.                         |
+| Symptom                                                           | Cause                                                                                                                                                                 |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CONFIG_REQUIRED`                                                 | No `--profile`, `--url` or default profile, a profile that does not exist, or an unreadable config file. Run `config set-profile`.                                    |
+| `AUTHENTICATION_REQUIRED` right after signing in                  | A different origin: `localhost` and `127.0.0.1` are two. Check `config show`.                                                                                         |
+| `WRITES_DISABLED`                                                 | The profile does not allow writes, or you used `--url`. A person turns it on at a terminal.                                                                           |
+| `PERMISSION_DENIED` from `auth login` on a desktop install        | The profile says `127.0.0.1` and the install is at `localhost`, or the other way round. The message names the address to use.                                         |
+| `INVALID_ARGUMENT` from `auth login --local`                      | The URL is not on this machine. Signing in without a code works only on loopback; use `--email`.                                                                      |
+| `auth login` asks for an email on a desktop install               | The server offers the emailed code as well, or is too old to say what it offers. Pass `--local`.                                                                      |
+| `CONFLICT` with `TENANT_DEACTIVATED` in its details               | An admin deactivated the customer. Every command on it is refused until an admin reactivates it, on the web or with `tenants reactivate`.                             |
+| `AUTHENTICATION_REQUIRED` naming a variable that is unset         | Signed in with `--token-env`, and this process was not given the variable. Set it for the job.                                                                        |
+| `AUTHENTICATION_REQUIRED` saying the token was refused            | The token was revoked, expired, or its person lost access. Mint a new one on the Account page and put it in the same variable.                                        |
+| `PERMISSION_DENIED` with `needs: "write"` in its details          | The token holds the `read` grant. Mint a `write` token if this job is meant to change anything.                                                                       |
+| `INVALID_ARGUMENT` from `auth login --token-env`                  | The value is not a variable's name, most likely the token itself. Pass the name of the variable that holds it.                                                        |
+| `NETWORK_ERROR` against a URL that is up                          | Nothing there answers `/trpc` as tRPC. Use the control plane's origin, or the Vite dev server that proxies to it.                                                     |
 | `npm install` from a server fails with `404` or `TAR_BAD_ARCHIVE` | The server serves no CLI: it was started from a checkout, or its release is older than the first to serve one. Install that release from GitHub, as under Running it. |
-| No colour in human mode                                    | `--no-color`, or `NO_COLOR` set in the environment.                                                                                       |
-| `npm install -g` fails with `EACCES`                       | Node is installed system-wide. Use a Node you own (nvm, fnm, Homebrew) rather than `sudo`.                                                |
+| No colour in human mode                                           | `--no-color`, or `NO_COLOR` set in the environment.                                                                                                                   |
+| `npm install -g` fails with `EACCES`                              | Node is installed system-wide. Use a Node you own (nvm, fnm, Homebrew) rather than `sudo`.                                                                            |
