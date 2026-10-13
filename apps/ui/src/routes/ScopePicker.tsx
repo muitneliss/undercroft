@@ -78,7 +78,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
-import type { Connection, Source } from "@/api/types.ts";
+import type { ConnectionWithConfig, Source } from "@/api/types.ts";
 import { DriveChoice } from "@/components/DriveChoice.tsx";
 import { Errata, type ServerError } from "@/components/Errata.tsx";
 import { FileTypeChoice } from "@/components/FileTypeChoice.tsx";
@@ -90,6 +90,7 @@ import { XeroChoice } from "@/components/XeroChoice.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import type { ListedItem } from "@/lib/hubspotProperties.ts";
 import { isBrowsedLabel } from "@/lib/labelIndex.ts";
+import { configListed } from "@/lib/listAnswers.ts";
 import { sourceLabel } from "@/lib/runs.ts";
 import { storedDraft } from "@/lib/scopeChange.ts";
 import { type ScopeDraft, useUiStore } from "@/store.ts";
@@ -150,8 +151,17 @@ function useBrowse(
   };
 }
 
+/** This connection as stored, by every name its scope chose; `undefined` until it is listed. */
+type Saved = ConnectionWithConfig | undefined;
+
+/**
+ * The list read with each card's config: what the review compares, what the draft is seeded
+ * from and what Discard puts back. One without it fails the query (`listAnswers.ts`).
+ */
+const SAVED = { select: configListed };
+
 /** Seed the draft from what is already stored, once the grants arrive. */
-function useStoredScope(source: string, current: Connection | undefined): void {
+function useStoredScope(source: string, current: Saved): void {
   const setDraft = useUiStore((s) => s.setScopeDraft);
 
   useEffect(() => {
@@ -165,7 +175,7 @@ function useStoredScope(source: string, current: Connection | undefined): void {
  * Put the draft back to what is stored and return to the schedule. The draft is re-seeded
  * rather than left behind, so the store holds nothing the reader chose to throw away.
  */
-function useDiscard(tenantId: string, source: string, current: Connection | undefined): () => void {
+function useDiscard(tenantId: string, source: string, current: Saved): () => void {
   const navigate = useNavigate();
   const setDraft = useUiStore((s) => s.setScopeDraft);
 
@@ -279,7 +289,7 @@ export function ScopePicker({
   const { t } = useTranslation();
   const { review, paths } = useScopeStep();
   const draft = useUiStore((s) => s.scopeDraft);
-  const connections = trpc.connections.list.useQuery({ tenantId });
+  const connections = trpc.connections.list.useQuery({ tenantId, include: ["config"] }, SAVED);
   const listing = useBrowse(tenantId, source, kind);
   const setScope = useSaveScope(tenantId, kind, source);
   const current = connections.data?.find((c) => c.source === source);

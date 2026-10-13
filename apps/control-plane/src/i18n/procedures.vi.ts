@@ -36,7 +36,8 @@ export const procedureSentences: SentenceTable = {
     "Ngừng kích hoạt khách hàng: mọi thành viên mất quyền truy cập và mọi lần đồng bộ dừng lại cho đến khi được kích hoạt lại. Không xoá dữ liệu nào. Quản trị khách hàng.",
   "tenants.reactivate":
     "Kích hoạt lại một khách hàng đã ngừng kích hoạt: quyền truy cập và lịch đồng bộ trở lại như trước. Quản trị khách hàng.",
-  "connections.list": "Các nguồn của khách hàng và trạng thái kết nối.",
+  "connections.list":
+    'Các nguồn của khách hàng và trạng thái kết nối, kèm số lượng mà phạm vi của từng nguồn đã chọn. names (nguồn) hoặc match để lọc; include: ["config"] để lấy mọi tên đã chọn.',
   "connections.get": "Một nguồn và trạng thái kết nối của nó.",
   "connections.startOAuth":
     "Bắt đầu cấp quyền OAuth; trả về URL để mở trong trình duyệt. Quản trị.",
@@ -84,9 +85,13 @@ export const procedureSentences: SentenceTable = {
     "Khởi tạo các loại đầu tiên của catalogue từ một mẫu tài liệu của khách hàng, như một lần chạy; không publish gì. Quản trị.",
   "documentKinds.publish":
     "Publish bản nháp catalogue, để mọi tài liệu được phân loại lại theo nó. Quản trị.",
-  "models.list": "Các mô hình dbt của khách hàng.",
-  "models.get": "Một mô hình dbt và SQL của nó.",
-  "models.save": "Lưu một mô hình dbt; không chạy gì. Quản trị.",
+  "models.list":
+    'Các mô hình dbt của khách hàng kèm lần dựng gần nhất: sqlSha256 và testsSha256 để so một bản sao, và số cột, không kèm SQL. names hoặc match để lọc; include: ["columns"] để lấy các cột của từng lần dựng.',
+  "models.revision":
+    "Một mã băm cho các mô hình, macro và câu hỏi của khách hàng và một mã cho tất cả, tính từ những gì mỗi lần lưu đã ghi: bằng nhau nghĩa là không có gì thay đổi.",
+  "models.get": "Một mô hình dbt, SQL và kiểm thử của nó, kèm mã băm của chúng.",
+  "models.save":
+    "Lưu một mô hình dbt; không chạy gì. SQL và kiểm thử giống hệt bản đã lưu trả về unchanged: true và không thay đổi gì. Quản trị.",
   "models.delete":
     "Xoá một mô hình dbt cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu; không xoá gì nếu chưa gỡ được bảng. Quản trị.",
   "models.build":
@@ -94,22 +99,24 @@ export const procedureSentences: SentenceTable = {
   "models.lineage":
     "Mô hình nào đọc mô hình nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro. name cho phần quanh một mô hình hay một bảng thô (raw.records), direction up, down hoặc both và depth để giới hạn số bước.",
   "models.reference":
-    "Tài liệu tham khảo cho người viết mô hình: các nguồn, macro của nền tảng và macro riêng của khách hàng.",
+    "Tài liệu tham khảo cho người viết mô hình: các nguồn, macro của nền tảng và macro riêng của khách hàng. parts để chỉ lấy một số trong sources, platformMacros và tenantMacros; hai phần đầu giống hệt nhau ở mọi lần gọi.",
   "models.check":
     "Kiểm tra SQL của một mô hình trước khi lưu, không chạy gì: lỗi chắc chắn, điều đáng ngờ, và những gì không kiểm được.",
-  "macros.list": "Các macro dbt riêng của khách hàng, mỗi macro kèm công dụng và tham số.",
-  "macros.get": "Một macro dbt của khách hàng và định nghĩa của nó.",
+  "macros.list":
+    "Các macro dbt riêng của khách hàng, mỗi macro kèm công dụng, tham số và mã băm của định nghĩa và mô tả, không kèm định nghĩa. names hoặc match để lọc.",
+  "macros.get": "Một macro dbt của khách hàng, định nghĩa của nó và các mã băm.",
   "macros.check":
     "Kiểm tra định nghĩa một macro trước khi lưu, không chạy gì: điều sẽ bị từ chối, điều đáng ngờ, và những gì không kiểm được.",
   "macros.save":
-    "Lưu một macro dbt, trọn một định nghĩa {% macro %} mà mọi mô hình gọi được; không chạy gì. Quản trị.",
+    "Lưu một macro dbt, trọn một định nghĩa {% macro %} mà mọi mô hình gọi được; không chạy gì. Định nghĩa và mô tả giống hệt bản đã lưu trả về unchanged: true và không thay đổi gì. Quản trị.",
   "macros.delete": "Xoá một macro dbt; bị từ chối khi còn mô hình hay macro khác gọi nó. Quản trị.",
   "bi.answer": "Trả lời một định nghĩa câu hỏi. Thành viên trở lên.",
   "bi.runQuestion": "Chạy một câu hỏi đã lưu với tham số.",
   "bi.compile": "Dịch một định nghĩa câu hỏi thành SQL. Thành viên trở lên.",
   "bi.schema":
     "Các bảng và cột mà báo cáo đọc được; tables cho đúng những bảng đó, match lọc theo một đoạn tên (không phân biệt hoa thường), columns: false chỉ lấy tên bảng.",
-  "bi.questions.list": "Các câu hỏi đã lưu.",
+  "bi.questions.list":
+    'Các câu hỏi đã lưu: loại, kiểu biểu đồ và definitionSha256, không kèm SQL. names hoặc match để lọc; include: ["definition", "chart"] để lấy đầy đủ từng phần.',
   "bi.questions.get": "Một câu hỏi đã lưu.",
   "bi.questions.answer": "Câu trả lời của một câu hỏi đã lưu với tham số.",
   "bi.questions.save": "Lưu một câu hỏi. Thành viên trở lên.",

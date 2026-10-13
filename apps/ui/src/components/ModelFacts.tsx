@@ -11,13 +11,13 @@ import { Link } from "react-router-dom";
 import type { ModelDetail } from "@/api/types.ts";
 import { Fact, Facts } from "@/components/Facts.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
-import { buildMark, buildMarkLabel, builtColumnCount } from "@/lib/modelBuild.ts";
+import { buildMark, buildMarkLabel } from "@/lib/modelBuild.ts";
 import { formatCount, MISSING } from "@/lib/money.ts";
 import { journalPath } from "@/lib/runs.ts";
 
 /**
  * A model never built says so as a state, and has no run and no known columns: those two are
- * MISSING, never a zero or an empty cell (`builtColumnCount` says why an empty list of columns
+ * MISSING, never a zero or an empty cell (`columnCount` on the server says why no columns recorded
  * is not "none").
  */
 export function ModelFacts({
@@ -33,7 +33,7 @@ export function ModelFacts({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const built = stored.lastBuild;
-  const columns = builtColumnCount(built);
+  const columns = built?.columnCount ?? null;
   return (
     <Facts>
       <Fact label={t("models.colBuild")}>

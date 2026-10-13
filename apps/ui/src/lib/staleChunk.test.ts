@@ -157,6 +157,8 @@ describe("holdsUnsavedWork", () => {
         tests: { columns: {} },
         updatedAt: "2026-09-17T10:00:00.000Z",
         updatedBy: "u-1",
+        sqlSha256: "0".repeat(64),
+        testsSha256: "0".repeat(64),
         lastBuild: null,
       }),
     });
@@ -171,6 +173,8 @@ describe("holdsUnsavedWork", () => {
       tests: { columns: {} },
       updatedAt: "2026-09-17T10:00:00.000Z",
       updatedBy: "u-1",
+      sqlSha256: "0".repeat(64),
+      testsSha256: "0".repeat(64),
       lastBuild: null,
     });
     useUiStore.setState({ modelDraft: { ...seeded, sql: "select 2 as deal_id" } });

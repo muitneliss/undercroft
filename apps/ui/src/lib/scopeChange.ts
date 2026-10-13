@@ -34,14 +34,14 @@
 
 import type { TFunction } from "i18next";
 
-import type { Connection, Source } from "@/api/types.ts";
+import type { ConnectionConfig, ConnectionWithConfig, Source } from "@/api/types.ts";
 import { scopeSummary } from "@/lib/connectionState.ts";
 import { describeFileType } from "@/lib/fileTypes.ts";
 import { describeHubspotObject } from "@/lib/hubspotProperties.ts";
 import { describeXeroEntity } from "@/lib/xeroEntities.ts";
 import type { ScopeDraft } from "@/store.ts";
 
-type Config = Connection["config"];
+type Config = ConnectionConfig;
 type Choice = Omit<ScopeDraft, "source">;
 
 /** One row of the comparison. `null` is a scope nothing names, printed as MISSING. */
@@ -166,7 +166,7 @@ export function scopeChange(
  * An admin changing a selection should see what they chose last time, not an empty form that
  * silently means "everything" -- and Discard puts exactly this back.
  */
-export function storedDraft(source: string, current: Connection): ScopeDraft {
+export function storedDraft(source: string, current: ConnectionWithConfig): ScopeDraft {
   return {
     source,
     labels: current.config.labels ?? [],

@@ -115,7 +115,9 @@ export const READ_TOOLS = {
     summarize: countRows,
   },
   listQuestions: {
-    description: "The saved questions and dashboards in this customer's Reports division.",
+    description:
+      "The saved questions in this customer's Reports division: each one's name, kind (visual " +
+      "or sql) and chart type. No SQL; a question's definition is not on this list.",
     inputSchema: inTenant,
     tier: "read",
     plate: "questions",
@@ -123,7 +125,9 @@ export const READ_TOOLS = {
     summarize: countItems,
   },
   listModels: {
-    description: "The dbt models this customer has authored, and each one's last build.",
+    description:
+      "The dbt models this customer has authored, and each one's last build with how many " +
+      "columns it found. No SQL.",
     inputSchema: inTenant,
     tier: "read",
     plate: "facts",

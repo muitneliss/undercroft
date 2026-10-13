@@ -328,10 +328,10 @@ function QuestionTable({
                 </Link>
               </td>
               <td className="datum datum--quiet">
-                {question.definition.kind === "visual" ? t("bi.kindVisual") : t("bi.kindSql")}
+                {question.kind === "visual" ? t("bi.kindVisual") : t("bi.kindSql")}
               </td>
               <td className="datum datum--quiet">
-                <ChartGlyph type={question.chart.type} />
+                <ChartGlyph type={question.chartType} />
               </td>
               <td className="datum datum--quiet">{relativeTime(question.updatedAt, locale)}</td>
             </tr>

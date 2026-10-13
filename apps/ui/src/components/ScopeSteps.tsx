@@ -20,7 +20,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 
-import type { Connection, Source } from "@/api/types.ts";
+import type { ConnectionConfig, Source } from "@/api/types.ts";
 import { Errata, type ServerError } from "@/components/Errata.tsx";
 import { ArrowLeft, ArrowRight } from "@/components/Icon.tsx";
 import { orMissing } from "@/lib/money.ts";
@@ -83,7 +83,7 @@ export function ScopeReview({
   loadError,
 }: {
   kind: Source;
-  saved: Connection["config"];
+  saved: ConnectionConfig;
   chosen: Omit<ScopeDraft, "source">;
   /**
    * Why the choices did not load, if they did not. Said here too, because Save waits on it and a

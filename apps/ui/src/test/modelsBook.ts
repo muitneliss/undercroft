@@ -77,23 +77,44 @@ const LAST_UPDATED_DAY = 28;
 const UPDATE_SPREAD = 3;
 const LAST_BUILD_MINUTE = 50;
 
-export const MODEL_LIST: readonly ModelItem[] = MODELS.map(([name, status], index) => ({
-  name,
-  updatedAt: `2026-09-${String(LAST_UPDATED_DAY - (index % UPDATE_SPREAD))}T08:00:00Z`,
-  updatedBy: AUTHOR,
-  lastBuild:
-    status === null
-      ? null
-      : {
-          runId: `run-mg4k${String(FIRST_RUN + index).padStart(4, "0")}-5e1f0a42`,
-          status,
-          endedAt: `2026-09-29T08:${String(LAST_BUILD_MINUTE - index).padStart(2, "0")}:00Z`,
-          columns: columnNames(FIRST_COLUMNS + index),
-        },
-}));
+/** A stand-in for a content hash: the visual tier compares pictures, never hashes. */
+const FIXTURE_SHA256 = "0".repeat(64);
+
+/** Each model as `models.get` answers it, but for its SQL and tests. */
+const IN_FULL: readonly Omit<ModelDetail, "sql" | "tests">[] = MODELS.map(
+  ([name, status], index) => {
+    const columns = columnNames(FIRST_COLUMNS + index);
+    return {
+      name,
+      updatedAt: `2026-09-${String(LAST_UPDATED_DAY - (index % UPDATE_SPREAD))}T08:00:00Z`,
+      updatedBy: AUTHOR,
+      sqlSha256: FIXTURE_SHA256,
+      testsSha256: FIXTURE_SHA256,
+      lastBuild:
+        status === null
+          ? null
+          : {
+              runId: `run-mg4k${String(FIRST_RUN + index).padStart(4, "0")}-5e1f0a42`,
+              status,
+              endedAt: `2026-09-29T08:${String(LAST_BUILD_MINUTE - index).padStart(2, "0")}:00Z`,
+              columnCount: columns.length,
+              columns,
+            },
+    };
+  },
+);
+
+/** The list as `models.list` answers it: each build's column count, and not its columns. */
+export const MODEL_LIST: readonly ModelItem[] = IN_FULL.map(({ lastBuild, ...model }) => {
+  if (lastBuild === null) {
+    return { ...model, lastBuild };
+  }
+  const { columns: _listedOnRequest, ...summary } = lastBuild;
+  return { ...model, lastBuild: summary };
+});
 
 function modelDetail(name: string): ModelDetail | undefined {
-  const item = MODEL_LIST.find((model) => model.name === name);
+  const item = IN_FULL.find((model) => model.name === name);
   const declares = MODELS.find(([model]) => model === name)?.[2];
   if (item === undefined || declares === undefined) {
     return undefined;

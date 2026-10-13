@@ -75,6 +75,7 @@ export function ConnectionCard({
 }: {
   /** Whose book this row is in: where a failed run's slip links into the journal. */
   tenantId: string;
+  /** Read with its config (`include: ["config"]`), which the card names its scope by. */
   connection: Connection;
   /**
    * Whether the card's kind holds more than one account, so the card names WHICH by its source

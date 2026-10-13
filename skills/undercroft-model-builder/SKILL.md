@@ -40,8 +40,8 @@ These hold for the whole workflow. None of them bends because the person is in a
    otherwise keep it as text and tell the person why. The same holds for statuses,
    currencies, date forms, keys, relationships and a workbook's layout.
 4. **Missing stays missing.** An absent value is `NULL`, never `0`, `''` or a made-up
-   default. Use the macros `models.reference` lists, such as the one for reading an amount,
-   rather than writing your own cast.
+   default. Use the platform's macros, such as the one for reading an amount
+   (`models.reference` with `parts: ["platformMacros"]`), rather than writing your own cast.
 5. **Reuse before you create.** An existing question, dashboard, model or macro that owns
    the concept is used, not copied. Before you propose a new component, say why the
    existing ones cannot do it. Before you write an expression, look in `macros.list` for a
@@ -88,7 +88,8 @@ These hold for the whole workflow. None of them bends because the person is in a
 ## Who can do what
 
 - Anyone who can see the customer may run `models.list`, `models.get`, `models.reference`,
-  `models.check` and `models.lineage`, `macros.list`, `macros.get` and `macros.check`,
+  `models.revision`, `models.check` and `models.lineage`, `macros.list`, `macros.get` and
+  `macros.check`,
   `lake.summary`, and `bi.questions.list`, `bi.questions.get`, `bi.dashboards.list`,
   `bi.dashboards.get` and `bi.schema`.
 - Running a definition against the built models (`bi.answer`, `bi.compile`) and saving a
@@ -124,6 +125,9 @@ the person's role and grant allow (above).
 
 Read `models.list`, `macros.list`, `models.reference`, `lake.summary`, `bi.questions.list` and
 `bi.dashboards.list`, and give the person a short inventory of what bears on the request.
+The lists are summaries; `references/discovery.md` says what each leaves out and how to ask
+for it, and how `models.revision` and the content hashes tell you whether what you read is
+still current.
 Read further -- `models.get`, `models.lineage`, `macros.get`, `bi.questions.get`,
 `bi.dashboards.get`, `lake.records` -- when the request touches it. Before changing a model,
 or building one beside it, read `models.lineage` for the models that `ref` it: they read what

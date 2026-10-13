@@ -63,6 +63,7 @@ function account(
     ungranted: [],
     externalAccountId: `demo-${over.source}`,
     scopes: [],
+    chosen: null,
     config: {},
     cadence: "every_6h",
     cron: null,

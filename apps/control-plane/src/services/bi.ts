@@ -10,22 +10,20 @@
  *
  * A definition is validated on the way OUT of the database as well as in. A row written
  * by an older contract is refused with a value the handler can word, rather than drawn
- * half-right.
+ * half-right. The questions themselves are kept by `biQuestions.ts`.
  */
 
 import {
   bindParams,
-  type ChartConfig,
   compile,
   type DashboardFilter,
   DashboardFilters,
   type DashboardLayout,
   DashboardLayout as DashboardLayoutShape,
-  ChartConfig as ChartConfigShape,
   DEFAULT_QUERY_ROWS,
   ParamMissing,
   type QueryParams,
-  QuestionDefinition,
+  type QuestionDefinition,
   type RunQueryRequest,
   type TableResult,
 } from "@undercroft/contracts";
@@ -39,24 +37,9 @@ import {
   listDashboards,
   updateDashboard,
 } from "../repos/biDashboards.ts";
-import {
-  deleteQuestion,
-  getQuestion,
-  insertQuestion,
-  listQuestions,
-  updateQuestion,
-} from "../repos/biQuestions.ts";
+import { getQuestionView } from "./biQuestions.ts";
 import { readSchema, type SchemaFilter, type SchemaOutcome } from "./tableSchema.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
-
-export interface QuestionView {
-  readonly id: string;
-  readonly name: string;
-  readonly definition: QuestionDefinition;
-  readonly chart: ChartConfig;
-  readonly updatedAt: string;
-  readonly updatedBy: string;
-}
 
 export interface DashboardView {
   readonly id: string;
@@ -135,93 +118,7 @@ export async function answerQuestion(
   });
 }
 
-// -- questions ----------------------------------------------------------------------
-
-function questionView(row: {
-  id: string;
-  name: string;
-  definition: unknown;
-  chart: unknown;
-  updatedAt: string;
-  updatedBy: string;
-}): QuestionView {
-  return {
-    id: row.id,
-    name: row.name,
-    definition: QuestionDefinition.parse(row.definition),
-    chart: ChartConfigShape.parse(row.chart),
-    updatedAt: row.updatedAt,
-    updatedBy: row.updatedBy,
-  };
-}
-
-export async function listQuestionViews(
-  exec: SqlExecutor,
-  tenantId: string,
-): Promise<QuestionView[]> {
-  return (await listQuestions(exec, tenantId)).map(questionView);
-}
-
-export async function getQuestionView(
-  exec: SqlExecutor,
-  tenantId: string,
-  id: string,
-): Promise<QuestionView | null> {
-  const row = await getQuestion(exec, tenantId, id);
-  return row === null ? null : questionView(row);
-}
-
 export type SaveOutcome = { ok: true; id: string } | { ok: false; reason: "not-found" };
-
-/** Store a question: a new one without an id, an existing one with. Executes nothing. */
-export async function saveQuestion(
-  exec: SqlExecutor,
-  input: {
-    tenantId: string;
-    id?: string;
-    name: string;
-    definition: QuestionDefinition;
-    chart: ChartConfig;
-    actor: Actor;
-    actorId: string;
-  },
-): Promise<SaveOutcome> {
-  const fields = {
-    name: input.name,
-    definition: input.definition,
-    chart: input.chart,
-    actorId: input.actorId,
-  };
-  let { id } = input;
-  if (id === undefined) {
-    id = await insertQuestion(exec, input.tenantId, fields);
-  } else if (!(await updateQuestion(exec, input.tenantId, { id, ...fields }))) {
-    return { ok: false, reason: "not-found" };
-  }
-  await recordAudit(exec, {
-    tenantId: input.tenantId,
-    actor: input.actor,
-    action: "bi.questions.save",
-    detail: JSON.stringify({ id, name: input.name, kind: input.definition.kind }),
-  });
-  return { ok: true, id };
-}
-
-export async function removeQuestion(
-  exec: SqlExecutor,
-  input: { tenantId: string; id: string; actor: Actor },
-): Promise<boolean> {
-  const removed = await deleteQuestion(exec, input.tenantId, input.id);
-  if (removed) {
-    await recordAudit(exec, {
-      tenantId: input.tenantId,
-      actor: input.actor,
-      action: "bi.questions.delete",
-      detail: JSON.stringify({ id: input.id }),
-    });
-  }
-  return removed;
-}
 
 // -- dashboards ---------------------------------------------------------------------
 

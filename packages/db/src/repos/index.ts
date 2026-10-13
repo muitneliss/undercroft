@@ -51,8 +51,10 @@ export {
   deleteMacro,
   getMacro,
   insertMacro,
+  listMacroHashes,
   listMacros,
   type Macro,
+  type MacroHashes,
   type MacroWrite,
   saveMacro,
 } from "./macros.ts";
@@ -63,9 +65,12 @@ export {
   insertModel,
   type LastBuild,
   lastBuildPerModel,
+  listModelHashes,
   listModels,
   type Model,
+  type ModelHashes,
   type ModelTestsJson,
+  type SaveResult,
   saveModel,
   setModelColumns,
 } from "./models.ts";

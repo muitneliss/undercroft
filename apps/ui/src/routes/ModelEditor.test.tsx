@@ -31,7 +31,15 @@ function detail(name: string): ModelDetail {
     name,
     updatedAt: WHEN,
     updatedBy: "u1",
-    lastBuild: { runId: "run-7", status: "success", endedAt: WHEN, columns: ["deal_id"] },
+    sqlSha256: "0".repeat(64),
+    testsSha256: "0".repeat(64),
+    lastBuild: {
+      runId: "run-7",
+      status: "success",
+      endedAt: WHEN,
+      columnCount: 1,
+      columns: ["deal_id"],
+    },
     sql: `select 1 as deal_id -- ${name}`,
     tests: { columns: {} },
   };

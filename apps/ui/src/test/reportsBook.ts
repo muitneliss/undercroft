@@ -59,8 +59,23 @@ function visual(
   };
 }
 
+/** A stand-in for a content hash: the visual tier compares pictures, never hashes. */
+const FIXTURE_SHA256 = "0".repeat(64);
+
+/** A saved question as `bi.questions.get` answers it, its summary read off its body. */
+function saved(
+  question: Omit<QuestionView, "kind" | "chartType" | "definitionSha256">,
+): QuestionView {
+  return {
+    ...question,
+    kind: question.definition.kind,
+    chartType: question.chart.type,
+    definitionSha256: FIXTURE_SHA256,
+  };
+}
+
 export const QUESTIONS: readonly QuestionView[] = [
-  {
+  saved({
     id: QUESTION_ID.revenue,
     name: "Monthly revenue",
     definition: visual("revenue_monthly", ["period", "revenue"], {
@@ -70,8 +85,8 @@ export const QUESTIONS: readonly QuestionView[] = [
     chart: { type: "line", x: "period", y: ["revenue"], options: {} },
     updatedAt: WHEN_SAVED,
     updatedBy: AUTHOR,
-  },
-  {
+  }),
+  saved({
     id: QUESTION_ID.segment,
     name: "Revenue by segment",
     definition: {
@@ -86,16 +101,16 @@ export const QUESTIONS: readonly QuestionView[] = [
     chart: { type: "bar", x: "segment", y: ["revenue"], options: {} },
     updatedAt: WHEN_SAVED,
     updatedBy: AUTHOR,
-  },
-  {
+  }),
+  saved({
     id: QUESTION_ID.aging,
     name: "Receivables by age",
     definition: visual("ar_open_items", ["age", "amount"]),
     chart: { type: "bar", x: "age", y: ["amount"], options: {} },
     updatedAt: "2026-09-27T08:00:00Z",
     updatedBy: AUTHOR,
-  },
-  {
+  }),
+  saved({
     id: QUESTION_ID.ledger,
     name: "Open invoice ledger",
     definition: {
@@ -105,15 +120,15 @@ export const QUESTIONS: readonly QuestionView[] = [
     chart: { type: "table", y: [], options: {} },
     updatedAt: "2026-09-27T08:00:00Z",
     updatedBy: AUTHOR,
-  },
-  {
+  }),
+  saved({
     id: QUESTION_ID.refunds,
     name: "Refund reasons",
     definition: visual("refund_reasons", ["reason", "refunds"]),
     chart: { type: "bar", x: "reason", y: ["refunds"], options: {} },
     updatedAt: "2026-09-29T08:00:00Z",
     updatedBy: AUTHOR,
-  },
+  }),
 ];
 
 /** The dashboard's range, in the address, so every tile has its values and draws at once. */

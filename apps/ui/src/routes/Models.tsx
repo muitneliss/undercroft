@@ -38,7 +38,6 @@ import {
   buildMark,
   buildMarkLabel,
   buildTally,
-  builtColumnCount,
   stateLabel,
   stateMark,
 } from "@/lib/modelBuild.ts";
@@ -331,7 +330,7 @@ function ModelList({
           </thead>
           <tbody>
             {shown.map((model) => {
-              const columns = builtColumnCount(model.lastBuild);
+              const columns = model.lastBuild?.columnCount ?? null;
               return (
                 <tr key={model.name}>
                   <td>
