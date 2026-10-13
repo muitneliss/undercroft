@@ -207,6 +207,14 @@ call and answers:
 
 There is no idempotency key. The server offers none, so a retried write is a second write.
 
+## Runs
+
+`undercroft runs get --tenant-id CASE-0042 --run-id <id> --wait-seconds 50` answers once the
+run has ended, well inside the 120-second `TIMEOUT`; never wrap `runs list` in a shell loop
+instead. `runs list` takes its filters as flags -- `--status failed`, `--trigger manual`,
+`--parent-run-id <id>`, `--chained`, `--started-after <ISO instant>` -- and its two lists, `kind`
+and `ids`, through `--input-json '{"kind":["build"],"ids":["run-1"]}'`.
+
 ## Environments
 
 - **URL.** `--url`, then `UNDERCROFT_URL`, then the chosen profile's URL.

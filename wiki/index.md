@@ -127,6 +127,7 @@
 - [ADR 0121 Dokploy Clones the Private Repository over SSH, with a Read-Only Deploy Key](sources/adr-0121-dokploy-clones-the-private-repository-over-ssh-with-a-read-only-deploy-key.md)
 - [ADR 0122 What a Model Reads over MCP Is Bounded in Every Copy](sources/adr-0122-what-a-model-reads-over-mcp-is-bounded-in-every-copy.md)
 - [ADR 0123 A Search Ranks Each Kind's Newest Matches, Found Through the Index by the Owner](sources/adr-0123-a-search-ranks-each-kind-s-newest-matches-found-through-the-index-by-the-owner.md)
+- [ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does](sources/adr-0124-a-procedure-that-waits-holds-its-request-open-to-its-own-cap-and-nothing-else-does.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

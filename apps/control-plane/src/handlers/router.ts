@@ -2,11 +2,13 @@ import { TRPCError } from "@trpc/server";
 import { MAX_PREVIEW_ROWS } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
+import { StepQuery } from "./inputs.ts";
 import * as connections from "../services/connections.ts";
 import * as keys from "../services/keys.ts";
 import * as models from "../services/models.ts";
 import * as preferences from "../services/preferences.ts";
 import * as runs from "../services/runs.ts";
+import { MAX_WAIT_SECONDS } from "../services/runWait.ts";
 import {
   actorOf,
   authedProcedure,
@@ -26,6 +28,15 @@ import { macrosRouter } from "./macrosRouter.ts";
 import { modelsRouter } from "./modelsRouter.ts";
 import { peopleRouter } from "./peopleRouter.ts";
 import { tenantsRouter } from "./tenantsRouter.ts";
+
+/** The most run ids one `runs.list` takes: "where are these runs now", not a bulk export. */
+const MAX_LISTED_RUNS = 50;
+
+/**
+ * What a procedure that waits needs beyond its wait to answer: read what it waited for and send
+ * it. Part of `holdsOpenSeconds`, so a wait that ran its whole course is never cut as it answers.
+ */
+const ANSWER_SECONDS = 10;
 
 /**
  * The control-plane API. The React app imports `AppRouter` as a type only, so the client
@@ -184,8 +195,10 @@ export const appRouter = router({
      * is the question the whole division exists to answer, and hiding it from a viewer would
      * hide the one thing they came to look at.
      *
-     * `source` narrows it to one account's runs (ADR 0043): what a source card opens. The same
-     * 64 characters `lake.records` allows a source, which is more than any account name holds.
+     * Every filter is optional and narrows (issue 439): `source` to one account's runs (ADR
+     * 0043) -- what a source card opens, in the same 64 characters `lake.records` allows a source
+     * -- and the rest to what an agent would otherwise list everything to find. They combine
+     * with each other and with the cursor, and an empty page is "nothing matched".
      */
     list: tenantProcedure
       .input(
@@ -193,6 +206,18 @@ export const appRouter = router({
           limit: z.number().int().min(1).max(100).default(50),
           cursor: z.string().optional(),
           source: z.string().trim().min(1).max(64).optional(),
+          kind: z
+            .array(z.enum(runs.RUN_FILTERS.kind))
+            .min(1)
+            .max(runs.RUN_FILTERS.kind.length)
+            .optional(),
+          status: z.enum(runs.RUN_FILTERS.status).optional(),
+          trigger: z.enum(runs.RUN_FILTERS.trigger).optional(),
+          parentRunId: z.string().min(1).optional(),
+          chained: z.boolean().optional(),
+          startedAfter: z.string().datetime({ offset: true }).optional(),
+          startedBefore: z.string().datetime({ offset: true }).optional(),
+          ids: z.array(z.string().min(1)).min(1).max(MAX_LISTED_RUNS).optional(),
         }),
       )
       .query(({ ctx, input }) =>
@@ -200,15 +225,44 @@ export const appRouter = router({
           limit: input.limit,
           cursor: input.cursor ?? null,
           source: input.source ?? null,
+          kinds: input.kind ?? null,
+          status: input.status ?? null,
+          trigger: input.trigger ?? null,
+          parentRunId: input.parentRunId ?? null,
+          chained: input.chained ?? null,
+          startedAfter: input.startedAfter ?? null,
+          startedBefore: input.startedBefore ?? null,
+          ids: input.ids ?? null,
         }),
       ),
 
-    // A run that is not this tenant's is NOT_FOUND, not FORBIDDEN, for the reason
-    // `tenantProcedure` gives: the id must not confirm that another customer's run exists.
+    /**
+     * One run in full, its dbt steps as a summary and the page of them asked for -- the problems
+     * by default (issue 441, `StepQuery`).
+     *
+     * With `waitSeconds` it answers once the run is no longer `running` -- and, for an ingest that
+     * closed ok, once the transform it chains exists -- or when the wait runs out, still saying
+     * `running` (issue 440). So an agent that started a run reads it once instead of polling.
+     * The wait holds the request open (`holdsOpenSeconds`, ADR 0124): its cap plus ten seconds to
+     * read and send the run once it is over.
+     *
+     * A run that is not this tenant's is NOT_FOUND, not FORBIDDEN, for the reason
+     * `tenantProcedure` gives: the id must not confirm that another customer's run exists.
+     */
     get: tenantProcedure
-      .input(z.object({ runId: z.string().min(1) }))
-      .query(async ({ ctx, input }) => {
-        const run = await runs.get(ctx.exec, input.tenantId, input.runId);
+      .meta({ holdsOpenSeconds: MAX_WAIT_SECONDS + ANSWER_SECONDS })
+      .input(
+        StepQuery.extend({
+          runId: z.string().min(1),
+          waitSeconds: z.number().int().min(1).max(MAX_WAIT_SECONDS).optional(),
+        }),
+      )
+      .query(async ({ ctx, input, signal }) => {
+        const { tenantId, runId, waitSeconds, ...steps } = input;
+        const run = await runs.get(ctx.exec, tenantId, runId, {
+          steps,
+          ...(waitSeconds === undefined ? {} : { wait: { seconds: waitSeconds, signal } }),
+        });
         if (run === null) {
           throw new TRPCError({ code: "NOT_FOUND" });
         }

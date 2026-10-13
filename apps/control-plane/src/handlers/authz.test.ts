@@ -67,6 +67,7 @@ function caller(user: SessionUser | null, superadmin = false) {
     signInMethods: [],
     channel: "web",
     publicUrl: null,
+    holdOpen: () => undefined,
   };
   return appRouter.createCaller(ctx);
 }

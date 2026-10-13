@@ -55,6 +55,7 @@ import type { SpecReads } from "../services/connections.ts";
 import type { StartOutcome } from "../services/oauth.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import { auditRuleOf, detailOf, isRecorded, namedTenant } from "./audited.ts";
+import type { ProcedureMeta } from "./holdOpen.ts";
 import { effectOf, grantAdmits } from "./surface.ts";
 
 export interface SessionUser {
@@ -185,6 +186,14 @@ export interface Context {
    * alone, which the browser and the CLI resolve against the server they already talk to.
    */
   readonly publicUrl: string | null;
+  /**
+   * Let this request go up to `seconds` without sending a byte (ADR 0124). Bun cuts a request
+   * that sends nothing for ten seconds, which is right for every request but one that waits on
+   * purpose; such a procedure says so in its meta ({@link ProcedureMeta}) and the middleware
+   * below calls this for it. `createContext` builds one that holds nothing; `/trpc` and `/mcp`
+   * replace it with a hold on their own request (`holdOpen.ts`), so no procedure reaches Bun.
+   */
+  readonly holdOpen: (seconds: number) => void;
 }
 
 export type { Role } from "../services/authz.ts";
@@ -235,7 +244,10 @@ export function refusal(code: TRPCError["code"], message: string, facts: Refusal
   return new TRPCError({ code, message, cause: new Refusal(facts) });
 }
 
-const t = initTRPC.context<Context>().create({
+/** What every procedure here is built from: this context, and what a procedure may declare. */
+const base = initTRPC.context<Context>().meta<ProcedureMeta>();
+
+const t = base.create({
   // Never development, whatever NODE_ENV says. tRPC's default reads `NODE_ENV !== "production"`,
   // the deployment sets no NODE_ENV, and in development mode every error -- an anonymous 401
   // included -- carries `data.stack`: server paths, line numbers, dependency versions (issue 152).
@@ -363,12 +375,25 @@ function endingOf(error: TRPCError | null): { outcome: Outcome; reason: string |
  * FORBIDDEN, worded, with the facts an agent matches on: the caller is authenticated, and what
  * they lack is a grant their owner can give them by minting a `write` token.
  */
-export const publicProcedure = audited.use(({ ctx, path, type, next }) => {
+const guarded = audited.use(({ ctx, path, type, next }) => {
   if (!grantAdmits(ctx.grant, effectOf({ path, type }))) {
     throw refusal("FORBIDDEN", messages(ctx.locale)("error.writesDisabled"), {
       reason: "WRITES_DISABLED",
       grant: ctx.grant,
     });
+  }
+  return next();
+});
+
+/**
+ * Hold the request open for a procedure that waits on purpose (ADR 0124), at the root, so it is
+ * true of every procedure that declares `holdsOpenSeconds` and at every door -- `/trpc` and
+ * `/mcp` both reach the router through here, and each door's `holdOpen` knows its own request.
+ * After the grant guard, so a call refused there is not held for anything.
+ */
+export const publicProcedure = guarded.use(({ ctx, meta, next }) => {
+  if (meta?.holdsOpenSeconds !== undefined) {
+    ctx.holdOpen(meta.holdsOpenSeconds);
   }
   return next();
 });

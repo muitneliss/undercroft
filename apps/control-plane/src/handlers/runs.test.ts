@@ -62,6 +62,7 @@ function caller(userId: string, email: string, worker: WorkerClient | null = nul
     signInMethods: [],
     channel: "web",
     publicUrl: null,
+    holdOpen: () => undefined,
   };
   return appRouter.createCaller(ctx);
 }
@@ -166,6 +167,37 @@ describe("runs.list narrowed to one account", () => {
   });
 });
 
+describe("runs.list narrowed by what it is asked", () => {
+  it("passes every filter to the ledger, so a run in progress is one call away", async () => {
+    const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
+    const { runs } = caller(viewer, "v@example.test");
+
+    const running = await runs.list({ tenantId: "CASE-0042", status: "running" });
+    const manualIngests = await runs.list({
+      tenantId: "CASE-0042",
+      kind: ["ingest"],
+      trigger: "manual",
+    });
+    const named = await runs.list({ tenantId: "CASE-0042", ids: ["r-ok", "r-other"] });
+
+    expect(running.items.map((r) => r.id)).toEqual(["r-running"]);
+    expect(manualIngests.items.map((r) => r.id)).toEqual(["r-running"]);
+    // `r-other` is CASE-0043's: naming it finds nothing, and says nothing about it.
+    expect(named.items.map((r) => r.id)).toEqual(["r-ok"]);
+  });
+
+  it("refuses more than 50 ids, or a time that is not an instant, before reading anything", async () => {
+    const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
+    const { runs } = caller(viewer, "v@example.test");
+    const ids = Array.from({ length: 51 }, (_, at) => `r-${at}`);
+
+    expect(await errorCode(() => runs.list({ tenantId: "CASE-0042", ids }))).toBe("BAD_REQUEST");
+    expect(
+      await errorCode(() => runs.list({ tenantId: "CASE-0042", startedAfter: "since ten" })),
+    ).toBe("BAD_REQUEST");
+  });
+});
+
 describe("the scope a run read with", () => {
   async function chooseLabels(labels: string[]): Promise<void> {
     await writeConnectionDetail(db, {
@@ -232,6 +264,65 @@ describe("runs.get", () => {
     ]);
     expect(run.entityCounts[0]?.entity).toBe("deals");
     expect(run.steps).toEqual([]);
+    expect(run.stepSummary.total).toBe(0);
+  });
+
+  it("leads with the steps that did not pass, and lists the rest only when asked", async () => {
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `INSERT INTO ops.run_step (run_id, unique_id, kind, name, status) VALUES
+           ('r-ok', 'model.shop.orders', 'model', 'orders', 'success'),
+           ('r-ok', 'test.shop.unique_orders_id', 'test', 'unique_orders_id', 'pass'),
+           ('r-ok', 'test.shop.not_null_orders_total', 'test', 'not_null_orders_total', 'fail')`,
+      ),
+    );
+    const member = await seedMember("m@example.test", "member", "CASE-0042");
+    const { runs } = caller(member, "m@example.test");
+
+    const problems = await runs.get({ tenantId: "CASE-0042", runId: "r-ok" });
+    const all = await runs.get({ tenantId: "CASE-0042", runId: "r-ok", steps: "all" });
+    const paged = await runs.get({
+      tenantId: "CASE-0042",
+      runId: "r-ok",
+      steps: "all",
+      stepLimit: 2,
+    });
+
+    expect(problems.steps.map((s) => s.name)).toEqual(["not_null_orders_total"]);
+    expect(problems.stepSummary).toMatchObject({ total: 3, problems: 1 });
+    expect(all.steps).toHaveLength(3);
+    expect(paged.steps).toHaveLength(2);
+    expect(paged.nextStepCursor).not.toBeNull();
+  });
+
+  it("waits for a run to settle, and answers with the verdict it then has", async () => {
+    const member = await seedMember("m@example.test", "member", "CASE-0042");
+    const answer = caller(member, "m@example.test").runs.get({
+      tenantId: "CASE-0042",
+      runId: "r-running",
+      waitSeconds: 10,
+    });
+    // Sequencing, not an assertion: the wait has read the run as running before it closes. A
+    // `get` that did not wait would have answered `running` already.
+    await Bun.sleep(1200);
+    await db.asSuperuser((tx) => closeRun(tx, "r-running", { status: "failed", error: "boom" }));
+
+    const run = await answer;
+    expect(run.status).toBe("failed");
+    expect(run.error).toBe("boom");
+  });
+
+  it("refuses a wait longer than 50 seconds, before waiting at all", async () => {
+    const member = await seedMember("m@example.test", "member", "CASE-0042");
+    expect(
+      await errorCode(() =>
+        caller(member, "m@example.test").runs.get({
+          tenantId: "CASE-0042",
+          runId: "r-running",
+          waitSeconds: 51,
+        }),
+      ),
+    ).toBe("BAD_REQUEST");
   });
 
   it("a run of another tenant is NOT_FOUND, never FORBIDDEN", async () => {

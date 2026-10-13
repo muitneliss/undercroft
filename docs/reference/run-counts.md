@@ -98,6 +98,23 @@ A source card's "View runs" opens the Journal filtered to that account (`?source
 address), and `runs list --source` does the same over the CLI and MCP. A second mailbox is its
 own account, so each card lists only its own runs.
 
+`runs list` narrows further by `kind`, `status`, `trigger`, `parentRunId`, `chained`,
+`startedAfter` (inclusive) and `startedBefore` (exclusive), and up to 50 `ids`. The filters
+combine with each other and with the page cursor, and an empty page means nothing matched.
+`kind` is read off the run, never stored: `build` is a transform the editor started, `lake-api`
+an ingest a script pushed, and `extract`, `semantic` and `semantic-init` are their own verbs.
+
+## A run's dbt steps
+
+`runs get` reports a transform's steps as `stepSummary` -- the total, how many steps of each
+kind ended in each dbt status, and how many are problems -- then the page of steps asked for.
+A problem is any step that did not end `success`, `pass` or `skipped`: `fail`, `error`, `warn`,
+or a status the platform does not know, which is listed rather than assumed fine. A `skipped`
+step is counted as `skipped`, never as a pass. `steps` chooses `none`, `problems` (the default)
+or `all`; `stepStatus`, `stepKind` and `stepName` narrow it (a filter given without `steps`
+reads all of them); `stepLimit` (at most 2,000) and `stepCursor` page it. The Journal asks for
+every step.
+
 ## Where the numbers come from
 
 The worker decides each record's column when it writes the record to the raw lake, in

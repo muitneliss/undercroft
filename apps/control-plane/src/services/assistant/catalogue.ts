@@ -84,8 +84,9 @@ export const READ_TOOLS = {
   },
   runDetail: {
     description:
-      "One run in full: every step, what it landed, and every row it REFUSED with the reason. " +
-      "This is how to answer 'why was that row not imported?'.",
+      "One run in full: its dbt steps counted by status with the ones that did not pass, what " +
+      "it landed, and every row it REFUSED with the reason. This is how to answer 'why was " +
+      "that row not imported?'.",
     inputSchema: inTenant.extend({ runId: z.string().min(1) }),
     tier: "read",
     plate: "facts",

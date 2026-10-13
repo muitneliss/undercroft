@@ -1573,6 +1573,7 @@ export const vi = {
     },
 
     stepsHead: "Các bước dbt",
+    stepsCut: "Đang hiện {{shown}} trong {{total}} bước; lần chạy này có nhiều bước hơn một trang.",
     colStep: "Bước",
     colStatus: "Trạng thái",
     colFailures: "Dòng lỗi",

@@ -363,3 +363,6 @@
 ## [2026-10-13] ingest | Runbook: Connecting an agent over MCP
 ## [2026-10-13] ingest | ADR 0122 What a Model Reads over MCP Is Bounded in Every Copy
 ## [2026-10-13] ingest | ADR 0123 A Search Ranks Each Kind's Newest Matches, Found Through the Index by the Owner
+## [2026-10-13] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-13] ingest | What an ingest run counts
+## [2026-10-13] ingest | ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does

@@ -229,6 +229,7 @@ describe("a consent that cannot start names the provider of the source pressed",
       signInMethods: [],
       channel: "web",
       publicUrl: null,
+      holdOpen: () => undefined,
     };
     return appRouter.createCaller(ctx);
   }

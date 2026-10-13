@@ -44,7 +44,13 @@ import { StepsTable } from "@/components/StepsTable.tsx";
 import { lakeStreamPath, streamOfEntity } from "@/lib/lake.ts";
 import { formatCount, orMissing } from "@/lib/money.ts";
 import { feedEntries, runGauges } from "@/lib/runFeed.ts";
-import { type AccountName, runScopeSummary, runTarget, triggerLabel } from "@/lib/runs.ts";
+import {
+  type AccountName,
+  EVERY_STEP,
+  runScopeSummary,
+  runTarget,
+  triggerLabel,
+} from "@/lib/runs.ts";
 import { formatDateTime, formatDuration } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -336,6 +342,36 @@ function RunCounts({
   );
 }
 
+/**
+ * The run's dbt steps, every one -- the leaf asks for all of them (`EVERY_STEP`) -- and a line
+ * saying so when a run has more than one page holds, so a page is never read as the whole.
+ */
+function RunSteps({
+  detail,
+  locale,
+}: {
+  detail: RunDetailView;
+  locale: ReturnType<typeof useUiStore.getState>["locale"];
+}): React.JSX.Element | null {
+  const { t } = useTranslation();
+  if (detail.steps.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      <StepsTable steps={detail.steps} locale={locale} />
+      {detail.nextStepCursor === null ? null : (
+        <p className="note">
+          {t("journal.stepsCut", {
+            shown: formatCount(detail.steps.length, locale),
+            total: formatCount(detail.stepSummary.total, locale),
+          })}
+        </p>
+      )}
+    </>
+  );
+}
+
 export function RunDetail({
   tenantId,
   runId,
@@ -346,7 +382,7 @@ export function RunDetail({
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
   const run = trpc.runs.get.useQuery(
-    { tenantId, runId },
+    { tenantId, runId, ...EVERY_STEP },
     { refetchInterval: (query) => runDetailRefetchInterval(query.state.data) },
   );
   // Whose leaf this is, for the counts' doors. Cached from the book's own head.
@@ -416,7 +452,7 @@ export function RunDetail({
         canOpenRows={tenant.data?.role === "admin"}
       />
 
-      {detail.steps.length > 0 ? <StepsTable steps={detail.steps} locale={locale} /> : null}
+      <RunSteps detail={detail} locale={locale} />
 
       {recordedNothing(detail, events) ? (
         <p className="note">{t("journal.nothingRecorded")}</p>

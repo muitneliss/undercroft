@@ -183,6 +183,11 @@ token as an environment variable, as above, so it stays off every process's comm
   A transfer that is cut fails as a download; it never ends as a short file. ADR 0111.
 - **Refusals** carry a `code` -- the CLI's vocabulary -- a sentence, any facts the server named,
   and a `traceId`.
+- **Runs.** `runs_list` takes filters (kind, status, trigger, parent run, start time, ids), so an
+  agent asks for the run it wants rather than listing every one. `runs_get` with `waitSeconds`
+  answers once the run has ended, holding the call at most 60 seconds (ADR 0124); a host whose
+  tool timeout is shorter needs a shorter wait. It leads with `stepSummary` and lists only the
+  dbt steps that did not pass unless asked for more.
 - **Widgets.** In a host that draws MCP Apps (claude.ai, Claude Desktop), a query result
   (`lake_query`, `lake_search`, `lake_records`, `lake_documents`, `bi_answer`, `bi_runQuestion`,
   `bi_questions_answer`) is drawn as a table, up to 500 rows, amounts printed digit for digit;

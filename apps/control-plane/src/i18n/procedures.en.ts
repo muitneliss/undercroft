@@ -106,8 +106,10 @@ export const procedureSentences: SentenceTable = {
   "bi.exports.get":
     "One export you asked for that has not expired: the SQL it runs and its file name.",
   "dq.failures": "The rows a failed data-quality test stored. Admins.",
-  "runs.list": "The ledger of runs, newest first; all accounts, or one source's.",
-  "runs.get": "One run, with the scope it read with, its refusals and dbt steps.",
+  "runs.list":
+    "The ledger of runs, newest first. Every filter is optional and combines with the others and with the cursor: one source, kind (one or several), status, trigger, parentRunId (the runs that run chained, such as the transform after an ingest), chained or not, startedAfter (inclusive) and startedBefore (exclusive), and up to 50 ids. An empty page means nothing matched.",
+  "runs.get":
+    "One run, with the scope it read with and its refusals. Its dbt steps come as stepSummary (counts by kind and status; a skipped step stays skipped) plus the steps asked for: steps is none, problems (the default: every step that is not success, pass or skipped) or all; narrow with stepStatus, stepKind and stepName (a filter without steps means all) and page with stepCursor from nextStepCursor. waitSeconds (at most 50) answers as soon as the run is no longer running, and for an ingest that closed ok once its chained transform (childRun) exists; when the wait runs out it still says running. Use it instead of polling.",
   "runs.events": "What the worker is saying about a run.",
   "runs.trigger": "Read a source now. Admins.",
   "config.google": "The public half of the Google client, for the Drive picker.",
