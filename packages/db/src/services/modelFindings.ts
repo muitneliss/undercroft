@@ -26,7 +26,10 @@ export type FindingCode =
   | "top-level-limit"
   | "unknown-macro"
   | "dynamic-reference"
-  | "test-column-unmentioned";
+  | "test-column-unmentioned"
+  | "test-forbidden-call"
+  | "test-model-unread"
+  | "test-name-too-long";
 
 export type Severity = "error" | "warning";
 
@@ -37,6 +40,11 @@ export interface Finding {
   readonly line: number | null;
   /** What the finding is about -- a keyword, a model, a column -- when it names one. */
   readonly subject: string | null;
+  /**
+   * The test whose text the finding is in, when it is not the model's SQL: a SQL test's name,
+   * or `<column>.<kind>` for a column test. `line` is then that test's own line. ADR 0130.
+   */
+  readonly test?: string;
 }
 
 /** What text alone cannot show, in the order an author would run into it. */
@@ -79,6 +87,15 @@ const SEVERITY: Readonly<Record<FindingCode, Severity>> = {
   "unknown-macro": "warning",
   "dynamic-reference": "warning",
   "test-column-unmentioned": "warning",
+  // A SQL test (ADR 0130). Each is an error, and `models.save` refuses a test with any error:
+  // a test runs as the tenant's dbt login with its failing rows written to dq, so a call that
+  // runs SQL of its own or moves where those rows go is not a test.
+  "test-forbidden-call": "error",
+  // A test that reads its model through no `ref()` is neither built after it nor selected
+  // with it, so it would judge a table the build has not made yet.
+  "test-model-unread": "error",
+  // `<model>__<name>` is a relation name: past 63 characters Postgres cuts it silently.
+  "test-name-too-long": "error",
 };
 
 /** What text alone cannot show, always reported: rule 2, no evidence is not a pass. */
@@ -90,7 +107,11 @@ export const UNVERIFIED: readonly UnverifiedCode[] = [
   "function-effects",
 ];
 
-/** Words that make a statement a write, wherever they stand -- a CTE included. */
 export function finding(code: FindingCode, line: number | null, subject: string | null): Finding {
   return { code, severity: SEVERITY[code], line, subject };
+}
+
+/** The same finding, said to be about the test named `test` rather than the model's SQL. */
+export function inTest(found: Finding, test: string): Finding {
+  return { ...found, test };
 }

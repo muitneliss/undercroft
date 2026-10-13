@@ -184,6 +184,7 @@ export const vi = {
     documentKindsEmpty:
       "Catalogue chưa có loại nào ngoài other, nên publish sẽ xếp mọi tài liệu vào không loại nào. Hãy thêm một loại hoặc khởi tạo catalogue trước.",
     modelNameTaken: "Đã có một mô hình tên {{name}}. Hãy mở mô hình đó để sửa, hoặc chọn tên khác.",
+    modelTestRefused: "Chưa lưu gì. {{reason}} models.check cho thấy mọi phát hiện.",
     buildInProgress:
       "Đang có một lần dựng mô hình cho khách hàng này. Hãy đợi lần đó xong rồi thử lại.",
     /** The same refusal, naming the run that holds the lock, so it can be waited on (#442). */

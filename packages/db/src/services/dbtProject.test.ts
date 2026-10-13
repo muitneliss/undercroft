@@ -61,7 +61,9 @@ describe("renderProject", () => {
     expect(PROJECT["models/stg_deals.sql"]).toBe("select 1 as deal_id");
     expect(PROJECT["models/stg_contacts.sql"]).toBe("select 2 as contact_id");
     expect(PROJECT["models/schema.yml"]).toContain("- name: stg_deals");
-    expect(PROJECT["models/schema.yml"]).toContain("data_tests: [not_null, unique]");
+    expect(PROJECT["models/schema.yml"]).toContain(
+      "        data_tests:\n          - not_null\n          - unique\n",
+    );
     // A model with no tests is not listed: an empty entry is a warning in dbt's eyes.
     expect(PROJECT["models/schema.yml"]).not.toContain("stg_contacts");
     for (const macro of MACROS) {
@@ -85,6 +87,75 @@ describe("renderProject", () => {
     expect(file.endsWith(wrapped)).toBe(true);
     expect(file.slice(0, file.length - wrapped.length)).toMatch(ONLY_A_COMMENT);
     expect(gmailLettersSql("raw.records")).not.toMatch(JINJA);
+  });
+});
+
+describe("renderProject, the tests beyond not_null and unique (ADR 0130)", () => {
+  const RICH = renderProject({
+    slug: "case_0042",
+    database: { host: "undercroft-postgres", port: 5432, dbname: "undercroft" },
+    models: [
+      {
+        name: "stg_payments",
+        sql: "select 1 as invoice_id",
+        tests: {
+          columns: {
+            status: [{ kind: "accepted_values", values: ["open", "it's paid"], severity: "warn" }],
+            code: [{ kind: "accepted_values", values: ["1", "2"], quote: false }],
+            invoice_id: [
+              { kind: "not_null", severity: "warn" },
+              { kind: "relationships", to: "stg_invoices", field: "invoice_id" },
+            ],
+          },
+          sql: [
+            {
+              name: "paid_not_after_received",
+              sql: "select * from {{ ref('stg_payments') }} where paid_on > received_on",
+              severity: "warn",
+            },
+            { name: "total_matches", sql: "select * from {{ ref('stg_payments') }} where false" },
+          ],
+        },
+      },
+    ],
+    macros: [],
+  });
+
+  it("writes accepted_values and relationships in dbt 1.9's top-level form, severity under config", () => {
+    expect(RICH["models/schema.yml"]).toContain(`      - name: status
+        data_tests:
+          - accepted_values:
+              values: ["open", "it''s paid"]
+              config:
+                severity: warn
+      - name: code
+        data_tests:
+          - accepted_values:
+              values: ["1", "2"]
+              quote: false
+      - name: invoice_id
+        data_tests:
+          - not_null:
+              config:
+                severity: warn
+          - relationships:
+              to: "ref('stg_invoices')"
+              field: invoice_id
+`);
+    // 1.10.5's `arguments:` would be read by 1.9 as one argument named `arguments`.
+    expect(RICH["models/schema.yml"]).not.toContain("arguments:");
+  });
+
+  it("writes each SQL test as a singular test under tests/, a warn one saying so in its config", () => {
+    expect(RICH["dbt_project.yml"]).toContain('test-paths: ["tests"]');
+    expect(RICH["tests/stg_payments__paid_not_after_received.sql"]).toBe(
+      "{{ config(severity = 'warn') }}\nselect * from {{ ref('stg_payments') }} where paid_on > received_on\n",
+    );
+    expect(RICH["tests/stg_payments__total_matches.sql"]).toBe(
+      "select * from {{ ref('stg_payments') }} where false\n",
+    );
+    // Its failing rows go where every test's go: the project's dq schema, nothing of its own.
+    expect(RICH["dbt_project.yml"]).toContain("+store_failures: true\n  +schema: dq_case_0042");
   });
 });
 
@@ -146,6 +217,35 @@ describe("parseRunResults", () => {
     ]);
   });
 
+  it("keeps a SQL test's step under its own name, and a warn as warn: visible, not failed", () => {
+    const parsed = parseRunResults({
+      results: [
+        {
+          unique_id: "test.undercroft.stg_payments__paid_not_after_received",
+          status: "warn",
+          message: "Got 3 results, configured to warn if != 0",
+          failures: 3,
+          execution_time: 0.2,
+          relation_name: '"undercroft"."dq_case_0042"."stg_payments__paid_not_after_received"',
+        },
+        {
+          unique_id: "test.undercroft.stg_payments__total_matches",
+          status: "fail",
+          message: "Got 1 result, configured to fail if != 0",
+          failures: 1,
+          execution_time: 0.1,
+          relation_name: '"undercroft"."dq_case_0042"."stg_payments__total_matches"',
+        },
+      ],
+    });
+
+    expect(parsed.steps.map((s) => [s.kind, s.name, s.status, s.failures])).toEqual([
+      ["test", "stg_payments__paid_not_after_received", "warn", 3],
+      ["test", "stg_payments__total_matches", "fail", 1],
+    ]);
+    expect(parsed.testsFailed).toBe(1);
+  });
+
   it("something that is not dbt's file yields no steps rather than a guess", () => {
     expect(parseRunResults("garbage")).toEqual({ steps: [], testsFailed: 0 });
     expect(parseRunResults({ results: "no" })).toEqual({ steps: [], testsFailed: 0 });
@@ -167,6 +267,34 @@ describe("relationsOfModel", () => {
       "not_null_fct_customer_lifetime_fe86bf5d797738089f46e3e192d7e930",
       `unique_${model}_region`,
     ]);
+
+    // The same synthesis for the tests that carry arguments, and a SQL test's own name.
+    expect(
+      relationsOfModel({
+        name: "pay",
+        tests: {
+          columns: {
+            inv: [{ kind: "relationships", to: "inv", field: "id" }],
+            code: [{ kind: "accepted_values", values: ["1", "2"], quote: false }],
+          },
+          sql: [{ name: "totals_match", sql: "select 1" }],
+        },
+      }).dq,
+    ).toEqual([
+      "relationships_pay_inv__id__ref_inv_",
+      "accepted_values_pay_code__False__1__2",
+      "pay__totals_match",
+    ]);
+    expect(
+      relationsOfModel({
+        name: "stg_payments",
+        tests: {
+          columns: {
+            invoice_id: [{ kind: "relationships", to: "stg_invoices", field: "invoice_id" }],
+          },
+        },
+      }).dq,
+    ).toEqual(["relationships_stg_payments_431834f3110c18883983394f9bbd3f3c"]);
 
     const longest = "a".repeat(63);
     expect(relationsOfModel({ name: longest, tests: { columns: {} } }).analytics).toEqual([

@@ -17,8 +17,8 @@ export {
   relationsOfModel,
   renderProject,
   SOURCES_YML,
-  testRelationPrefix,
 } from "./dbtProject.ts";
+export { sqlTestName, testRelationPrefixes } from "./dbtTests.ts";
 export { grantExpiryFor } from "./grantExpiry.ts";
 export {
   callersOf,
@@ -29,6 +29,7 @@ export {
 export {
   checkMacro,
   checkModel,
+  checkTests,
   type Finding,
   type FindingCode,
   type MacroCheckInput,

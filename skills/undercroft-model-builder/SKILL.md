@@ -271,6 +271,9 @@ step, and page further with `runs.get` on the same `runId` and its `stepCursor`.
   id. Show the person the count and a few rows, and ask whether the model or the test is
   wrong. These rows are the customer's data: show them to the person and put them nowhere
   else, the plan file included.
+- A test step with status `warn`: a `severity: "warn"` test found rows. It is not in
+  `testsFailed` and is not a pass. Read its rows with `dq.failures` the same way and show the
+  person the count; it is theirs to decide whether that rule should stop builds.
 - `ok` false: the build failed. Show `error`, fix the SQL with the person, and go back to
   M3. A save of the fix is again a save the person agrees to.
 - `NOT_FOUND`: a name is not a saved model; the message and `missing` in the details name it.
