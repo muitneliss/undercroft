@@ -475,10 +475,12 @@ function profilesYml(slug: string, database: DatabaseAddress): string {
  * Every file of the tenant's project, keyed by path relative to the project root.
  *
  * Model, macro, seed and column names have been validated against the contract's identifier
- * rule before they reach a row, and the slug is Postgres's own folding; nothing here is quoted
- * for YAML except the values that come from configuration and the seeds block (`seedsYml`). A
- * tenant's macro has its own directory, so its file can never be one of the platform's whatever it is named -- and a name
- * that would override one of the platform's macros never reaches a row (`macroDefinition.ts`).
+ * rule before they reach a row, and the slug is Postgres's own folding. A valid identifier can
+ * still be a YAML 1.1 boolean or null (`on`, `no`, `null`), so every name written as YAML -- the
+ * seeds block (`seedsYml`) and `schema.yml` (`dbtTests.ts`) -- is a quoted string, as are the
+ * values that come from configuration. A tenant's macro has its own directory, so its file can
+ * never be one of the platform's whatever it is named -- and a name that would override one of
+ * the platform's macros never reaches a row (`macroDefinition.ts`).
  */
 export function renderProject(input: ProjectInput): Record<string, string> {
   const files: Record<string, string> = {

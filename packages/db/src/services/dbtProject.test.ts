@@ -8,6 +8,8 @@
 
 import { describe, expect, test as it } from "bun:test";
 
+import { parse } from "yaml";
+
 import {
   excelSerialDateSql,
   excelSerialTimestampSql,
@@ -78,7 +80,7 @@ describe("renderProject", () => {
   it("writes one file per model and the chosen tests as dbt's schema file", () => {
     expect(PROJECT["models/stg_deals.sql"]).toBe("select 1 as deal_id");
     expect(PROJECT["models/stg_contacts.sql"]).toBe("select 2 as contact_id");
-    expect(PROJECT["models/schema.yml"]).toContain("- name: stg_deals");
+    expect(PROJECT["models/schema.yml"]).toContain('- name: "stg_deals"');
     expect(PROJECT["models/schema.yml"]).toContain(
       "        data_tests:\n          - not_null\n          - unique\n",
     );
@@ -210,28 +212,61 @@ describe("renderProject, the tests beyond not_null and unique (ADR 0130)", () =>
   });
 
   it("writes accepted_values and relationships in dbt 1.9's top-level form, severity under config", () => {
-    expect(RICH["models/schema.yml"]).toContain(`      - name: status
+    expect(RICH["models/schema.yml"]).toContain(`      - name: "status"
         data_tests:
           - accepted_values:
               values: ["open", "it''s paid"]
               config:
                 severity: warn
-      - name: code
+      - name: "code"
         data_tests:
           - accepted_values:
               values: ["1", "2"]
               quote: false
-      - name: invoice_id
+      - name: "invoice_id"
         data_tests:
           - not_null:
               config:
                 severity: warn
           - relationships:
               to: "ref('stg_invoices')"
-              field: invoice_id
+              field: "invoice_id"
 `);
     // 1.10.5's `arguments:` would be read by 1.9 as one argument named `arguments`.
     expect(RICH["models/schema.yml"]).not.toContain("arguments:");
+  });
+
+  // dbt reads YAML 1.1, where each of these valid identifiers, bare, is a boolean or null: the
+  // test would be declared on column `true` or on none, and nothing would say so.
+  it("names a model or column called like a YAML 1.1 boolean or null as itself, read as dbt reads it", () => {
+    const names = ["on", "no", "yes", "off", "true", "null"];
+    const yml =
+      renderProject({
+        slug: "case_0042",
+        database: { host: "undercroft-postgres", port: 5432, dbname: "undercroft" },
+        models: [
+          {
+            name: "off",
+            sql: "select 1",
+            tests: {
+              columns: {
+                ...Object.fromEntries(names.map((name) => [name, ["not_null"]])),
+                parent_id: [{ kind: "relationships", to: "yes", field: "no" }],
+              },
+            },
+          },
+        ],
+        macros: [],
+        seeds: [],
+      })["models/schema.yml"] ?? "";
+    const read = parse(yml, { version: "1.1" }) as {
+      models: { name: unknown; columns: { name: unknown; data_tests: unknown[] }[] }[];
+    };
+    expect(read.models.map((model) => model.name)).toEqual(["off"]);
+    expect(read.models[0]?.columns.map((column) => column.name)).toEqual([...names, "parent_id"]);
+    expect(read.models[0]?.columns.at(-1)?.data_tests).toEqual([
+      { relationships: { to: "ref('yes')", field: "no" } },
+    ]);
   });
 
   it("writes each SQL test as a singular test under tests/, a warn one saying so in its config", () => {
