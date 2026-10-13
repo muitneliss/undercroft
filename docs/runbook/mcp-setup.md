@@ -190,7 +190,7 @@ token as an environment variable, as above, so it stays off every process's comm
   dbt steps that did not pass unless asked for more.
 - **Builds.** `models_build` builds several models (`names`, with `+name` and `name+` for their
   upstream and downstream) as one run and answers the same way, with each named model's row
-  count. Waiting, it holds the call at most 160 seconds (ADR 0125); a host whose tool timeout is
+  count. Waiting, it holds the call at most 160 seconds (ADR 0126); a host whose tool timeout is
   shorter passes `wait: false`, which answers with the run at once, and waits on it with
   `runs_get`. A build refused because another is running names that run.
 - **Widgets.** In a host that draws MCP Apps (claude.ai, Claude Desktop), a query result

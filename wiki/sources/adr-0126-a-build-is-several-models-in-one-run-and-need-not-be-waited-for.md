@@ -1,17 +1,17 @@
 ---
-title: ADR 0125 A Build Is Several Models in One Run, and Need Not Be Waited For
+title: ADR 0126 A Build Is Several Models in One Run, and Need Not Be Waited For
 type: source
 date: 2026-10-13
 tags: []
 source: >-
-  docs/adr/0125-a-build-is-several-models-in-one-run-and-need-not-be-waited-for.md
+  docs/adr/0126-a-build-is-several-models-in-one-run-and-need-not-be-waited-for.md
 source_path: >-
-  docs/adr/0125-a-build-is-several-models-in-one-run-and-need-not-be-waited-for.md
-source_hash: 38a66a282ec4757ce39647c41449d0b1dc4ac211bf3ce89e87c188e09df45b7b
+  docs/adr/0126-a-build-is-several-models-in-one-run-and-need-not-be-waited-for.md
+source_hash: f1c449af45ac8c8b798c130d5eb930347e67af33ac6315a64f0de0041bac8c3f
 ingested: 2026-10-13
 ---
 
-# ADR 0125 A Build Is Several Models in One Run, and Need Not Be Waited For
+# ADR 0126 A Build Is Several Models in One Run, and Need Not Be Waited For
 
 Amends the `models.build` consequences of [[ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does]]. Issues #442 and #441: in 2,433 MCP calls, 261 of 317 `models_build` calls came in back-to-back one-model streaks, 18 hit the client's timeout and 7 were refused with `CONFLICT` by the agent's own earlier build with no run id to wait on; the answer listed every dbt step and was the largest token sink.
 

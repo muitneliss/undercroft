@@ -373,3 +373,6 @@
 ## [2026-10-13] ingest | ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does
 ## [2026-10-13] ingest | ADR 0125 A Build Is Several Models in One Run, and Need Not Be Waited For
 ## [2026-10-13] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-13] ingest | ADR 0126 A Build Is Several Models in One Run, and Need Not Be Waited For
+## [2026-10-13] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-13] remove | ADR 0125 A Build Is Several Models in One Run, and Need Not Be Waited For

@@ -151,7 +151,7 @@ export const modelsRouter = router({
    * It waits by default and answers with what the build did, its steps reported as `runs.get`
    * reports them (the problems unless asked, issue 441). With `wait: false` it answers at once
    * with the run, for a caller that waits on `runs.get` instead of on this request. Waiting, it
-   * holds its request open for the worker's whole deadline plus the time to answer (ADR 0125).
+   * holds its request open for the worker's whole deadline plus the time to answer (ADR 0126).
    *
    * A name the tenant has no model of is NOT_FOUND naming it, before anything runs. A build
    * already running is a CONFLICT naming that run and its start, so it can be waited on; a
