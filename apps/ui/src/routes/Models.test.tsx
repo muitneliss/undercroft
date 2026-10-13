@@ -25,17 +25,27 @@ import { trpc } from "@/trpc.ts";
 const TENANT = "CASE-0042";
 const WHEN = "2026-09-30T03:12:53.210Z";
 
-function built(name: string, status: string | null, columns: string[] = []): unknown {
+const SHA256 = "0".repeat(64);
+/** mart_pipeline's last build, as `models.get` answers it: the columns themselves. */
+const PIPELINE_COLUMNS = ["deal_id", "stage", "amount"];
+
+/**
+ * One model as `models.list` answers it: how many columns its build found, never which, and
+ * `null` for a count the server does not know.
+ */
+function built(name: string, status: string | null, columnCount: number | null = null): unknown {
   return {
     name,
     updatedAt: WHEN,
     updatedBy: "u1",
-    lastBuild: status === null ? null : { runId: "run-7", status, endedAt: WHEN, columns },
+    sqlSha256: SHA256,
+    testsSha256: SHA256,
+    lastBuild: status === null ? null : { runId: "run-7", status, endedAt: WHEN, columnCount },
   };
 }
 
 const MODELS = [
-  built("mart_pipeline", "success", ["deal_id", "stage", "amount"]),
+  built("mart_pipeline", "success", PIPELINE_COLUMNS.length),
   built("stg_deals", "success"),
   built("stg_files", "error"),
   built("stg_notes", null),
@@ -96,10 +106,20 @@ function mount(url: string): ReturnType<typeof createMemoryRouter> {
             return Promise.resolve(answer(LINEAGE));
           }
           if (path.endsWith("/models.get")) {
-            const detail = MODELS[0] as Record<string, unknown>;
             return Promise.resolve(
               answer({
-                ...detail,
+                name: "mart_pipeline",
+                updatedAt: WHEN,
+                updatedBy: "u1",
+                sqlSha256: SHA256,
+                testsSha256: SHA256,
+                lastBuild: {
+                  runId: "run-7",
+                  status: "success",
+                  endedAt: WHEN,
+                  columnCount: PIPELINE_COLUMNS.length,
+                  columns: PIPELINE_COLUMNS,
+                },
                 sql: "select * from {{ ref('stg_deals') }}",
                 tests: { columns: {} },
               }),
