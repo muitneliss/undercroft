@@ -91,7 +91,7 @@ export const procedureSentences: SentenceTable = {
     "Một mã băm cho các mô hình, macro, bảng tham chiếu và câu hỏi của khách hàng và một mã cho tất cả, tính từ những gì mỗi lần lưu đã ghi: bằng nhau nghĩa là không có gì thay đổi.",
   "models.get": "Một mô hình dbt, SQL và kiểm thử của nó, kèm mã băm của chúng.",
   "models.save":
-    "Lưu một mô hình dbt; không chạy gì. SQL và kiểm thử giống hệt bản đã lưu trả về unchanged: true và không thay đổi gì. Quản trị.",
+    "Lưu một mô hình dbt; không chạy gì. tests: columns gán mỗi cột not_null, unique, {kind: accepted_values, values, quote?} hoặc {kind: relationships, to, field}; sql là các kiểm thử SQL {name, sql}, mỗi kiểm thử là một câu select trả về các dòng vi phạm quy tắc; kiểm thử nào cũng nhận severity error hoặc warn. Kiểm thử SQL hoặc relationships mà models.check thấy có lỗi sẽ bị từ chối và không lưu gì. SQL và kiểm thử giống hệt bản đã lưu trả về unchanged: true và không thay đổi gì. Quản trị.",
   "models.delete":
     "Xoá một mô hình dbt cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu; không xoá gì nếu chưa gỡ được bảng. Quản trị.",
   "models.build":
@@ -101,7 +101,7 @@ export const procedureSentences: SentenceTable = {
   "models.reference":
     "Tài liệu tham khảo cho người viết mô hình: các nguồn, macro của nền tảng và macro riêng của khách hàng. parts để chỉ lấy một số trong sources, platformMacros và tenantMacros; hai phần đầu giống hệt nhau ở mọi lần gọi.",
   "models.check":
-    "Kiểm tra SQL của một mô hình trước khi lưu, không chạy gì: lỗi chắc chắn, điều đáng ngờ, và những gì không kiểm được.",
+    "Kiểm tra SQL và các kiểm thử của một mô hình trước khi lưu, không chạy gì: lỗi chắc chắn, điều đáng ngờ, và những gì không kiểm được; phát hiện nằm trong một kiểm thử thì ghi tên nó ở test.",
   "macros.list":
     "Các macro dbt riêng của khách hàng, mỗi macro kèm công dụng, tham số và mã băm của định nghĩa và mô tả, không kèm định nghĩa. names hoặc match để lọc.",
   "macros.get": "Một macro dbt của khách hàng, định nghĩa của nó và các mã băm.",

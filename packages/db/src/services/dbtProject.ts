@@ -29,9 +29,9 @@
  * it.
  */
 
-import { createHash } from "node:crypto";
-
+import type { ModelTestsJson } from "../repos/models.ts";
 import type { RunStep, RunStepKind } from "../repos/runs.ts";
+import { testFiles, testRelations } from "./dbtTests.ts";
 
 /** The environment variable the generated profile reads the tenant's password from. */
 export const PASSWORD_VAR = "UNDERCROFT_DBT_PASSWORD";
@@ -315,7 +315,7 @@ export const MACROS: readonly { name: string; sql: string }[] = [
 export interface ProjectModel {
   readonly name: string;
   readonly sql: string;
-  readonly tests: { readonly columns: Record<string, readonly string[]> };
+  readonly tests: ModelTestsJson;
 }
 
 /** A tenant's macro: one whole `{% macro %}` definition, as `macroDefinition.ts` admitted it. */
@@ -390,6 +390,7 @@ profile: undercroft
 
 model-paths: ["models"]
 macro-paths: ["macros"]
+test-paths: ["tests"]
 seed-paths: ["seeds"]
 
 models:
@@ -423,28 +424,6 @@ function profilesYml(slug: string, database: DatabaseAddress): string {
 `;
 }
 
-/** `models/schema.yml`: the tests the author chose, per column. Models with none are omitted. */
-function schemaYml(models: readonly ProjectModel[]): string {
-  const lines = ["version: 2", "", "models:"];
-  const tested = models
-    .map((model) => ({
-      name: model.name,
-      columns: Object.entries(model.tests.columns).filter(([, tests]) => tests.length > 0),
-    }))
-    .filter((model) => model.columns.length > 0);
-  for (const model of tested) {
-    lines.push(`  - name: ${model.name}`, "    columns:");
-    for (const [column, tests] of model.columns) {
-      lines.push(`      - name: ${column}`, `        data_tests: [${tests.join(", ")}]`);
-    }
-  }
-  if (tested.length === 0) {
-    lines.push("  []");
-  }
-  lines.push("");
-  return lines.join("\n");
-}
-
 /**
  * Every file of the tenant's project, keyed by path relative to the project root.
  *
@@ -459,7 +438,7 @@ export function renderProject(input: ProjectInput): Record<string, string> {
     "dbt_project.yml": projectYml(input.slug, input.seeds),
     "profiles.yml": profilesYml(input.slug, input.database),
     "models/sources.yml": SOURCES_YML,
-    "models/schema.yml": schemaYml(input.models),
+    ...testFiles(input.models),
   };
   for (const macro of MACROS) {
     files[`macros/${macro.name}.sql`] = macro.sql;
@@ -478,10 +457,6 @@ export function renderProject(input: ProjectInput): Record<string, string> {
 
 /** NAMEDATALEN - 1, and the length dbt-postgres fits every relation name it makes into. */
 const MAX_RELATION_NAME = 63;
-/** dbt 1.9: a generic test name this long or longer is truncated and hashed. */
-const LONG_TEST_NAME = 64;
-/** dbt 1.9: how much of `<kind>_<model>` a truncated test name keeps before its hash. */
-const TEST_NAME_KEPT = 30;
 /** The working copies dbt-postgres 1.9 renames through when it replaces a relation. */
 const WORKING_SUFFIXES = ["__dbt_tmp", "__dbt_backup"] as const;
 
@@ -495,10 +470,8 @@ const WORKING_SUFFIXES = ["__dbt_tmp", "__dbt_backup"] as const;
  * the next build of the same model would have cleared it.
  *
  * `dq` is where each of the model's declared tests stores its failing rows, which the project
- * above sends to `dq_<slug>` with `+store_failures`. dbt 1.9 names a generic test
- * `<kind>_<model>_<column>` (`synthesize_generic_test_names`), and when that is 64 characters
- * or more it keeps the first 30 of `<kind>_<model>` and appends the md5 of the full name --
- * the only form in which Postgres would not cut the name itself.
+ * above sends to `dq_<slug>` with `+store_failures`, named as `testRelations` (`dbtTests.ts`)
+ * says dbt names them.
  *
  * Here beside `renderProject` because it is a statement about what that rendering produces;
  * a change to how tests are rendered is a change to this, and they should be read together.
@@ -515,29 +488,7 @@ export function relationsOfModel(model: Pick<ProjectModel, "name" | "tests">): {
       (suffix) => `${model.name.slice(0, MAX_RELATION_NAME - suffix.length)}${suffix}`,
     ),
   ];
-  const dq = Object.entries(model.tests.columns).flatMap(([column, kinds]) =>
-    kinds.map((kind) => testRelationName(kind, model.name, column)),
-  );
-  return { analytics, dq };
-}
-
-/**
- * The prefix every failing-rows relation of a `kind` test on `model` starts with, hashed or
- * not: a truncated name keeps `<kind>_<model>` whole when that is 30 characters or fewer.
- */
-export function testRelationPrefix(kind: string, model: string): string {
-  return `${kind}_${model}_`;
-}
-
-function testRelationName(kind: string, model: string, column: string): string {
-  // dbt replaces anything outside [0-9a-zA-Z_] in an argument; a column that passed the
-  // contract's identifier rule has nothing to replace, and this keeps the rule exact anyway.
-  const full = `${kind}_${model}_${column.replaceAll(/[^0-9a-zA-Z_]+/gu, "_")}`;
-  if (full.length < LONG_TEST_NAME) {
-    return full;
-  }
-  const hash = createHash("md5").update(full, "utf8").digest("hex");
-  return `${`${kind}_${model}`.slice(0, TEST_NAME_KEPT)}_${hash}`;
+  return { analytics, dq: testRelations(model) };
 }
 
 interface RunResultsNode {
@@ -575,6 +526,8 @@ function isStepKind(kind: string | undefined): kind is RunStepKind {
 
 /**
  * `model.undercroft.stg_deals` -> `stg_deals`; `test.undercroft.not_null_x.a1b2` -> `not_null_x`;
+ * a SQL test's `test.undercroft.stg_deals__total_matches` (no hash) -> `stg_deals__total_matches`,
+ * whose model is the part before the last `__` (`sqlTestName`);
  * `seed.undercroft.account_groups` -> `account_groups`.
  */
 function stepOf(node: RunResultsNode): RunStep | null {
@@ -595,7 +548,11 @@ function stepOf(node: RunResultsNode): RunStep | null {
   };
 }
 
-/** A test that did not pass: it found rows, or it could not run at all. */
+/**
+ * A test that did not pass: it found rows, or it could not run at all. A `severity: warn` test
+ * that found rows is dbt's status `warn` and is NOT here: it is recorded as the step's status,
+ * visible, never counted failed and never folded into `pass` (ADR 0130).
+ */
 const TEST_FAILED = new Set(["fail", "error"]);
 
 /**

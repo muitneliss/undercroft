@@ -18,7 +18,8 @@
  * this morning, so re-creating a model of the same name and deleting it clears the leftover.
  * `relationsOfModel` says what dbt names things; `relationsToDrop` says which of the relations
  * that exist belong to THIS model and to no other, because two models' names can share a
- * prefix and a test's failing-rows table is named `<kind>_<model>_<column>`.
+ * prefix and a test's failing-rows table is named `<kind>_<model>_<column>` (or, for a SQL
+ * test, `<model>__<name>`; ADR 0130).
  *
  * WHAT IS REFUSED, and why nothing is dropped when it is:
  * - A build of the tenant is running. It read every model when it started and would build
@@ -34,7 +35,6 @@
  * all `dropSeedRelations` takes, under the same refusals.
  */
 
-import { TEST_KINDS } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   listModels,
@@ -43,7 +43,7 @@ import {
   SOURCE_OF_TRANSFORM,
   tenantRolesFor,
 } from "@undercroft/db/repos";
-import { relationsOfModel, testRelationPrefix } from "@undercroft/db/services";
+import { relationsOfModel, testRelationPrefixes } from "@undercroft/db/services";
 
 import {
   dependentsOf,
@@ -209,12 +209,12 @@ function relationsToDrop(
   });
 }
 
-/** The model with the longest name that `<kind>_<name>_` starts `relation` for, if any. */
+/** The model with the longest name a test-relation prefix of starts `relation`, if any. */
 function ownerByName(relation: string, models: readonly ModelShape[]): string | null {
   let owner: string | null = null;
   for (const candidate of models) {
-    const matches = TEST_KINDS.some((kind) =>
-      relation.startsWith(testRelationPrefix(kind, candidate.name)),
+    const matches = testRelationPrefixes(candidate.name).some((prefix) =>
+      relation.startsWith(prefix),
     );
     if (matches && (owner === null || candidate.name.length > owner.length)) {
       owner = candidate.name;

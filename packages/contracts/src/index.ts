@@ -111,16 +111,29 @@ export {
 } from "./lakeApi.ts";
 export { parseSpec, SpecError } from "./loadSpec.ts";
 export {
+  ColumnTest,
+  canonicalTests,
+  GENERIC_TEST_KINDS,
+  type GenericTestKind,
+  kindOf,
+  MAX_ACCEPTED_VALUE_CHARS,
+  MAX_ACCEPTED_VALUES,
   MAX_BUILD_SELECTORS,
   MAX_IDENTIFIER_CHARS,
   MAX_MODEL_SQL_BYTES,
+  MAX_SQL_TEST_BYTES,
+  MAX_SQL_TESTS,
   MODEL_NAME,
   ModelName,
   ModelSelector,
   ModelTests,
+  SQL_TEST_NAME,
+  SqlTest,
   selectedModel,
   TEST_KINDS,
+  TEST_SEVERITIES,
   TestKind,
+  TestSeverity,
 } from "./models.ts";
 export { MacroDescription, MacroName, MAX_MACRO_SQL_BYTES } from "./macros.ts";
 export {

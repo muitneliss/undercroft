@@ -31,6 +31,29 @@ describe("modelDraft", () => {
     expect(isDirty({ ...seeded, tests: { ...seeded.tests, amount: [] } })).toBe(true);
   });
 
+  it("keeps every test the form cannot edit when it saves, so the editor deletes none (ADR 0130)", () => {
+    const seeded = draftFrom("CASE-0042", {
+      ...MODEL,
+      tests: {
+        columns: {
+          deal_id: [{ kind: "not_null", severity: "warn" }, "unique"],
+          stage: [{ kind: "accepted_values", values: ["won", "lost"] }],
+        },
+        sql: [{ name: "won_has_amount", sql: "select 1" }],
+      },
+    });
+    expect(seeded.tests).toEqual({ deal_id: ["not_null", "unique"], stage: [] });
+
+    // The person unticks unique and drops the stage row from the form.
+    expect(testsFor({ ...seeded, tests: { deal_id: ["not_null"] } })).toEqual({
+      columns: {
+        deal_id: [{ kind: "not_null", severity: "warn" }],
+        stage: [{ kind: "accepted_values", values: ["won", "lost"] }],
+      },
+      sql: [{ name: "won_has_amount", sql: "select 1" }],
+    });
+  });
+
   it("hands the server the contract's shape", () => {
     const seeded = draftFrom("CASE-0042", MODEL);
     expect(testsFor({ ...seeded, tests: { deal_id: ["unique"], amount: [] } })).toEqual({

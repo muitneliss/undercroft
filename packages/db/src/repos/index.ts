@@ -83,8 +83,10 @@ export {
   listModels,
   type Model,
   type ModelHashes,
+  type ColumnTestJson,
   type ModelTestsJson,
   type SaveResult,
+  type SqlTestJson,
   saveModel,
   setModelColumns,
 } from "./models.ts";

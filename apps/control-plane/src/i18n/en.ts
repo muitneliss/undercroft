@@ -113,6 +113,7 @@ export const en = {
       "A model named {{name}} already exists. Open it to edit, or choose another name.",
     modelNameIsSeed:
       "A reference table (seed) named {{name}} already exists. A model and a reference table may not share a name, since ref('{{name}}') reads both. Choose another name.",
+    modelTestRefused: "Nothing was saved. {{reason}} models.check shows every finding.",
     buildInProgress:
       "A build is already running for this customer. Wait for it to finish, then try again.",
     buildInProgressAs:

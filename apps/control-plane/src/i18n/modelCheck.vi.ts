@@ -48,7 +48,15 @@ export const modelCheck = {
       "Tên truyền vào {{subject}} không được viết thẳng ra, nên không kiểm tra được nó có tồn tại không.",
     "test-column-unmentioned":
       "Có kiểm thử cho cột {{subject}} nhưng câu SQL không nhắc đến cột đó.",
+    "test-forbidden-call":
+      "Kiểm thử SQL không được gọi {{subject}}(). Kiểm thử là đúng một câu select trả về các dòng vi phạm; mức nghiêm trọng khai báo bằng severity của kiểm thử.",
+    "test-model-unread":
+      "Kiểm thử SQL phải đọc chính mô hình của nó, {{subject}}, qua ref(), để dbt chạy nó sau khi dựng mô hình đó và cùng với mô hình đó.",
+    "test-name-too-long":
+      "Tên {{subject}} dài quá 63 ký tự, Postgres sẽ cắt bớt. Hãy đặt tên kiểm thử ngắn hơn.",
   },
+  /** A finding inside one of the model's tests rather than its SQL: which test, then what. */
+  inTest: "Kiểm thử {{test}}: {{message}}",
   unverified: {
     compiles: "Câu SQL có biên dịch và chạy được không: chỉ bản dựng mới biết.",
     "payload-keys": "Các khoá đọc từ payload có thật sự tồn tại trong dữ liệu không.",

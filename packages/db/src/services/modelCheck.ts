@@ -34,11 +34,13 @@
  * is the only way there is; `raw-direct` fires only for a table a source declares.
  */
 
+import type { ModelTestsJson, SqlTestJson } from "../repos/models.ts";
 import { MACROS } from "./dbtProject.ts";
+import { sqlTestName } from "./dbtTests.ts";
 import { SOURCES } from "./dbtSources.ts";
 import { DBT_CONTEXT, type JinjaReading, readJinja } from "./jinja.ts";
 import { readMacroDefinition } from "./macroDefinition.ts";
-import { type Finding, finding, type ModelCheck, UNVERIFIED } from "./modelFindings.ts";
+import { type Finding, finding, inTest, type ModelCheck, UNVERIFIED } from "./modelFindings.ts";
 import { bareModelFindings, fragmentFindings, namesIn, sqlFindings } from "./sqlChecks.ts";
 import { lex, type Token } from "./sqlLexer.ts";
 
@@ -53,7 +55,7 @@ export type {
 export interface ModelCheckInput {
   readonly name: string;
   readonly sql: string;
-  readonly tests: { readonly columns: Readonly<Record<string, readonly string[]>> };
+  readonly tests: ModelTestsJson;
   /** The tenant's model names, which a `ref()` must name one of -- or one of its seeds. */
   readonly existingModels: readonly string[];
   /** The tenant's own macro names, which a model may call like the platform's. */
@@ -166,16 +168,91 @@ function wholeModelFindings(
 function distinct(findings: readonly Finding[]): Finding[] {
   const seen = new Set<string>();
   return findings.filter((found) => {
-    const key = `${found.code}|${String(found.line)}|${found.subject ?? ""}`;
+    const key = `${found.test ?? ""}|${found.code}|${String(found.line)}|${found.subject ?? ""}`;
     const fresh = !seen.has(key);
     seen.add(key);
     return fresh;
   });
 }
 
+/** NAMEDATALEN - 1: a SQL test's name is the relation its failing rows are stored in. */
+const MAX_TEST_RELATION_CHARS = 63;
+
+/**
+ * What a SQL test may not call: dbt's ways of running SQL of its own beside the test's one
+ * SELECT, which the lexer never sees, and `config()`, which could send the failing rows -- source
+ * rows, verbatim -- out of `dq_<slug>` into a schema a dashboard reads. Its severity is declared
+ * in the test, and the one `config()` it gets is the one `dbtProject.ts` writes for it.
+ */
+const TEST_FORBIDDEN_CALLS: ReadonlySet<string> = new Set([
+  "config",
+  "run_query",
+  "statement",
+  "adapter",
+]);
+
+/**
+ * Everything text alone can say about one SQL test of `model`, each finding naming the test.
+ *
+ * Held to what a model's SQL is held to -- one SELECT, no write, every `ref()` and `source()`
+ * known, no relation read around dbt -- with three differences: it must `ref()` its own model
+ * (`test-model-unread`), it may call none of `TEST_FORBIDDEN_CALLS`, and its relation name must
+ * fit Postgres. Its own model is a model it may name even before that model is first saved.
+ */
+function sqlTestFindings(
+  model: string,
+  test: SqlTestJson,
+  input: Pick<ModelCheckInput, "existingModels" | "existingMacros" | "existingSeeds">,
+): Finding[] {
+  const jinja = readJinja(test.sql);
+  const tokens = lex(jinja.text);
+  // A test may read a seed beside its model -- a list of allowed codes, say (ADR 0128).
+  const refable = new Set([...input.existingModels, ...input.existingSeeds, model]);
+  const forbidden = [...jinja.calls, ...jinja.names]
+    .filter(({ name }) => TEST_FORBIDDEN_CALLS.has(name))
+    .map(({ name, line }) => finding("test-forbidden-call", line, name));
+  const readsModel = jinja.references.some(
+    ({ fn, args }) => fn === "ref" && args !== null && args.at(-1) === model,
+  );
+  const tooLong = sqlTestName(model, test.name).length > MAX_TEST_RELATION_CHARS;
+  return [
+    ...(tooLong ? [finding("test-name-too-long", null, sqlTestName(model, test.name))] : []),
+    ...nameFindings(jinja, new Set(input.existingMacros), "report-parameter"),
+    ...referenceFindings(jinja, refable, null),
+    ...sqlFindings(tokens),
+    ...bareModelFindings(tokens, refable),
+    ...forbidden,
+    ...(readsModel ? [] : [finding("test-model-unread", null, model)]),
+  ].map((found) => inTest(found, test.name));
+}
+
+/**
+ * What text alone can say about a model's tests beyond its SQL: each SQL test, and each
+ * `relationships` test's `to`, which -- like a `ref()` -- must name a model the tenant has, one
+ * of its seeds (ADR 0128), or this one. dbt compiles every test with the project, so either one
+ * naming nothing fails the whole tenant's build, not this model's test.
+ */
+export function checkTests(
+  input: Pick<
+    ModelCheckInput,
+    "name" | "tests" | "existingModels" | "existingMacros" | "existingSeeds"
+  >,
+): Finding[] {
+  const models = new Set([...input.existingModels, ...input.existingSeeds, input.name]);
+  const relationships = Object.entries(input.tests.columns).flatMap(([column, tests]) =>
+    tests.flatMap((test) =>
+      typeof test !== "string" && test.kind === "relationships" && !models.has(test.to ?? "")
+        ? [inTest(finding("unknown-ref", null, test.to ?? ""), `${column}.relationships`)]
+        : [],
+    ),
+  );
+  const sql = (input.tests.sql ?? []).flatMap((test) => sqlTestFindings(input.name, test, input));
+  return distinct([...relationships, ...sql]);
+}
+
 /**
  * Everything text alone can say about a model, and what it cannot. Pure: the tenant's model
- * names are the caller's to read.
+ * names are the caller's to read. The model's tests are read too (`checkTests`).
  */
 export function checkModel(input: ModelCheckInput): ModelCheck {
   const jinja = readJinja(input.sql);
@@ -193,7 +270,7 @@ export function checkModel(input: ModelCheckInput): ModelCheck {
       ...referenceFindings(jinja, refable, input.name),
       ...sql,
       ...whole,
-    ]),
+    ]).concat(checkTests(input)),
     unverified: UNVERIFIED,
   };
 }

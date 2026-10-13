@@ -27,6 +27,7 @@ const DRAFT: ModelDraft = {
   sql: "select 1 as deal_id",
   tests: TESTS,
   saved: { sql: "select 1 as deal_id", tests: TESTS },
+  stored: { columns: { deal_id: ["not_null", "unique"], stage: ["not_null"] } },
 };
 
 it("offers the last build's columns as suggestions for the column to test", () => {

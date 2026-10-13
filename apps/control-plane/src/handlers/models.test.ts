@@ -129,6 +129,73 @@ describe("models.save", () => {
     );
   });
 
+  it("stores richer tests in one spelling, reads them back, and an equal re-save changes nothing", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const api = caller(admin, "a@example.test");
+    await api.models.save({ ...DRAFT, name: "stg_invoices", create: true });
+    const tests = {
+      columns: {
+        status: [
+          { kind: "accepted_values" as const, values: ["open", "paid"], severity: "warn" as const },
+        ],
+        invoice_id: [
+          { kind: "not_null" as const, severity: "error" as const },
+          { kind: "relationships" as const, to: "stg_invoices", field: "invoice_id" },
+        ],
+      },
+      sql: [
+        {
+          name: "paid_not_after_received",
+          sql: "select * from {{ ref('stg_payments') }} where paid_on > received_on",
+        },
+      ],
+    };
+    const payments = { tenantId: TENANT, name: "stg_payments", sql: "select 1 as invoice_id" };
+
+    expect(await api.models.save({ ...payments, tests, create: true })).toEqual({
+      ok: true,
+      unchanged: false,
+    });
+    const stored = await api.models.get({ tenantId: TENANT, name: "stg_payments" });
+    expect(stored.tests).toEqual({
+      columns: {
+        status: [{ kind: "accepted_values", values: ["open", "paid"], severity: "warn" }],
+        invoice_id: [
+          "not_null",
+          { kind: "relationships", to: "stg_invoices", field: "invoice_id" },
+        ],
+      },
+      sql: tests.sql,
+    });
+    // The same tests in the stored spelling are the same tests: no write, the same hash.
+    expect(await api.models.save({ ...payments, tests: stored.tests })).toEqual({
+      ok: true,
+      unchanged: true,
+    });
+    const again = await api.models.get({ tenantId: TENANT, name: "stg_payments" });
+    expect(again.testsSha256).toBe(stored.testsSha256);
+  });
+
+  it("an unsafe SQL test is refused in the caller's language, naming the test, and nothing is written", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    function save(locale: "vi" | "en", sql: string) {
+      return refusal(() =>
+        caller(admin, "a@example.test", locale).models.save({
+          ...DRAFT,
+          create: true,
+          tests: { columns: {}, sql: [{ name: "paid_on_time", sql }] },
+        }),
+      );
+    }
+
+    const en = await save("en", "select * from {{ ref('stg_deals') }};");
+    expect(en.code).toBe("BAD_REQUEST");
+    expect(en.message).toStartWith("Nothing was saved. Test paid_on_time: Remove the semicolon.");
+    const vi = await save("vi", "select 1 as one");
+    expect(vi.message).toStartWith("Chưa lưu gì. Kiểm thử paid_on_time: Kiểm thử SQL phải đọc");
+    expect(await caller(admin, "a@example.test").models.list({ tenantId: TENANT })).toEqual([]);
+  });
+
   it("a name that is not a plain identifier is refused before it reaches the database", async () => {
     const admin = await seedMember("a@example.test", "admin");
     const got = await refusal(() =>

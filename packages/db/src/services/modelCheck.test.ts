@@ -10,7 +10,7 @@
 import { describe, expect, test as it } from "bun:test";
 
 import { declaredSources } from "./dbtSources.ts";
-import { checkModel, type FindingCode, type ModelCheck } from "./modelCheck.ts";
+import { checkModel, checkTests, type FindingCode, type ModelCheck } from "./modelCheck.ts";
 
 const CLEAN = `with deals as (
     select
@@ -359,5 +359,95 @@ describe("Jinja", () => {
   it("ignores a Jinja comment's contents", () => {
     const sql = "{# drop table x; ref('nothing') #}\nselect 1 as one";
     expect(check(sql).findings).toEqual([]);
+  });
+});
+
+describe("a model's SQL tests and relationships (ADR 0130)", () => {
+  function testFindings(
+    sql: string,
+    existing: string[] = [],
+    seeds: string[] = [],
+  ): [FindingCode, string | undefined][] {
+    return checkTests({
+      name: "stg_payments",
+      tests: { columns: {}, sql: [{ name: "paid_on_time", sql }] },
+      existingModels: existing,
+      existingMacros: [],
+      existingSeeds: seeds,
+    })
+      .filter((found) => found.severity === "error")
+      .map((found) => [found.code, found.test]);
+  }
+
+  const SAFE = "select * from {{ ref('stg_payments') }} where paid_on > received_on";
+
+  it("finds nothing in one SELECT of its own model, even before the model is first saved", () => {
+    expect(testFindings(SAFE)).toEqual([]);
+    expect(
+      testFindings(
+        "select p.* from {{ ref('stg_payments') }} p left join {{ ref('stg_invoices') }} i using (invoice_id) where i.invoice_id is null",
+        ["stg_invoices"],
+      ),
+    ).toEqual([]);
+  });
+
+  it("holds a test to a model's rules, each finding naming the test", () => {
+    expect(testFindings(`${SAFE};`)).toEqual([["semicolon", "paid_on_time"]]);
+    expect(testFindings(`${SAFE} and 1 = (delete from x returning 1)`)).toContainEqual([
+      "write-statement",
+      "paid_on_time",
+    ]);
+    expect(testFindings(`${SAFE} and exists (select 1 from {{ ref('stg_gone') }})`)).toEqual([
+      ["unknown-ref", "paid_on_time"],
+    ]);
+    expect(testFindings(`${SAFE} and exists (select 1 from analytics_case_0042.x)`)).toEqual([
+      ["analytics-direct", "paid_on_time"],
+    ]);
+  });
+
+  it("lets a test read one of the tenant's seeds beside its model (ADR 0128)", () => {
+    const reads = `${SAFE} and status not in (select code from {{ ref('payment_statuses') }})`;
+    expect(testFindings(reads, [], ["payment_statuses"])).toEqual([]);
+    expect(testFindings(reads)).toEqual([["unknown-ref", "paid_on_time"]]);
+  });
+
+  it("refuses a test that reads no ref() of its model, or calls what could move its rows", () => {
+    expect(testFindings("select 1 as one where false")).toEqual([
+      ["test-model-unread", "paid_on_time"],
+    ]);
+    expect(testFindings(`{{ config(schema='analytics_case_0042') }}\n${SAFE}`)).toEqual([
+      ["test-forbidden-call", "paid_on_time"],
+    ]);
+    expect(testFindings(`{{ run_query('drop table x') }}\n${SAFE}`)).toEqual([
+      ["test-forbidden-call", "paid_on_time"],
+    ]);
+  });
+
+  it("refuses a relationships test to a model the tenant does not have, and not to itself", () => {
+    function relates(to: string) {
+      return checkTests({
+        name: "stg_payments",
+        tests: { columns: { invoice_id: [{ kind: "relationships", to, field: "invoice_id" }] } },
+        existingModels: ["stg_invoices"],
+        existingMacros: [],
+        existingSeeds: ["payment_terms"],
+      }).map((found) => [found.code, found.subject, found.test]);
+    }
+    expect(relates("stg_invoices")).toEqual([]);
+    expect(relates("payment_terms")).toEqual([]);
+    expect(relates("stg_payments")).toEqual([]);
+    expect(relates("stg_gone")).toEqual([["unknown-ref", "stg_gone", "invoice_id.relationships"]]);
+  });
+
+  it("reports the tests' findings through checkModel too, so models.check shows them", () => {
+    const checked = checkModel({
+      name: "stg_payments",
+      sql: "select 1 as invoice_id",
+      tests: { columns: {}, sql: [{ name: "paid_on_time", sql: "select 1" }] },
+      existingModels: [],
+      existingMacros: [],
+      existingSeeds: [],
+    });
+    expect(codes(checked)).toEqual(["test-model-unread"]);
   });
 });

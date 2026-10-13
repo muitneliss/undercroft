@@ -272,6 +272,72 @@ every table it names against `lake.summary` and `models.list`.
 
 ## Tests
 
-Each column can carry `not_null` and `unique`, and nothing else. They are passed with the
-save as `{ "columns": { "deal_id": ["unique", "not_null"] } }`. A test that fails does not
-stop the build: the table is built, and the failing rows are kept for `dq.failures`.
+A rule about a model's rows is a test of that model, never a model of its own. Do not write a
+`chk_*` model that counts violations and arrange a `not_null` or `unique` to trip on it: that is
+one more table in lineage and in `bi.schema`, read as if it were business data. Declare the
+rule as one of these, passed with the save in `tests`:
+
+| Rule                                        | Test                                                                       |
+| ------------------------------------------- | -------------------------------------------------------------------------- |
+| the column is never empty                   | `"not_null"`                                                               |
+| the column is the key                       | `"unique"`                                                                 |
+| the column holds one of a known set         | `{ "kind": "accepted_values", "values": ["open", "paid"] }`                |
+| the column points at a row of another model | `{ "kind": "relationships", "to": "stg_invoices", "field": "invoice_id" }` |
+| anything else: across columns, an aggregate | a SQL test, under `sql`                                                    |
+
+```json
+{
+  "columns": {
+    "payment_id": ["unique", "not_null"],
+    "status": [{ "kind": "accepted_values", "values": ["pending", "settled"] }],
+    "invoice_id": [{ "kind": "relationships", "to": "stg_invoices", "field": "invoice_id" }]
+  },
+  "sql": [
+    {
+      "name": "paid_not_after_received",
+      "sql": "select * from {{ ref('stg_payments') }} where paid_on > received_on",
+      "severity": "warn"
+    }
+  ]
+}
+```
+
+- `accepted_values` values are always strings. For a numeric column add `"quote": false`, and
+  each value must then be a plain decimal (`"1"`, `"2.50"`). Never write a value as a JSON
+  number.
+- `relationships.to` is a model the customer already has, or this model itself; save that
+  model first. `models.check` and `models.save` refuse one that names nothing, because it would
+  fail every build of the customer, not just this test.
+- A SQL test is one `select` returning the rows that break the rule; no rows is a pass. It
+  must read its own model through `ref()`, so dbt runs it after that model and with it. It is
+  held to every rule a model's SQL is -- no `;`, no write, every `ref()` and `source()` known --
+  and may not call `config()`, `run_query`, `statement` or `adapter`. Its name is lowercase
+  words joined by single underscores, and `<model>__<name>` must fit 63 characters. Unlike a
+  model's SQL, `models.save` refuses a SQL test with an error and writes nothing; run
+  `models.check` with the tests first, and read each finding's `test`.
+- `"severity": "warn"` on any test makes a failure a warning: the step's status is `warn`, it is
+  not counted in `testsFailed`, and it does not skip the models that read this one. Leave it out
+  (`error`, dbt's default) for a rule a report must not be built past.
+
+The SQL test above, as `models.check` reads it -- one `select` of the model's own rows:
+
+```sql
+select payment_id, paid_on, received_on
+from {{ ref('stg_payments') }}
+where paid_on > received_on
+```
+
+A total that must equal the sum of its lines is the same kind of test, reading both models:
+
+```sql
+select i.invoice_id, i.total, sum(l.amount) as lines_total
+from {{ ref('stg_invoices') }} as i
+join {{ ref('stg_invoice_lines') }} as l on l.invoice_id = i.invoice_id
+group by i.invoice_id, i.total
+having i.total is distinct from sum(l.amount)
+```
+
+A test that fails at `error` does not stop its own model: the table is built, and the failing
+rows are kept for `dq.failures` (a warn test's too), in the customer's `dq` schema, never
+`analytics`. `dq.failures` reads them for any of these kinds, with the build's `runId` and the
+step's id.

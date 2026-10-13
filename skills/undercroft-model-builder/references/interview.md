@@ -77,9 +77,15 @@ Check `models.list` first. A name that is taken is not a name to reuse without a
 
 - The column that is one row: `unique` and `not_null`.
 - Any column the report cannot do without: `not_null`.
+- A column with a known set of values: `accepted_values`, with the set the person names.
+- A column that points at another model's row: `relationships`, to that model and its key.
+- Any other rule the person states -- a date not after another, a total equal to its lines:
+  a SQL test, one `select` of the rows that break it (`model-patterns.md`, Tests). Never a
+  `chk_*` model.
 
-Only these two tests exist per column. Say that a test failing does not stop the table from
-being built; it tells the person which rows break the rule.
+Ask, for each rule, whether a break must stop what is built on this model (`error`) or only be
+shown (`warn`). Say that a test failing does not stop this table from being built; it tells
+the person which rows break the rule.
 
 ## The brief
 
@@ -97,6 +103,7 @@ Columns:  deal_id    text       the deal's HubSpot id               source_recor
           closed_at  timestamp  when it closed, NULL if open       payload.properties.closedate
 Rows:     live records only
 Tests:    deal_id unique, not_null
+          stage accepted_values (appointmentscheduled, closedwon, closedlost), warn
 ```
 
 Nothing is drafted until the person says the brief is right, and nothing is saved until

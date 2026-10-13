@@ -188,6 +188,7 @@ export const vi = {
     /** A model may not take a seed's name, nor a seed a model's: `ref()` reads both (ADR 0128). */
     modelNameIsSeed:
       "Đã có một bảng tham chiếu (seed) tên {{name}}. Mô hình và bảng tham chiếu không được trùng tên, vì cả hai đều được đọc bằng ref('{{name}}'). Hãy chọn tên khác.",
+    modelTestRefused: "Chưa lưu gì. {{reason}} models.check cho thấy mọi phát hiện.",
     buildInProgress:
       "Đang có một lần dựng mô hình cho khách hàng này. Hãy đợi lần đó xong rồi thử lại.",
     /** The same refusal, naming the run that holds the lock, so it can be waited on (#442). */
