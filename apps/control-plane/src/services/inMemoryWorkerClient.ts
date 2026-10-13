@@ -11,6 +11,7 @@ import {
   type BrowseScopeResponse,
   CSV_BOM,
   type ExportQueryRequest,
+  type QueryAnswer,
   type RawSearchResponse,
   resultCsv,
   type RevokeConnectionResponse,
@@ -245,13 +246,16 @@ export class InMemoryWorkerClient implements WorkerClient {
   readonly queries: QueryInput[] = [];
   /** Every search it was asked, in order. */
   readonly searches: SearchInput[] = [];
-  #answer: TableResult = { columns: [], rows: [], truncated: false };
+  #answer: QueryAnswer = { columns: [], rows: [], truncated: false };
   /** Nothing found, which is a real answer rather than an absent one. */
   #found: RawSearchResponse = { hits: [], truncated: false, capped: [] };
   #refusal: string | null = null;
 
-  /** Answer every query with `result`. */
-  answering(result: TableResult): this {
+  /**
+   * Answer every query with `result`, and with the tables its plan read when `relations` is
+   * given -- which the real worker reads from Postgres's plan (`runFramedWithRelations`).
+   */
+  answering(result: QueryAnswer): this {
     this.#answer = result;
     return this;
   }
@@ -262,7 +266,7 @@ export class InMemoryWorkerClient implements WorkerClient {
     return this;
   }
 
-  runQuery(input: QueryInput): Promise<WorkerOutcome<TableResult>> {
+  runQuery(input: QueryInput): Promise<WorkerOutcome<QueryAnswer>> {
     if (this.#failWith !== null) {
       return this.#fail();
     }

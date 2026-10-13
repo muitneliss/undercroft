@@ -180,6 +180,7 @@ export {
   MAX_QUERY_ROWS,
   MAX_QUERY_SQL_BYTES,
   ModelRowCount,
+  QueryAnswer,
   RunQueryRequest,
   RunStepShape,
   SchemaResponse,

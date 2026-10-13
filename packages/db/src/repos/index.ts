@@ -91,6 +91,11 @@ export {
   setModelColumns,
 } from "./models.ts";
 export {
+  latestTestsPerModel,
+  type ModelTestRecord,
+  type TestStepRecord,
+} from "./testOutcomes.ts";
+export {
   claimExternalRun,
   claimFailedRuns,
   claimRecoveredRuns,

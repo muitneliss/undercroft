@@ -5,7 +5,7 @@ date: 2026-10-13
 tags: []
 source: docs/reference/run-counts.md
 source_path: docs/reference/run-counts.md
-source_hash: 4ae717fc9d80009a10fec190b0a18bf771a475f9caa652b2a097db5e35e7bb8b
+source_hash: 0dbfa3aa171edfb8263c394bac2bb5cb9933c13174855c8eba551e697bd4c76a
 ingested: 2026-10-13
 ---
 
@@ -32,3 +32,5 @@ The reference page for the five per-entity numbers an ingest run reports, which 
 **Narrowing the ledger.** `runs list` also takes `kind` (one or several; read off `verb` and `trigger`, never stored: `build` is an editor's transform, `lake-api` a pushed ingest, `extract`/`semantic`/`semantic-init` their own verbs), `status`, `trigger`, `parentRunId`, `chained`, `startedAfter` (inclusive) / `startedBefore` (exclusive) and up to 50 `ids`, combined with each other and the cursor; an empty page means nothing matched (issue #439).
 
 **A run's dbt steps.** `runs get` reports them as `stepSummary` (total, counts by kind and dbt status, how many are problems) and the page asked for: `steps` is `none`, `problems` (default: anything not `success`, `pass` or `skipped`, an unknown status included) or `all`, narrowed by `stepStatus`/`stepKind`/`stepName` (a filter without `steps` reads all), paged by `stepLimit` (at most 2,000) and `stepCursor`. A skipped step is counted as skipped, never as a pass. The Journal asks for every step (issue #441). With `waitSeconds` it answers once the run has ended ([[ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does]]).
+
+**A run's verdict and a model's tests.** Every run carries `verdict` -- `running`, `failed`, `tests-failing` (finished `ok` with a failing or erroring test) or `clean` -- read off its status and failing-test count, never stored; a build has succeeded when it is `clean`. Each model on `models list`/`models get` carries `lastTests` (`passing`, `failing` or `unknown`, never a pass for no record) from the build serving its rows, tests attributed by dbt's manifest. A Reports answer carries `qualifiers` for each table its plan read whose tests fail or are unknown, rows always served. Building `name` or `name+` over a parent with failing tests is refused; `+name` rebuilds and tests the parents first. [[ADR 0129 A Failing Test Is Visible Wherever the Figure Is Read]].

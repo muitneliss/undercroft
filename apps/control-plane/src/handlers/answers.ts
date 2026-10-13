@@ -6,9 +6,10 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import type { QueryParams, TableResult } from "@undercroft/contracts";
+import type { QueryParams } from "@undercroft/contracts";
 import type { Locale } from "@undercroft/core/locale";
 import { type MessageKey, messages } from "../i18n/index.ts";
+import type { QualifiedAnswer } from "../services/answerQualifiers.ts";
 import * as bi from "../services/bi.ts";
 import type { Context } from "./trpc.ts";
 
@@ -72,7 +73,7 @@ export function answerRefusal(
 export async function answerSaved(
   ctx: Pick<Context, "exec" | "worker" | "locale">,
   input: { tenantId: string; questionId: string; params: QueryParams },
-): Promise<TableResult> {
+): Promise<QualifiedAnswer> {
   if (ctx.worker === null) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",

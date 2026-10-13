@@ -8,6 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
+import { closeRun, openRun, recordSteps } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
@@ -347,7 +348,12 @@ describe("models.build", () => {
       wait: false,
     });
 
-    expect(started).toEqual({ waited: false, runId: "run-mem-build-1" });
+    expect(started).toEqual({
+      waited: false,
+      runId: "run-mem-build-1",
+      verdict: "running",
+      parentTestsUnknown: [],
+    });
     expect(worker.builds.asked.map((asked) => asked.wait)).toEqual([false]);
     expect((await buildTrail())[0]?.detail).toEqual({
       names: ["stg_deals+"],
@@ -453,6 +459,8 @@ describe("models.build", () => {
     });
     expect(lean.steps.map((s) => s.name)).toEqual(["unique_stg_deals_deal_id"]);
     expect([lean.testsFailed, lean.rowCounts]).toEqual([1, [{ name: "stg_deals", rows: 1204 }]]);
+    // ADR 0129: the run is `ok` -- its table was written -- and its verdict says the tests failed.
+    expect([lean.ok, lean.verdict]).toEqual([true, "tests-failing"]);
     expect(whole.steps).toHaveLength(4);
   });
 
@@ -470,6 +478,216 @@ describe("models.build", () => {
       "excel_serial_date",
       "excel_serial_timestamp",
     ]);
+  });
+});
+
+/**
+ * A build as the worker writes it to the ledger: a run opened and closed, one model step per
+ * model that built, and each test step attributed to the model its manifest names (ADR 0129).
+ */
+async function ledgerBuild(
+  runId: string,
+  built: readonly string[],
+  tests: readonly { model: string | null; name: string; status: string }[] = [],
+): Promise<void> {
+  const failed = tests.filter((t) => t.status === "fail" || t.status === "error").length;
+  await db.asSuperuser(async (tx) => {
+    await openRun(tx, {
+      id: runId,
+      tenantId: TENANT,
+      source: "*",
+      verb: "transform",
+      trigger: "build",
+    });
+    await recordSteps(tx, runId, [
+      ...built.map((name) => ({
+        uniqueId: `model.undercroft.${name}`,
+        kind: "model" as const,
+        name,
+        status: "success",
+        failures: null,
+        relation: null,
+        message: null,
+        executionMs: 10,
+      })),
+      ...tests.map((t) => ({
+        uniqueId: `test.undercroft.${t.name}.a1`,
+        kind: "test" as const,
+        name: t.name,
+        status: t.status,
+        failures: t.status === "fail" ? 2 : null,
+        relation: null,
+        message: null,
+        executionMs: 5,
+        model: t.model,
+      })),
+    ]);
+    await closeRun(tx, runId, { status: "ok", testsFailed: failed });
+  });
+}
+
+describe("a model's latest tests (issue 456)", () => {
+  const PROJECT = [
+    { name: "stg_deals", sql: "select 1 as deal_id" },
+    { name: "fct_pipeline", sql: "select * from {{ ref('stg_deals') }}" },
+    { name: "dim_owner", sql: "select 1 as owner_id" },
+  ];
+
+  async function adminWithProject(): Promise<string> {
+    const admin = await seedMember("a@example.test", "admin");
+    for (const model of PROJECT) {
+      await caller(admin, "a@example.test").models.save({ ...DRAFT, ...model, create: true });
+    }
+    return admin;
+  }
+
+  it("list and get say passing, failing with which tests, or unknown -- never passing for no record", async () => {
+    const admin = await adminWithProject();
+    await ledgerBuild(
+      "run-1",
+      ["stg_deals", "fct_pipeline", "dim_owner"],
+      [
+        { model: "stg_deals", name: "not_null_stg_deals_deal_id", status: "fail" },
+        { model: "fct_pipeline", name: "unique_fct_pipeline_deal_id", status: "pass" },
+        { model: "fct_pipeline", name: "not_null_fct_pipeline_deal_id", status: "warn" },
+        // A step dbt's manifest could not attribute belongs to no model, and passes for none.
+        { model: null, name: "not_null_dim_owner_owner_id", status: "pass" },
+      ],
+    );
+    const { models } = caller(admin, "a@example.test");
+
+    const listed = await models.list({ tenantId: TENANT });
+    expect(Object.fromEntries(listed.map((m) => [m.name, m.lastTests]))).toEqual({
+      dim_owner: {
+        state: "unknown",
+        failing: null,
+        warnings: null,
+        runId: "run-1",
+        endedAt: expect.any(String),
+      },
+      fct_pipeline: {
+        state: "passing",
+        failing: 0,
+        warnings: 1,
+        runId: "run-1",
+        endedAt: expect.any(String),
+      },
+      stg_deals: {
+        state: "failing",
+        failing: 1,
+        warnings: 0,
+        runId: "run-1",
+        endedAt: expect.any(String),
+      },
+    });
+    // The model step succeeded: the build status alone reads as fine, which was the defect.
+    expect(listed.find((m) => m.name === "stg_deals")?.lastBuild?.status).toBe("success");
+
+    const one = await models.get({ tenantId: TENANT, name: "stg_deals" });
+    expect(one.lastTests.failingTests).toEqual([
+      {
+        name: "not_null_stg_deals_deal_id",
+        uniqueId: "test.undercroft.not_null_stg_deals_deal_id.a1",
+        status: "fail",
+        failures: 2,
+      },
+    ]);
+  });
+
+  it("a later build of only the child does not clear a parent's failing tests; a passing rebuild does", async () => {
+    const admin = await adminWithProject();
+    await ledgerBuild(
+      "run-1",
+      ["stg_deals"],
+      [{ model: "stg_deals", name: "not_null_stg_deals_deal_id", status: "fail" }],
+    );
+    await ledgerBuild("run-2", ["fct_pipeline"]);
+    const { models } = caller(admin, "a@example.test");
+    expect((await models.get({ tenantId: TENANT, name: "stg_deals" })).lastTests.state).toBe(
+      "failing",
+    );
+
+    await ledgerBuild(
+      "run-3",
+      ["stg_deals"],
+      [{ model: "stg_deals", name: "not_null_stg_deals_deal_id", status: "pass" }],
+    );
+    const after = await models.get({ tenantId: TENANT, name: "stg_deals" });
+    expect([after.lastTests.state, after.lastTests.runId]).toEqual(["passing", "run-3"]);
+  });
+
+  /** The refusal's code, sentence and facts, as an agent at either door receives them. */
+  async function refusedWith(
+    fn: () => Promise<unknown>,
+  ): Promise<{ code: string; message: string; facts: unknown }> {
+    try {
+      await fn();
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        return { code: error.code, message: error.message, facts: refusalFacts(error) };
+      }
+      throw error;
+    }
+    throw new Error("expected a refusal");
+  }
+
+  it("issue 457: building a model alone over a parent whose tests failed is refused, naming them", async () => {
+    const admin = await adminWithProject();
+    await ledgerBuild(
+      "run-1",
+      ["stg_deals", "fct_pipeline"],
+      [{ model: "stg_deals", name: "not_null_stg_deals_deal_id", status: "fail" }],
+    );
+    const worker = new InMemoryWorkerClient();
+    const { build } = caller(admin, "a@example.test", "en", { worker }).models;
+
+    const got = await refusedWith(() => build({ tenantId: TENANT, name: "fct_pipeline" }));
+    expect(got.code).toBe("PRECONDITION_FAILED");
+    expect(got.message).toBe(
+      "fct_pipeline was not built: the latest tests of its parent stg_deals failed (not_null_stg_deals_deal_id, run run-1), so building fct_pipeline now would copy those rows. Fix and rebuild stg_deals, or build it with its parents as +fct_pipeline.",
+    );
+    expect(got.facts).toEqual({
+      reason: "PARENT_TESTS_FAILING",
+      model: "fct_pipeline",
+      parent: "stg_deals",
+      tests: "not_null_stg_deals_deal_id",
+      runId: "run-1",
+      parents: "stg_deals",
+    });
+    expect(worker.builds.asked).toEqual([]);
+
+    // With its parents, or with the parent named beside it, the parent rebuilds and is tested
+    // in the same run, before the child: nothing to refuse.
+    await build({ tenantId: TENANT, names: ["+fct_pipeline"] });
+    await build({ tenantId: TENANT, names: ["stg_deals", "fct_pipeline"] });
+    await build({ tenantId: TENANT, names: ["stg_deals+"] });
+    // A model that reads no failing parent is not held back by one that does.
+    await build({ tenantId: TENANT, name: "dim_owner" });
+    expect(worker.builds.asked.map((asked) => asked.select)).toEqual([
+      ["+fct_pipeline"],
+      ["stg_deals", "fct_pipeline"],
+      ["stg_deals+"],
+      ["dim_owner"],
+    ]);
+  });
+
+  it("a parent with no test record does not refuse the build, and is named as unknown", async () => {
+    const admin = await adminWithProject();
+    const worker = new InMemoryWorkerClient();
+    const { build } = caller(admin, "a@example.test", "en", { worker }).models;
+
+    const built = await build({ tenantId: TENANT, name: "fct_pipeline" });
+    expect(built.parentTestsUnknown).toEqual(["stg_deals"]);
+    expect(built.waited ? built.verdict : null).toBe("clean");
+
+    await ledgerBuild(
+      "run-1",
+      ["stg_deals"],
+      [{ model: "stg_deals", name: "not_null_stg_deals_deal_id", status: "pass" }],
+    );
+    expect((await build({ tenantId: TENANT, name: "fct_pipeline" })).parentTestsUnknown).toEqual(
+      [],
+    );
   });
 });
 

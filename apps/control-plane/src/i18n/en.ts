@@ -56,6 +56,9 @@ export const en = {
     failingSince: "Failing since",
     recovered: "The {{source}} sync for {{tenantId}} is working again",
     modelsRecovered: "The model build for {{tenantId}} is working again",
+    modelsRecoveredTestsFailing:
+      "The model build for {{tenantId}} runs again, but some of its tests are failing",
+    testsFailing: "Tests failing",
   },
 
   grantExpiring: {
@@ -123,6 +126,8 @@ export const en = {
       "This customer has no model named {{names}}. Check the names against the list of models; nothing was built.",
     buildNotStarted:
       "The model could not be built. The processing service did not answer; try again in a few minutes.",
+    buildParentTestsFailing:
+      "{{model}} was not built: the latest tests of its parent {{parent}} failed ({{tests}}, run {{runId}}), so building {{model}} now would copy those rows. Fix and rebuild {{parent}}, or build it with its parents as +{{model}}.",
     modelNotDeleted:
       "The model {{name}} was not deleted: the processing service could not drop the table it built, so the model is still here. Try again in a few minutes.",
     modelDependedOn:

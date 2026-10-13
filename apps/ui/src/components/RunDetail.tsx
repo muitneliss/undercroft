@@ -7,7 +7,8 @@
  *
  * What it shows is what the ledger recorded and nothing it did not: the counts per entity,
  * the run's own error in an errata slip, every record the run refused with its reason, and
- * every dbt step with its failing-row count. A section with nothing in it is not drawn --
+ * every dbt step with its failing-row count, and -- for a build whose tests fail, which is `ok`
+ * and would otherwise read as clean -- that verdict beside its status (ADR 0129). A section with nothing in it is not drawn --
  * an empty refusals table would say "refusals" over a run that refused nothing -- and a run
  * that recorded nothing beyond its outcome says so in one line. `RunFlow` is the one
  * exception: it always has at least its own outcome to draw, so it is never gated on
@@ -40,6 +41,7 @@ import { RunFlow } from "@/components/RunFlow.tsx";
 import { RunProgress } from "@/components/RunProgress.tsx";
 import { RunDoors, TargetDoor } from "@/components/RunTarget.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { StatusMark } from "@/components/StatusMark.tsx";
 import { StepsTable } from "@/components/StepsTable.tsx";
 import { lakeStreamPath, streamOfEntity } from "@/lib/lake.ts";
 import { formatCount, orMissing } from "@/lib/money.ts";
@@ -47,9 +49,12 @@ import { feedEntries, runGauges } from "@/lib/runFeed.ts";
 import {
   type AccountName,
   EVERY_STEP,
+  runMark,
+  runMarkLabel,
   runScopeSummary,
   runTarget,
   triggerLabel,
+  verdictNote,
 } from "@/lib/runs.ts";
 import { formatDateTime, formatDuration } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
@@ -138,6 +143,7 @@ function RunFacts({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const target = runTarget(detail);
+  const verdict = verdictNote(t, locale, detail);
 
   return (
     <>
@@ -145,6 +151,15 @@ function RunFacts({
         {target === null ? null : (
           <Fact label={t("journal.target")}>
             <TargetDoor target={target} tenantId={tenantId} accounts={accounts} />
+          </Fact>
+        )}
+        {/* A build whose tests fail is `ok` -- its tables are written and served -- so its
+            status alone reads as clean. The verdict is stated beside it, on the leaf as on the
+            row (ADR 0129); a run whose status says everything gets no second fact. */}
+        {verdict === null ? null : (
+          <Fact label={t("journal.verdict")}>
+            <StatusMark mark={runMark(detail.status)} label={runMarkLabel(t, detail.status)} />
+            <span className="datum datum--quiet journal__trigger">{verdict}</span>
           </Fact>
         )}
         <Fact label={t("journal.started")}>{formatDateTime(detail.startedAt, locale)}</Fact>

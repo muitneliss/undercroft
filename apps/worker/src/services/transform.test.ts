@@ -59,6 +59,14 @@ function writeResults(dir: string, results: unknown[]): void {
   writeFileSync(join(dir, "target", "run_results.json"), JSON.stringify({ results }));
 }
 
+/** The manifest dbt writes beside its results: here, which model each test hangs off. */
+function writeManifest(dir: string, attached: Record<string, string>): void {
+  const nodes = Object.fromEntries(
+    Object.entries(attached).map(([test, model]) => [test, { attached_node: model }]),
+  );
+  writeFileSync(join(dir, "target", "manifest.json"), JSON.stringify({ nodes }));
+}
+
 const MODEL_OK = {
   unique_id: "model.undercroft.stg_deals",
   status: "success",
@@ -187,13 +195,23 @@ describe("runTransform", () => {
             relation_name: '"undercroft"."dq_case_1"."not_null_stg_deals_deal_id"',
           },
         ]);
+        writeManifest(options.cwd, {
+          "test.undercroft.not_null_stg_deals_deal_id.a1": "model.undercroft.stg_deals",
+        });
         return { exitCode: 1, stdout: "Done. PASS=0 FAIL=1", stderr: "" };
       }),
       { tenantId: TENANT },
     );
 
+    // The run is still ok -- the table was written and is served -- and the control plane reads
+    // its verdict as tests-failing from this count (ADR 0129). The status is not changed here.
     expect(outcome.ok).toBe(true);
     expect(outcome.testsFailed).toBe(1);
+    // The failing test is attributed to the model it tests, from the manifest (ADR 0129).
+    expect(outcome.steps.map((s) => [s.kind, s.name, s.model ?? null])).toEqual([
+      ["model", "stg_deals", null],
+      ["test", "not_null_stg_deals_deal_id", "stg_deals"],
+    ]);
   });
 
   it("dbt that could not run at all raises with its last lines, and the directory is still removed", async () => {

@@ -8,10 +8,12 @@
  */
 
 import { type ModelRowCount, selectedModel, type TableResult } from "@undercroft/contracts";
+import { type RunVerdict, runVerdict } from "@undercroft/contracts/runs";
 import type { SqlExecutor } from "@undercroft/db";
 import { getRun, listModels } from "@undercroft/db/repos";
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
+import { guardParents, type ParentTests } from "./buildGuard.ts";
 import { reportSteps, type StepQuery, type StepReport } from "./stepReport.ts";
 import type { WorkerClient } from "./workerClient.ts";
 import type { WorkerFailure } from "./workerRefusals.ts";
@@ -21,17 +23,29 @@ import type { WorkerFailure } from "./workerRefusals.ts";
  * asked for, the named models' row counts, the one model's first rows -- or, not waited for,
  * the run doing it, which `runs.get` waits on.
  */
-export type BuildView =
-  | { readonly waited: false; readonly runId: string }
+export type BuildView = (
+  | { readonly waited: false; readonly runId: string; readonly verdict: "running" }
   | ({
       readonly waited: true;
       readonly runId: string;
       readonly ok: boolean;
+      /**
+       * `clean`, `tests-failing` or `failed` (ADR 0129). `ok` with failing tests is a build
+       * whose tables are written and served with rows its tests refused: success is `clean`.
+       */
+      readonly verdict: RunVerdict;
       readonly testsFailed: number;
       readonly error: string | null;
       readonly rowCounts: ModelRowCount[];
       readonly preview: TableResult | null;
-    } & StepReport);
+    } & StepReport)
+) & {
+  /**
+   * Parents this build read without building whose tests are unknown -- none recorded, or never
+   * built -- by name. Not a refusal and not a pass: their rows went into this build untested.
+   */
+  readonly parentTestsUnknown: readonly string[];
+};
 
 /** The run that holds the tenant's build lock, as the ledger has it. */
 export interface BuildHolder {
@@ -43,6 +57,12 @@ export type BuildOutcome =
   | { readonly ok: true; readonly value: BuildView }
   /** Models the selection names that the tenant does not have, deduplicated, in order named. */
   | { readonly ok: false; readonly reason: "not-found"; readonly missing: string[] }
+  /** A parent the build would read without building has failing tests (issue 457). */
+  | {
+      readonly ok: false;
+      readonly reason: "parent-tests-failing";
+      readonly failing: readonly ParentTests[];
+    }
   /** `null` when the holder could not be named: it finished, or the worker did not say. */
   | { readonly ok: false; readonly reason: "in-progress"; readonly holder: BuildHolder | null }
   | { readonly ok: false; readonly reason: Exclude<WorkerFailure, "in-progress"> };
@@ -52,9 +72,11 @@ export type BuildOutcome =
  *
  * Every model the selection names must be one the tenant has, checked here before anything
  * runs: dbt answers a selector that matches nothing with a green build of nothing, and that
- * would reach the caller as a success. A build already running is refused by the worker's lock,
- * and the refusal is given the holder's start from the ledger, so whoever asked can wait on
- * that run instead of guessing when to retry.
+ * would reach the caller as a success. Then the parents it would read without building are read
+ * for their latest tests, and one failing refuses the build (`buildGuard.ts`, issue 457): a build
+ * of one model must not publish the rows its parent's tests just refused. A build already
+ * running is refused by the worker's lock, and the refusal is given the holder's start from the
+ * ledger, so whoever asked can wait on that run instead of guessing when to retry.
  *
  * The steps the worker returns are reported as `runs.get` reports them (`stepReport.ts`): the
  * summary of every step, then the page `steps` asks for. The cursor of that page is the run's,
@@ -78,6 +100,10 @@ export async function buildModels(
   const missing = [...new Set(input.select.map(selectedModel))].filter((name) => !known.has(name));
   if (missing.length > 0) {
     return { ok: false, reason: "not-found", missing };
+  }
+  const guard = await guardParents(exec, input.tenantId, input.select);
+  if (!guard.ok) {
+    return { ok: false, reason: "parent-tests-failing", failing: guard.failing };
   }
   const outcome = await worker.buildModels({
     tenantId: input.tenantId,
@@ -104,7 +130,10 @@ export async function buildModels(
     }),
   });
   if (!answer.waited) {
-    return { ok: true, value: answer };
+    return {
+      ok: true,
+      value: { ...answer, verdict: "running", parentTestsUnknown: guard.unknown },
+    };
   }
   return {
     ok: true,
@@ -112,11 +141,13 @@ export async function buildModels(
       waited: true,
       runId: answer.runId,
       ok: answer.ok,
+      verdict: runVerdict(answer.ok ? "ok" : "failed", answer.testsFailed),
       testsFailed: answer.testsFailed,
       error: answer.error,
       ...reportSteps(answer.steps, input.steps),
       rowCounts: answer.rowCounts,
       preview: answer.preview,
+      parentTestsUnknown: guard.unknown,
     },
   };
 }

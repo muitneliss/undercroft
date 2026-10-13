@@ -16,7 +16,7 @@
 
 import { useSearchParams } from "react-router-dom";
 
-import type { TableResult } from "@/api/types.ts";
+import type { QualifiedAnswer } from "@/api/types.ts";
 import type { ServerError } from "@/components/Errata.tsx";
 import type { BoundParams } from "@/components/QuestionBands.tsx";
 import { withPoint } from "@/lib/chartData.ts";
@@ -25,7 +25,8 @@ import { trpc } from "@/trpc.ts";
 
 /** A question's answer as the page holds it, whichever of the two ways it was asked. */
 export interface QuestionAnswer {
-  readonly result: TableResult | undefined;
+  /** The rows, and the qualifiers naming each table read whose tests are not passing. */
+  readonly result: QualifiedAnswer | undefined;
   readonly error: ServerError | null;
   /** A request is in flight: the first read, a re-read, or a run of the draft. */
   readonly running: boolean;

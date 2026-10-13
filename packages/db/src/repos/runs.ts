@@ -157,6 +157,12 @@ export interface RunStep {
   readonly relation: string | null;
   readonly message: string | null;
   readonly executionMs: number | null;
+  /**
+   * The model a test step tests, as dbt's manifest attributes it (`testedModels` in
+   * `dbtManifest.ts`, ADR 0129). `null` for a model step, for a test it could not attribute to
+   * exactly one model, and for a step recorded before the attribution existed. Absent is `null`.
+   */
+  readonly model?: string | null | undefined;
 }
 
 /**
@@ -446,13 +452,14 @@ export async function recordSteps(
   }
   await exec.query(
     `INSERT INTO ops.run_step
-       (run_id, unique_id, kind, name, status, failures, relation, message, execution_ms)
+       (run_id, unique_id, kind, name, status, failures, relation, message, execution_ms, model)
      SELECT $1, s->>'uniqueId', s->>'kind', s->>'name', s->>'status',
-            (s->>'failures')::int, s->>'relation', left(s->>'message', $3), (s->>'executionMs')::int
+            (s->>'failures')::int, s->>'relation', left(s->>'message', $3), (s->>'executionMs')::int,
+            s->>'model'
      FROM jsonb_array_elements($2::jsonb) AS s
      ON CONFLICT (run_id, unique_id) DO UPDATE SET
        status = EXCLUDED.status, failures = EXCLUDED.failures, relation = EXCLUDED.relation,
-       message = EXCLUDED.message, execution_ms = EXCLUDED.execution_ms`,
+       message = EXCLUDED.message, execution_ms = EXCLUDED.execution_ms, model = EXCLUDED.model`,
     [runId, JSON.stringify(steps), MAX_ERROR_CHARS],
   );
 }
@@ -705,6 +712,11 @@ export interface RecoveredRunNotice {
   readonly endedAt: string;
   /** When the first failure of the streak this run ended was recorded. */
   readonly failingSince: string;
+  /**
+   * Tests the recovering run counted as failing, `null` for a run that counts none (an ingest).
+   * A build that is `ok` again with failing tests is not "working again" (ADR 0129).
+   */
+  readonly testsFailed: number | null;
 }
 
 /**
@@ -731,6 +743,7 @@ export async function claimRecoveredRuns(exec: SqlExecutor): Promise<RecoveredRu
     verb: RunVerb;
     ended_at: Date | string;
     failing_since: Date | string;
+    tests_failed: number | null;
   }>(
     `UPDATE ops.run r
      SET notified_at = now(), notice = 'recovered'
@@ -752,7 +765,8 @@ export async function claimRecoveredRuns(exec: SqlExecutor): Promise<RecoveredRu
        HAVING bool_or(f.notice IS NOT NULL)
      ) streak
      WHERE r.id = streak.id
-     RETURNING r.id, r.tenant_id, r.source, r.verb, r.ended_at, streak.failing_since`,
+     RETURNING r.id, r.tenant_id, r.source, r.verb, r.ended_at, streak.failing_since,
+               r.tests_failed`,
   );
   return rows
     .map((row) => ({
@@ -762,6 +776,7 @@ export async function claimRecoveredRuns(exec: SqlExecutor): Promise<RecoveredRu
       verb: row.verb,
       endedAt: new Date(row.ended_at).toISOString(),
       failingSince: new Date(row.failing_since).toISOString(),
+      testsFailed: row.tests_failed,
     }))
     .sort((a, b) => a.endedAt.localeCompare(b.endedAt));
 }
@@ -1040,8 +1055,9 @@ export async function stepsFor(exec: SqlExecutor, runId: string): Promise<RunSte
     relation: string | null;
     message: string | null;
     execution_ms: number | null;
+    model: string | null;
   }>(
-    `SELECT unique_id, kind, name, status, failures, relation, message, execution_ms
+    `SELECT unique_id, kind, name, status, failures, relation, message, execution_ms, model
      FROM ops.run_step WHERE run_id = $1 ORDER BY kind, name`,
     [runId],
   );
@@ -1054,5 +1070,6 @@ export async function stepsFor(exec: SqlExecutor, runId: string): Promise<RunSte
     relation: r.relation,
     message: r.message,
     executionMs: r.execution_ms,
+    model: r.model,
   }));
 }

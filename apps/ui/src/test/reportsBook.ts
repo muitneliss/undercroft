@@ -12,7 +12,7 @@
 
 import { compile, QuestionDefinition } from "@undercroft/contracts/bi";
 
-import type { DashboardView, QuestionView, SchemaView, TableResult } from "@/api/types.ts";
+import type { DashboardView, QualifiedAnswer, QuestionView, SchemaView } from "@/api/types.ts";
 import { AUTHOR, idOf, type Role, reader } from "@/test/modelsBook.ts";
 import type { Answers } from "@/test/visual.tsx";
 
@@ -176,7 +176,7 @@ const MONTHS = ["2026-04-01", "2026-05-01", "2026-06-01", "2026-07-01", "2026-08
 /** The design's revenue, services plus products per month, in SGD. */
 const MONTHLY = ["94500.25", "100000.25", "103000.75", "110000.00", "118200.50", "128600.50"];
 
-const ANSWERS: Readonly<Record<string, TableResult>> = {
+const ANSWERS: Readonly<Record<string, QualifiedAnswer>> = {
   [QUESTION_ID.revenue]: {
     columns: [
       { name: "period", type: "date" },
@@ -184,6 +184,7 @@ const ANSWERS: Readonly<Record<string, TableResult>> = {
     ],
     rows: MONTHS.map((month, index) => [month, MONTHLY[index] ?? null]),
     truncated: false,
+    qualifiers: [],
   },
   [QUESTION_ID.segment]: {
     columns: [
@@ -195,6 +196,7 @@ const ANSWERS: Readonly<Record<string, TableResult>> = {
       ["products", "254800.50"],
     ],
     truncated: false,
+    qualifiers: [],
   },
 };
 

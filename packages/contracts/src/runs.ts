@@ -28,3 +28,34 @@ export const REFUSAL_RETENTION_DAYS = 7;
  * whole. The server bounds the page with it; the browser asks for it.
  */
 export const MAX_STEP_PAGE = 2000;
+
+/**
+ * What a run came to, in one word, beside its ledger status (ADR 0129).
+ *
+ * The ledger keeps three statuses (`running`, `ok`, `failed`, ADR 0051) and this adds no fourth:
+ * a build whose models all built and whose tests found rows that break them is `ok` -- the
+ * tables were written and are being served -- and that is exactly why it must not read as
+ * clean. The verdict is DERIVED from the status and the failing-test count, never stored, so it
+ * cannot disagree with them:
+ *
+ * - `running`: not settled yet; nothing is known about its tests.
+ * - `failed`: the run itself failed.
+ * - `tests-failing`: it finished, and at least one test failed or could not run. The rows are
+ *   built and served, and they are suspect.
+ * - `clean`: it finished, and no test of it failed. A run with no tests is clean by this word
+ *   too -- the word judges the run, and whether a model's rows were ever tested is a model's own
+ *   test state (`tests` on `models.list` / `models.get`), which says "unknown" for that.
+ */
+export const RUN_VERDICTS = ["clean", "tests-failing", "failed", "running"] as const;
+export type RunVerdict = (typeof RUN_VERDICTS)[number];
+
+/** The verdict a run's status and failing-test count come to. `null` tests is "none counted". */
+export function runVerdict(
+  status: "running" | "ok" | "failed",
+  testsFailed: number | null,
+): RunVerdict {
+  if (status === "running" || status === "failed") {
+    return status;
+  }
+  return testsFailed !== null && testsFailed > 0 ? "tests-failing" : "clean";
+}

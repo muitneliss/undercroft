@@ -72,16 +72,17 @@ export const procedureSentences: SentenceTable = {
   "documentKinds.publish":
     "Publish the catalogue's draft, so every document is classified against it again. Admins.",
   "models.list":
-    "The customer's dbt models with their last build: sqlSha256 and testsSha256 to compare a copy, and the column count, no SQL. names or match to narrow; include: [\"columns\"] for each build's columns.",
+    "The customer's dbt models with their last build: sqlSha256 and testsSha256 to compare a copy, and the column count, no SQL. names or match to narrow; include: [\"columns\"] for each build's columns. lastTests is what the tests of the build serving each model's rows found: passing, failing (failing counts them) or unknown (no test record, never a pass).",
   "models.revision":
     "One hash for each of the customer's models, macros, reference tables and questions and one over all of them, from what each save wrote: equal means nothing changed.",
-  "models.get": "One dbt model, its SQL and tests, with their hashes.",
+  "models.get":
+    "One dbt model, its SQL and tests, with their hashes, and lastTests: passing, failing or unknown, with failingTests and warningTests by name.",
   "models.save":
     "Store a dbt model; runs nothing. tests: columns maps a column to not_null, unique, {kind: accepted_values, values, quote?} or {kind: relationships, to, field}; sql lists SQL tests {name, sql}, each a select of the rows that break a rule; any test takes severity error or warn. A SQL test or relationships that models.check finds an error in is refused and nothing is written. The SQL and tests already stored answer unchanged: true and change nothing. Admins.",
   "models.delete":
     "Delete a dbt model with the table it built and the rows its tests stored; deletes nothing if the table could not be dropped. Admins.",
   "models.build":
-    "Build models in one dbt build: name for one model, or names for up to 20, each name, +name (with the models upstream) or name+ (with those downstream); every name must be one of the customer's models. By default it waits and answers waited true with ok, testsFailed, stepSummary (counts by kind and status), the steps asked for (steps: none, problems by default, or all; narrow with stepStatus, stepKind, stepName; read the next page with runs.get on runId with stepCursor), rowCounts (each named model's rows; null means not counted, never 0) and preview when one model is named. wait false answers at once with waited false and runId; wait on that run with runs.get and waitSeconds. While another build runs it is a CONFLICT naming that run's runId and startedAt. Admins.",
+    "Build models in one dbt build: name for one model, or names for up to 20, each name, +name (with the models upstream) or name+ (with those downstream); every name must be one of the customer's models. Before it runs, the parents it reads without rebuilding are checked: one whose latest tests failed is PRECONDITION_FAILED naming the parent, its tests and the run (rebuild it, or build +name); one with no test record is named in parentTestsUnknown. By default it waits and answers waited true with ok, verdict (clean, tests-failing or failed: success is clean; ok with failing tests is tests-failing), testsFailed, stepSummary (counts by kind and status), the steps asked for (steps: none, problems by default, or all; narrow with stepStatus, stepKind, stepName; read the next page with runs.get on runId with stepCursor), rowCounts (each named model's rows; null means not counted, never 0) and preview when one model is named. wait false answers at once with waited false and runId; wait on that run with runs.get and waitSeconds. While another build runs it is a CONFLICT naming that run's runId and startedAt. Admins.",
   "models.lineage":
     "Which models read which models, reference tables and raw lake tables, from the models' and macros' own ref() and source() declarations. name for the part around one model, reference table or raw table (raw.records), direction up, down or both, and depth to bound the steps.",
   "models.reference":
@@ -104,15 +105,18 @@ export const procedureSentences: SentenceTable = {
     "Store a small reference table: columns is [{name, type}] with type one of text, integer, bigint, numeric(18,4), boolean, date, timestamptz; rows are arrays of strings or null, one cell per column. No type is inferred: a cell its column cannot hold is refused, naming the row and column. At most 10,000 rows, 100 columns and 1 MB. A table identical to the stored one answers unchanged: true. Admins.",
   "seeds.delete":
     "Delete a reference table and the table loaded from it; refused while a model reads it by ref(). Admins.",
-  "bi.answer": "Answer a question definition. Members and above.",
-  "bi.runQuestion": "Run a saved question with parameters.",
+  "bi.answer":
+    "Answer a question definition: columns, rows and truncated, and qualifiers naming each table it read whose latest tests fail or are unknown (null when the tables read are not known); rows are never withheld. Members and above.",
+  "bi.runQuestion":
+    "Run a saved question with parameters; answers as bi.answer, qualifiers included.",
   "bi.compile": "Compile a question definition to SQL. Members and above.",
   "bi.schema":
     "The tables and columns reports can read; tables for exactly those, match for names containing a fragment (case-insensitive), columns: false for table names alone.",
   "bi.questions.list":
     'The saved questions: kind, chart type and definitionSha256, no SQL. names or match to narrow; include: ["definition", "chart"] for either in full.',
   "bi.questions.get": "One saved question.",
-  "bi.questions.answer": "A saved question's answer under parameters.",
+  "bi.questions.answer":
+    "A saved question's answer under parameters, with qualifiers as bi.answer gives them.",
   "bi.questions.save": "Save a question. Members and above.",
   "bi.questions.delete": "Delete a question. Members and above.",
   "bi.dashboards.list": "The dashboards.",
@@ -125,9 +129,9 @@ export const procedureSentences: SentenceTable = {
     "One export you asked for that has not expired: the SQL it runs and its file name.",
   "dq.failures": "The rows a failed data-quality test stored. Admins.",
   "runs.list":
-    "The ledger of runs, newest first. Every filter is optional and combines with the others and with the cursor: one source, kind (one or several), status, trigger, parentRunId (the runs that run chained, such as the transform after an ingest), chained or not, startedAfter (inclusive) and startedBefore (exclusive), and up to 50 ids. An empty page means nothing matched.",
+    "The ledger of runs, newest first. Every filter is optional and combines with the others and with the cursor: one source, kind (one or several), status, trigger, parentRunId (the runs that run chained, such as the transform after an ingest), chained or not, startedAfter (inclusive) and startedBefore (exclusive), and up to 50 ids. Each run carries verdict: clean, tests-failing (ok, with failing tests), failed or running. An empty page means nothing matched.",
   "runs.get":
-    "One run, with the scope it read with and its refusals. Its dbt steps come as stepSummary (counts by kind and status; a skipped step stays skipped) plus the steps asked for: steps is none, problems (the default: every step that is not success, pass or skipped) or all; narrow with stepStatus, stepKind and stepName (a filter without steps means all) and page with stepCursor from nextStepCursor. waitSeconds (at most 50) answers as soon as the run is no longer running, and for an ingest that closed ok once its chained transform (childRun) exists; when the wait runs out it still says running. Use it instead of polling.",
+    "One run, with the scope it read with, its refusals and its verdict (clean, tests-failing, failed or running). Its dbt steps come as stepSummary (counts by kind and status; a skipped step stays skipped) plus the steps asked for: steps is none, problems (the default: every step that is not success, pass or skipped) or all; narrow with stepStatus, stepKind and stepName (a filter without steps means all) and page with stepCursor from nextStepCursor. waitSeconds (at most 50) answers as soon as the run is no longer running, and for an ingest that closed ok once its chained transform (childRun) exists; when the wait runs out it still says running. Use it instead of polling.",
   "runs.events": "What the worker is saying about a run.",
   "runs.trigger": "Read a source now. Admins.",
   "config.google": "The public half of the Google client, for the Drive picker.",

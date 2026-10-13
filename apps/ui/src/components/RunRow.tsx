@@ -12,6 +12,9 @@
  * as the total, and a build, which lands no records at all. Which of them has counts is the
  * ledger's decision (`countsOf`, control-plane `services/runs.ts`), not this row's -- the row
  * prints the four figures or the four dashes.
+ *
+ * Beside the status, the run's verdict when it says more than the status: a build whose tests
+ * fail stays `ok` -- its tables are served -- and is noted as tests failing (`verdictNote`).
  */
 
 import type { Locale } from "@undercroft/core/locale";
@@ -22,7 +25,14 @@ import type { RunView } from "@/api/types.ts";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import { TableCell, TableRow } from "@/components/ui/table.tsx";
 import { formatCount, MISSING } from "@/lib/money.ts";
-import { type AccountName, describeRun, runMark, runMarkLabel, triggerLabel } from "@/lib/runs.ts";
+import {
+  type AccountName,
+  describeRun,
+  runMark,
+  runMarkLabel,
+  triggerLabel,
+  verdictNote,
+} from "@/lib/runs.ts";
 import { formatDateTime, formatDuration, relativeTime } from "@/lib/when.ts";
 
 export function RunRow({
@@ -43,6 +53,8 @@ export function RunRow({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const { counts } = run;
+  // A build whose tests fail is `ok` and must not read as clean beside it (ADR 0129).
+  const verdict = verdictNote(t, locale, run);
 
   /** A figure, or MISSING for every figure while the run is still writing them. */
   function count(value: number): string {
@@ -62,14 +74,9 @@ export function RunRow({
       </TableCell>
       <TableCell>
         <StatusMark mark={runMark(run.status)} label={runMarkLabel(t, run.status)} />
-        {run.testsFailed !== null && run.testsFailed > 0 ? (
-          <span className="datum datum--quiet journal__trigger">
-            {t("journal.testsFailed", {
-              count: run.testsFailed,
-              countText: formatCount(run.testsFailed, locale),
-            })}
-          </span>
-        ) : null}
+        {verdict === null ? null : (
+          <span className="datum datum--quiet journal__trigger">{verdict}</span>
+        )}
       </TableCell>
       <TableCell className="num">{count(counts?.landed ?? 0)}</TableCell>
       <TableCell className="num">{count(counts?.created ?? 0)}</TableCell>

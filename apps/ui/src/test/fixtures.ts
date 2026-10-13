@@ -7,20 +7,31 @@
  * server.
  */
 
+import { runVerdict } from "@undercroft/contracts/runs";
 import { sourceKind } from "@undercroft/contracts/sources";
 
 import {
   type Connection,
   type ConnectionWithConfig,
   isSource,
+  type ModelDetail,
   type RunDetail,
   type RunView,
 } from "@/api/types.ts";
 import type { LastRun } from "@/lib/runs.ts";
 
-/** One line of the journal: an ingest that landed, a little before the when-tests' `NOW`. */
+/** A run's shape before its verdict is derived: the verdict only where an override names it. */
+type Unverdicted<T extends { verdict: unknown }> = Omit<T, "verdict"> & Partial<Pick<T, "verdict">>;
+
+/**
+ * One line of the journal: an ingest that landed, a little before the when-tests' `NOW`.
+ *
+ * Its `verdict` is derived from the merged status and failing-test count, the way the server
+ * derives it (`runVerdict`), so an override of `testsFailed` gets the verdict it comes to and a
+ * fixture cannot claim a run the server would never answer.
+ */
 export function run(over: Partial<RunView> = {}): RunView {
-  return {
+  const line: Unverdicted<RunView> = {
     id: "run-1",
     kind: "ingest",
     source: "hubspot",
@@ -39,11 +50,12 @@ export function run(over: Partial<RunView> = {}): RunView {
     pendingBefore: null,
     ...over,
   };
+  return { ...line, verdict: over.verdict ?? runVerdict(line.status, line.testsFailed) };
 }
 
 /** A run's full detail, as its leaf reads it: the line above plus an empty closed record. */
 export function runDetail(over: Partial<RunDetail> = {}): RunDetail {
-  return {
+  const detail = {
     ...run(),
     entityCounts: [],
     refusals: [],
@@ -58,21 +70,37 @@ export function runDetail(over: Partial<RunDetail> = {}): RunDetail {
     scope: null,
     ...over,
   };
+  return { ...detail, verdict: over.verdict ?? runVerdict(detail.status, detail.testsFailed) };
 }
 
 /** The other end of a chain: enough to name a run and link to it, never its own full detail. */
 export function runLink(
   over: Partial<NonNullable<RunDetail["parentRun"]>> = {},
 ): NonNullable<RunDetail["parentRun"]> {
-  return {
+  const link = {
     id: "run-2",
-    kind: "transform",
+    kind: "transform" as const,
     source: null,
-    status: "ok",
+    status: "ok" as const,
     testsFailed: null,
     ...over,
   };
+  return { ...link, verdict: over.verdict ?? runVerdict(link.status, link.testsFailed) };
 }
+
+/**
+ * A model with no test record -- never built, or built with no test attributed to it -- as
+ * `models.get` answers it. Every count is `null`, never `0`: no record is not a passing one.
+ */
+export const NO_TEST_RECORD: ModelDetail["lastTests"] = {
+  state: "unknown",
+  failing: null,
+  warnings: null,
+  runId: null,
+  endedAt: null,
+  failingTests: [],
+  warningTests: [],
+};
 
 /** A run that finished a little before the fixed `NOW` the when-tests use. */
 export function lastRun(over: Partial<LastRun> = {}): LastRun {

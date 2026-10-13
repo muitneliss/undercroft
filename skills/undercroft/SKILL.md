@@ -124,7 +124,14 @@ door with this rule.
   models one call at a time. Its answer is reported like `runs.get`'s, plus `rowCounts` (`null`
   is not counted, never zero). With `wait: false` it answers with the `runId` at once; wait on it
   with `runs.get` and `waitSeconds`. A `CONFLICT` names the build already running in `runId` and
-  `startedAt`: wait on that run rather than retrying.
+  `startedAt`: wait on that run rather than retrying. A `PRECONDITION_FAILED` naming a `parent`
+  means that parent's latest tests failed and the build would copy its rows: rebuild the parent,
+  or build `+name`.
+- **Success is `verdict: "clean"`, not `ok`.** A run or a build is `clean`, `tests-failing`,
+  `failed` or `running`. `ok` with failing tests is `tests-failing`: its tables are built and
+  Reports serves them. A model's own `lastTests` (on `models.list` and `models.get`) says
+  `passing`, `failing` or `unknown`; unknown is no test record, never a pass. A Reports answer's
+  `qualifiers` name each table it read whose tests fail or are unknown: say so beside the figure.
 
 ## Workflows
 
