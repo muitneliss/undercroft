@@ -18,6 +18,7 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@undercroft/control-plane/router";
 
+import { run } from "@/test/fixtures.ts";
 import type { Answers } from "@/test/visual.tsx";
 
 type Out = inferRouterOutputs<AppRouter>;
@@ -154,25 +155,21 @@ export const CONNECTIONS: Connection[] = [
   }),
 ];
 
-/** An ingest run of the ledger, ended forty seconds after it started. */
+/**
+ * An ingest run of the ledger, ended forty seconds after it started: the shared fixture's run,
+ * whose verdict is derived from its status the way the server derives it (ADR 0129).
+ */
 function ingest(id: string, source: string, at: string, over: Partial<Run> = {}): Run {
-  return {
+  return run({
     id,
-    kind: "ingest",
     source,
     entities: [],
-    status: "ok",
-    trigger: "schedule",
     startedAt: at,
     endedAt: at.replace(":00Z", ":40Z"),
     counts: { landed: 1, created: 1, changed: 0, unchanged: 0, refused: 0 },
-    testsFailed: null,
-    error: null,
-    parentRunId: null,
     releaseTag: "v1.57.0",
-    pendingBefore: null,
     ...over,
-  };
+  });
 }
 
 const XERO_READ = ingest(XERO_RUN, "xero", "2026-09-29T08:39:00Z", {

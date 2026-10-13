@@ -20,7 +20,8 @@
  *    same login locks it out (ADR 0087). The password is the environment of one child process.
  *    A build that runs for half an hour is a build that has hung, and the previous tables keep
  *    serving -- stale, not wrong.
- * 4. **Read `run_results.json`** into steps for the ledger, one per model or test. A
+ * 4. **Read `run_results.json`** into steps for the ledger, one per model or test, each test
+ *    attributed to the model it tests from `manifest.json` (ADR 0129). A
  *    non-zero exit with results is a build that ran and found something wrong, reported step
  *    by step; a non-zero exit with no results is dbt stopping before its first model, and that
  *    raises with dbt's own statement of why (`causeOf`).
@@ -44,7 +45,12 @@ import {
   setModelColumns,
   tenantRolesFor,
 } from "@undercroft/db/repos";
-import { parseRunResults, PASSWORD_VAR, renderProject } from "@undercroft/db/services";
+import {
+  parseRunResults,
+  PASSWORD_VAR,
+  renderProject,
+  testedModels,
+} from "@undercroft/db/services";
 
 import { columnsOf } from "../repos/relations.ts";
 import { TenantNotProvisioned, type TenantSessions } from "./tenantSession.ts";
@@ -221,12 +227,25 @@ async function writeProject(dir: string, files: Record<string, string>): Promise
   }
 }
 
-async function readRunResults(dir: string): Promise<unknown> {
+/** One of the JSON files dbt writes under `target/`, or `null` when it wrote none readable. */
+async function readTarget(dir: string, file: string): Promise<unknown> {
   try {
-    return JSON.parse(await readFile(join(dir, "target", "run_results.json"), "utf8"));
+    return JSON.parse(await readFile(join(dir, "target", file), "utf8"));
   } catch {
     return null;
   }
+}
+
+/**
+ * Each test step with the model it tests, from the manifest this build wrote (ADR 0129). A
+ * test the manifest does not attribute -- or a build that left no manifest -- keeps `null`,
+ * which reads as "unknown" downstream rather than as a pass.
+ */
+function attributed(steps: readonly RunStep[], manifest: unknown): RunStep[] {
+  const byTest = testedModels(manifest);
+  return steps.map((step) =>
+    step.kind === "test" ? { ...step, model: byTest.get(step.uniqueId) ?? null } : step,
+  );
 }
 
 /** Why the build is not ok, in dbt's own words for the model that broke. */
@@ -341,7 +360,9 @@ export async function runTransform(
       }),
     );
     const { exitCode, output } = await spawnDbt(deps, input, dir);
-    const { steps, testsFailed } = parseRunResults(await readRunResults(dir));
+    const parsed = parseRunResults(await readTarget(dir, "run_results.json"));
+    const steps = attributed(parsed.steps, await readTarget(dir, "manifest.json"));
+    const { testsFailed } = parsed;
 
     if (exitCode !== 0 && steps.length === 0) {
       throw new ConnectorError("dbt", "build", 0, `dbt build exited ${String(exitCode)}`, {

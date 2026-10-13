@@ -21,6 +21,7 @@ import "@/i18n/index.ts";
 import { draftFrom } from "@/lib/modelDraft.ts";
 import { ModelEditor } from "@/routes/ModelEditor.tsx";
 import { useUiStore } from "@/store.ts";
+import { NO_TEST_RECORD } from "@/test/fixtures.ts";
 import { trpc } from "@/trpc.ts";
 
 const TENANT = "CASE-0042";
@@ -40,6 +41,7 @@ function detail(name: string): ModelDetail {
       columnCount: 1,
       columns: ["deal_id"],
     },
+    lastTests: NO_TEST_RECORD,
     sql: `select 1 as deal_id -- ${name}`,
     tests: { columns: {} },
   };

@@ -54,6 +54,8 @@ export const RunStepShape = z.object({
   relation: z.string().nullable(),
   message: z.string().nullable(),
   executionMs: z.number().int().nullable(),
+  /** The model a test step tests, from dbt's manifest (ADR 0129); absent from an older worker. */
+  model: z.string().nullable().optional(),
 });
 
 /**
@@ -182,6 +184,16 @@ export const RunQueryRequest = z.object({
   offset: z.number().int().min(0).default(0),
 });
 export type RunQueryRequest = z.infer<typeof RunQueryRequest>;
+
+/**
+ * A query's answer from the worker: the rows, and which tables of the tenant's analytics
+ * schema Postgres's plan of the statement read (ADR 0129). `relations` is `null` when the plan
+ * could not be read and absent from a worker older than it; either is "not known", never "none".
+ */
+export const QueryAnswer = TableResult.extend({
+  relations: z.array(z.string()).nullable().optional(),
+});
+export type QueryAnswer = z.infer<typeof QueryAnswer>;
 
 /**
  * Stream every row one SELECT answers, as CSV, as the tenant's read-only login (ADR 0111).

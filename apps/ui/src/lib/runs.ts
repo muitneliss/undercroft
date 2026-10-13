@@ -28,7 +28,7 @@ import {
 } from "@/api/types.ts";
 import { type CardFacts, scopeSummary } from "@/lib/connectionState.ts";
 import { divisionPath } from "@/lib/divisions.ts";
-import { MISSING } from "@/lib/money.ts";
+import { formatCount, MISSING } from "@/lib/money.ts";
 import { TICK_MINUTES } from "@/lib/cadence.ts";
 import { formatDateTime } from "@/lib/when.ts";
 
@@ -292,6 +292,31 @@ export function runMarkLabel(t: TFunction, status: RunStatus | null): string {
       throw new Error(`unhandled run status ${String(exhaustive)}`);
     }
   }
+}
+
+/**
+ * What a run came to beyond its status, worded -- or `null` when the status already says it.
+ *
+ * Only `tests-failing` says more: such a run is `ok` (its tables were written and are served),
+ * and the word "succeeded" beside it alone would read as clean (ADR 0129). Driven by the
+ * server's `verdict`, never re-derived here from `testsFailed`, so the journal, the leaf and
+ * every other door agree on which runs are suspect. The count is given when the run counted
+ * its failing tests, and the verdict alone when it did not.
+ */
+export function verdictNote(
+  t: TFunction,
+  locale: Locale,
+  run: Pick<RunView, "verdict" | "testsFailed">,
+): string | null {
+  if (run.verdict !== "tests-failing") {
+    return null;
+  }
+  return run.testsFailed === null
+    ? t("journal.testsFailing")
+    : t("journal.testsFailed", {
+        count: run.testsFailed,
+        countText: formatCount(run.testsFailed, locale),
+      });
 }
 
 /**

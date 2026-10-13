@@ -254,6 +254,30 @@ describe("a sync's status in the operators' Lark group", () => {
     ]);
   });
 
+  it("a build that runs again with failing tests is posted as that, not as working again", async () => {
+    // ADR 0129: `ok` with failing tests serves rows its tests refused.
+    for (const [id, status, testsFailed] of [
+      ["r-1", "failed", null],
+      ["r-2", "ok", 2],
+    ] as const) {
+      await openRun(db, {
+        id,
+        tenantId: TENANT,
+        source: "*",
+        verb: "transform",
+        trigger: "schedule",
+      });
+      await closeRun(db, id, { status, testsFailed });
+      await runAlerts(deps({ lark: larkGroup }));
+    }
+
+    expect(cards.map((c) => [c.tone, c.title])).toEqual([
+      ["red", "❌ Dựng mô hình cho CASE-0042 không thành công"],
+      ["orange", "⚠️ Dựng mô hình cho CASE-0042 đã chạy lại, nhưng có kiểm thử không đạt"],
+    ]);
+    expect(cards[1]?.facts).toContainEqual(["Kiểm thử không đạt", "2"]);
+  });
+
   it("with Lark and no email, a failure is still posted and an expiry is left for email to tell", async () => {
     await seedAdmin("bob@example.test", "en");
     const soon = new Date(Date.now() + 2 * 86_400_000).toISOString();

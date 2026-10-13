@@ -34,6 +34,8 @@ const RESULT = {
     ["2026-09", null],
   ],
   truncated: false,
+  // Every table it read is passing: nothing to qualify (ADR 0129).
+  qualifiers: [],
 };
 
 const VISUAL = {
@@ -58,7 +60,7 @@ function saved(over: Record<string, unknown> = {}): unknown {
   };
 }
 
-function served(role: string, question: unknown): Record<string, Answer> {
+function served(role: string, question: unknown, result: unknown = RESULT): Record<string, Answer> {
   return {
     "tenants.get": () => ({ tenantId: TENANT, displayName: "Acme", role }),
     "bi.schema": () => ({
@@ -73,7 +75,7 @@ function served(role: string, question: unknown): Record<string, Answer> {
       ],
     }),
     "bi.questions.get": () => question,
-    "bi.questions.answer": () => RESULT,
+    "bi.questions.answer": () => result,
     "bi.compile": () => ({ sql: 'SELECT "month", "revenue"\nFROM "mart_revenue"' }),
   };
 }
@@ -82,12 +84,13 @@ function mount(
   url: string,
   role: string,
   question: unknown = saved(),
+  result: unknown = RESULT,
 ): ReturnType<typeof mountRoute> {
   return mountRoute({
     pattern: "/tenants/:tenantId/reports/questions/:id",
     url,
     element: <Question tenantId={TENANT} />,
-    answers: served(role, question),
+    answers: served(role, question, result),
   });
 }
 
@@ -127,6 +130,56 @@ describe("a saved question opens answered", () => {
     await screen.findByRole("table");
     const asked = received.find((request) => request.path === "bi.questions.answer");
     expect(asked?.input).toEqual({ tenantId: TENANT, id: ID, params: { region: "north" } });
+  });
+});
+
+describe("an answer read from a table whose tests fail (issue 456)", () => {
+  it("serves every row and says, in words, which table failed which tests in which run", async () => {
+    mount(PATH, "viewer", saved(), {
+      ...RESULT,
+      qualifiers: [
+        {
+          table: "mart_revenue",
+          state: "failing",
+          failing: 1,
+          failingTests: ["not_null_mart_revenue_revenue"],
+          runId: "run-7",
+          endedAt: WHEN,
+        },
+        {
+          table: "dim_region",
+          state: "unknown",
+          failing: null,
+          failingTests: [],
+          runId: null,
+          endedAt: null,
+        },
+      ],
+    });
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("2026-08")).toBeDefined();
+    const said = screen.getByRole("status", { name: "Kiểm thử của các bảng đã đọc" });
+    expect(
+      within(said).getByText(
+        "Kiểm thử không đạt trên bảng mart_revenue từ lần chạy run-7. Kiểm thử không đạt: not_null_mart_revenue_revenue.",
+      ),
+    ).toBeDefined();
+    // No record is not a pass: it is named too.
+    expect(within(said).getByText("Chưa có kết quả kiểm thử cho bảng dim_region.")).toBeDefined();
+  });
+
+  it("says nothing over an answer whose tables pass, and 'not known' when the tables read are not", async () => {
+    mount(PATH, "viewer");
+    await screen.findByRole("table");
+    expect(screen.queryByRole("status", { name: "Kiểm thử của các bảng đã đọc" })).toBeNull();
+    expect(screen.queryByText(/Không rõ kết quả kiểm thử/u)).toBeNull();
+    cleanup();
+
+    mount(PATH, "viewer", saved(), { ...RESULT, qualifiers: null });
+    await screen.findByRole("table");
+    expect(
+      screen.getByText("Không rõ kết quả kiểm thử của các bảng mà câu trả lời này đọc."),
+    ).toBeDefined();
   });
 });
 

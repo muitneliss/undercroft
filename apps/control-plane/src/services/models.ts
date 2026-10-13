@@ -1,6 +1,6 @@
 /**
- * The customer's dbt models: listed with their last build, read in full, saved, deleted
- * together with what they built.
+ * The customer's dbt models: listed with their last build and what its tests found (ADR 0129),
+ * read in full, saved, deleted together with what they built.
  *
  * Save stores and executes nothing. That is the whole of this module's promise: a model
  * saved with a syntax error is a row in `app.model`, not a broken table in `analytics_x`,
@@ -34,18 +34,22 @@ import {
   saveModel,
 } from "@undercroft/db/repos";
 import {
-  checkModel,
-  checkTests,
   type Finding,
   type Lineage,
   type LineageTarget,
   lineageAround,
-  type ModelCheck,
   modelLineage,
 } from "@undercroft/db/services";
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { type ListRequest, mapNarrowed, type Narrowed, narrowByName } from "./listFilter.ts";
+import { refusedTest } from "./modelChecks.ts";
+import {
+  readTestStates,
+  summaryOf as testSummaryOf,
+  type TestDetail,
+  type TestSummary,
+} from "./testState.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 
 export type { LastBuild, Model } from "@undercroft/db/repos";
@@ -86,11 +90,19 @@ interface ModelFacts {
 /** One model on the list: what a reader chooses one by, and no SQL. */
 export interface ModelItem extends ModelFacts {
   readonly lastBuild: BuildSummary | null;
+  /**
+   * What the tests of the build serving this model's rows found: `passing`, `failing` with how
+   * many, or `unknown` -- never passing for a model with no test record (ADR 0129). Not
+   * `lastBuild.status`: a build whose tests fail still succeeds, and its rows are served.
+   */
+  readonly lastTests: TestSummary;
 }
 
 /** One model in full: its SQL, its tests and the columns its last build found. */
 export interface ModelDetail extends ModelFacts {
   readonly lastBuild: BuildWithColumns | null;
+  /** As on the list, with the tests that failed and the ones that warned, by name. */
+  readonly lastTests: TestDetail;
   readonly sql: string;
   readonly tests: ModelTests;
 }
@@ -116,12 +128,22 @@ function buildOf(model: Model, built: LastBuild): BuildWithColumns {
   };
 }
 
-function summaryOf(model: Model, built: LastBuild | undefined, columns: boolean): ModelItem {
+function summaryOf(
+  model: Model,
+  built: LastBuild | undefined,
+  tests: TestDetail,
+  columns: boolean,
+): ModelItem {
+  const lastTests = testSummaryOf(tests);
   if (built === undefined) {
-    return { ...facts(model), lastBuild: null };
+    return { ...facts(model), lastBuild: null, lastTests };
   }
   const { columns: listed, ...summary } = buildOf(model, built);
-  return { ...facts(model), lastBuild: columns ? { ...summary, columns: listed } : summary };
+  return {
+    ...facts(model),
+    lastBuild: columns ? { ...summary, columns: listed } : summary,
+    lastTests,
+  };
 }
 
 /**
@@ -134,14 +156,15 @@ export async function list(
   tenantId: string,
   request: ListRequest<ModelInclude> = {},
 ): Promise<Narrowed<ModelItem>> {
-  const [models, builds] = await Promise.all([
+  const [models, builds, tests] = await Promise.all([
     listModels(exec, tenantId),
     lastBuildPerModel(exec, tenantId),
+    readTestStates(exec, tenantId),
   ]);
   const columns = request.include?.includes("columns") ?? false;
   return mapNarrowed(
     narrowByName(models, (m) => m.name, request),
-    (m) => summaryOf(m, builds.get(m.name), columns),
+    (m) => summaryOf(m, builds.get(m.name), tests(m.name), columns),
   );
 }
 
@@ -154,10 +177,15 @@ export async function get(
   if (model === null) {
     return null;
   }
-  const built = (await lastBuildPerModel(exec, tenantId)).get(name);
+  const [builds, tests] = await Promise.all([
+    lastBuildPerModel(exec, tenantId),
+    readTestStates(exec, tenantId, [name]),
+  ]);
+  const built = builds.get(name);
   return {
     ...facts(model),
     lastBuild: built === undefined ? null : buildOf(model, built),
+    lastTests: tests(name),
     sql: model.sql,
     // Re-validated on the way out rather than asserted: the row's shape is the contract's
     // by construction, and a parse says so where an assertion would only claim it.
@@ -218,56 +246,6 @@ export async function save(
     });
   }
   return { ok: true, unchanged: result === "unchanged" };
-}
-
-/** The first error `checkTests` finds in `tests`, or `null`; reads the tenant only when needed. */
-async function refusedTest(
-  exec: SqlExecutor,
-  tenantId: string,
-  name: string,
-  tests: ModelTests,
-): Promise<Finding | null> {
-  const relates = Object.values(tests.columns).some((declaredTests) =>
-    declaredTests.some(
-      (declared) => typeof declared !== "string" && declared.kind === "relationships",
-    ),
-  );
-  if (!relates && (tests.sql ?? []).length === 0) {
-    return null;
-  }
-  const [existing, macros] = await Promise.all([
-    listModels(exec, tenantId),
-    listMacros(exec, tenantId),
-  ]);
-  const findings = checkTests({
-    name,
-    tests,
-    existingModels: existing.map((model) => model.name),
-    existingMacros: macros.map((macro) => macro.name),
-  });
-  return findings.find((found) => found.severity === "error") ?? null;
-}
-
-/**
- * What can be said about a model's SQL before it is saved or built, against the tenant's own
- * model and macro names. Reads, stores nothing, and is not the security boundary: the tenant's
- * dbt login's grants are (`modelCheck.ts`).
- */
-export async function check(
-  exec: SqlExecutor,
-  input: { tenantId: string; name: string; sql: string; tests: ModelTests },
-): Promise<ModelCheck> {
-  const [existing, macros] = await Promise.all([
-    listModels(exec, input.tenantId),
-    listMacros(exec, input.tenantId),
-  ]);
-  return checkModel({
-    name: input.name,
-    sql: input.sql,
-    tests: input.tests,
-    existingModels: existing.map((model) => model.name),
-    existingMacros: macros.map((macro) => macro.name),
-  });
 }
 
 /**

@@ -18,6 +18,7 @@ export {
   renderProject,
   SOURCES_YML,
 } from "./dbtProject.ts";
+export { testedModels } from "./dbtManifest.ts";
 export { sqlTestName, testRelationPrefixes } from "./dbtTests.ts";
 export { grantExpiryFor } from "./grantExpiry.ts";
 export {

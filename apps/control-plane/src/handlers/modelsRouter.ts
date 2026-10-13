@@ -17,6 +17,7 @@ import type { Locale } from "@undercroft/core/locale";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import { formatWhen } from "../services/alertWording.ts";
+import type { ParentTests } from "../services/buildGuard.ts";
 import { type BuildHolder, buildModels } from "../services/modelBuild.ts";
 import {
   REFERENCE_PARTS,
@@ -25,6 +26,7 @@ import {
   reference,
   referenceParts,
 } from "../services/modelReference.ts";
+import { check } from "../services/modelChecks.ts";
 import * as models from "../services/models.ts";
 import { revision } from "../services/revision.ts";
 import { BUILD_DEADLINE_MS } from "../services/workerBuild.ts";
@@ -59,6 +61,37 @@ function buildHeld(locale: Locale, holder: BuildHolder | null): TRPCError {
       startedAt: formatWhen(holder.startedAt, locale),
     }),
     { reason: "BUILD_IN_PROGRESS", runId: holder.runId, startedAt: holder.startedAt },
+  );
+}
+
+/**
+ * A build refused because a parent it would read without rebuilding has failing tests (issue
+ * 457): PRECONDITION_FAILED, since the fix is upstream of the request. The sentence names the
+ * first such parent, its failing tests and the run, and the way on -- fix and rebuild it, or
+ * build `+name`; the facts carry every failing parent, comma-joined, for an agent.
+ */
+function parentTestsFailing(locale: Locale, failing: readonly ParentTests[]): TRPCError {
+  const [first] = failing;
+  const tests = first?.tests.failingTests.map((test) => test.name) ?? [];
+  const parent = first?.parent ?? "";
+  const model = first?.readBy[0] ?? "";
+  const runId = first?.tests.runId ?? null;
+  return refusal(
+    "PRECONDITION_FAILED",
+    messages(locale)("error.buildParentTestsFailing", {
+      model,
+      parent,
+      tests: tests.join(", "),
+      runId: runId ?? "",
+    }),
+    {
+      reason: "PARENT_TESTS_FAILING",
+      model,
+      parent,
+      tests: tests.join(","),
+      runId,
+      parents: failing.map((p) => p.parent).join(","),
+    },
   );
 }
 
@@ -204,7 +237,10 @@ export const modelsRouter = router({
    * with the run, for a caller that waits on `runs.get` instead of on this request. Waiting, it
    * holds its request open for the worker's whole deadline plus the time to answer (ADR 0126).
    *
-   * A name the tenant has no model of is NOT_FOUND naming it, before anything runs. A build
+   * A name the tenant has no model of is NOT_FOUND naming it, before anything runs. A parent the
+   * build would read without rebuilding whose latest tests failed is PRECONDITION_FAILED naming
+   * it (issue 457); one with no test record is named in `parentTestsUnknown` instead. Success is
+   * `verdict: "clean"` -- `ok` with failing tests is `tests-failing` (ADR 0129). A build
    * already running is a CONFLICT naming that run and its start, so it can be waited on; a
    * worker that did not answer is a precondition nobody at the screen can fix.
    */
@@ -247,6 +283,8 @@ export const modelsRouter = router({
           );
         case "in-progress":
           throw buildHeld(ctx.locale, outcome.holder);
+        case "parent-tests-failing":
+          throw parentTestsFailing(ctx.locale, outcome.failing);
         default:
           throw notRun(ctx.locale, outcome.reason, "error.buildNotStarted");
       }
@@ -267,7 +305,7 @@ export const modelsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const checked = await models.check(ctx.exec, {
+      const checked = await check(ctx.exec, {
         tenantId: ctx.tenantId,
         name: input.name,
         sql: input.sql,

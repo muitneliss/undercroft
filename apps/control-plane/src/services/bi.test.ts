@@ -9,9 +9,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { closeRun, openRun, recordSteps } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
-import { answerQuestion, getDashboardView, saveDashboard } from "./bi.ts";
+import { answer, answerQuestion, getDashboardView, saveDashboard } from "./bi.ts";
 import { getQuestionView, listQuestionViews, removeQuestion, saveQuestion } from "./biQuestions.ts";
 import { InMemoryWorkerClient } from "./inMemoryWorkerClient.ts";
 import type { Actor } from "../repos/auditLog.ts";
@@ -142,6 +143,108 @@ describe("questions", () => {
     });
     expect(refused).toEqual({ ok: false, reason: "param-missing", param: "period_from" });
     expect(worker.queries).toHaveLength(1);
+  });
+});
+
+describe("an answer's qualifiers (issue 456)", () => {
+  /** A build in the ledger: each model built, and one test on it that passed or failed. */
+  async function built(runId: string, tests: Record<string, "pass" | "fail">): Promise<void> {
+    await db.asSuperuser(async (tx) => {
+      await openRun(tx, {
+        id: runId,
+        tenantId: TENANT,
+        source: "*",
+        verb: "transform",
+        trigger: "build",
+      });
+      await recordSteps(
+        tx,
+        runId,
+        Object.entries(tests).flatMap(([model, status]) => [
+          {
+            uniqueId: `model.undercroft.${model}`,
+            kind: "model" as const,
+            name: model,
+            status: "success",
+            failures: null,
+            relation: null,
+            message: null,
+            executionMs: 10,
+          },
+          {
+            uniqueId: `test.undercroft.not_null_${model}_id.a1`,
+            kind: "test" as const,
+            name: `not_null_${model}_id`,
+            status,
+            failures: status === "fail" ? 1 : 0,
+            relation: null,
+            message: null,
+            executionMs: 5,
+            model,
+          },
+        ]),
+      );
+      await closeRun(tx, runId, { status: "ok", testsFailed: 1 });
+    });
+  }
+
+  const ROWS = {
+    columns: [{ name: "amount", type: "numeric" }],
+    rows: [["12345678901234.5678"], [null]],
+    truncated: false,
+  };
+  const SQL = { kind: "sql" as const, sql: "select amount from t_demo" };
+
+  it("names each table read whose tests fail or are unknown, and serves every row", async () => {
+    await built("run-1", { t_demo: "fail", fct_ok: "pass" });
+    const worker = new InMemoryWorkerClient().answering({
+      ...ROWS,
+      relations: ["fct_ok", "never_built", "t_demo"],
+    });
+
+    const outcome = await answer(db, worker, { tenantId: TENANT, definition: SQL, params: {} });
+    if (!outcome.ok) {
+      throw new Error("expected an answer");
+    }
+    // The rows are not withheld, and the amount is the string the database sent.
+    expect(outcome.value.rows).toEqual(ROWS.rows);
+    expect(outcome.value.qualifiers).toEqual([
+      {
+        table: "never_built",
+        state: "unknown",
+        failing: null,
+        failingTests: [],
+        runId: null,
+        endedAt: null,
+      },
+      {
+        table: "t_demo",
+        state: "failing",
+        failing: 1,
+        failingTests: ["not_null_t_demo_id"],
+        runId: "run-1",
+        endedAt: expect.any(String),
+      },
+    ]);
+    expect("relations" in outcome.value).toBe(false);
+  });
+
+  it("says nothing for a table whose tests pass, and 'not known' when the tables read are not", async () => {
+    await built("run-1", { fct_ok: "pass" });
+    const passing = await answer(
+      db,
+      new InMemoryWorkerClient().answering({ ...ROWS, relations: ["fct_ok"] }),
+      { tenantId: TENANT, definition: SQL, params: {} },
+    );
+    expect(passing.ok && passing.value.qualifiers).toEqual([]);
+
+    // A worker older than the plan read sends no relations: not "none read", which `[]` would say.
+    const older = await answer(db, new InMemoryWorkerClient().answering(ROWS), {
+      tenantId: TENANT,
+      definition: SQL,
+      params: {},
+    });
+    expect(older.ok && older.value.qualifiers).toBeNull();
   });
 });
 

@@ -20,6 +20,7 @@ import {
   type DqFailuresRequest,
   DropModelResponse,
   type ExportQueryRequest,
+  type QueryAnswer,
   type RawSearchRequest,
   type RawSearchResponse,
   type RevokeConnectionResponse,
@@ -126,8 +127,8 @@ export interface WorkerClient {
   dropModel: (input: { tenantId: string; model: string }) => Promise<DropOutcome>;
   /** The rows a failed test stored, as the worker reads them for an admin. */
   dqFailures: (input: DqFailuresRequest) => Promise<WorkerOutcome<TableResult>>;
-  /** SQL an author wrote, run as the tenant's read-only login. */
-  runQuery: (input: QueryInput) => Promise<WorkerOutcome<TableResult>>;
+  /** SQL an author wrote, run as the tenant's read-only login, with the tables its plan read. */
+  runQuery: (input: QueryInput) => Promise<WorkerOutcome<QueryAnswer>>;
   /** Every row of that SQL as a CSV stream, as the same login (`workerExport.ts`, ADR 0111). */
   exportQuery: (input: ExportQueryRequest) => Promise<WorkerOutcome<ReadableStream<Uint8Array>>>;
   /** The tenant's analytics schema, as that login sees it. */
@@ -252,7 +253,7 @@ function initialiseOn(t: WorkerTransport): WorkerClient["initialiseDocumentKinds
  * reviewer can check against the endpoint it calls.
  */
 function queryOn(t: WorkerTransport): typeof query {
-  function query(path: string, input: QueryInput): Promise<WorkerOutcome<TableResult>> {
+  function query(path: string, input: QueryInput): Promise<WorkerOutcome<QueryAnswer>> {
     return exchange(t, { path, body: input }, async (response) => {
       if (response.status === BAD_REQUEST) {
         const refusal = await envelopeOf(response);
@@ -264,7 +265,7 @@ function queryOn(t: WorkerTransport): typeof query {
       if (!response.ok) {
         return { ok: false, reason: "refused" };
       }
-      return { ok: true, value: (await response.json()) as TableResult };
+      return { ok: true, value: (await response.json()) as QueryAnswer };
     });
   }
   return query;

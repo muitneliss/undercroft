@@ -37,6 +37,7 @@ import {
   listDashboards,
   updateDashboard,
 } from "../repos/biDashboards.ts";
+import { type QualifiedAnswer, qualify } from "./answerQualifiers.ts";
 import { getQuestionView } from "./biQuestions.ts";
 import { readSchema, type SchemaFilter, type SchemaOutcome } from "./tableSchema.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
@@ -72,7 +73,7 @@ export function compileDefinition(definition: QuestionDefinition): string {
 }
 
 export type AnswerOutcome =
-  | WorkerOutcome<TableResult>
+  | WorkerOutcome<QualifiedAnswer>
   | { readonly ok: false; readonly reason: "param-missing"; readonly param: string }
   | { readonly ok: false; readonly reason: "question-not-found" };
 
@@ -80,9 +81,12 @@ export type AnswerOutcome =
  * Answer a definition with the dashboard's (or the URL's) values bound in.
  *
  * A parameter with no value is a refusal before anything is sent: a filter that silently
- * matched everything is the wrong answer that looks right.
+ * matched everything is the wrong answer that looks right. The rows come back whole, with a
+ * qualifier for each table they were read from whose latest tests fail or are unknown
+ * (`answerQualifiers.ts`, ADR 0129).
  */
 export async function answer(
+  exec: SqlExecutor,
   worker: WorkerClient,
   input: { tenantId: string; definition: QuestionDefinition; params: QueryParams; limit?: number },
 ): Promise<AnswerOutcome> {
@@ -98,7 +102,11 @@ export async function answer(
   const limit =
     input.limit ??
     (input.definition.kind === "visual" ? input.definition.limit : DEFAULT_QUERY_ROWS);
-  return await worker.runQuery({ tenantId: input.tenantId, sql, limit });
+  const outcome = await worker.runQuery({ tenantId: input.tenantId, sql, limit });
+  if (!outcome.ok) {
+    return outcome;
+  }
+  return { ok: true, value: await qualify(exec, input.tenantId, outcome.value) };
 }
 
 /** Answer a saved question. Any member of the tenant may: the question was saved for them. */
@@ -111,7 +119,7 @@ export async function answerQuestion(
   if (question === null) {
     return { ok: false, reason: "question-not-found" };
   }
-  return answer(worker, {
+  return answer(exec, worker, {
     tenantId: input.tenantId,
     definition: question.definition,
     params: input.params,

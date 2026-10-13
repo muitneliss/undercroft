@@ -29,6 +29,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "react-router-dom";
 
 import type { QuestionView } from "@/api/types.ts";
+import { AnswerQualifiers } from "@/components/AnswerQualifiers.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { CardContent, CardFooter, CardHeader } from "@/components/ui/card.tsx";
@@ -161,9 +162,13 @@ function TileBody({
     return <Errata heading={t("bi.notRun")} error={answer.error} />;
   }
   return (
-    <Suspense fallback={<Skeleton rows={3} />}>
-      <ChartFrame result={answer.data} chart={question.chart} locale={locale} />
-    </Suspense>
+    <>
+      {/* A tile reads the same answer as its question, so it is qualified the same way. */}
+      <AnswerQualifiers qualifiers={answer.data.qualifiers} />
+      <Suspense fallback={<Skeleton rows={3} />}>
+        <ChartFrame result={answer.data} chart={question.chart} locale={locale} />
+      </Suspense>
+    </>
   );
 }
 

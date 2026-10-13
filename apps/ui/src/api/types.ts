@@ -158,6 +158,13 @@ export type BuildResult = Extract<
 /** A query result as every tenant-scoped read answers it: columns, rows, and whether cut. */
 export type TableResult = BuildResult["preview"] & object;
 
+/**
+ * A Reports answer: the rows, whole, and `qualifiers` -- each table the query read whose latest
+ * tests fail or are unknown, or `null` when which tables were read is not known (ADR 0129).
+ */
+export type QualifiedAnswer = inferRouterOutputs<AppRouter>["bi"]["questions"]["answer"];
+export type AnswerQualifier = NonNullable<QualifiedAnswer["qualifiers"]>[number];
+
 /** One saved question in full, as `bi.questions.get` returns it. */
 export type QuestionView = inferRouterOutputs<AppRouter>["bi"]["questions"]["get"];
 

@@ -12,6 +12,7 @@
  */
 
 import { needsScope } from "@undercroft/contracts";
+import { type RunVerdict, runVerdict } from "@undercroft/contracts/runs";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   entitiesForRuns,
@@ -66,6 +67,12 @@ export interface RunView {
     refused: number;
   } | null;
   readonly testsFailed: number | null;
+  /**
+   * What the run came to: `clean`, `tests-failing`, `failed` or `running`, derived from `status`
+   * and `testsFailed` (ADR 0129). A build whose tests fail is `ok` and `tests-failing`: its
+   * tables were written and are served, and this is the word that says they are suspect.
+   */
+  readonly verdict: RunVerdict;
   readonly error: string | null;
   readonly parentRunId: string | null;
   /** Which build produced this run; `""` when the image did not say. */
@@ -86,6 +93,7 @@ export interface RunLink {
   readonly source: string | null;
   readonly status: Run["status"];
   readonly testsFailed: number | null;
+  readonly verdict: RunVerdict;
 }
 
 /**
@@ -150,6 +158,7 @@ function toLink(run: Run): RunLink {
     source: run.source === SOURCE_OF_TRANSFORM ? null : run.source,
     status: run.status,
     testsFailed: run.testsFailed,
+    verdict: runVerdict(run.status, run.testsFailed),
   };
 }
 
@@ -190,6 +199,7 @@ function present(run: Run, entities: RunEntity[]): RunView {
     endedAt: run.endedAt,
     counts: countsOf(run, landed),
     testsFailed: run.testsFailed,
+    verdict: runVerdict(run.status, run.testsFailed),
     error: run.error,
     parentRunId: run.parentRunId,
     releaseTag: run.releaseTag,
@@ -255,7 +265,7 @@ export interface RunRead {
  *
  * With `wait`, it is answered once the run has settled (see `settled`), or when the wait runs out
  * -- and then the answer is exactly what an immediate read would have said: `running`, with no
- * counts and no verdict. Its dbt steps are reported by `reportSteps`, so the summary always comes
+ * counts and the verdict `running`. Its dbt steps are reported by `reportSteps`, so the summary always comes
  * and the steps come as `read.steps` asks.
  */
 export async function get(

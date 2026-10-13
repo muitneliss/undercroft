@@ -1418,6 +1418,10 @@ export const vi = {
     triggerBuild: "từ trình soạn",
     triggerLakeApi: "qua API hồ dữ liệu",
     testsFailed_other: "{{countText}} kiểm thử không đạt",
+    /** A run whose tests fail with no count to give: the verdict alone. */
+    testsFailing: "Kiểm thử không đạt",
+    /** The leaf's fact for a run whose status alone would read as clean (ADR 0129). */
+    verdict: "Kết luận",
     older: "Cũ hơn",
     loadingOlder: "Đang tải…",
     emptyTitle: "Chưa có lần chạy nào",
@@ -1752,6 +1756,18 @@ export const vi = {
     colBuild: "Lần dựng gần nhất",
     colRun: "Lần dựng",
     colColumns: "Số cột",
+    colTests: "Kiểm thử",
+    /** What the tests of the build serving a model's rows found (ADR 0129). */
+    testsPassing: "Đạt",
+    testsFailing_other: "{{countText}} không đạt",
+    testsFailingAny: "Kiểm thử không đạt",
+    /** No test record is not a pass: never built, no test, or none attributed to the model. */
+    testsUnknown: "Chưa có kết quả kiểm thử",
+    testsWarnings_other: "{{countText}} cảnh báo",
+    failingTestsNote: "Kiểm thử không đạt ở lần dựng {{runId}}: {{tests}}.",
+    warningTestsNote: "Kiểm thử cảnh báo ở lần dựng {{runId}}: {{tests}}.",
+    parentTestsUnknown:
+      "Lần dựng này đọc các mô hình cha chưa có kết quả kiểm thử: {{models}}. Hãy kiểm tra chúng trước khi tin số liệu.",
     buildOk: "Dựng thành công",
     buildFailed: "Dựng thất bại",
     neverBuilt: "Chưa dựng",
@@ -1798,6 +1814,8 @@ export const vi = {
       "Dựng chạy dbt cho riêng mô hình này, với bản đã lưu. Hãy lưu hoặc bỏ thay đổi trước.",
     notBuilt: "Chưa dựng được",
     buildOkHead: "Dựng thành công",
+    /** `ok`, and its tests found rows that break them: built and served, not a success (ADR 0129). */
+    buildTestsFailingHead: "Đã dựng, nhưng có kiểm thử không đạt",
     buildFailedHead: "Dựng thất bại",
     testsFailed_other: "{{count, number}} kiểm thử không đạt. Xem từng bước trong Nhật ký.",
     openInJournal: "Xem trong Nhật ký",
@@ -2042,6 +2060,13 @@ export const vi = {
     nameLabel: "Tên câu hỏi",
     namePlaceholder: "Ví dụ: Doanh thu theo giai đoạn",
     untitled: "Câu hỏi chưa đặt tên",
+    /** What an answer says about the tables it read, above its rows (ADR 0129). */
+    qualifiersLabel: "Kiểm thử của các bảng đã đọc",
+    qualifierFailing: "Kiểm thử không đạt trên bảng {{table}} từ lần chạy {{runId}}.",
+    qualifierFailingNoRun: "Kiểm thử không đạt trên bảng {{table}}.",
+    qualifierFailingTests: "Kiểm thử không đạt: {{tests}}.",
+    qualifierUnknown: "Chưa có kết quả kiểm thử cho bảng {{table}}.",
+    qualifiersNotKnown: "Không rõ kết quả kiểm thử của các bảng mà câu trả lời này đọc.",
     viewerNote: "Bạn có thể xem và chạy câu hỏi này. Sửa và lưu cần vai trò member.",
     viewerNew: "Đặt câu hỏi mới cần vai trò member.",
     builderHead: "Dựng câu hỏi",

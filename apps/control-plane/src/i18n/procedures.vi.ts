@@ -86,16 +86,17 @@ export const procedureSentences: SentenceTable = {
   "documentKinds.publish":
     "Publish bản nháp catalogue, để mọi tài liệu được phân loại lại theo nó. Quản trị.",
   "models.list":
-    'Các mô hình dbt của khách hàng kèm lần dựng gần nhất: sqlSha256 và testsSha256 để so một bản sao, và số cột, không kèm SQL. names hoặc match để lọc; include: ["columns"] để lấy các cột của từng lần dựng.',
+    'Các mô hình dbt của khách hàng kèm lần dựng gần nhất: sqlSha256 và testsSha256 để so một bản sao, và số cột, không kèm SQL. names hoặc match để lọc; include: ["columns"] để lấy các cột của từng lần dựng. lastTests là kết quả kiểm thử của lần dựng đang phục vụ các dòng của từng mô hình: passing (đạt), failing (không đạt, failing đếm số kiểm thử) hoặc unknown (chưa có kết quả kiểm thử, không bao giờ coi là đạt).',
   "models.revision":
     "Một mã băm cho các mô hình, macro và câu hỏi của khách hàng và một mã cho tất cả, tính từ những gì mỗi lần lưu đã ghi: bằng nhau nghĩa là không có gì thay đổi.",
-  "models.get": "Một mô hình dbt, SQL và kiểm thử của nó, kèm mã băm của chúng.",
+  "models.get":
+    "Một mô hình dbt, SQL và kiểm thử của nó, kèm mã băm của chúng, và lastTests: passing, failing hoặc unknown, cùng failingTests và warningTests theo tên.",
   "models.save":
     "Lưu một mô hình dbt; không chạy gì. tests: columns gán mỗi cột not_null, unique, {kind: accepted_values, values, quote?} hoặc {kind: relationships, to, field}; sql là các kiểm thử SQL {name, sql}, mỗi kiểm thử là một câu select trả về các dòng vi phạm quy tắc; kiểm thử nào cũng nhận severity error hoặc warn. Kiểm thử SQL hoặc relationships mà models.check thấy có lỗi sẽ bị từ chối và không lưu gì. SQL và kiểm thử giống hệt bản đã lưu trả về unchanged: true và không thay đổi gì. Quản trị.",
   "models.delete":
     "Xoá một mô hình dbt cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu; không xoá gì nếu chưa gỡ được bảng. Quản trị.",
   "models.build":
-    "Dựng mô hình bằng một lần dbt build: name cho một mô hình, hoặc names cho tối đa 20, mỗi mục là name, +name (kèm các mô hình phía trên) hoặc name+ (kèm các mô hình phía dưới); mọi tên phải là mô hình của khách hàng. Mặc định chờ kết quả và trả về waited true với ok, testsFailed, stepSummary (đếm theo loại và trạng thái), các bước được hỏi (steps: none, problems là mặc định, hoặc all; lọc bằng stepStatus, stepKind, stepName; trang tiếp đọc bằng runs.get với runId và stepCursor), rowCounts (số dòng của từng mô hình được nêu; null là không đếm được, không phải 0) và preview khi chỉ nêu một mô hình. wait false trả về ngay waited false với runId; chờ lần chạy đó bằng runs.get với waitSeconds. Khi đang có lần dựng khác, CONFLICT nêu runId và startedAt của lần đó. Quản trị.",
+    "Dựng mô hình bằng một lần dbt build: name cho một mô hình, hoặc names cho tối đa 20, mỗi mục là name, +name (kèm các mô hình phía trên) hoặc name+ (kèm các mô hình phía dưới); mọi tên phải là mô hình của khách hàng. Trước khi chạy, các mô hình cha được đọc mà không dựng lại sẽ được kiểm tra: một mô hình cha có lần kiểm thử mới nhất không đạt thì PRECONDITION_FAILED nêu mô hình cha, các kiểm thử và lần chạy (dựng lại nó, hoặc dựng +name); một mô hình cha chưa có kết quả kiểm thử được nêu trong parentTestsUnknown. Mặc định chờ kết quả và trả về waited true với ok, verdict (clean, tests-failing hoặc failed: thành công là clean; ok mà có kiểm thử không đạt là tests-failing), testsFailed, stepSummary (đếm theo loại và trạng thái), các bước được hỏi (steps: none, problems là mặc định, hoặc all; lọc bằng stepStatus, stepKind, stepName; trang tiếp đọc bằng runs.get với runId và stepCursor), rowCounts (số dòng của từng mô hình được nêu; null là không đếm được, không phải 0) và preview khi chỉ nêu một mô hình. wait false trả về ngay waited false với runId; chờ lần chạy đó bằng runs.get với waitSeconds. Khi đang có lần dựng khác, CONFLICT nêu runId và startedAt của lần đó. Quản trị.",
   "models.lineage":
     "Mô hình nào đọc mô hình nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro. name cho phần quanh một mô hình hay một bảng thô (raw.records), direction up, down hoặc both và depth để giới hạn số bước.",
   "models.reference":
@@ -110,15 +111,17 @@ export const procedureSentences: SentenceTable = {
   "macros.save":
     "Lưu một macro dbt, trọn một định nghĩa {% macro %} mà mọi mô hình gọi được; không chạy gì. Định nghĩa và mô tả giống hệt bản đã lưu trả về unchanged: true và không thay đổi gì. Quản trị.",
   "macros.delete": "Xoá một macro dbt; bị từ chối khi còn mô hình hay macro khác gọi nó. Quản trị.",
-  "bi.answer": "Trả lời một định nghĩa câu hỏi. Thành viên trở lên.",
-  "bi.runQuestion": "Chạy một câu hỏi đã lưu với tham số.",
+  "bi.answer":
+    "Trả lời một định nghĩa câu hỏi: columns, rows và truncated, cùng qualifiers nêu từng bảng nó đã đọc mà kiểm thử mới nhất không đạt hoặc chưa rõ (null khi không biết đã đọc bảng nào); không bao giờ giữ lại dòng nào. Thành viên trở lên.",
+  "bi.runQuestion": "Chạy một câu hỏi đã lưu với tham số; trả lời như bi.answer, kèm qualifiers.",
   "bi.compile": "Dịch một định nghĩa câu hỏi thành SQL. Thành viên trở lên.",
   "bi.schema":
     "Các bảng và cột mà báo cáo đọc được; tables cho đúng những bảng đó, match lọc theo một đoạn tên (không phân biệt hoa thường), columns: false chỉ lấy tên bảng.",
   "bi.questions.list":
     'Các câu hỏi đã lưu: loại, kiểu biểu đồ và definitionSha256, không kèm SQL. names hoặc match để lọc; include: ["definition", "chart"] để lấy đầy đủ từng phần.',
   "bi.questions.get": "Một câu hỏi đã lưu.",
-  "bi.questions.answer": "Câu trả lời của một câu hỏi đã lưu với tham số.",
+  "bi.questions.answer":
+    "Câu trả lời của một câu hỏi đã lưu với tham số, kèm qualifiers như bi.answer.",
   "bi.questions.save": "Lưu một câu hỏi. Thành viên trở lên.",
   "bi.questions.delete": "Xoá một câu hỏi. Thành viên trở lên.",
   "bi.dashboards.list": "Các bảng điều khiển.",
@@ -130,9 +133,9 @@ export const procedureSentences: SentenceTable = {
   "bi.exports.get": "Một bản xuất bạn đã yêu cầu và còn hạn: SQL nó chạy và tên tệp.",
   "dq.failures": "Các dòng mà một kiểm thử chất lượng dữ liệu đã lưu khi thất bại. Quản trị.",
   "runs.list":
-    "Sổ các lần chạy, mới nhất trước. Mọi bộ lọc đều tuỳ chọn và kết hợp được với nhau và với con trỏ: một nguồn (source), loại (kind, một hoặc nhiều), trạng thái (status), cách khởi chạy (trigger), lần chạy cha (parentRunId: các lần chạy nối tiếp từ lần đó, như lần dựng sau một lần đọc), chỉ lần chạy được nối tiếp hay không (chained), bắt đầu từ (startedAfter, tính cả mốc) và trước (startedBefore), và tối đa 50 mã (ids). Trang rỗng nghĩa là không có gì khớp.",
+    "Sổ các lần chạy, mới nhất trước. Mọi bộ lọc đều tuỳ chọn và kết hợp được với nhau và với con trỏ: một nguồn (source), loại (kind, một hoặc nhiều), trạng thái (status), cách khởi chạy (trigger), lần chạy cha (parentRunId: các lần chạy nối tiếp từ lần đó, như lần dựng sau một lần đọc), chỉ lần chạy được nối tiếp hay không (chained), bắt đầu từ (startedAfter, tính cả mốc) và trước (startedBefore), và tối đa 50 mã (ids). Mỗi lần chạy có verdict: clean, tests-failing (ok nhưng có kiểm thử không đạt), failed hoặc running. Trang rỗng nghĩa là không có gì khớp.",
   "runs.get":
-    "Một lần chạy, với phạm vi nó đã đọc và các dòng bị từ chối. Các bước dbt có stepSummary (đếm theo loại và trạng thái; bước skipped vẫn là skipped) cùng các bước được hỏi: steps là none, problems (mặc định: mọi bước không phải success, pass hay skipped) hoặc all; lọc bằng stepStatus, stepKind, stepName (khi có bộ lọc mà không nêu steps thì là all) và sang trang bằng stepCursor với nextStepCursor. waitSeconds (tối đa 50) trả lời ngay khi lần chạy hết running, và với một lần đọc kết thúc ok thì khi lần dựng nối tiếp (childRun) đã có; hết giờ chờ thì vẫn báo running. Dùng nó thay cho việc hỏi lặp.",
+    "Một lần chạy, với phạm vi nó đã đọc, các dòng bị từ chối và verdict của nó (clean, tests-failing, failed hoặc running). Các bước dbt có stepSummary (đếm theo loại và trạng thái; bước skipped vẫn là skipped) cùng các bước được hỏi: steps là none, problems (mặc định: mọi bước không phải success, pass hay skipped) hoặc all; lọc bằng stepStatus, stepKind, stepName (khi có bộ lọc mà không nêu steps thì là all) và sang trang bằng stepCursor với nextStepCursor. waitSeconds (tối đa 50) trả lời ngay khi lần chạy hết running, và với một lần đọc kết thúc ok thì khi lần dựng nối tiếp (childRun) đã có; hết giờ chờ thì vẫn báo running. Dùng nó thay cho việc hỏi lặp.",
   "runs.events": "Những gì worker đang báo về một lần chạy.",
   "runs.trigger": "Chạy ngay việc đọc một nguồn. Quản trị.",
   "config.google": "Nửa công khai của ứng dụng Google, cho trình chọn Drive.",
