@@ -50,8 +50,8 @@ it("carries Gmail's own ownership of a label through to the picker", async () =>
   });
 
   expect(await labels()).toEqual([
-    { id: "INBOX", name: "INBOX", kind: "system" },
-    { id: "Label_7", name: "Kế toán", kind: "user" },
+    { id: "INBOX", name: "INBOX", kind: "system", parentId: null },
+    { id: "Label_7", name: "Kế toán", kind: "user", parentId: null },
   ]);
 });
 
@@ -60,5 +60,39 @@ it("leaves a label Gmail did not classify unclassified rather than guessing an o
   // default, and defaulting to it states who made a label on no evidence at all.
   fetcher.on("GET", LABELS, { body: { labels: [{ id: "Label_9", name: "Github" }] } });
 
-  expect(await labels()).toEqual([{ id: "Label_9", name: "Github", kind: null }]);
+  expect(await labels()).toEqual([{ id: "Label_9", name: "Github", kind: null, parentId: null }]);
+});
+
+it("nests a label under the one its name continues, as Gmail draws it", async () => {
+  fetcher.on("GET", LABELS, {
+    body: {
+      labels: [
+        { id: "Label_1", name: "Clients", type: "user" },
+        { id: "Label_2", name: "Clients/Acme", type: "user" },
+        { id: "Label_3", name: "Clients/Acme/2026", type: "user" },
+      ],
+    },
+  });
+
+  expect((await labels()).map((label) => [label.id, label.parentId])).toEqual([
+    ["Label_1", null],
+    ["Label_2", "Label_1"],
+    ["Label_3", "Label_2"],
+  ]);
+});
+
+it("leaves a label at the top when no label is named by what precedes its slash", async () => {
+  // The quiet side: `Archive/2025` with no `Archive`, and `Clients/Acme/2026` with `Clients`
+  // but no `Clients/Acme`. Hanging the second under `Clients` would be a nesting nobody made.
+  fetcher.on("GET", LABELS, {
+    body: {
+      labels: [
+        { id: "Label_1", name: "Clients", type: "user" },
+        { id: "Label_3", name: "Clients/Acme/2026", type: "user" },
+        { id: "Label_4", name: "Archive/2025", type: "user" },
+      ],
+    },
+  });
+
+  expect((await labels()).map((label) => label.parentId)).toEqual([null, null, null]);
 });

@@ -151,5 +151,11 @@ export type DashboardView = inferRouterOutputs<AppRouter>["bi"]["dashboards"]["g
 /** One dashboard on the list, as `bi.dashboards.list` returns it. */
 export type DashboardItem = inferRouterOutputs<AppRouter>["bi"]["dashboards"]["list"][number];
 
-/** The tenant's analytics schema as its read-only login sees it. */
-export type SchemaView = inferRouterOutputs<AppRouter>["bi"]["schema"];
+/**
+ * Either answer `bi.schema` and `lake.querySchema` give: the tables with their columns, or --
+ * asked `columns: false`, which only an agent asks -- the table names alone (issue 443).
+ */
+export type SchemaAnswer = inferRouterOutputs<AppRouter>["bi"]["schema"];
+
+/** A schema with its columns, as the browser always asks for it. See `@/lib/schemaAnswer`. */
+export type SchemaView = Exclude<SchemaAnswer, { readonly columns: false }>;

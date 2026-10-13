@@ -41,7 +41,7 @@ export const procedureSentences: SentenceTable = {
   "connections.startOAuth":
     "Bắt đầu cấp quyền OAuth; trả về URL để mở trong trình duyệt. Quản trị.",
   "connections.browseScope":
-    "Những gì có thể chọn cho phạm vi đọc: nhãn Gmail, tổ chức Xero, thư mục Google Drive kèm đường dẫn và các loại tệp đang có, hoặc các trường của từng đối tượng HubSpot, kể cả trường do portal tự tạo. Quản trị.",
+    "Những gì có thể chọn cho phạm vi đọc: nhãn Gmail, tổ chức Xero, thư mục Google Drive kèm đường dẫn và các loại tệp đang có, hoặc các trường của từng đối tượng HubSpot, kể cả trường do portal tự tạo. parentId cho một cấp của cây thư mục hay nhãn (null là cấp trên cùng), query tìm theo tên hoặc đường dẫn, limit và cursor để chia trang; partial vẫn báo khi danh sách chưa đủ. Quản trị.",
   "connections.setScope":
     "Đặt phạm vi đọc của một nguồn. Với HubSpot, các trường chọn thêm cho từng đối tượng được đọc cùng các trường chuẩn, không thay thế chúng. Quản trị.",
   "connections.setToken": "Kết nối một nguồn bằng token dán vào. Quản trị.",
@@ -71,7 +71,8 @@ export const procedureSentences: SentenceTable = {
     "Các tài liệu thô của một nguồn, hoặc những tài liệu một lần chạy đã ghi. Quản trị.",
   "lake.query": "Chạy một câu SELECT trên hồ dữ liệu thô. Quản trị.",
   "lake.search": "Tìm kiếm toàn văn trên hồ dữ liệu thô. Quản trị.",
-  "lake.querySchema": "Các bảng và cột mà lake query đọc được. Quản trị.",
+  "lake.querySchema":
+    "Các bảng và cột mà lake query đọc được; tables cho đúng những bảng đó, match lọc theo một đoạn tên (không phân biệt hoa thường), columns: false chỉ lấy tên bảng. Quản trị.",
   "documentKinds.list":
     "Catalogue loại tài liệu của khách hàng, phiên bản đã publish, và số tài liệu một lần publish sẽ phân loại.",
   "documentKinds.add":
@@ -89,7 +90,7 @@ export const procedureSentences: SentenceTable = {
     "Xoá một mô hình dbt cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu; không xoá gì nếu chưa gỡ được bảng. Quản trị.",
   "models.build": "Chạy dbt cho một mô hình và chờ kết quả. Quản trị.",
   "models.lineage":
-    "Mô hình nào đọc mô hình nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro.",
+    "Mô hình nào đọc mô hình nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro. name cho phần quanh một mô hình hay một bảng thô (raw.records), direction up, down hoặc both và depth để giới hạn số bước.",
   "models.reference":
     "Tài liệu tham khảo cho người viết mô hình: các nguồn, macro của nền tảng và macro riêng của khách hàng.",
   "models.check":
@@ -104,7 +105,8 @@ export const procedureSentences: SentenceTable = {
   "bi.answer": "Trả lời một định nghĩa câu hỏi. Thành viên trở lên.",
   "bi.runQuestion": "Chạy một câu hỏi đã lưu với tham số.",
   "bi.compile": "Dịch một định nghĩa câu hỏi thành SQL. Thành viên trở lên.",
-  "bi.schema": "Các bảng và cột mà báo cáo đọc được.",
+  "bi.schema":
+    "Các bảng và cột mà báo cáo đọc được; tables cho đúng những bảng đó, match lọc theo một đoạn tên (không phân biệt hoa thường), columns: false chỉ lấy tên bảng.",
   "bi.questions.list": "Các câu hỏi đã lưu.",
   "bi.questions.get": "Một câu hỏi đã lưu.",
   "bi.questions.answer": "Câu trả lời của một câu hỏi đã lưu với tham số.",

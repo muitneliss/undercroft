@@ -24,6 +24,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import type { QuestionView, SchemaView } from "@/api/types.ts";
+import { columnsListed } from "@/lib/schemaAnswer.ts";
 import { Errata, type ServerError } from "@/components/Errata.tsx";
 import {
   DeleteBand,
@@ -68,7 +69,7 @@ const EDIT = "edit";
 function useQuestionDraft(tenantId: string, id: string, isNew: boolean): QuestionDraft | null {
   const draft = useUiStore((state) => state.questionDraft);
   const setQuestionDraft = useUiStore((state) => state.setQuestionDraft);
-  const schema = trpc.bi.schema.useQuery({ tenantId });
+  const schema = trpc.bi.schema.useQuery({ tenantId }, { select: columnsListed });
   const question = trpc.bi.questions.get.useQuery({ tenantId, id }, { enabled: !isNew });
   const [search, setSearch] = useSearchParams();
   const onTable = isNew ? search.get(ON_TABLE) : null;
@@ -122,7 +123,7 @@ export function Question({ tenantId }: { tenantId: string }): React.JSX.Element 
   const utils = trpc.useUtils();
 
   const tenant = trpc.tenants.get.useQuery({ tenantId });
-  const schema = trpc.bi.schema.useQuery({ tenantId });
+  const schema = trpc.bi.schema.useQuery({ tenantId }, { select: columnsListed });
   const question = trpc.bi.questions.get.useQuery({ tenantId, id }, { enabled: !isNew });
   const held = useQuestionDraft(tenantId, id, isNew);
 

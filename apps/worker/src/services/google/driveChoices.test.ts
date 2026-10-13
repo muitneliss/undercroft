@@ -82,12 +82,33 @@ it("lists every folder with its path, a shared drive's name first, and every typ
       },
     });
 
+  // A folder's parent is the folder above it when the listing saw one, and the top otherwise:
+  // My Drive's root and a shared drive are no folder of the listing's, so `Books` and `Audit`
+  // start the tree as they start their paths. A file type is in no tree and carries no parent.
   expect(await choices()).toEqual({
     items: [
-      { id: "f-books", name: "Books", kind: "folder", path: ["Books"] },
-      { id: "f-2026a", name: "2026", kind: "folder", path: ["Books", "2026"] },
-      { id: "f-audit", name: "Audit", kind: "folder", path: ["Finance team", "Audit"] },
-      { id: "f-2026b", name: "2026", kind: "folder", path: ["Finance team", "Audit", "2026"] },
+      { id: "f-books", name: "Books", kind: "folder", path: ["Books"], parentId: null },
+      {
+        id: "f-2026a",
+        name: "2026",
+        kind: "folder",
+        path: ["Books", "2026"],
+        parentId: "f-books",
+      },
+      {
+        id: "f-audit",
+        name: "Audit",
+        kind: "folder",
+        path: ["Finance team", "Audit"],
+        parentId: null,
+      },
+      {
+        id: "f-2026b",
+        name: "2026",
+        kind: "folder",
+        path: ["Finance team", "Audit", "2026"],
+        parentId: "f-audit",
+      },
       { id: "application/pdf", name: "application/pdf", kind: "file-type" },
       { id: "image/heic", name: "image/heic", kind: "file-type" },
     ],

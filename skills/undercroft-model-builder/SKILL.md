@@ -124,7 +124,9 @@ Read `models.list`, `macros.list`, `models.reference`, `lake.summary`, `bi.quest
 Read further -- `models.get`, `models.lineage`, `macros.get`, `bi.questions.get`,
 `bi.dashboards.get`, `lake.records` -- when the request touches it. Before changing a model,
 or building one beside it, read `models.lineage` for the models that `ref` it: they read what
-it builds. It lists only what the models declare, and says so where it cannot read one.
+it builds. Name the model (`name`, with `direction: "down"`) rather than reading the whole
+graph, and narrow `bi.schema` to the tables you are weighing. Lineage lists only what the
+models declare, and says so where it cannot read one.
 
 ### 3. Interview and read the evidence
 

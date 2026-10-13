@@ -12,6 +12,7 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
 import { providerName } from "../services/oauthProviders.ts";
+import { type ChoiceRefusal, isChoiceRefusal, MAX_CHOICES_PAGE } from "../services/scopeChoices.ts";
 import type { WorkerFailure } from "../services/workerRefusals.ts";
 import { actorOf, refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
 import { tokenRefusalKey } from "./answers.ts";
@@ -79,6 +80,44 @@ function browseRefusal(
       });
   }
 }
+
+/**
+ * Why a listing could not be cut as asked (issue 443, ADR 0125). Each is the request's fault,
+ * and the facts say what to change -- leave the parent out, name an id the listing holds, start
+ * the pages again -- never "retry", which would only be refused the same way.
+ */
+function cutRefusal(
+  locale: Locale,
+  at: { source: string; listing: BrowseListing; parentId: string | null | undefined },
+  reason: ChoiceRefusal,
+): TRPCError {
+  const t = messages(locale);
+  const facts = { source: at.source, listing: at.listing, reason };
+  switch (reason) {
+    case "not-a-tree":
+      return refusal("BAD_REQUEST", t("error.browseNotTree", { source: at.source }), {
+        ...facts,
+        remedy: "omit-parent",
+      });
+    case "unknown-parent":
+      return refusal(
+        "NOT_FOUND",
+        t("error.browseParentUnknown", { source: at.source, parentId: at.parentId ?? "" }),
+        { ...facts, parentId: at.parentId ?? null, remedy: "none" },
+      );
+    default:
+      return refusal("BAD_REQUEST", t("error.browseCursorUnknown", { source: at.source }), {
+        ...facts,
+        remedy: "restart",
+      });
+  }
+}
+
+/**
+ * The longest `parentId`, `query` or `cursor` worth reading. A Drive id is 33 characters and a
+ * cursor a few dozen; this is a bound on what a request may make the server hold, not a format.
+ */
+const MAX_CHOICE_TEXT_CHARS = 1024;
 
 /** Why a scope was not saved: the one refusal left is a selection nobody could read. */
 function scopeRefusal(locale: Locale, source: string): TRPCError {
@@ -150,24 +189,39 @@ export const connectionsRouter = router({
    *
    * Proxied to the worker because it needs a live token, which only the worker can open.
    * Every refusal names, in `details`, which listing could not be had and what would fix it.
+   *
+   * `parentId`, `query`, `limit` and `cursor` cut the listing to one level of its tree, a
+   * search or a page (`scopeChoices.ts`): 2,331 Drive folders with their paths overflowed an
+   * agent's client (issue 443). With none of them the listing comes whole, as the picker reads it.
    */
   browseScope: requireRole("admin")
-    .input(z.object({ source: z.string().min(1) }))
+    .input(
+      z.object({
+        source: z.string().min(1),
+        parentId: z.string().min(1).max(MAX_CHOICE_TEXT_CHARS).nullable().optional(),
+        query: z.string().min(1).max(MAX_CHOICE_TEXT_CHARS).optional(),
+        limit: z.number().int().min(1).max(MAX_CHOICES_PAGE).optional(),
+        cursor: z.string().min(1).max(MAX_CHOICE_TEXT_CHARS).optional(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
-      const listing = connections.browseListingFor(input.source);
+      const { source, tenantId: _tenant, ...filter } = input;
+      const listing = connections.browseListingFor(source);
       if (listing === null) {
-        throw browseRefusal(ctx.locale, { source: input.source, listing }, "unsupported");
+        throw browseRefusal(ctx.locale, { source, listing }, "unsupported");
       }
       if (ctx.worker === null) {
-        throw browseRefusal(ctx.locale, { source: input.source, listing }, "unreachable");
+        throw browseRefusal(ctx.locale, { source, listing }, "unreachable");
       }
-      const outcome = await ctx.worker.browseScope({
-        source: input.source,
-        tenantId: ctx.tenantId,
-        kind: listing,
-      });
+      const outcome = await connections.browse(
+        ctx.worker,
+        { source, tenantId: ctx.tenantId, kind: listing },
+        filter,
+      );
       if (!outcome.ok) {
-        throw browseRefusal(ctx.locale, { source: input.source, listing }, outcome.reason);
+        throw isChoiceRefusal(outcome.reason)
+          ? cutRefusal(ctx.locale, { source, listing, parentId: filter.parentId }, outcome.reason)
+          : browseRefusal(ctx.locale, { source, listing }, outcome.reason);
       }
       return outcome.value;
     }),

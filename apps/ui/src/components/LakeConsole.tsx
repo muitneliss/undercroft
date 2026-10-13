@@ -60,6 +60,7 @@ import { SizeGrip } from "@/components/SizeGrip.tsx";
 import type { SqlEditorHandle } from "@/components/SqlEditor.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { type LakeStream, streamKey, streamLabel, streamQuery } from "@/lib/lake.ts";
+import { columnsListed } from "@/lib/schemaAnswer.ts";
 import type { LakeRun } from "@/lib/statements.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -292,7 +293,7 @@ export function LakeConsole({
   const run = useUiStore((state) => state.lakeRun[tenantId]);
   const startLakeRun = useUiStore((state) => state.startLakeRun);
   const folded = useUiStore((state) => state.lakeRailFolded);
-  const schema = trpc.lake.querySchema.useQuery({ tenantId });
+  const schema = trpc.lake.querySchema.useQuery({ tenantId }, { select: columnsListed });
   const editorRef = useRef<SqlEditorHandle>(null);
   const opened = useOpenedStream(tenantId, stream ?? null);
   // Every pane's query carries the same mutation key, so this is the one place that knows a

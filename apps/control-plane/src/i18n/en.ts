@@ -121,6 +121,9 @@ export const en = {
     macroDependedOn:
       "The macro {{name}} was not deleted: it is still called by {{dependents}}. Remove those calls first, then try again.",
     dqNotRead: "The failing rows for this step could not be read.",
+    lineageNameUnknown:
+      "This customer's lineage has no model or table named {{name}}. A raw table is written as schema.table, such as raw.records.",
+    tablesUnknown: "Not among this customer's tables: {{tables}}.",
     queryFailed: "The query did not run: {{message}}",
     queryNotRun:
       "The query could not be run. The processing service did not answer; try again in a few minutes.",
@@ -137,6 +140,12 @@ export const en = {
       "The access granted to the {{source}} connection has expired or been revoked, so the list could not be fetched. Connect the source again, then come back to this screen.",
     browseRefused: "The processing service could not fetch the list for {{source}}.",
     browseUnsupported: "{{source}} has no list to choose what it reads from.",
+    browseNotTree:
+      "The {{source}} list is not a tree, so it cannot be browsed by parent. Leave out parentId.",
+    browseParentUnknown:
+      "The {{source}} list has no item with the id {{parentId}}. Use the id of a folder or label the list holds.",
+    browseCursorUnknown:
+      "This page cursor no longer matches the {{source}} list: the item it continues after is no longer listed. Browse again from the first page.",
     scopeNotUnderstood: "The selection for {{source}} could not be read.",
     cronFields:
       "A cron expression has exactly five fields: minute, hour, day of month, month, day of week.",

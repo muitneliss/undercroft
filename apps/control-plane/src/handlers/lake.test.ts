@@ -238,6 +238,26 @@ describe("the rows one run wrote", () => {
   });
 });
 
+describe("lake.querySchema", () => {
+  it("narrows the raw schema by the rule bi.schema uses, and refuses a table that is not there", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient().withSchema({
+      tables: [
+        { name: "documents", columns: [{ name: "sha256", type: "text" }] },
+        { name: "records", columns: [{ name: "payload", type: "jsonb" }] },
+      ],
+    });
+    const api = caller(admin, "a@example.test", worker);
+
+    expect(await api.lake.querySchema({ tenantId: TENANT, tables: ["records"] })).toEqual({
+      tables: [{ name: "records", columns: [{ name: "payload", type: "jsonb" }] }],
+    });
+    expect(
+      await errorCode(() => api.lake.querySchema({ tenantId: TENANT, tables: ["record"] })),
+    ).toBe("NOT_FOUND");
+  });
+});
+
 describe("lake.search", () => {
   const HIT = {
     kind: "document" as const,

@@ -162,7 +162,7 @@ describe("which list a source is browsed for", () => {
       source: "drive.3fa9c1d2e0ab",
     });
 
-    expect(answer).toEqual({ items: [folder], partial: [] });
+    expect(answer).toEqual({ items: [folder], partial: [], nextCursor: null });
     expect(worker.browsed.map((asked) => asked.kind)).toEqual(["folders", "folders"]);
   });
 
@@ -189,5 +189,142 @@ describe("which list a source is browsed for", () => {
       callerOf(worker).connections.browseScope({ tenantId: TENANT, source: "shopify" }),
     ).rejects.toThrow(messages(DEFAULT_LOCALE)("error.browseUnsupported", { source: "shopify" }));
     expect(worker.browsed).toEqual([]);
+  });
+});
+
+describe("a browse cut to a level, a search or a page (issue 443)", () => {
+  function folder(id: string, path: string[], parentId: string | null) {
+    return { id, name: path.at(-1) ?? "", kind: "folder" as const, path, parentId };
+  }
+  const DRIVE = {
+    items: [
+      folder("f-a", ["Accounts"], null),
+      folder("f-a1", ["Accounts", "2025"], "f-a"),
+      folder("f-a2", ["Accounts", "2026"], "f-a"),
+      folder("f-b", ["Board"], null),
+      folder("f-b1", ["Board", "Minutes 2026"], "f-b"),
+      { id: "application/pdf", name: "application/pdf", kind: "file-type" as const },
+    ],
+    // The folder listing stopped at its bound: no cut may make that look whole.
+    partial: ["folder" as const],
+  };
+
+  function drive() {
+    const worker = new InMemoryWorkerClient().withChoices(DRIVE);
+    return { worker, api: callerOf(worker).connections };
+  }
+
+  async function refused(call: () => Promise<unknown>): Promise<{ code: string; facts: unknown }> {
+    try {
+      await call();
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        return { code: error.code, facts: (error.cause as { facts?: unknown } | undefined)?.facts };
+      }
+      throw error;
+    }
+    throw new Error("expected the browse to be refused");
+  }
+
+  function ids(answer: { items: readonly { id: string }[] }): string[] {
+    return answer.items.map((item) => item.id);
+  }
+
+  it("answers one level under a parent, or the top with null, and still says the listing is partial", async () => {
+    const { api } = drive();
+
+    const under = await api.browseScope({ tenantId: TENANT, source: "drive", parentId: "f-a" });
+    const top = await api.browseScope({ tenantId: TENANT, source: "drive", parentId: null });
+
+    expect(ids(under)).toEqual(["f-a1", "f-a2"]);
+    expect(ids(top)).toEqual(["f-a", "f-b"]);
+    expect([under.partial, top.partial]).toEqual([["folder"], ["folder"]]);
+  });
+
+  it("searches names and folder paths, case-insensitively", async () => {
+    const { api } = drive();
+
+    const byName = await api.browseScope({ tenantId: TENANT, source: "drive", query: "2026" });
+    const byPath = await api.browseScope({
+      tenantId: TENANT,
+      source: "drive",
+      query: "accounts/20",
+    });
+
+    expect(ids(byName)).toEqual(["f-a2", "f-b1"]);
+    expect(ids(byPath)).toEqual(["f-a1", "f-a2"]);
+  });
+
+  it("pages through the whole listing, every item once, partial on every page", async () => {
+    const { api } = drive();
+    const pages: { items: readonly { id: string }[]; partial: readonly string[] }[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await api.browseScope({
+        tenantId: TENANT,
+        source: "drive",
+        limit: 2,
+        ...(cursor === undefined ? {} : { cursor }),
+      });
+      pages.push(page);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+
+    expect(pages.flatMap(ids)).toEqual(ids(DRIVE));
+    expect(pages.map((page) => page.items.length)).toEqual([2, 2, 2]);
+    expect(pages.every((page) => page.partial.join() === "folder")).toBe(true);
+  });
+
+  it("a cursor whose item has left the listing is refused, not restarted from the top", async () => {
+    const { worker, api } = drive();
+    const first = await api.browseScope({ tenantId: TENANT, source: "drive", limit: 2 });
+    worker.withChoices({ ...DRIVE, items: DRIVE.items.filter((item) => item.id !== "f-a1") });
+
+    const got = await refused(() =>
+      api.browseScope({ tenantId: TENANT, source: "drive", cursor: first.nextCursor ?? "" }),
+    );
+
+    expect(got.code).toBe("BAD_REQUEST");
+    expect(got.facts).toEqual({
+      source: "drive",
+      listing: "folders",
+      reason: "unknown-cursor",
+      remedy: "restart",
+    });
+  });
+
+  it("a parent the listing does not hold is NOT_FOUND, never an empty level", async () => {
+    const { api } = drive();
+
+    const got = await refused(() =>
+      api.browseScope({ tenantId: TENANT, source: "drive", parentId: "f-gone" }),
+    );
+
+    expect(got.code).toBe("NOT_FOUND");
+    expect(got.facts).toEqual({
+      source: "drive",
+      listing: "folders",
+      reason: "unknown-parent",
+      parentId: "f-gone",
+      remedy: "none",
+    });
+  });
+
+  it("a listing with no tree refuses a parent, but still answers a search", async () => {
+    // Xero's organisations carry no `parentId`; neither does a worker built before the field,
+    // whose folders would otherwise answer every level as empty.
+    const worker = new InMemoryWorkerClient().withChoices({
+      items: [{ id: "org-1", name: "Acme Ltd", kind: null }],
+      partial: [],
+    });
+    const api = callerOf(worker).connections;
+
+    const got = await refused(() =>
+      api.browseScope({ tenantId: TENANT, source: "xero", parentId: null }),
+    );
+    const searched = await api.browseScope({ tenantId: TENANT, source: "xero", query: "acme" });
+
+    expect(got.code).toBe("BAD_REQUEST");
+    expect(ids(searched)).toEqual(["org-1"]);
   });
 });

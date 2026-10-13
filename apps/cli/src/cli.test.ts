@@ -212,6 +212,41 @@ describe("an agent reads the platform through the same door as the browser", () 
     });
   });
 
+  it("a browse names its parent and its page as typed flags, though the parent may also be null", async () => {
+    // Issue 443. `parentId` is a nullable input, which the manifest describes as an `anyOf`;
+    // read as anything but its string, it had no flag, and the one level an agent asks for
+    // could only be sent as JSON.
+    writeProfile("local", plane.origin, false);
+    await signIn();
+    plane.worker.withChoices({
+      items: [
+        { id: "f-a", name: "Accounts", kind: "folder", path: ["Accounts"], parentId: null },
+        { id: "f-1", name: "2025", kind: "folder", path: ["Accounts", "2025"], parentId: "f-a" },
+        { id: "f-2", name: "2026", kind: "folder", path: ["Accounts", "2026"], parentId: "f-a" },
+      ],
+      partial: [],
+    });
+
+    const level = await undercroft([
+      "connections",
+      "browse-scope",
+      "--tenant-id",
+      OWN,
+      "--source",
+      "drive",
+      "--parent-id",
+      "f-a",
+      "--limit",
+      "1",
+      "--agent",
+    ]);
+
+    expect(envelope(level).data).toMatchObject({
+      items: [{ id: "f-1" }],
+      nextCursor: expect.any(String),
+    });
+  });
+
   it("a tenant that is not yours is NOT_FOUND, never an empty list", async () => {
     writeProfile("local", plane.origin, false);
     await signIn();

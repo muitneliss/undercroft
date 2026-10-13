@@ -29,7 +29,7 @@ export const procedureSentences: SentenceTable = {
   "connections.get": "One source and how it is connected.",
   "connections.startOAuth": "Begin an OAuth grant; returns the URL to open in a browser. Admins.",
   "connections.browseScope":
-    "What may be chosen for a source's scope: Gmail labels, Xero organisations, Google Drive folders with their paths and the file types present, or each HubSpot object's properties, the portal's own included. Admins.",
+    "What may be chosen for a source's scope: Gmail labels, Xero organisations, Google Drive folders with their paths and the file types present, or each HubSpot object's properties, the portal's own included. parentId for one level of the folder or label tree (null for the top), query to search names and paths, limit and cursor to page; partial still says when the listing is incomplete. Admins.",
   "connections.setScope":
     "Set what a source reads. For HubSpot, the properties chosen for each object are read as well as the standard ones, never instead of them. Admins.",
   "connections.setToken": "Connect a source with a pasted token. Admins.",
@@ -56,7 +56,8 @@ export const procedureSentences: SentenceTable = {
   "lake.documents": "A source's raw documents, or the ones a run wrote. Admins.",
   "lake.query": "Run one SELECT over the raw lake. Admins.",
   "lake.search": "Full-text search over the raw lake. Admins.",
-  "lake.querySchema": "The tables and columns lake query can read. Admins.",
+  "lake.querySchema":
+    "The tables and columns lake query can read; tables for exactly those, match for names containing a fragment (case-insensitive), columns: false for table names alone. Admins.",
   "documentKinds.list":
     "The customer's catalogue of document kinds, what is published, and how many documents a publish would classify.",
   "documentKinds.add":
@@ -75,7 +76,7 @@ export const procedureSentences: SentenceTable = {
     "Delete a dbt model with the table it built and the rows its tests stored; deletes nothing if the table could not be dropped. Admins.",
   "models.build": "Build one model with dbt and wait for the answer. Admins.",
   "models.lineage":
-    "Which models read which models and raw lake tables, from the models' and macros' own ref() and source() declarations.",
+    "Which models read which models and raw lake tables, from the models' and macros' own ref() and source() declarations. name for the part around one model or raw table (raw.records), direction up, down or both, and depth to bound the steps.",
   "models.reference":
     "Reference material for a model's author: the sources, the platform's macros and the customer's own.",
   "models.check":
@@ -90,7 +91,8 @@ export const procedureSentences: SentenceTable = {
   "bi.answer": "Answer a question definition. Members and above.",
   "bi.runQuestion": "Run a saved question with parameters.",
   "bi.compile": "Compile a question definition to SQL. Members and above.",
-  "bi.schema": "The tables and columns reports can read.",
+  "bi.schema":
+    "The tables and columns reports can read; tables for exactly those, match for names containing a fragment (case-insensitive), columns: false for table names alone.",
   "bi.questions.list": "The saved questions.",
   "bi.questions.get": "One saved question.",
   "bi.questions.answer": "A saved question's answer under parameters.",

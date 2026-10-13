@@ -220,7 +220,7 @@ describe("browsing what may be shared", () => {
     // sitting on top of the ones an admin came to find, and nothing on the page to say a
     // classification was lost on the way.
     expect(await response.json()).toEqual({
-      items: [{ id: "Label_8", name: "Invoices", kind: "user" }],
+      items: [{ id: "Label_8", name: "Invoices", kind: "user", parentId: null }],
       partial: [],
     });
   });
@@ -289,7 +289,7 @@ describe("browsing what may be shared", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       items: [
-        { id: "fo-1", name: "Statements", kind: "folder", path: ["Statements"] },
+        { id: "fo-1", name: "Statements", kind: "folder", path: ["Statements"], parentId: null },
         { id: "application/pdf", name: "application/pdf", kind: "file-type" },
       ],
       partial: [],

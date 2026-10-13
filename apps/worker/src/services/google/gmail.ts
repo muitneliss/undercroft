@@ -79,13 +79,14 @@ export interface GmailLabel {
   readonly name: string;
   /** Gmail's own `type`, or null where it did not say. See `labelKind`. */
   readonly kind: "system" | "user" | null;
+  /** The label this one is nested under, or null at the top. See `nestedUnder`. */
+  readonly parentId: string | null;
 }
 
 /** The labels an admin can choose from. Needs a live token, so it runs in the worker. */
 export async function listLabels(api: GoogleApi): Promise<GmailLabel[]> {
   const body = await api.getJson(`${GMAIL_BASE}/labels`, "labels");
-  const labels = asArray(getPath(body, "labels"));
-  return labels.flatMap((label) => {
+  const labels = asArray(getPath(body, "labels")).flatMap((label) => {
     const id = str(label, "id");
     if (id === "") {
       return [];
@@ -93,6 +94,20 @@ export async function listLabels(api: GoogleApi): Promise<GmailLabel[]> {
     const name = str(label, "name");
     return [{ id, name: name === "" ? id : name, kind: labelKind(str(label, "type")) }];
   });
+  const byName = new Map(labels.map((label) => [label.name, label.id]));
+  return labels.map((label) => ({ ...label, parentId: nestedUnder(label.name, byName) }));
+}
+
+/**
+ * The id of the label a label is nested under, by Gmail's own convention: a `/` in a name
+ * nests it under the label named by what precedes the last one, so `Clients/Acme` sits under
+ * `Clients`. Only when that label exists -- a name whose prefix names nothing is at the top,
+ * where its full name still shows the path it was given -- and only the immediate prefix, never
+ * the nearest ancestor that happens to exist, which would be a nesting nobody made.
+ */
+function nestedUnder(name: string, byName: ReadonlyMap<string, string>): string | null {
+  const cut = name.lastIndexOf("/");
+  return cut <= 0 ? null : (byName.get(name.slice(0, cut)) ?? null);
 }
 
 /**

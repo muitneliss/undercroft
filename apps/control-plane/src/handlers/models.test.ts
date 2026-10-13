@@ -350,4 +350,35 @@ describe("models.lineage", () => {
     );
     expect(got.code).toBe("NOT_FOUND");
   });
+
+  it("with a name, answers the part around that node alone (issue 443)", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const api = caller(admin, "a@example.test");
+    const readsDeals = "select * from {{ ref('stg_deals') }}";
+    await api.models.save({ ...DRAFT, create: true });
+    await api.models.save({ ...DRAFT, name: "mart", sql: readsDeals, create: true });
+    // mart's sibling: it reads what mart reads, and nothing joins it to mart.
+    await api.models.save({ ...DRAFT, name: "stg_other", sql: readsDeals, create: true });
+
+    const part = await api.models.lineage({ tenantId: TENANT, name: "mart" });
+
+    expect(part).toEqual({
+      nodes: [
+        { kind: "model", id: "model:mart", name: "mart", undeclared: [] },
+        { kind: "model", id: "model:stg_deals", name: "stg_deals", undeclared: [] },
+      ],
+      edges: [{ from: "model:stg_deals", to: "model:mart", via: null }],
+    });
+  });
+
+  it("a name no node carries is NOT_FOUND naming it, never an empty graph", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const api = caller(admin, "a@example.test", "en");
+    await api.models.save({ ...DRAFT, create: true });
+
+    const got = await refusal(() => api.models.lineage({ tenantId: TENANT, name: "stg_dealz" }));
+
+    expect(got.code).toBe("NOT_FOUND");
+    expect(got.message).toContain("stg_dealz");
+  });
 });

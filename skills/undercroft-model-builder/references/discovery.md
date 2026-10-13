@@ -47,14 +47,19 @@ Read these when the request touches them:
   columns of its last build.
 - `models.lineage` before you propose to change a model, or to build one beside it: the
   models that `ref` it read what it builds, and a second model over the same entity is
-  often the first sign of a duplicate.
+  often the first sign of a duplicate. Name the model: `name` with `direction: "down"` for
+  what reads it, `"up"` for what it reads, and `depth` to stop after a few steps. The whole
+  graph of a large tenant will not fit in your context.
 - `macros.get` when a macro's description leaves you unsure what it returns.
 - `bi.questions.get` and `bi.dashboards.get` for a report that might already answer the
   request, or that the request would change.
-- `bi.schema` for the columns a report can read in each built model.
+- `bi.schema` for the columns a report can read in each built model. Pass `tables` with the
+  models you are weighing, or `match` with a fragment of their names; `columns: false` lists
+  the names alone. A table you name that is not built is refused as `NOT_FOUND`, naming it.
 - `lake.records` for a sample of an entity's payloads, and `lake.documents` for the files
   and attachments a source landed.
-- `lake.querySchema` and `lake.query` for a count or a distribution (section 3).
+- `lake.querySchema` and `lake.query` for a count or a distribution (section 3). Narrow
+  `lake.querySchema` with `tables` the way you narrow `bi.schema`.
 
 ## 2. The interview: the outcome before the implementation
 

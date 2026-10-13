@@ -6,7 +6,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { answerRefusal, answerSaved, notRun } from "./answers.ts";
+import { answerRefusal, answerSaved } from "./answers.ts";
 import {
   ChartConfig,
   DashboardFilters,
@@ -22,6 +22,7 @@ import { outranks } from "../services/authz.ts";
 import * as bi from "../services/bi.ts";
 import * as biExports from "../services/biExports.ts";
 import { exportPath, exportUrl } from "./exportLink.ts";
+import { SchemaFilterInput, schemaOrRefusal } from "./schemaFilter.ts";
 import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
 
 /** What an export is of: a saved question, a definition as `bi.answer` takes one, or a model. */
@@ -274,18 +275,19 @@ export const biRouter = router({
       }),
   }),
 
-  /** The tables and columns a question can name. Any member may read the shape. */
-  schema: tenantProcedure.query(async ({ ctx, input }) => {
+  /**
+   * The tables and columns a question can name. Any member may read the shape. Narrowed to
+   * the named or matching tables when asked (`schemaFilter.ts`), since the whole of a large
+   * tenant's schema is more than an agent's client will hold (issue 443).
+   */
+  schema: tenantProcedure.input(SchemaFilterInput).query(async ({ ctx, input }) => {
     if (ctx.worker === null) {
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
         message: messages(ctx.locale)("error.workerUnavailable"),
       });
     }
-    const outcome = await bi.schema(ctx.worker, { tenantId: input.tenantId });
-    if (!outcome.ok) {
-      throw notRun(ctx.locale, outcome.reason, "error.queryNotRun");
-    }
-    return outcome.value;
+    const { tenantId, ...filter } = input;
+    return schemaOrRefusal(ctx.locale, await bi.schema(ctx.worker, { tenantId }, filter));
   }),
 });

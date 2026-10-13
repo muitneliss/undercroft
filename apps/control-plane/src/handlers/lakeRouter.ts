@@ -22,6 +22,7 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as lake from "../services/lake.ts";
 import { notRun } from "./answers.ts";
+import { SchemaFilterInput, schemaOrRefusal } from "./schemaFilter.ts";
 import { requireRole, router, tenantProcedure } from "./trpc.ts";
 
 export const lakeRouter = router({
@@ -176,18 +177,20 @@ export const lakeRouter = router({
       return outcome.value;
     }),
 
-  /** The `raw` schema's tables and columns: the console's sidebar. Admin-only, as above. */
-  querySchema: requireRole("admin").query(async ({ ctx, input }) => {
-    if (ctx.worker === null) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: messages(ctx.locale)("error.workerUnavailable"),
-      });
-    }
-    const outcome = await ctx.worker.readRawSchema({ tenantId: input.tenantId });
-    if (!outcome.ok) {
-      throw notRun(ctx.locale, outcome.reason, "error.queryNotRun");
-    }
-    return outcome.value;
-  }),
+  /**
+   * The `raw` schema's tables and columns: the console's sidebar. Admin-only, as above.
+   * Narrowed to the named or matching tables when asked, by the rule `bi.schema` uses.
+   */
+  querySchema: requireRole("admin")
+    .input(SchemaFilterInput)
+    .query(async ({ ctx, input }) => {
+      if (ctx.worker === null) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: messages(ctx.locale)("error.workerUnavailable"),
+        });
+      }
+      const { tenantId, ...filter } = input;
+      return schemaOrRefusal(ctx.locale, await lake.querySchema(ctx.worker, tenantId, filter));
+    }),
 });

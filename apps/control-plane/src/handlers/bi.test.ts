@@ -15,7 +15,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
-import type { Context, Role } from "./trpc.ts";
+import { type Context, type RefusalFacts, type Role, refusalFacts } from "./trpc.ts";
 
 const TENANT = "CASE-0042";
 const SQL = { kind: "sql" as const, sql: "select 1 as n" };
@@ -65,12 +65,14 @@ function caller(userId: string, email: string, worker: WorkerClient, locale: "vi
   return appRouter.createCaller(ctx);
 }
 
-async function refusal(fn: () => Promise<unknown>): Promise<{ code: string; message: string }> {
+async function refusal(
+  fn: () => Promise<unknown>,
+): Promise<{ code: string; message: string; facts: RefusalFacts | null }> {
   try {
     await fn();
   } catch (error) {
     if (error instanceof TRPCError) {
-      return { code: error.code, message: error.message };
+      return { code: error.code, message: error.message, facts: refusalFacts(error) };
     }
     throw error;
   }
@@ -173,6 +175,62 @@ describe("bi.answer and bi.runQuestion", () => {
     expect(await caller(viewer, "v@example.test", worker).bi.schema({ tenantId: TENANT })).toEqual({
       tables: [],
     });
+  });
+});
+
+describe("bi.schema, narrowed to the tables a reader names (issue 443)", () => {
+  const SCHEMA = {
+    tables: [
+      { name: "fct_pipeline", columns: [{ name: "deal_id", type: "text" }] },
+      { name: "stg_deals", columns: [{ name: "deal_id", type: "text" }] },
+      { name: "stg_files", columns: [{ name: "name", type: "text" }] },
+    ],
+  };
+
+  async function schemaReader() {
+    const member = await seedMember("m@example.test", "member");
+    return caller(member, "m@example.test", new InMemoryWorkerClient().withSchema(SCHEMA), "en");
+  }
+
+  it("answers only the tables named, or whose name holds the fragment, in any case", async () => {
+    const api = await schemaReader();
+
+    const named = await api.bi.schema({ tenantId: TENANT, tables: ["stg_files", "fct_pipeline"] });
+    const matched = await api.bi.schema({ tenantId: TENANT, match: "STG_" });
+
+    // In the schema's own order, columns and all.
+    expect(named).toEqual({
+      tables: SCHEMA.tables.filter((table) => table.name !== "stg_deals"),
+    });
+    expect(matched.tables.map((table) => table.name)).toEqual(["stg_deals", "stg_files"]);
+  });
+
+  it("with nothing named, answers the whole schema exactly as before", async () => {
+    const api = await schemaReader();
+
+    expect(await api.bi.schema({ tenantId: TENANT })).toEqual(SCHEMA);
+  });
+
+  it("names alone carry no columns key, and the answer says so", async () => {
+    // Not `columns: []`, which reads as a table that has none.
+    const api = await schemaReader();
+
+    expect(await api.bi.schema({ tenantId: TENANT, match: "deals", columns: false })).toEqual({
+      columns: false,
+      tables: [{ name: "stg_deals" }],
+    });
+  });
+
+  it("a table that is not there is NOT_FOUND naming every one missing, never a shorter answer", async () => {
+    const api = await schemaReader();
+
+    const got = await refusal(() =>
+      api.bi.schema({ tenantId: TENANT, tables: ["stg_deals", "stg_dealz", "dim_owner"] }),
+    );
+
+    expect(got.code).toBe("NOT_FOUND");
+    expect(got.message).toBe("Not among this customer's tables: stg_dealz, dim_owner.");
+    expect(got.facts).toEqual({ reason: "unknown-tables", tables: "stg_dealz,dim_owner" });
   });
 });
 
