@@ -20,8 +20,11 @@ export interface TenantRoles {
   readonly slug: string;
   readonly dbtRole: string;
   readonly biRole: string;
+  /** What the BI login reads: only what passed its tests is here (ADR 0131). */
   readonly analyticsSchema: string;
   readonly dqSchema: string;
+  /** Where a build writes, before its tests decide what is promoted. BI has no USAGE on it. */
+  readonly stagingSchema: string;
 }
 
 /**
@@ -101,5 +104,6 @@ export async function tenantRolesFor(
     biRole: bi.role_name,
     analyticsSchema: `analytics_${dbt.slug}`,
     dqSchema: `dq_${dbt.slug}`,
+    stagingSchema: `staging_${dbt.slug}`,
   };
 }

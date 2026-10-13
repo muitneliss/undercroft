@@ -89,12 +89,14 @@ function matches(seed: Seed, standing: readonly Column[]): boolean {
 
 /**
  * The tenant's seeds as the project carries them: each one's file, and whether its standing
- * table, read as the tenant's dbt login, needs a full refresh. A seed never loaded has no table
+ * table in staging, read as the tenant's dbt login, needs a full refresh. Promotion moves a
+ * loaded table out of staging (ADR 0131), so a standing one is a load that was held back. A seed never loaded has no table
  * and is created by its first load, as dbt does.
  */
 export async function projectSeeds(
   sessions: TenantSessions,
-  input: { tenantId: string; analyticsSchema: string; seeds: readonly Seed[] },
+  /** `schema` is where the build loads its seeds: the tenant's staging schema (ADR 0131). */
+  input: { tenantId: string; schema: string; seeds: readonly Seed[] },
 ): Promise<ProjectSeed[]> {
   if (input.seeds.length === 0) {
     return [];
@@ -102,7 +104,7 @@ export async function projectSeeds(
   const standing = await sessions.as({ tenantId: input.tenantId, kind: "dbt" }, (exec) =>
     declaredColumnsOf(
       exec,
-      input.analyticsSchema,
+      input.schema,
       input.seeds.map((seed) => seed.name),
     ),
   );

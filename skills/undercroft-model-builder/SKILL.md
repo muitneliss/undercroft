@@ -11,7 +11,10 @@ existing model, a macro, or a look at the data. A new model is one possible outc
 workflow, and ending without one is often the right result.
 
 A model is one dbt `SELECT` that the platform turns into a table in the customer's own
-analytics schema, named after the model. Reports and dashboards read that table. A wrong
+analytics schema, named after the model. Reports and dashboards read that table. A build writes
+into a staging schema first, and the table is replaced only when the build passed its tests:
+a build that failed leaves the last passing version in place, and a first build that failed
+leaves nothing for Reports to read. A wrong
 model does not fail loudly: it becomes a dashboard that shows a wrong number as if it were a
 fact. A second model for a concept the tenant already defines is wrong more quietly still:
 two tables that will disagree. So this workflow is slow on purpose. Find out what the tenant
@@ -80,7 +83,8 @@ These hold for the whole workflow. None of them bends because the person is in a
 12. **Success is the platform's answer.** A build succeeded when `models.build` (or, after
     `wait: false`, `runs.get` on its run) says `verdict: "clean"`, and the model is trustworthy
     when `models.get` says `lastTests.state` is `passing`. `ok` with `verdict: "tests-failing"` is
-    a table built and served with rows its tests refused, not a success; `lastTests.state`
+    a build held back from Reports because its tests refused rows -- the model's step says
+    `promoted: false` and Reports still reads its last passing version -- not a success; `lastTests.state`
     `unknown` is no test record, never a pass. A question exists when `bi.questions.save`
     returned its id, and an answer whose `qualifiers` name a table is a figure to qualify when
     you show it. Until then, say what happened, not what you hoped. A row count of `null` is
@@ -284,12 +288,15 @@ A waited answer leads with `stepSummary` (every step counted by kind and status)
 the steps that did not pass. Read those; ask for `steps: "all"` only when the person wants every
 step, and page further with `runs.get` on the same `runId` and its `stepCursor`.
 
-- `verdict: "clean"`: the table is built and no test of the run failed. Say how many rows each
+- `verdict: "clean"`: the table is built, published (each model step says `promoted: true`)
+  and no test of the run failed. Say how many rows each
   model has from `rowCounts` and, for one model, show the first rows from `preview`. A count of
   `null` was not read: say so, never "0 rows". If `parentTestsUnknown` names a parent, say its
   rows went in untested: it has no test record, which is not a pass.
-- `verdict: "tests-failing"` (`ok` true, `testsFailed` above 0): the table is built, and Reports
-  is serving it, but a test found rows that break it. Do not call it a success. For each
+- `verdict: "tests-failing"` (`ok` true, `testsFailed` above 0): the model was built but a test
+  found rows that break it, so it was not published (`promoted: false`, `rowCounts` and
+  `preview` null): Reports still reads its last passing version, or nothing if it never had
+  one, and so does any model built over it in the same run. Do not call it a success. For each
   failing step, read the rows with `dq.failures`, using the build's `runId` and the step's
   id. Show the person the count and a few rows, and ask whether the model or the test is
   wrong. These rows are the customer's data: show them to the person and put them nowhere

@@ -149,6 +149,9 @@ async function settleTransform(
       models: outcome.steps.filter((s) => s.kind === "model").length,
       tests: outcome.steps.filter((s) => s.kind === "test").length,
       testsFailed: outcome.testsFailed,
+      // What reached the BI login, and what stayed in staging (ADR 0131). Counts only.
+      promoted: outcome.steps.filter((s) => s.promoted === true).length,
+      held: outcome.steps.filter((s) => s.promoted === false).length,
     });
   }
   journal.info("run_closed", {

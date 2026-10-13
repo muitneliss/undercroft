@@ -37,7 +37,12 @@ import {
   listDashboards,
   updateDashboard,
 } from "../repos/biDashboards.ts";
-import { type QualifiedAnswer, qualify } from "./answerQualifiers.ts";
+import {
+  type NoPassingVersion,
+  noPassingVersion,
+  type QualifiedAnswer,
+  qualify,
+} from "./answerQualifiers.ts";
 import { getQuestionView } from "./biQuestions.ts";
 import { readSchema, type SchemaFilter, type SchemaOutcome } from "./tableSchema.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
@@ -75,7 +80,9 @@ export function compileDefinition(definition: QuestionDefinition): string {
 export type AnswerOutcome =
   | WorkerOutcome<QualifiedAnswer>
   | { readonly ok: false; readonly reason: "param-missing"; readonly param: string }
-  | { readonly ok: false; readonly reason: "question-not-found" };
+  | { readonly ok: false; readonly reason: "question-not-found" }
+  /** The query read a model whose first build was held back: nothing of it is published. */
+  | ({ readonly ok: false; readonly reason: "no-passing-version" } & NoPassingVersion);
 
 /**
  * Answer a definition with the dashboard's (or the URL's) values bound in.
@@ -104,7 +111,13 @@ export async function answer(
     (input.definition.kind === "visual" ? input.definition.limit : DEFAULT_QUERY_ROWS);
   const outcome = await worker.runQuery({ tenantId: input.tenantId, sql, limit });
   if (!outcome.ok) {
-    return outcome;
+    const unpublished =
+      outcome.reason === "query-failed"
+        ? await noPassingVersion(exec, input.tenantId, outcome.message)
+        : null;
+    return unpublished === null
+      ? outcome
+      : { ok: false, reason: "no-passing-version", ...unpublished };
   }
   return { ok: true, value: await qualify(exec, input.tenantId, outcome.value) };
 }

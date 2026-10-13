@@ -134,6 +134,7 @@
 - [ADR 0128 A Tenant Keeps Its Own Reference Tables, Typed by Its Author and Loaded by the Build That Reads Them](sources/adr-0128-a-tenant-keeps-its-own-reference-tables-typed-by-its-author-and-loaded-by-the-build-that-reads-them.md)
 - [ADR 0129 A Failing Test Is Visible Wherever the Figure Is Read](sources/adr-0129-a-failing-test-is-visible-wherever-the-figure-is-read.md)
 - [ADR 0130 A Rule About a Model's Rows Is a Test of That Model, Not a Model of Its Own](sources/adr-0130-a-rule-about-a-model-s-rows-is-a-test-of-that-model-not-a-model-of-its-own.md)
+- [ADR 0131 A Build Publishes Only What Passed](sources/adr-0131-a-build-publishes-only-what-passed.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

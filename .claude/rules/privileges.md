@@ -21,17 +21,20 @@ grant model a security boundary, not configuration.
   test database is fresh and so always gets the newest function. ADR 0036.
 - **NEVER write an `ALTER DEFAULT PRIVILEGES` by hand.** Every one in the database is issued
   by `ops.provision_tenant`, scoped `FOR ROLE <the tenant's own dbt role> IN SCHEMA <that
-role's own analytics schema>`, plus the one legacy row `FOR ROLE undercroft_dbt IN SCHEMA
+role's own analytics or staging schema>`, plus the one legacy row `FOR ROLE undercroft_dbt IN SCHEMA
 analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches to whoever
   ran the migration, and grants become unpredictable. The gate test derives the expected set
   from `ops.tenant_role` and compares `pg_default_acl` in full, so a hand-written default
   and a forgotten tenant fail the same way. ADR 0018.
-- **NEVER grant a BI role USAGE on `app`, `raw`, `ops` or any `dq*` schema.** `app` holds
+- **NEVER grant a BI role USAGE on `app`, `raw`, `ops`, any `dq*` or any `staging*` schema.** `app` holds
   sealed credentials, `raw` holds unreviewed source payloads, `dq_<slug>` holds dbt's
   store_failures output (which contains source data). A dashboard reader must reach none of
-  them, and a tenant's BI role reaches only `analytics_<slug>`.
-- **NEVER let a dbt role create outside its own two schemas.** A tenant's dbt role owns
-  `analytics_<slug>` and `dq_<slug>` and has `CREATE` nowhere else; `ops.guard_ddl()` is the
+  them, and a tenant's BI role reaches only `analytics_<slug>`. `staging_<slug>` holds builds
+  no test has passed yet (ADR 0131): what dbt creates there carries BI's SELECT by default, so a
+  relation promoted into analytics with `SET SCHEMA` is readable at once, and that grant is
+  unreachable while it sits in staging only because BI has no USAGE there.
+- **NEVER let a dbt role create outside its own three schemas.** A tenant's dbt role owns
+  `analytics_<slug>`, `dq_<slug>` and `staging_<slug>` and has `CREATE` nowhere else; `ops.guard_ddl()` is the
   tripwire behind that privilege. No dbt role has USAGE on `app`, so a model cannot read a
   credential; keep it that way.
 - **NEVER key row-level security on a session setting or on `SET ROLE`.** A SQL author can

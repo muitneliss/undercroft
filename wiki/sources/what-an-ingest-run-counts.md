@@ -5,7 +5,7 @@ date: 2026-10-13
 tags: []
 source: docs/reference/run-counts.md
 source_path: docs/reference/run-counts.md
-source_hash: b1e579248b669962d6477d6bbcc234ef4c35919c5ad52095eb8f6298352cc773
+source_hash: 9033c1d5459d555c0872de727aa0d3b5a3d0c697318db5a846b723a187cc2394
 ingested: 2026-10-13
 ---
 
@@ -33,6 +33,6 @@ The reference page for the five per-entity numbers an ingest run reports, which 
 
 **A run's dbt steps.** `runs get` reports them as `stepSummary` (total, counts by kind and dbt status, how many are problems) and the page asked for: `steps` is `none`, `problems` (default: anything not `success`, `pass` or `skipped`, an unknown status included) or `all`, narrowed by `stepStatus`/`stepKind`/`stepName` (a filter without `steps` reads all), paged by `stepLimit` (at most 2,000) and `stepCursor`. A skipped step is counted as skipped, never as a pass. The Journal asks for every step (issue #441). With `waitSeconds` it answers once the run has ended ([[ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does]]).
 
-**A run's verdict and a model's tests.** Every run carries `verdict` -- `running`, `failed`, `tests-failing` (finished `ok` with a failing or erroring test) or `clean` -- read off its status and failing-test count, never stored; a build has succeeded when it is `clean`. Each model on `models list`/`models get` carries `lastTests` (`passing`, `failing` or `unknown`, never a pass for no record) from the build serving its rows, tests attributed by dbt's manifest. A Reports answer carries `qualifiers` for each table its plan read whose tests fail or are unknown, rows always served. Building `name` or `name+` over a parent with failing tests is refused; `+name` rebuilds and tests the parents first. [[ADR 0129 A Failing Test Is Visible Wherever the Figure Is Read]].
+**A run's verdict and a model's tests.** Every run carries `verdict` -- `running`, `failed`, `tests-failing` (finished `ok` with a failing or erroring test) or `clean` -- read off its status and failing-test count, never stored; a build has succeeded when it is `clean`. Each model on `models list`/`models get` carries `lastTests` (`passing`, `failing` or `unknown`, never a pass for no record) from the published build serving its rows, tests attributed by dbt's manifest, with `unpublished` naming a newer build held back in staging; each model step carries `promoted`. A Reports answer carries `qualifiers` for each table its plan read whose tests fail or are unknown or whose current build was held (the rows are the last passing version), rows always served, and a query over a model never published is refused as having no passing version yet ([[ADR 0131 A Build Publishes Only What Passed]]). Building `name` or `name+` over a parent with failing tests is refused; `+name` rebuilds and tests the parents first. [[ADR 0129 A Failing Test Is Visible Wherever the Figure Is Read]].
 
 A build's step kind is `model`, `test` or `seed`: a seed step is the load of a reference table a model reads, and a seed that did not load fails the run ([[ADR 0128 A Tenant Keeps Its Own Reference Tables, Typed by Its Author and Loaded by the Build That Reads Them]]).

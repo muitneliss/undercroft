@@ -121,6 +121,7 @@ function lastTestsOf(
       warnings: null,
       runId: null,
       endedAt: null,
+      unpublished: null,
       failingTests: [],
       warningTests: [],
     };
@@ -132,6 +133,7 @@ function lastTestsOf(
     warnings: found.warningTests.length,
     runId: build.runId,
     endedAt: build.endedAt,
+    unpublished: null,
     ...found,
   };
 }

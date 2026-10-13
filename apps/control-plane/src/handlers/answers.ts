@@ -65,6 +65,16 @@ export function answerRefusal(
       });
     case "question-not-found":
       return new TRPCError({ code: "NOT_FOUND" });
+    // The first build of a model it read was held back (ADR 0131): nothing to read yet, and not
+    // the author's typo that Postgres's "does not exist" would suggest.
+    case "no-passing-version":
+      return new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: messages(locale)("error.noPassingVersion", {
+          model: outcome.model,
+          runId: outcome.runId,
+        }),
+      });
     default:
       return notRun(locale, outcome.reason, "error.queryNotRun");
   }

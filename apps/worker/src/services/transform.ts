@@ -25,9 +25,14 @@
  *    non-zero exit with results is a build that ran and found something wrong, reported step
  *    by step; a non-zero exit with no results is dbt stopping before its first model, and that
  *    raises with dbt's own statement of why (`causeOf`).
- * 5. **Record what was built**: the columns each successful model's relation now has, read
- *    as the tenant's dbt login and written back to `app.model` so the editor can offer them.
- * 6. **Remove the directory**, whatever happened.
+ * 5. **Record what was built**: the columns each successful model's relation now has in
+ *    staging, read as the tenant's dbt login and written back to `app.model` so the editor can
+ *    offer them.
+ * 6. **Promote** (ADR 0131): dbt built and tested everything in `staging_<slug>`; only the models
+ *    and seeds that built, whose own tests passed and whose parents in this build were promoted
+ *    too are moved into `analytics_<slug>`, where the BI login reads (`promote.ts`). Every step
+ *    says whether it was. A model that was not keeps its previous published version serving.
+ * 7. **Remove the directory**, whatever happened.
  *
  * A tenant with no models and no seeds spawns nothing and reports an empty, successful build.
  */
@@ -54,6 +59,8 @@ import {
 } from "@undercroft/db/services";
 
 import { columnsOf } from "../repos/relations.ts";
+import { causeOf, errorOf, tailOf } from "./dbtOutput.ts";
+import { publishBuild } from "./promote.ts";
 import { projectSeeds, withSeedSelectors } from "./seedLoad.ts";
 import { TenantNotProvisioned, type TenantSessions } from "./tenantSession.ts";
 
@@ -110,6 +117,11 @@ export interface TransformOutcome {
   /** Why a build is not ok: the first erroring model's message, else dbt's last lines. */
   readonly error: string | null;
   /**
+   * The models and seeds a view outside the build kept from being promoted, each with the
+   * views' names (ADR 0131). Empty when none did.
+   */
+  readonly heldByViews?: ReadonlyMap<string, readonly string[]>;
+  /**
    * How many models the tenant HAS, which is not how many were built.
    *
    * Zero is the reason a green build can have no steps at all: dbt was never spawned,
@@ -122,8 +134,6 @@ export interface TransformOutcome {
 
 /** A scheduled build of every model. Longer than any honest project needs. */
 export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
-/** How many trailing lines of dbt's output are kept. Enough to name the fault; never a row. */
-const TAIL_LINES = 20;
 
 /**
  * How this repo runs a child process. Exported so the extract verb's composition root wires
@@ -151,38 +161,6 @@ export async function realSpawn(
   } finally {
     clearTimeout(deadline);
   }
-}
-
-/** The line dbt opens its own account of an error it stopped on with. */
-const ENCOUNTERED = "Encountered an error";
-/** The `HH:MM:SS  ` dbt writes in front of each line it logs. */
-const LOG_TIME = /^\d{2}:\d{2}:\d{2}\s+/u;
-
-function tailOf(output: string): string {
-  return output.trim().split("\n").slice(-TAIL_LINES).join("\n");
-}
-
-/**
- * Why dbt stopped before its first model, in its own words: its "Encountered an error:" line
- * and everything after it, else its last lines.
- *
- * NOT THE TAIL (issue #336). A run keeps the first 500 characters of its error, and when dbt
- * stops early its last lines are mostly its startup banner -- which took all 500 and cut the
- * cause off at the "E" of "Encountered". Starting at that line puts the cause first, so the
- * bound, when it bites, keeps the cause's opening words and drops the banner instead. The
- * time dbt stamps on each line is dropped for the same reason: it is not the cause.
- */
-function causeOf(output: string): string {
-  const lines = output.trim().split("\n");
-  const at = lines.findIndex((line) => line.replace(LOG_TIME, "").startsWith(ENCOUNTERED));
-  if (at === -1) {
-    return tailOf(output);
-  }
-  return lines
-    .slice(at)
-    .map((line) => line.replace(LOG_TIME, "").trim())
-    .filter((line) => line !== "")
-    .join("\n");
 }
 
 /**
@@ -251,19 +229,8 @@ function attributed(steps: readonly RunStep[], manifest: unknown): RunStep[] {
 }
 
 /**
- * Why the build is not ok, in dbt's own words for the model or seed that broke: a seed that did
- * not load left its readers skipped, or reading whatever the last load left (ADR 0128).
- */
-function errorOf(steps: readonly RunStep[], tail: string): string | null {
-  const broken = steps.find((s) => s.kind !== "test" && s.status === "error");
-  if (broken === undefined) {
-    return null;
-  }
-  return broken.message ?? tail;
-}
-
-/**
- * Record the columns each successful model now has, as the tenant reads them.
+ * Record the columns each successful model now has in staging, where it was built, as the
+ * tenant reads them -- before promotion moves what passed.
  *
  * One session for every model of the build; the write-back is the worker's own column-level
  * grant on `app.model`. A model whose relation cannot be seen records nothing rather than an
@@ -272,16 +239,19 @@ function errorOf(steps: readonly RunStep[], tail: string): string | null {
 async function recordColumns(
   deps: TransformDeps,
   tenantId: string,
-  analyticsSchema: string,
-  built: readonly string[],
+  schema: string,
+  steps: readonly RunStep[],
 ): Promise<void> {
+  const built = steps
+    .filter((s) => s.kind === "model" && s.status === "success")
+    .map((s) => s.name);
   if (built.length === 0) {
     return;
   }
   const found = await deps.sessions.as({ tenantId, kind: "dbt" }, async (exec) => {
     const byModel = new Map<string, string[]>();
     for (const name of built) {
-      const columns = await columnsOf(exec, analyticsSchema, name);
+      const columns = await columnsOf(exec, schema, name);
       if (columns.length > 0) {
         byModel.set(
           name,
@@ -358,7 +328,7 @@ export async function runTransform(
   const macros = await listMacros(deps.exec, input.tenantId);
   const loads = await projectSeeds(deps.sessions, {
     tenantId: input.tenantId,
-    analyticsSchema: roles.analyticsSchema,
+    schema: roles.stagingSchema,
     seeds,
   });
   const dir = await mkdtemp(join(deps.workDir ?? tmpdir(), "undercroft-dbt-"));
@@ -375,9 +345,8 @@ export async function runTransform(
     );
     const selected = withSeedSelectors(input, seeds.length > 0);
     const { exitCode, output } = await spawnDbt(deps, selected, dir);
-    const parsed = parseRunResults(await readTarget(dir, "run_results.json"));
-    const steps = attributed(parsed.steps, await readTarget(dir, "manifest.json"));
-    const { testsFailed } = parsed;
+    const { steps: ran, testsFailed } = parseRunResults(await readTarget(dir, "run_results.json"));
+    const steps = attributed(ran, await readTarget(dir, "manifest.json"));
 
     if (exitCode !== 0 && steps.length === 0) {
       throw new ConnectorError("dbt", "build", 0, `dbt build exited ${String(exitCode)}`, {
@@ -385,11 +354,21 @@ export async function runTransform(
       });
     }
     const error = errorOf(steps, tailOf(output));
-    const built = steps
-      .filter((s) => s.kind === "model" && s.status === "success")
-      .map((s) => s.name);
-    await recordColumns(deps, input.tenantId, roles.analyticsSchema, built);
-    return { ok: error === null, steps, testsFailed, error, models: models.length };
+    await recordColumns(deps, input.tenantId, roles.stagingSchema, steps);
+    const published = await publishBuild(deps.sessions, {
+      ...roles,
+      tenantId: input.tenantId,
+      steps,
+      manifest: await readTarget(dir, "manifest.json"),
+    });
+    return {
+      ok: error === null && published.error === null,
+      steps: published.steps,
+      testsFailed,
+      error: error ?? published.error,
+      heldByViews: published.heldByViews,
+      models: models.length,
+    };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

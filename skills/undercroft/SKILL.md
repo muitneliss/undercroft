@@ -17,7 +17,10 @@ Every role check and every refusal the web UI has applies to you unchanged.
 - **Model**: a dbt `SELECT` over the raw lake, built into a table in the tenant's analytics
   schema. The logic lives here: joins, deduplication, time zones, what a metric means. A
   model changes only when it is built -- after each successful ingest, or by
-  `models.build`.
+  `models.build` -- and is **published** only when that build passed: a build is written to a
+  staging schema Reports cannot read, and only a model that built, whose own tests passed and
+  whose parents in the build were published is moved to where Reports reads it. A model whose
+  build was held keeps serving its last passing version.
 - **Macro**: a named piece of dbt Jinja a model calls, such as `{{ parse_amount(...) }}`.
   The platform ships a few into every project; a customer's admin can save the customer's
   own with `macros.save`, and every model of that customer can then call it. Reuse one
@@ -128,10 +131,14 @@ door with this rule.
   means that parent's latest tests failed and the build would copy its rows: rebuild the parent,
   or build `+name`.
 - **Success is `verdict: "clean"`, not `ok`.** A run or a build is `clean`, `tests-failing`,
-  `failed` or `running`. `ok` with failing tests is `tests-failing`: its tables are built and
-  Reports serves them. A model's own `lastTests` (on `models.list` and `models.get`) says
-  `passing`, `failing` or `unknown`; unknown is no test record, never a pass. A Reports answer's
-  `qualifiers` name each table it read whose tests fail or are unknown: say so beside the figure.
+  `failed` or `running`. `ok` with failing tests is `tests-failing`: the models whose tests
+  failed were built and held back, not published, and Reports still reads their last passing
+  version. Each model step's `promoted` says whether it was published. A model's own `lastTests`
+  (on `models.list` and `models.get`) says `passing`, `failing` or `unknown` for the published
+  version -- unknown is no test record, never a pass -- and `unpublished` names a newer build that
+  was held. A Reports answer's `qualifiers` name each table it read whose tests fail or are
+  unknown, or that is an older version than a held build: say so beside the figure. An answer
+  refused with "no passing version yet" read a model that has never been published.
 
 ## Workflows
 

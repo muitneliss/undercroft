@@ -42,6 +42,7 @@ flowchart LR
         text[("raw.document_text<br/>extracted text")]
         analytics[("analytics_slug<br/>the tenant's dbt models")]
         dq[("dq_slug<br/>stored test failures")]
+        staging[("staging_slug<br/>builds before their tests pass")]
     end
     reports["Reports division<br/>questions, dashboards"]
 
@@ -49,10 +50,11 @@ flowchart LR
     lake -->|"loadStreamToRaw<br/>journal from cursor"| records
     lake -->|"landDocuments"| docs
     docs -->|"extract verb"| text
-    records -->|"dbt build as<br/>undercroft_dbt_slug"| analytics
-    docs --> analytics
-    text --> analytics
-    analytics --> dq
+    records -->|"dbt build as<br/>undercroft_dbt_slug"| staging
+    staging -->|"promote what passed"| analytics
+    docs --> staging
+    text --> staging
+    staging --> dq
     analytics -->|"read as<br/>undercroft_bi_slug"| reports
 ```
 
@@ -143,7 +145,7 @@ flowchart TB
         worker["worker :8081<br/>ingest, extract, dbt,<br/>queries, lake write API,<br/>credential sealing"]
         kestra["kestra :8080<br/>ingest_due every 5 min<br/>extract_due hourly"]
         pgb["pgbouncer<br/>session pool per tenant login"]
-        pg[("postgres 17<br/>app, ops, raw,<br/>analytics_slug, dq_slug")]
+        pg[("postgres 17<br/>app, ops, raw,<br/>analytics_slug, dq_slug, staging_slug")]
         kpg[("kestra-postgres")]
         minio[("MinIO<br/>bucket undercroft-raw")]
         migrate["db-migrate<br/>one-shot"]
@@ -353,7 +355,8 @@ Migrations are numbered files in `packages/db/sql/`, applied in order and record
 | `app`            | People and auth (`auth_*`, `app_user`, `tenant_member`), invitations, sealed secrets, ingest keys, models, BI questions and dashboards, assistant threads, access tokens, OAuth clients | control plane, worker   |
 | `ops`            | Tenants, connections (scope, cadence, cron), the run ledger (`run`, `run_entity`, `run_refusal`, `run_step`, `run_event`), the audit log, `tenant_role`                                 | control plane, worker   |
 | `raw`            | `records` (partitioned by source), `documents`, `document_text`, `load_cursor`, `sync_cursor`, and the search functions                                                                 | worker                  |
-| `analytics_slug` | One tenant's built dbt models                                                                                                                                                           | that tenant's dbt login |
+| `analytics_slug` | One tenant's published dbt models and seeds: only what passed its tests                                                                                                                 | that tenant's dbt login |
+| `staging_slug`   | That tenant's builds before promotion, and those held back; BI has no USAGE                                                                                                             | that tenant's dbt login |
 | `dq_slug`        | That tenant's stored test failures                                                                                                                                                      | that tenant's dbt login |
 
 Two cursors keep reads proportional to new work:
@@ -401,17 +404,24 @@ cannot replace one dbt or the platform relies on
 ([ADR 0086](adr/0086-a-tenant-writes-its-own-macros.md)). The worker then runs `dbt build` as a
 subprocess, connected as that tenant's dbt login
 ([ADR 0007](adr/0007-dbt-runs-as-a-subprocess-in-the-worker.md)), with an allowlisted
-environment, so a model's `env_var()` reads none of the worker's secrets. Models materialise as tables in
-`analytics_slug`, and test failures are stored in `dq_slug`. Deleting a model drops what it built
-in both, as the same login, before its row goes; if the drop does not happen, the row stays
-([ADR 0077](adr/0077-deleting-a-model-drops-what-it-built.md)).
+environment, so a model's `env_var()` reads none of the worker's secrets. Models materialise as
+tables in `staging_slug`, which the BI login cannot reach, and test failures are stored in
+`dq_slug`. After the build the worker promotes into `analytics_slug`, in one transaction as the
+same login, only the models and seeds that built, whose own tests passed (a `warn` does not block)
+and whose parents in the build were promoted too; each step records whether it was. A model that
+was held back keeps serving its last passing version, and a first build that fails publishes
+nothing. A model the build does not select is read from `analytics_slug` by an overridden
+`ref()`, so a build of one model reads its parents' published rows
+([ADR 0131](adr/0131-a-build-publishes-only-what-passed.md)). Deleting a model drops what it
+built in all three, as the same login, before its row goes; if the drop does not happen, the row
+stays ([ADR 0077](adr/0077-deleting-a-model-drops-what-it-built.md)).
 
 A small table a person keeps by hand, such as accounts mapped to groups, is a seed: a row in
 `app.seed` with typed columns and rows of strings or nulls, which models read with `ref()`. No
 type is inferred, and a cell its column cannot hold, or one dbt would load as a different
 value, is refused at save. The worker renders every seed into the build's project as a CSV file
-and loads the ones its selection reaches into `analytics_slug`, beside the models; a seed that
-fails to load fails the build
+and loads the ones its selection reaches into `staging_slug`, beside the models, to be promoted
+with them; a seed that fails to load fails the build
 ([ADR 0128](adr/0128-a-tenant-keeps-its-own-reference-tables.md)).
 
 Reports are first-party ([ADR 0020](adr/0020-bi-is-first-party-metabase-leaves-the-stack.md)). A
@@ -462,8 +472,9 @@ sequenceDiagram
     opt the ingest succeeded and chain is not false
         W->>PG: open a child run for the transform
         W->>D: dbt build as undercroft_dbt_slug
-        D->>PG: tables in analytics_slug, failures in dq_slug
-        W->>PG: ops.run_step per model and test
+        D->>PG: tables in staging_slug, failures in dq_slug
+        W->>PG: promote what passed into analytics_slug, one transaction
+        W->>PG: ops.run_step per model and test, each model's promoted
     end
 ```
 
@@ -718,7 +729,7 @@ flowchart LR
     end
     appS[("app, ops")]
     raw[("raw, under RLS")]
-    an[("analytics_slug, dq_slug")]
+    an[("analytics_slug, dq_slug, staging_slug")]
     legacy[("analytics, legacy shared schema<br/>ops.tenant, connection, run")]
 
     app --> appS
@@ -727,7 +738,7 @@ flowchart LR
     wk --> raw
     dbt -->|"own rows only"| raw
     dbt -->|"writes"| an
-    bi -->|"reads analytics_slug"| an
+    bi -->|"reads analytics_slug only"| an
     extbi -->|"reads"| legacy
 ```
 

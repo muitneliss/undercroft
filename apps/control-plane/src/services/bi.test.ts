@@ -216,6 +216,7 @@ describe("an answer's qualifiers (issue 456)", () => {
         failingTests: [],
         runId: null,
         endedAt: null,
+        unpublished: null,
       },
       {
         table: "t_demo",
@@ -224,6 +225,7 @@ describe("an answer's qualifiers (issue 456)", () => {
         failingTests: ["not_null_t_demo_id"],
         runId: "run-1",
         endedAt: expect.any(String),
+        unpublished: null,
       },
     ]);
     expect("relations" in outcome.value).toBe(false);
@@ -275,5 +277,117 @@ describe("dashboards", () => {
     expect(read?.layout.tiles).toEqual([{ questionId: question.id, x: 0, y: 0, w: 6, h: 4 }]);
     expect(read?.filters).toEqual([{ name: "period", kind: "date_range", label: "Kỳ" }]);
     expect(await getDashboardView(db, OTHER, saved.id)).toBeNull();
+  });
+});
+
+// ADR 0131: a build whose tests fail is held in staging, and what a question reads is the last
+// version that passed -- which the answer must name as older than the build that is failing now.
+describe("an answer over a model whose current build was held back (issue 459)", () => {
+  /** A build of one model, in the ledger as the worker records it: promoted or held. */
+  async function wapBuild(runId: string, model: string, promoted: boolean): Promise<void> {
+    await db.asSuperuser(async (tx) => {
+      await openRun(tx, {
+        id: runId,
+        tenantId: TENANT,
+        source: "*",
+        verb: "transform",
+        trigger: "build",
+      });
+      await recordSteps(tx, runId, [
+        {
+          uniqueId: `model.undercroft.${model}`,
+          kind: "model",
+          name: model,
+          status: "success",
+          failures: null,
+          relation: null,
+          message: null,
+          executionMs: 10,
+          promoted,
+        },
+        {
+          uniqueId: `test.undercroft.not_null_${model}_id.a1`,
+          kind: "test",
+          name: `not_null_${model}_id`,
+          status: promoted ? "pass" : "fail",
+          failures: promoted ? 0 : 1,
+          relation: null,
+          message: null,
+          executionMs: 5,
+          model,
+        },
+      ]);
+      await closeRun(tx, runId, { status: "ok", testsFailed: promoted ? 0 : 1 });
+    });
+  }
+
+  const SQL = { kind: "sql" as const, sql: "select * from fct_revenue" };
+
+  it("serves the last passing version and names it, with the build that is failing now", async () => {
+    await wapBuild("run-1", "fct_revenue", true);
+    await wapBuild("run-2", "fct_revenue", false);
+    const worker = new InMemoryWorkerClient().answering({
+      columns: [{ name: "id", type: "integer" }],
+      rows: [[1]],
+      truncated: false,
+      relations: ["fct_revenue"],
+    });
+
+    const outcome = await answer(db, worker, { tenantId: TENANT, definition: SQL, params: {} });
+
+    expect(outcome.ok && outcome.value.qualifiers).toEqual([
+      {
+        table: "fct_revenue",
+        state: "passing",
+        failing: 0,
+        failingTests: [],
+        runId: "run-1",
+        endedAt: expect.any(String),
+        unpublished: { runId: "run-2", endedAt: expect.any(String) },
+      },
+    ]);
+  });
+
+  it("a passing build after the held one clears the qualifier", async () => {
+    await wapBuild("run-1", "fct_revenue", false);
+    await wapBuild("run-2", "fct_revenue", true);
+    const worker = new InMemoryWorkerClient().answering({
+      columns: [{ name: "id", type: "integer" }],
+      rows: [[1]],
+      truncated: false,
+      relations: ["fct_revenue"],
+    });
+
+    const outcome = await answer(db, worker, { tenantId: TENANT, definition: SQL, params: {} });
+
+    expect(outcome.ok && outcome.value.qualifiers).toEqual([]);
+  });
+
+  it("a first build that failed leaves nothing to read, and the refusal says no passing version yet", async () => {
+    await wapBuild("run-1", "fct_revenue", false);
+    const worker = new InMemoryWorkerClient().refusingQueries(
+      'relation "fct_revenue" does not exist',
+    );
+
+    const outcome = await answer(db, worker, { tenantId: TENANT, definition: SQL, params: {} });
+
+    expect(outcome).toEqual({
+      ok: false,
+      reason: "no-passing-version",
+      model: "fct_revenue",
+      runId: "run-1",
+    });
+  });
+
+  it("a relation no model ever built is Postgres's own refusal, relayed as it was", async () => {
+    const worker = new InMemoryWorkerClient().refusingQueries('relation "fct_typo" does not exist');
+
+    const outcome = await answer(db, worker, { tenantId: TENANT, definition: SQL, params: {} });
+
+    expect(outcome).toEqual({
+      ok: false,
+      reason: "query-failed",
+      message: 'relation "fct_typo" does not exist',
+    });
   });
 });

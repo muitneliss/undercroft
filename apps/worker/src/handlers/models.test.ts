@@ -44,37 +44,66 @@ function writeResults(dir: string, results: unknown[]): void {
   writeFileSync(join(dir, "target", "run_results.json"), JSON.stringify({ results }));
 }
 
-/** dbt, as far as the database can tell: the table appears, as the tenant's dbt login. */
-const fakeDbt: Spawn = async (_cmd, options) => {
-  await db.asRole("undercroft_dbt_case_1", (tx) =>
-    tx.exec(
-      `CREATE TABLE analytics_case_1.stg_deals AS
-         SELECT 1 AS deal_id, 'Acme'::text AS deal_name, 12345.6789::numeric(18,4) AS amount
-       UNION ALL SELECT 2, NULL, NULL;
-       CREATE TABLE dq_case_1.not_null_stg_deals_deal_name AS
-         SELECT 2 AS deal_id, NULL::text AS deal_name`,
-    ),
-  );
-  writeResults(options.cwd, [
-    {
-      unique_id: "model.undercroft.stg_deals",
-      status: "success",
-      message: "CREATE TABLE",
-      failures: null,
-      execution_time: 0.2,
-      relation_name: '"undercroft"."analytics_case_1"."stg_deals"',
-    },
-    {
-      unique_id: "test.undercroft.not_null_stg_deals_deal_name.a1",
-      status: "fail",
-      message: "Got 1 result",
-      failures: 1,
-      execution_time: 0.1,
-      relation_name: '"undercroft"."dq_case_1"."not_null_stg_deals_deal_name"',
-    },
-  ]);
-  return { exitCode: 1, stdout: "Done. PASS=1 FAIL=1", stderr: "" };
-};
+/**
+ * dbt, as far as the database can tell: the table appears in staging, as the tenant's dbt login,
+ * its test reports `test`, and the manifest attributes the test to the model. What is published
+ * is then the worker's to decide (ADR 0131).
+ */
+function dbtWhoseTest(test: "pass" | "fail"): Spawn {
+  return async (_cmd, options) => {
+    await db.asRole("undercroft_dbt_case_1", (tx) =>
+      tx.exec(
+        `DROP TABLE IF EXISTS staging_case_1.stg_deals;
+         CREATE TABLE staging_case_1.stg_deals AS
+           SELECT 1 AS deal_id, 'Acme'::text AS deal_name, 12345.6789::numeric(18,4) AS amount
+         UNION ALL SELECT 2, ${test === "fail" ? "NULL" : "'Bolt'"}, NULL;
+         ${
+           test === "fail"
+             ? `CREATE TABLE IF NOT EXISTS dq_case_1.not_null_stg_deals_deal_name AS
+                  SELECT 2 AS deal_id, NULL::text AS deal_name`
+             : ""
+         }`,
+      ),
+    );
+    writeResults(options.cwd, [
+      {
+        unique_id: "model.undercroft.stg_deals",
+        status: "success",
+        message: "CREATE TABLE",
+        failures: null,
+        execution_time: 0.2,
+        relation_name: '"undercroft"."staging_case_1"."stg_deals"',
+      },
+      {
+        unique_id: "test.undercroft.not_null_stg_deals_deal_name.a1",
+        status: test,
+        message: test === "fail" ? "Got 1 result" : null,
+        failures: test === "fail" ? 1 : 0,
+        execution_time: 0.1,
+        relation_name: '"undercroft"."dq_case_1"."not_null_stg_deals_deal_name"',
+      },
+    ]);
+    writeFileSync(
+      join(options.cwd, "target", "manifest.json"),
+      JSON.stringify({
+        nodes: {
+          "test.undercroft.not_null_stg_deals_deal_name.a1": {
+            attached_node: "model.undercroft.stg_deals",
+          },
+          "model.undercroft.stg_deals": { depends_on: { nodes: [] } },
+        },
+      }),
+    );
+    return test === "fail"
+      ? { exitCode: 1, stdout: "Done. PASS=1 FAIL=1", stderr: "" }
+      : { exitCode: 0, stdout: "Done. PASS=2", stderr: "" };
+  };
+}
+
+/** A build whose test fails: held back in staging, its failing rows in dq. */
+const fakeDbt = dbtWhoseTest("fail");
+/** A build whose test passes: published into analytics. */
+const passingDbt = dbtWhoseTest("pass");
 
 /**
  * What dbt 1.9 prints when it stops before its first model: this startup banner, then its own
@@ -160,7 +189,7 @@ describe("POST /v1/models/build", () => {
   withDatabase();
 
   it("builds the model as the tenant and answers with the run, its steps, its rows counted and the first of them", async () => {
-    const res = await post(api(), "/v1/models/build", {
+    const res = await post(api(passingDbt), "/v1/models/build", {
       tenantId: TENANT,
       select: ["stg_deals"],
       triggeredBy: "u-1",
@@ -176,12 +205,12 @@ describe("POST /v1/models/build", () => {
     };
 
     expect(body.ok).toBe(true);
-    expect(body.testsFailed).toBe(1);
+    expect(body.testsFailed).toBe(0);
     // Counted as the BI login, which is what a dashboard reads as.
     expect(body.rowCounts).toEqual([{ name: "stg_deals", rows: 2 }]);
     expect(body.steps.map((s) => [s.kind, s.name, s.status])).toEqual([
       ["model", "stg_deals", "success"],
-      ["test", "not_null_stg_deals_deal_name", "fail"],
+      ["test", "not_null_stg_deals_deal_name", "pass"],
     ]);
     // Read as the BI login: the columns with Postgres's type names, and the numeric as a
     // string with every digit.
@@ -192,7 +221,7 @@ describe("POST /v1/models/build", () => {
     ]);
     expect(body.preview.rows).toEqual([
       [1, "Acme", "12345.6789"],
-      [2, null, null],
+      [2, "Bolt", null],
     ]);
     expect(body.preview.truncated).toBe(false);
 
@@ -201,12 +230,40 @@ describe("POST /v1/models/build", () => {
       "SELECT status, trigger, tests_failed FROM ops.run WHERE id = $1",
       [body.runId],
     );
-    expect(rows[0]).toEqual({ status: "ok", trigger: "build", tests_failed: 1 });
+    expect(rows[0]).toEqual({ status: "ok", trigger: "build", tests_failed: 0 });
     expect((await getModel(db, TENANT, "stg_deals"))?.columns).toEqual([
       "deal_id",
       "deal_name",
       "amount",
     ]);
+  });
+
+  // ADR 0131: what a dashboard would read is the last passing version, not this build's rows.
+  it("a build whose test failed is held back: not counted, not previewed, and its step says so", async () => {
+    await post(api(passingDbt), "/v1/models/build", { tenantId: TENANT, select: ["stg_deals"] });
+
+    const res = await post(api(fakeDbt), "/v1/models/build", {
+      tenantId: TENANT,
+      select: ["stg_deals"],
+    });
+    const body = (await res.json()) as {
+      ok: boolean;
+      steps: { kind: string; promoted?: boolean | null }[];
+      rowCounts: unknown;
+      preview: unknown;
+    };
+
+    expect(body.ok).toBe(true);
+    expect(body.steps.find((s) => s.kind === "model")?.promoted).toBe(false);
+    expect(body.rowCounts).toEqual([{ name: "stg_deals", rows: null }]);
+    expect(body.preview).toBeNull();
+    // The dashboard still reads the passing build's rows.
+    const { rows } = await db.asRole("undercroft_bi_case_1", (tx) =>
+      tx.query<{ deal_name: string | null }>(
+        "SELECT deal_name FROM analytics_case_1.stg_deals ORDER BY deal_id",
+      ),
+    );
+    expect(rows.map((r) => r.deal_name)).toEqual(["Acme", "Bolt"]);
   });
 
   it("a build that broke the model answers ok:false with dbt's message and no preview", async () => {
@@ -355,7 +412,7 @@ describe("POST /v1/models/build, several models and not waiting", () => {
   });
 
   it("several selectors are ONE dbt build and one run, each selector its own argv item", async () => {
-    const dbt = recording(fakeDbt);
+    const dbt = recording(passingDbt);
 
     const res = await post(api(dbt.spawn), "/v1/models/build", {
       tenantId: TENANT,
@@ -466,7 +523,7 @@ describe("POST /v1/models/build, a row count it cannot give", () => {
   withDatabase();
 
   it("a model that failed to build is not counted, though an earlier build's table is still there", async () => {
-    const app = api();
+    const app = api(passingDbt);
     await post(app, "/v1/models/build", { tenantId: TENANT, select: ["stg_deals"] });
     const broken: Spawn = (_cmd, options) => {
       writeResults(options.cwd, [
@@ -497,9 +554,9 @@ describe("POST /v1/models/build, a row count it cannot give", () => {
       provisionTenantRoles(tx, TENANT).then(() => tenantRolesFor(tx, TENANT)),
     );
     const unreadable: Spawn = async (cmd, options) => {
-      const done = await fakeDbt(cmd, options);
+      const done = await passingDbt(cmd, options);
       await db.asRole("undercroft_dbt_case_1", (tx) =>
-        tx.exec(`REVOKE ALL ON analytics_case_1.stg_deals FROM ${roles?.biRole ?? "nobody"}`),
+        tx.exec(`REVOKE ALL ON staging_case_1.stg_deals FROM ${roles?.biRole ?? "nobody"}`),
       );
       return done;
     };
@@ -703,7 +760,8 @@ describe("POST /v1/models/drop", () => {
       tx.query<{ name: string }>(
         `SELECT n.nspname || '.' || c.relname AS name FROM pg_class c
          JOIN pg_namespace n ON n.oid = c.relnamespace
-         WHERE n.nspname IN ('analytics_case_1', 'dq_case_1') AND c.relkind IN ('r', 'v', 'm')
+         WHERE n.nspname IN ('analytics_case_1', 'dq_case_1', 'staging_case_1')
+           AND c.relkind IN ('r', 'v', 'm')
          ORDER BY 1`,
       ),
     );
@@ -719,19 +777,36 @@ describe("POST /v1/models/drop", () => {
   it("drops the built table and its tests' failing rows, so no login can read them", async () => {
     const app = api();
     await post(app, "/v1/models/build", { tenantId: TENANT, model: "stg_deals", triggeredBy: "" });
+    // Its test failed, so the build was held back in staging (ADR 0131).
     expect(await relations()).toEqual([
-      "analytics_case_1.stg_deals",
       "dq_case_1.not_null_stg_deals_deal_name",
+      "staging_case_1.stg_deals",
     ]);
 
     const res = await post(app, "/v1/models/drop", { tenantId: TENANT, model: "stg_deals" });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       dropped: [
-        { schema: "analytics_case_1", name: "stg_deals", kind: "table" },
         { schema: "dq_case_1", name: "not_null_stg_deals_deal_name", kind: "table" },
+        { schema: "staging_case_1", name: "stg_deals", kind: "table" },
       ],
     });
+    expect(await relations()).toEqual([]);
+  });
+
+  // ADR 0131: the published version and the one its tests held back are both the model's data.
+  it("drops both copies: the version published in analytics and the one held back in staging", async () => {
+    await post(api(passingDbt), "/v1/models/build", { tenantId: TENANT, model: "stg_deals" });
+    await post(api(fakeDbt), "/v1/models/build", { tenantId: TENANT, model: "stg_deals" });
+    expect(await relations()).toEqual([
+      "analytics_case_1.stg_deals",
+      "dq_case_1.not_null_stg_deals_deal_name",
+      "staging_case_1.stg_deals",
+    ]);
+
+    const res = await post(api(), "/v1/models/drop", { tenantId: TENANT, model: "stg_deals" });
+
+    expect(res.status).toBe(200);
     expect(await relations()).toEqual([]);
   });
 

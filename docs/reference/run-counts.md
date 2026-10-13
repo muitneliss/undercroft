@@ -135,8 +135,12 @@ A build has succeeded when its verdict is `clean`. The Journal shows "tests fail
 a run, and `models build` answers with the same `verdict`. ADR 0129.
 
 Each model on `models list` and `models get` carries `lastTests`: what the tests of the build
-serving its rows found. That build is the newest one in which the model built successfully,
-since a later failed build leaves its table in place. `lastTests.state` is `failing` when any
+serving its rows found. That build is the newest one that was published: built into staging,
+passed its own tests, and promoted into the schema Reports reads (ADR 0131). A build recorded
+before that existed counts when the model built successfully. A later build that was held back
+leaves the published table in place, and is named in `lastTests.unpublished` with its run;
+`runId` `null` beside an `unpublished` build is a model with no passing version yet.
+Each model step of a build carries `promoted`: `true` published, `false` held back. `lastTests.state` is `failing` when any
 of those tests failed or errored, `passing` when at least one passed or warned and none failed,
 and `unknown` otherwise: the model never built, has no tests, or its tests were not attributed
 to it. `unknown` is never a pass. A `warn` does not fail a model but is counted in `warnings`.
@@ -145,7 +149,9 @@ test's name. Builds recorded before this existed attribute no tests, so their mo
 `unknown` until their next build.
 
 A Reports answer (`bi answer`, `bi run-question`, `bi questions answer`) carries `qualifiers`,
-one for each table the query read whose `lastTests` are `failing` or `unknown`, with the run. The
+one for each table the query read whose `lastTests` are `failing` or `unknown`, or carry an
+`unpublished` build, with the run: "the last passing version, from run X; the current build is
+failing". A query over a model never published is refused as having no passing version yet. The
 tables read are the ones Postgres's plan of the query scanned, read as the reports login, never
 the names in its SQL. The rows are always served. `qualifiers` is `null` when which tables were
 read is not known.

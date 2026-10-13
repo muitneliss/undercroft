@@ -17,12 +17,19 @@
  *   the dbt process (`PASSWORD_VAR`), which the worker sets for that one child and nothing
  *   else. A temp directory that outlives a crash holds no credential.
  * - **The profile IS the tenant.** `user` is the tenant's own dbt login and `schema` its own
- *   analytics schema, so a model that names no schema lands in the right one and a model
- *   that names another tenant's is refused by Postgres, not by a convention.
- * - **`generate_schema_name` is overridden** so `+schema: dq_<slug>` means exactly that.
- *   dbt's default would render it `analytics_<slug>_dq_<slug>` -- the reason the old
- *   starter project never ran. Tests store their failing rows there; the BI role has no
- *   USAGE on it.
+ *   STAGING schema, so a model lands where no dashboard reads it until its tests pass, and a
+ *   model that names another tenant's schema is refused by Postgres, not by a convention.
+ * - **Write, audit, publish (ADR 0131).** dbt builds and tests every model in
+ *   `staging_<slug>`; the worker then moves into `analytics_<slug>` only what passed
+ *   (`promotion.ts`). A model never chooses its own schema -- `generate_schema_name` puts every
+ *   model and seed in the target, whatever its config says, so none can write into analytics
+ *   past its tests -- and `ref()` is overridden so a model this build does not select is read
+ *   from analytics, where its last passing version is, and one it does select from staging,
+ *   where its new rows are. A build of `fct` alone therefore reads `stg`'s published rows,
+ *   never a version of `stg` that failed.
+ * - **`generate_schema_name` is overridden** so a test's `+schema: dq_<slug>` means exactly
+ *   that. dbt's default would render it `staging_<slug>_dq_<slug>`. Tests store their failing
+ *   rows there; the BI role has no USAGE on it.
  *
  * `parseRunResults` is the other half: dbt's `run_results.json` as the ledger's steps, one
  * per model, test or seed, with the failing-row count a test reported. Pure, so a fixture pins
@@ -112,16 +119,49 @@ const PARSE_AMOUNT = `{#
 `;
 
 const GENERATE_SCHEMA_NAME = `{#
-    A custom schema name is used as written. dbt's default would prefix it with the
-    target schema, turning \`dq_<slug>\` into \`analytics_<slug>_dq_<slug>\`. Models that
-    name no schema land in the target schema: this tenant's own analytics schema.
+    Where a node lands. A model, a seed or a snapshot lands in the target schema -- this
+    tenant's staging schema -- whatever schema its config names, because the platform, not
+    the node, decides what is published: only what passed its tests is moved into analytics
+    (ADR 0131). A test's custom schema is used as written, so \`dq_<slug>\` stays \`dq_<slug>\`;
+    dbt's default would prefix it with the target schema.
 #}
 {% macro generate_schema_name(custom_schema_name, node) -%}
-    {%- if custom_schema_name is none -%}
+    {%- if custom_schema_name is none or node.resource_type != 'test' -%}
         {{ target.schema }}
     {%- else -%}
         {{ custom_schema_name | trim }}
     {%- endif -%}
+{%- endmacro %}
+`;
+
+/** The project variable the `ref()` override reads the published schema from. */
+const PUBLISHED_VAR = "undercroft_published_schema";
+
+/**
+ * `ref()`, so a build reads each parent where the right version of it is (ADR 0131).
+ *
+ * A parent this build selects is built and tested in staging before its children, and dbt
+ * skips the children when it fails: they read it from staging, the new rows. A parent the
+ * build does not select is read from the published schema, its last passing version: staging
+ * may hold nothing of it, or a version whose tests failed. `selected_resources` is empty while
+ * dbt parses, which is when `builtins.ref` records the dependency, so the parse is untouched;
+ * the swap happens only when the SQL is rendered to run (`execute`).
+ *
+ * Not one of `MACROS`: those are offered to authors and read by the lineage as helpers a model
+ * calls, and this is dbt's own `ref` -- every model already calls it.
+ */
+const REF_OVERRIDE = `{#
+    ref(), reading a parent this build does not select from the published schema (ADR 0131).
+#}
+{% macro ref() -%}
+    {%- set relation = builtins.ref(*varargs, **kwargs) -%}
+    {%- set name = varargs | last -%}
+    {%- if execute and relation is not none and relation.schema == target.schema
+          and ('model.undercroft.' ~ name) not in selected_resources
+          and ('seed.undercroft.' ~ name) not in selected_resources -%}
+        {%- do return(relation.incorporate(path={'schema': var('${PUBLISHED_VAR}')})) -%}
+    {%- endif -%}
+    {%- do return(relation) -%}
 {%- endmacro %}
 `;
 
@@ -390,6 +430,11 @@ config-version: 2
 
 profile: undercroft
 
+# Where what passed its tests is promoted to, and where ref() reads a parent this build does
+# not select (ADR 0131). The target schema, in profiles.yml, is staging.
+vars:
+  ${PUBLISHED_VAR}: analytics_${slug}
+
 model-paths: ["models"]
 macro-paths: ["macros"]
 test-paths: ["tests"]
@@ -419,7 +464,7 @@ function profilesYml(slug: string, database: DatabaseAddress): string {
       dbname: ${yamlString(database.dbname)}
       user: undercroft_dbt_${slug}
       password: "{{ env_var('${PASSWORD_VAR}') }}"
-      schema: analytics_${slug}
+      schema: staging_${slug}
       threads: ${String(THREADS)}
       connect_timeout: ${String(CONNECT_TIMEOUT_S)}
       retries: ${String(CONNECT_RETRIES)}
@@ -445,6 +490,7 @@ export function renderProject(input: ProjectInput): Record<string, string> {
   for (const macro of MACROS) {
     files[`macros/${macro.name}.sql`] = macro.sql;
   }
+  files["macros/undercroft/ref.sql"] = REF_OVERRIDE;
   for (const macro of input.macros) {
     files[`macros/tenant/${macro.name}.sql`] = macro.sql;
   }
@@ -465,11 +511,13 @@ const WORKING_SUFFIXES = ["__dbt_tmp", "__dbt_backup"] as const;
 /**
  * Where a build of this project puts what one model makes, named the way dbt names it.
  *
- * `analytics` is the model's own relation in the tenant's analytics schema, plus the two
- * working copies dbt-postgres swaps through when it replaces one (`make_relation_with_suffix`:
- * the name cut to fit, then the suffix). The swap commits before the backup is dropped, so a
- * build killed between the two leaves `<name>__dbt_backup` holding the previous rows, and only
- * the next build of the same model would have cleared it.
+ * `built` is the model's own relation plus the two working copies dbt-postgres swaps through
+ * when it replaces one (`make_relation_with_suffix`: the name cut to fit, then the suffix). The
+ * same names stand in BOTH schemas a build writes: staging, where dbt builds and where a
+ * version whose tests failed stays (ADR 0131), and analytics, where a promoted version is
+ * moved and where builds before staging existed left theirs. The swap commits before the
+ * backup is dropped, so a build killed between the two leaves `<name>__dbt_backup` holding the
+ * previous rows, and only the next build of the same model would have cleared it.
  *
  * `dq` is where each of the model's declared tests stores its failing rows, which the project
  * above sends to `dq_<slug>` with `+store_failures`, named as `testRelations` (`dbtTests.ts`)
@@ -481,16 +529,16 @@ const WORKING_SUFFIXES = ["__dbt_tmp", "__dbt_backup"] as const;
  * the caller's to decide against the catalogue.
  */
 export function relationsOfModel(model: Pick<ProjectModel, "name" | "tests">): {
-  readonly analytics: string[];
+  readonly built: string[];
   readonly dq: string[];
 } {
-  const analytics = [
+  const built = [
     model.name,
     ...WORKING_SUFFIXES.map(
       (suffix) => `${model.name.slice(0, MAX_RELATION_NAME - suffix.length)}${suffix}`,
     ),
   ];
-  return { analytics, dq: testRelations(model) };
+  return { built, dq: testRelations(model) };
 }
 
 interface RunResultsNode {

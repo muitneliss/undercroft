@@ -187,6 +187,27 @@ export async function dropRelation(exec: SqlExecutor, relation: Relation): Promi
   );
 }
 
+const ALTER_OF: Readonly<Record<RelationKind, string>> = {
+  table: "ALTER TABLE",
+  view: "ALTER VIEW",
+  "materialized view": "ALTER MATERIALIZED VIEW",
+};
+
+/**
+ * Move one relation into `schema`, keeping its name, its rows, its own grants and every view
+ * that reads it -- a view refers to what it reads by identity, not by name, so it follows.
+ * Postgres allows it only to the relation's owner, with `CREATE` on the schema it arrives in.
+ */
+export async function moveRelation(
+  exec: SqlExecutor,
+  relation: Relation,
+  schema: string,
+): Promise<void> {
+  await exec.query(
+    `${ALTER_OF[relation.kind]} ${quoteIdent(relation.schema)}.${quoteIdent(relation.name)} SET SCHEMA ${quoteIdent(schema)}`,
+  );
+}
+
 /**
  * `fn` inside one transaction on this executor: committed when it returns, rolled back when
  * it throws. The executor must be a single connection, as a tenant session's is, or the

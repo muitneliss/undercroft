@@ -36,6 +36,7 @@ DECLARE
     v_bi        name;
     v_analytics name;
     v_dq        name;
+    v_staging   name;
 BEGIN
     IF p_tenant_id !~ '^[A-Za-z0-9_-]{1,64}$' THEN
         RAISE EXCEPTION 'undercroft: tenant id % is not a valid reference', p_tenant_id
@@ -58,6 +59,7 @@ BEGIN
     v_bi        := 'undercroft_bi_'  || v_slug;
     v_analytics := 'analytics_'      || v_slug;
     v_dq        := 'dq_'             || v_slug;
+    v_staging   := 'staging_'        || v_slug;
 
     -- Two tenants whose ids fold to one slug would share a login. Refused before any role
     -- exists, with an error the control plane can name to the operator.
@@ -97,9 +99,13 @@ BEGIN
         EXECUTE format('ALTER ROLE %I CONNECTION LIMIT 10', v_bi);
     END IF;
 
-    -- dbt owns the two schemas it writes, and may create in nothing else.
+    -- dbt owns the three schemas it writes, and may create in nothing else. A build writes
+    -- into staging; only what passed its tests is moved into analytics (ADR 0131). Created here
+    -- rather than in a numbered file so a tenant provisioned before staging existed gets it at
+    -- the next deploy, and the first build after that promotes as normal.
     EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I AUTHORIZATION %I', v_analytics, v_dbt);
     EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I AUTHORIZATION %I', v_dq, v_dbt);
+    EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I AUTHORIZATION %I', v_staging, v_dbt);
 
     -- dbt reads raw through the PARENT tables only. A partition is not granted, so
     -- `SELECT ... FROM raw.records_default` is a permission error and the row-level policy
@@ -134,9 +140,22 @@ BEGIN
         'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT SELECT ON TABLES TO %I',
         v_dbt, v_analytics, v_bi);
 
+    -- What dbt creates in staging carries BI's SELECT too, so that a relation promoted into
+    -- analytics with `ALTER ... SET SCHEMA` -- which keeps a relation's own ACL and applies no
+    -- default of the schema it arrives in -- is readable there at once. In staging itself it
+    -- grants nothing: BI has no USAGE on the schema (refused below), and without USAGE a
+    -- relation's own grant cannot be reached. The grant is issued here, beside the rest of
+    -- BI's, rather than by the promotion as each relation lands: a GRANT written at runtime is
+    -- a second place a tenant's reach is stated (ADR 0036, ADR 0131).
+    EXECUTE format(
+        'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT SELECT ON TABLES TO %I',
+        v_dbt, v_staging, v_bi);
+
     -- Explicit refusals, so a later broad grant is a visible contradiction.
     EXECUTE format('REVOKE ALL ON SCHEMA app, ops FROM %I, %I', v_dbt, v_bi);
     EXECUTE format('REVOKE ALL ON SCHEMA %I FROM %I', v_dq, v_bi);
+    -- Staging holds builds no test has passed yet; a dashboard reads none of it (ADR 0131).
+    EXECUTE format('REVOKE ALL ON SCHEMA %I FROM %I', v_staging, v_bi);
 
     -- Belt and braces for the read-only login. The query runner sets both per statement;
     -- these hold for any other client that logs in as the role.

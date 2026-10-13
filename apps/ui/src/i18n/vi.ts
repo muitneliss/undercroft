@@ -1770,6 +1770,10 @@ export const vi = {
     testsWarnings_other: "{{countText}} cảnh báo",
     failingTestsNote: "Kiểm thử không đạt ở lần dựng {{runId}}: {{tests}}.",
     warningTestsNote: "Kiểm thử cảnh báo ở lần dựng {{runId}}: {{tests}}.",
+    unpublishedNote:
+      "Báo cáo đang đọc phiên bản đạt kiểm thử gần nhất, từ lần dựng {{runId}}. Lần dựng {{heldRunId}} không đạt nên chưa được công bố.",
+    noPassingVersionNote:
+      "Chưa có phiên bản nào đạt kiểm thử: lần dựng {{heldRunId}} không đạt nên chưa được công bố, và Báo cáo chưa đọc được mô hình này.",
     parentTestsUnknown:
       "Lần dựng này đọc các mô hình cha chưa có kết quả kiểm thử: {{models}}. Hãy kiểm tra chúng trước khi tin số liệu.",
     buildOk: "Dựng thành công",
@@ -2081,6 +2085,10 @@ export const vi = {
     qualifierFailingNoRun: "Kiểm thử không đạt trên bảng {{table}}.",
     qualifierFailingTests: "Kiểm thử không đạt: {{tests}}.",
     qualifierUnknown: "Chưa có kết quả kiểm thử cho bảng {{table}}.",
+    qualifierHeld:
+      "Bảng {{table}} là phiên bản đạt kiểm thử gần nhất, từ lần chạy {{runId}}; lần dựng mới ở lần chạy {{heldRunId}} không đạt nên chưa được công bố.",
+    qualifierHeldNoVersion:
+      "Lần dựng mới của bảng {{table}} ở lần chạy {{heldRunId}} không đạt nên chưa được công bố.",
     qualifiersNotKnown: "Không rõ kết quả kiểm thử của các bảng mà câu trả lời này đọc.",
     viewerNote: "Bạn có thể xem và chạy câu hỏi này. Sửa và lưu cần vai trò member.",
     viewerNew: "Đặt câu hỏi mới cần vai trò member.",

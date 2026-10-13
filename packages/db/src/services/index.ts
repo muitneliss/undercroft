@@ -19,7 +19,8 @@ export {
   renderProject,
   SOURCES_YML,
 } from "./dbtProject.ts";
-export { testedModels } from "./dbtManifest.ts";
+export { buildGraph, testedModels } from "./dbtManifest.ts";
+export { type PromotionGraph, promotable } from "./promotion.ts";
 export { sqlTestName, testRelationPrefixes } from "./dbtTests.ts";
 export { grantExpiryFor } from "./grantExpiry.ts";
 export {
