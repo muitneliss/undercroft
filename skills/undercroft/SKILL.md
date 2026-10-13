@@ -145,7 +145,13 @@ Both doors refuse with the same codes. Branch on the code, and give the person t
   `tenants.get` still answers, and its `deactivatedAt` says since when. Reactivating is the
   admin's decision: ask them, never reactivate a customer to finish a task.
 - **Retry once:** `NETWORK_ERROR` and `TIMEOUT`.
-- **Fix, then retry:** `VALIDATION_FAILED`, using the issues in its details.
+- **Fix, then retry:** `VALIDATION_FAILED`, using the issues in its details. A `lake.search`
+  that ran past its time limit is refused this way with no issues. The same search will stop
+  again, so do not repeat it. Narrow it: one kind, more words, or a quoted phrase.
+
+`lake.search` ranks only each kind's newest matches. When a kind had more, the answer's
+`capped` names it and how many were ranked. Matches older than those are on no page, so tell
+the person rather than reading the result as everything that matched.
 
 A refusal is the platform working as designed. `INTERNAL_ERROR`, a value you do not believe,
 or an answer that breaks the contract in `references/cli.md` or `references/mcp.md` is a

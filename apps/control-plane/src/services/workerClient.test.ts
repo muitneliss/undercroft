@@ -50,6 +50,24 @@ describe("reading a worker refusal", () => {
     expect(read).toEqual({ ok: false, reason: "in-progress" });
   });
 
+  it("504 from the search is its time limit, and the search's 500 stays a plain refusal", async () => {
+    // #447: a search Postgres cancelled at its timeout reached the screen as "the service did
+    // not answer; try again", and callers did, with the same question. The status names it.
+    const timedOut = await answering(504).searchRaw({ tenantId: "CASE-0042", q: "invoice" });
+    const crashed = await answering(500).searchRaw({ tenantId: "CASE-0042", q: "invoice" });
+
+    expect(timedOut).toEqual({ ok: false, reason: "timed-out" });
+    expect(crashed).toEqual({ ok: false, reason: "refused" });
+  });
+
+  it("504 is read as a time limit by the search alone", async () => {
+    // The quiet side: only the search's worker verb raises it, and a 504 from anywhere else is
+    // not a statement this control plane knows to have been cancelled.
+    const outcome = await answering(504).readRawSchema({ tenantId: "CASE-0042" });
+
+    expect(outcome).toEqual({ ok: false, reason: "refused" });
+  });
+
   it("any other refusal stays a plain refusal", async () => {
     // The quiet side. A guard that answered `scope-insufficient` to everything would tell
     // an operator to reconnect a credential that was never the problem.

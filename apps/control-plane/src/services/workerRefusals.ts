@@ -49,7 +49,13 @@ export type WorkerFailure =
    * 0088). Not `unreachable` -- the worker answered -- and not `refused` -- nothing was wrong
    * with the request. Asked again in a moment, it runs.
    */
-  | "busy";
+  | "busy"
+  /**
+   * The search's 504: Postgres cancelled it at its time limit (ADR 0123). The opposite remedy
+   * to `busy`. The same question takes the same time, so it is worded as "narrow it" and never
+   * as "try again".
+   */
+  | "timed-out";
 
 /** A build the worker answered after it ran. */
 export const OK = 200;
@@ -67,6 +73,8 @@ const UNPROCESSABLE = 422;
 const PRECONDITION_FAILED = 412;
 /** The worker's answer when the tenant's login had no connection to give in time. */
 const SERVICE_UNAVAILABLE = 503;
+/** The worker's answer for a statement Postgres cancelled at its time limit. */
+const GATEWAY_TIMEOUT = 504;
 
 /** The refusals a status alone names. Anything else is `refused`: the worker said no. */
 export const REFUSAL_BY_STATUS: ReadonlyMap<number, WorkerFailure> = new Map([
@@ -84,6 +92,17 @@ export const REFUSAL_BY_STATUS: ReadonlyMap<number, WorkerFailure> = new Map([
 export const BROWSE_REFUSALS: ReadonlyMap<number, WorkerFailure> = new Map([
   ...REFUSAL_BY_STATUS,
   [CONFLICT, "credential-expired"],
+]);
+
+/**
+ * The search's own reading of a status. Its 504 is the statement timeout, the one refusal a
+ * search has that its reader can fix: by narrowing the question. Read from the status like
+ * every other, so the body stays unread here too. Only this endpoint maps it, because only this
+ * endpoint's worker verb raises it.
+ */
+export const SEARCH_REFUSALS: ReadonlyMap<number, WorkerFailure> = new Map([
+  ...REFUSAL_BY_STATUS,
+  [GATEWAY_TIMEOUT, "timed-out"],
 ]);
 
 /**

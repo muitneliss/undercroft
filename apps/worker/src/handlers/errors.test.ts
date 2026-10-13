@@ -3,6 +3,7 @@ import { ConnectorError, HttpError } from "@undercroft/core";
 import { ConnectionRegistryError } from "@undercroft/db/repos";
 
 import { ScopeNotChosen } from "../services/google/collect.ts";
+import { QueryTimedOut } from "../services/queryTimeout.ts";
 import { failureOf } from "./errors.ts";
 
 describe("what a thrown failure means over HTTP", () => {
@@ -27,6 +28,15 @@ describe("what a thrown failure means over HTTP", () => {
     expect(failure.message).toContain("failed after 412 records");
 
     expect(failureOf(new HttpError(401, "https://api.example.test/x")).code).toBe("source_failed");
+  });
+
+  it("a statement cancelled at its time limit is a 504 of its own, stating the limit", () => {
+    // #447: it reached the control plane as the wordless 500 below, which is worded "the
+    // service did not answer; try again" -- and the same question takes the same time.
+    const failure = failureOf(new QueryTimedOut(15_000));
+    expect(failure.status).toBe(504);
+    expect(failure.code).toBe("query_timeout");
+    expect(failure.message).toContain("15000 ms");
   });
 
   it("anything else is a 500 that repeats none of the error's text", () => {

@@ -38,9 +38,12 @@ export const VISUAL_NOW = "2026-09-29T09:30:00Z";
  * How long a screen with a village on it may take (ADR 0116). The tier draws WebGL in software
  * inside the Playwright image, emulated on an Apple-silicon Mac, and a lit, shadowed, occluded
  * scene takes several seconds where a page of text takes one; the default would fail it on time,
- * not on a pixel.
+ * not on a pixel. The first village a run draws also pays for compiling its shaders and loading
+ * its models: on CI's ubuntu runner that one took 58 to 65 seconds (October 2026), so a minute
+ * failed it about half the time, while the second, warm, took 16. Three minutes is room for the
+ * cold one, not a bound a screen should approach.
  */
-export const WEBGL_TIMEOUT = 60_000;
+export const WEBGL_TIMEOUT = 180_000;
 
 /**
  * What a procedure answers: its output; a `Response` for a refusal the test means to show; or a
