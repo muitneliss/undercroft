@@ -106,14 +106,15 @@ describe("every default privilege is the one a tenant's own role was given, and 
     const { rows: tenants } = await db.query<{ role_name: string; slug: string }>(
       "SELECT role_name, slug FROM ops.tenant_role WHERE kind = 'dbt' ORDER BY role_name",
     );
+    // Two per tenant since ADR 0131: analytics, and staging, whose grant travels with a relation
+    // promoted out of it -- unreachable in staging itself, where BI has no USAGE.
     const expected = [
       { grantor: "undercroft_dbt", schema: "analytics", objtype: "r" },
-      ...tenants.map((t) => ({
-        grantor: t.role_name,
-        schema: `analytics_${t.slug}`,
-        objtype: "r",
-      })),
-    ].sort((a, b) => a.grantor.localeCompare(b.grantor));
+      ...tenants.flatMap((t) => [
+        { grantor: t.role_name, schema: `analytics_${t.slug}`, objtype: "r" },
+        { grantor: t.role_name, schema: `staging_${t.slug}`, objtype: "r" },
+      ]),
+    ].sort((a, b) => a.grantor.localeCompare(b.grantor) || a.schema.localeCompare(b.schema));
     expect(await defaultAcls()).toEqual(expected);
   });
 });
@@ -149,11 +150,13 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
     ]);
     const { rows: schemas } = await db.query<{ nspname: string; owner: string }>(
       `SELECT nspname, pg_get_userbyid(nspowner) AS owner FROM pg_namespace
-       WHERE nspname IN ('analytics_case_0042', 'dq_case_0042') ORDER BY nspname`,
+       WHERE nspname IN ('analytics_case_0042', 'dq_case_0042', 'staging_case_0042')
+       ORDER BY nspname`,
     );
     expect(schemas).toEqual([
       { nspname: "analytics_case_0042", owner: "undercroft_dbt_case_0042" },
       { nspname: "dq_case_0042", owner: "undercroft_dbt_case_0042" },
+      { nspname: "staging_case_0042", owner: "undercroft_dbt_case_0042" },
     ]);
   });
 
@@ -289,6 +292,29 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
       await expectDenied(() => tx.query("SELECT * FROM ops.tenant_role"));
       await expectDenied(() => tx.exec("CREATE TABLE analytics_case_0042.mine (n int)"));
     });
+  });
+
+  // ADR 0131: staging holds builds no test has passed yet. dbt owns it and builds there; BI
+  // reaches none of it, though what dbt creates there carries BI's grant, and reaches a promoted
+  // relation the moment it moves into analytics.
+  it("a tenant's dbt role builds in staging and promotes from it; its bi role reads only what was promoted", async () => {
+    await db.asRole("undercroft_dbt_case_0042", async (tx) => {
+      await tx.exec("CREATE TABLE staging_case_0042.held AS SELECT 1 AS n");
+      await tx.exec("CREATE TABLE staging_case_0042.passed AS SELECT 2 AS n");
+      await tx.exec("ALTER TABLE staging_case_0042.passed SET SCHEMA analytics_case_0042");
+      await expectDenied(() => tx.exec("CREATE TABLE staging_case_0043.sneaky (n int)"));
+    });
+
+    await db.asRole("undercroft_bi_case_0042", async (tx) => {
+      const promoted = await tx.query<{ n: number }>("SELECT n FROM analytics_case_0042.passed");
+      expect(promoted.rows[0]?.n).toBe(2);
+      await expectDenied(() => tx.query("SELECT * FROM staging_case_0042.held"));
+      await expectDenied(() => tx.exec("CREATE TABLE staging_case_0042.mine (n int)"));
+    });
+    const { rows } = await db.query<{ usage: boolean }>(
+      "SELECT has_schema_privilege('undercroft_bi_case_0042', 'staging_case_0042', 'USAGE') AS usage",
+    );
+    expect(rows[0]?.usage).toBe(false);
   });
 
   it("only the worker may rotate a password, and the value it gets is not stored anywhere", async () => {

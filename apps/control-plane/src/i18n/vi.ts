@@ -112,7 +112,7 @@ export const vi = {
     recovered: "Đồng bộ {{source}} cho {{tenantId}} đã chạy lại bình thường",
     /** Its own whole sentence, for the reason `runFailed.modelsSubject` is one. */
     modelsRecovered: "Dựng mô hình cho {{tenantId}} đã chạy lại bình thường",
-    /** The build ran again but its tests fail: its tables are served with suspect rows. */
+    /** The build ran again but its tests fail: those models keep their last passing version. */
     modelsRecoveredTestsFailing:
       "Dựng mô hình cho {{tenantId}} đã chạy lại, nhưng có kiểm thử không đạt",
     testsFailing: "Kiểm thử không đạt",
@@ -243,6 +243,8 @@ export const vi = {
     /** A list asked for by `names`, and the names nothing in it carries, comma-joined. */
     namesUnknown: "Không có trong danh sách này của khách hàng: {{names}}.",
     /** Postgres's own sentence follows the colon; it quotes the author's SQL and nothing else. */
+    noPassingVersion:
+      "{{model}} chưa có phiên bản nào đạt kiểm thử: lần dựng ở lần chạy {{runId}} không đạt kiểm thử hoặc không dựng được, nên chưa có gì của nó được công bố cho Báo cáo. Hãy sửa mô hình rồi dựng lại.",
     queryFailed: "Câu truy vấn không chạy được: {{message}}",
     queryNotRun:
       "Không chạy được câu truy vấn. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",

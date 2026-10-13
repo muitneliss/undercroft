@@ -46,9 +46,26 @@ const PROJECT = renderProject({
 describe("renderProject", () => {
   it("logs in as the tenant's own role and writes to the tenant's own schemas", () => {
     expect(PROJECT["profiles.yml"]).toContain("user: undercroft_dbt_case_0042");
-    expect(PROJECT["profiles.yml"]).toContain("schema: analytics_case_0042");
     expect(PROJECT["dbt_project.yml"]).toContain("+schema: dq_case_0042");
     expect(PROJECT["macros/generate_schema_name.sql"]).toContain("custom_schema_name | trim");
+  });
+
+  // ADR 0131: a build writes where no dashboard reads, and only what passed is promoted.
+  it("builds into staging, and reads a parent it does not select from the published schema", () => {
+    expect(PROJECT["profiles.yml"]).toContain("schema: staging_case_0042");
+    expect(PROJECT["profiles.yml"]).not.toContain("analytics_case_0042");
+    expect(PROJECT["dbt_project.yml"]).toContain(
+      "vars:\n  undercroft_published_schema: analytics_case_0042\n",
+    );
+    const ref = PROJECT["macros/undercroft/ref.sql"] ?? "";
+    expect(ref).toContain("{% macro ref() -%}");
+    expect(ref).toContain("builtins.ref(*varargs, **kwargs)");
+    expect(ref).toContain("not in selected_resources");
+    expect(ref).toContain("var('undercroft_published_schema')");
+    // A model cannot choose a schema past its tests: only a test's custom schema is honoured.
+    expect(PROJECT["macros/generate_schema_name.sql"]).toContain(
+      "custom_schema_name is none or node.resource_type != 'test'",
+    );
   });
 
   it("reads the password from the environment; no file carries it", () => {
@@ -385,7 +402,7 @@ describe("relationsOfModel", () => {
     ).toEqual(["relationships_stg_payments_431834f3110c18883983394f9bbd3f3c"]);
 
     const longest = "a".repeat(63);
-    expect(relationsOfModel({ name: longest, tests: { columns: {} } }).analytics).toEqual([
+    expect(relationsOfModel({ name: longest, tests: { columns: {} } }).built).toEqual([
       longest,
       `${"a".repeat(54)}__dbt_tmp`,
       `${"a".repeat(51)}__dbt_backup`,

@@ -185,8 +185,11 @@ export async function startBuildJob(deps: JobDeps, input: BuildInput): Promise<{
  * What comes back is read from the ledger the run just wrote -- its steps, its error, its
  * failing-test count -- plus, as the tenant's BI login, how many rows each NAMED model now
  * holds and the first rows of the one named model, which is what proves the relation is there
- * for a dashboard and not only for its author. A model that did not build in this run is
- * neither counted nor previewed: its table, if one is left, is an earlier build's.
+ * for a dashboard and not only for its author. A model this run did not PUBLISH is neither
+ * counted nor previewed (ADR 0131): the table a dashboard reads is an earlier build's, and
+ * counting it would date an old figure to now; the rows it built and held back are in staging,
+ * which no dashboard reads, and what its tests refused is in the failing rows (`dqFailures`).
+ * Its step says `promoted: false`, which is how a reader tells "held" from "not counted".
  */
 export async function buildModels(deps: JobDeps, input: BuildInput): Promise<BuildModelResponse> {
   const { dbt } = deps;
@@ -202,7 +205,7 @@ export async function buildModels(deps: JobDeps, input: BuildInput): Promise<Bui
   ]);
   const named = [...new Set(input.select.map(selectedModel))];
   const built = new Set(
-    steps.filter((s) => s.kind === "model" && s.status === "success").map((s) => s.name),
+    steps.filter((s) => s.kind === "model" && s.promoted === true).map((s) => s.name),
   );
   const countable = named.filter((name) => built.has(name));
   const counts =

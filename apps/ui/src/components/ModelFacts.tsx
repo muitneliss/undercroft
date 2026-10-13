@@ -67,7 +67,7 @@ export function ModelFacts({
             formatCount(columns, locale)
           )}
         </Fact>
-        {/* Not the build's status: a build whose tests fail still succeeds and is served. */}
+        {/* Not the build's status: a build whose tests fail still succeeds, and is held back (ADR 0131). */}
         <Fact label={t("models.colTests")}>
           <StatusMark mark={testsMark(tests.state)} label={testsLabel(t, locale, tests)} />
           {warned === null ? null : (
@@ -83,6 +83,17 @@ export function ModelFacts({
       {tests.warningTests.length === 0 || tests.runId === null ? null : (
         <p className="note">
           {t("models.warningTestsNote", { runId: tests.runId, tests: names(tests.warningTests) })}
+        </p>
+      )}
+      {/* ADR 0131: a newer build held back in staging; Reports read the last passing version. */}
+      {tests.unpublished === null ? null : (
+        <p className="note">
+          {tests.runId === null
+            ? t("models.noPassingVersionNote", { heldRunId: tests.unpublished.runId })
+            : t("models.unpublishedNote", {
+                runId: tests.runId,
+                heldRunId: tests.unpublished.runId,
+              })}
         </p>
       )}
     </>

@@ -55,8 +55,19 @@ export function warningsLabel(t: TFunction, locale: Locale, tests: TestSummary):
   });
 }
 
-/** The sentences one qualifier comes to, in order: what the table's tests say, then which. */
+/**
+ * The sentences one qualifier comes to, in order: what the served version's tests say, which of
+ * them failed, then -- when a newer build was held back (ADR 0131) -- that the table is the last
+ * passing version and the current build is failing.
+ */
 export function qualifierSentences(t: TFunction, qualifier: AnswerQualifier): string[] {
+  return [...testSentences(t, qualifier), ...heldSentences(t, qualifier)];
+}
+
+function testSentences(t: TFunction, qualifier: AnswerQualifier): string[] {
+  if (qualifier.state === "passing") {
+    return [];
+  }
   if (qualifier.state === "unknown") {
     return [t("bi.qualifierUnknown", { table: qualifier.table })];
   }
@@ -67,4 +78,20 @@ export function qualifierSentences(t: TFunction, qualifier: AnswerQualifier): st
   return qualifier.failingTests.length === 0
     ? [head]
     : [head, t("bi.qualifierFailingTests", { tests: qualifier.failingTests.join(", ") })];
+}
+
+function heldSentences(t: TFunction, qualifier: AnswerQualifier): string[] {
+  const held = qualifier.unpublished;
+  if (held === null || held === undefined) {
+    return [];
+  }
+  return [
+    qualifier.runId === null
+      ? t("bi.qualifierHeldNoVersion", { table: qualifier.table, heldRunId: held.runId })
+      : t("bi.qualifierHeld", {
+          table: qualifier.table,
+          runId: qualifier.runId,
+          heldRunId: held.runId,
+        }),
+  ];
 }

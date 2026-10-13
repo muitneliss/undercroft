@@ -11,7 +11,8 @@
  *
  * WHY HERE. Only the owner of a relation may drop it, and the owner is the tenant's dbt login,
  * whose password only the worker can mint (ADR 0016). No grant is involved and none is added:
- * the login drops what it made, in the two schemas it owns.
+ * the login drops what it made, in the schemas it owns. Since write-audit-publish (ADR 0131)
+ * that is staging as well as analytics: a build its tests held back is the model's data too.
  *
  * WHAT IS DROPPED is decided against the catalogue, by name, and never from the ledger: a
  * relation left by a model deleted before this existed is found the same way as one built
@@ -30,7 +31,8 @@
  * All drops are one transaction, so a refusal or a failure part-way leaves everything as it was.
  *
  * A SEED'S TABLE goes the same way (ADR 0128): a seed's row is its cells, and what a dashboard
- * reads is the table dbt loaded from them into `analytics_<slug>`. A seed makes that one
+ * reads is the table dbt loaded from them, promoted into `analytics_<slug>` (and a load held
+ * back in `staging_<slug>`). A seed makes that one
  * relation -- dbt loads it in place, with no working copies and no tests of ours -- so that is
  * all `dropSeedRelations` takes, under the same refusals.
  */
@@ -101,10 +103,10 @@ export function dropSeedRelations(
   input: { tenantId: string; seed: string },
 ): Promise<DropOutcome> {
   return dropOwned(deps, input.tenantId, (models, present, schemas) => {
-    const theirs = new Set(models.flatMap((model) => relationsOfModel(model).analytics));
+    const theirs = new Set(models.flatMap((model) => relationsOfModel(model).built));
     return present.filter(
       (relation) =>
-        relation.schema === schemas.analytics &&
+        (relation.schema === schemas.analytics || relation.schema === schemas.staging) &&
         relation.name === input.seed &&
         !theirs.has(relation.name),
     );
@@ -114,10 +116,12 @@ export function dropSeedRelations(
 interface Schemas {
   readonly analytics: string;
   readonly dq: string;
+  /** Where a build writes before promotion; a held-back version stays here (ADR 0131). */
+  readonly staging: string;
 }
 
 /**
- * Drop the relations `pick` chooses from those present in the tenant's two schemas, or refuse
+ * Drop the relations `pick` chooses from those present in the tenant's three schemas, or refuse
  * and drop none: the refusals, the login and the one transaction every drop shares. `pick` is
  * handed the tenant's models, whose relations are never another node's to take.
  */
@@ -143,11 +147,19 @@ async function dropOwned(
     throw new RunInProgress("transform", tenantId, building);
   }
   const models = await listModels(deps.exec, tenantId);
-  const schemas: Schemas = { analytics: roles.analyticsSchema, dq: roles.dqSchema };
+  const schemas: Schemas = {
+    analytics: roles.analyticsSchema,
+    dq: roles.dqSchema,
+    staging: roles.stagingSchema,
+  };
 
   return deps.sessions.as({ tenantId, kind: "dbt" }, (exec) =>
     inTransaction(exec, async (): Promise<DropOutcome> => {
-      const present = await relationsIn(exec, [roles.analyticsSchema, roles.dqSchema]);
+      const present = await relationsIn(exec, [
+        roles.analyticsSchema,
+        roles.dqSchema,
+        roles.stagingSchema,
+      ]);
       const doomed = pick(models, present, schemas);
       const blocking = await dependentsOutside(exec, doomed);
       if (blocking.length > 0) {
@@ -182,8 +194,9 @@ function keyOf(relation: Pick<Relation, "schema" | "name">): string {
 /**
  * Which of the relations present belong to `model` and to no other model of the tenant.
  *
- * In `analytics`, the model's own name and dbt's two working copies of it, unless another
- * model has that name.
+ * In `analytics` and in `staging`, the model's own name and dbt's two working copies of it,
+ * unless another model has that name: the published version and a version its tests held back
+ * are both the model's data (ADR 0131), and deleting the model takes both.
  *
  * In `dq`, a failing-rows table is the model's when one of its declared tests writes it and no
  * other model's does. Otherwise its name is read: `<kind>_<model>_...` belongs to the model
@@ -201,13 +214,13 @@ function relationsToDrop(
 ): Relation[] {
   const ours = relationsOfModel(model);
   const theirs = others.map((other) => relationsOfModel(other));
-  const theirTables = new Set(theirs.flatMap((r) => r.analytics));
+  const theirTables = new Set(theirs.flatMap((r) => r.built));
   const theirTests = new Set(theirs.flatMap((r) => r.dq));
   const everyone = [model, ...others];
 
   return present.filter((relation) => {
-    if (relation.schema === schemas.analytics) {
-      return ours.analytics.includes(relation.name) && !theirTables.has(relation.name);
+    if (relation.schema === schemas.analytics || relation.schema === schemas.staging) {
+      return ours.built.includes(relation.name) && !theirTables.has(relation.name);
     }
     if (relation.schema !== schemas.dq || theirTests.has(relation.name)) {
       return false;

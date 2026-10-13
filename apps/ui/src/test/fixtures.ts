@@ -98,6 +98,7 @@ export const NO_TEST_RECORD: ModelDetail["lastTests"] = {
   warnings: null,
   runId: null,
   endedAt: null,
+  unpublished: null,
   failingTests: [],
   warningTests: [],
 };

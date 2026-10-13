@@ -77,10 +77,12 @@ const QUIET = new Set(["success", "pass", "skipped"]);
 
 /**
  * Whether a step needs reading: it failed, errored, or warned (`fail`, `error`, `warn`), or it
- * ended in a status this module does not know. Unknown is listed, never assumed fine.
+ * ended in a status this module does not know -- unknown is listed, never assumed fine -- or it
+ * built and was held back rather than published (ADR 0131): a `success` that Reports does not
+ * read is not one to pass over.
  */
-export function isProblem(step: Pick<RunStep, "status">): boolean {
-  return !QUIET.has(step.status);
+export function isProblem(step: Pick<RunStep, "status" | "promoted">): boolean {
+  return !QUIET.has(step.status) || (step.status === "success" && step.promoted === false);
 }
 
 /** The order a page walks in, compared by code point so the cursor and the sort agree exactly. */

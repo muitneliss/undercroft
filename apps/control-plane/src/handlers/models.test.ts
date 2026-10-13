@@ -564,6 +564,7 @@ describe("a model's latest tests (issue 456)", () => {
         warnings: null,
         runId: "run-1",
         endedAt: expect.any(String),
+        unpublished: null,
       },
       fct_pipeline: {
         state: "passing",
@@ -571,6 +572,7 @@ describe("a model's latest tests (issue 456)", () => {
         warnings: 1,
         runId: "run-1",
         endedAt: expect.any(String),
+        unpublished: null,
       },
       stg_deals: {
         state: "failing",
@@ -578,6 +580,7 @@ describe("a model's latest tests (issue 456)", () => {
         warnings: 0,
         runId: "run-1",
         endedAt: expect.any(String),
+        unpublished: null,
       },
     });
     // The model step succeeded: the build status alone reads as fine, which was the defect.

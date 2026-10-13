@@ -57,6 +57,12 @@ export const RunStepShape = z.object({
   executionMs: z.number().int().nullable(),
   /** The model a test step tests, from dbt's manifest (ADR 0129); absent from an older worker. */
   model: z.string().nullable().optional(),
+  /**
+   * Whether this build of a model or seed was published into the schema the BI login reads
+   * (ADR 0131); `null` for a test and for a step older than write-audit-publish, absent from
+   * an older worker.
+   */
+  promoted: z.boolean().nullable().optional(),
 });
 
 /**
@@ -97,8 +103,9 @@ export type BuildStarted = z.infer<typeof BuildStarted>;
 
 /**
  * How many rows a named model's table holds after this build, as the tenant's BI login counts
- * them. `null` when there is no count to give: the model did not build in this run (its table,
- * if any, is an earlier build's, and counting it would date an old figure to now), or the count
+ * them. `null` when there is no count to give: this run did not publish the model -- it did not
+ * build, or its tests held it back in staging (ADR 0131) -- so the table a dashboard reads, if
+ * any, is an earlier build's, and counting it would date an old figure to now; or the count
  * could not be read in time. Never `0` for either -- an empty table is the only zero.
  */
 export const ModelRowCount = z.object({ name: ModelName, rows: z.number().int().nullable() });
@@ -117,8 +124,9 @@ export const BuildModelResponse = z.object({
    */
   rowCounts: z.array(ModelRowCount).default([]),
   /**
-   * The first rows of the one model a selection names, once this build has built it; null when
-   * it did not build, or when the selection names several -- a page of each is a page nobody
+   * The first rows of the one model a selection names, once this build has published it, read
+   * as the BI login; null when it did not build or was held back (ADR 0131), or when the
+   * selection names several -- a page of each is a page nobody
    * asked for, and the counts say how much each holds.
    */
   preview: TableResult.nullable(),

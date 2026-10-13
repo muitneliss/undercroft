@@ -20,7 +20,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getModel, saveModel } from "@undercroft/db/repos";
+import { getModel, provisionTenantRoles, saveModel } from "@undercroft/db/repos";
 import { PASSWORD_VAR } from "@undercroft/db/services";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
@@ -104,6 +104,18 @@ afterEach(async () => {
   await db.close();
 });
 
+/** The relations in one schema, by name, read as the superuser. */
+async function relationsOf(schema: string): Promise<string[]> {
+  const { rows } = await db.asSuperuser((tx) =>
+    tx.query<{ name: string }>(
+      `SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = $1 AND c.relkind IN ('r', 'v', 'm') ORDER BY 1`,
+      [schema],
+    ),
+  );
+  return rows.map((r) => r.name);
+}
+
 describe("runTransform", () => {
   it("writes the tenant's project, passes the password by environment only, and cleans up", async () => {
     const seen: { last: Seen | null } = { last: null };
@@ -112,7 +124,7 @@ describe("runTransform", () => {
         seen.last = { cmd, options, files: readTree(options.cwd) };
         // What dbt would do, as the login dbt would be.
         await db.asRole("undercroft_dbt_case_1", (tx) =>
-          tx.exec("CREATE TABLE analytics_case_1.stg_deals AS SELECT 1 AS deal_id"),
+          tx.exec("CREATE TABLE staging_case_1.stg_deals AS SELECT 1 AS deal_id"),
         );
         writeResults(options.cwd, [MODEL_OK]);
         return { exitCode: 0, stdout: "Completed successfully", stderr: "" };
@@ -133,7 +145,7 @@ describe("runTransform", () => {
     expect(argv).toContain("--project-dir");
     expect(files["models/stg_deals.sql"]).toBe("select 1 as deal_id");
     expect(files["profiles.yml"]).toContain("user: undercroft_dbt_case_1");
-    expect(files["profiles.yml"]).toContain("schema: analytics_case_1");
+    expect(files["profiles.yml"]).toContain("schema: staging_case_1");
     expect(files["models/schema.yml"]).toContain("        data_tests:\n          - not_null\n");
     // The password: in the child's environment, in no file, and the directory is gone.
     const password = spawnOptions.env[PASSWORD_VAR] ?? "";
@@ -147,6 +159,10 @@ describe("runTransform", () => {
     // What was built is recorded for the editor: the relation's columns, as the tenant saw them.
     const model = await getModel(db, TENANT, "stg_deals");
     expect(model?.columns).toEqual(["deal_id"]);
+    // It had no test that failed, so it was published: moved out of staging into analytics.
+    expect(outcome.steps[0]?.promoted).toBe(true);
+    expect(await relationsOf("staging_case_1")).toEqual([]);
+    expect(await relationsOf("analytics_case_1")).toEqual(["stg_deals"]);
   });
 
   it("a build that ran and broke a model is an outcome with dbt's own message, not a throw", async () => {
@@ -182,7 +198,7 @@ describe("runTransform", () => {
     const outcome = await runTransform(
       deps(async (_cmd, options) => {
         await db.asRole("undercroft_dbt_case_1", (tx) =>
-          tx.exec("CREATE TABLE analytics_case_1.stg_deals AS SELECT 1 AS deal_id"),
+          tx.exec("CREATE TABLE staging_case_1.stg_deals AS SELECT 1 AS deal_id"),
         );
         writeResults(options.cwd, [
           MODEL_OK,
@@ -203,15 +219,18 @@ describe("runTransform", () => {
       { tenantId: TENANT },
     );
 
-    // The run is still ok -- the table was written and is served -- and the control plane reads
-    // its verdict as tests-failing from this count (ADR 0129). The status is not changed here.
+    // The run is still ok -- the model built -- and the control plane reads its verdict as
+    // tests-failing from this count (ADR 0129). The status is not changed here; what changed is
+    // that the rows the test refused were not published (ADR 0131).
     expect(outcome.ok).toBe(true);
     expect(outcome.testsFailed).toBe(1);
     // The failing test is attributed to the model it tests, from the manifest (ADR 0129).
-    expect(outcome.steps.map((s) => [s.kind, s.name, s.model ?? null])).toEqual([
-      ["model", "stg_deals", null],
-      ["test", "not_null_stg_deals_deal_id", "stg_deals"],
-    ]);
+    expect(outcome.steps.map((s) => [s.kind, s.name, s.model ?? null, s.promoted ?? null])).toEqual(
+      [
+        ["model", "stg_deals", null, false],
+        ["test", "not_null_stg_deals_deal_id", "stg_deals", null],
+      ],
+    );
   });
 
   it("dbt that could not run at all raises with its last lines, and the directory is still removed", async () => {
@@ -393,24 +412,201 @@ describe("runTransform, with the tenant's seeds (ADR 0128)", () => {
     await plantSeed();
     async function yml(): Promise<string> {
       const seen: { last: Seen | null } = { last: null };
-      await runTransform(deps(recording(seen, [SEED_OK])), { tenantId: TENANT });
+      // A load that errored is held, so the table standing in staging stays for the next build.
+      await runTransform(deps(recording(seen, [{ ...SEED_OK, status: "error" }])), {
+        tenantId: TENANT,
+      });
       return seen.last?.files["dbt_project.yml"] ?? "";
     }
     // The first build provisions the tenant's login; its load made the table, as that login.
     expect(await yml()).not.toContain("+full_refresh");
+    // A load held back stays in staging, where the next build loads again (ADR 0131).
     await db.asRole("undercroft_dbt_case_1", (tx) =>
-      tx.exec("CREATE TABLE analytics_case_1.account_groups (code text, budget numeric(18,4))"),
+      tx.exec("CREATE TABLE staging_case_1.account_groups (code text, budget numeric(18,4))"),
     );
     const matching = await yml();
     // The declaration changed since: `budget` was text, so a truncate-and-insert would cast every
     // amount into the old type.
     await db.asRole("undercroft_dbt_case_1", (tx) =>
-      tx.exec("ALTER TABLE analytics_case_1.account_groups ALTER COLUMN budget TYPE text"),
+      tx.exec("ALTER TABLE staging_case_1.account_groups ALTER COLUMN budget TYPE text"),
     );
     const changed = await yml();
 
     expect(matching).not.toContain("+full_refresh");
     expect(changed).toContain('    "account_groups":\n');
     expect(changed).toContain("      +full_refresh: true\n");
+  });
+});
+
+// ADR 0131 (issue 459): a build writes into staging, and only what passed reaches the schema the
+// BI login reads. A model whose new build fails keeps serving its last passing version.
+describe("runTransform, write-audit-publish", () => {
+  const PARENT_OK = MODEL_OK;
+  const CHILD_OK = {
+    ...MODEL_OK,
+    unique_id: "model.undercroft.fct_pipeline",
+    relation_name: '"undercroft"."staging_case_1"."fct_pipeline"',
+  };
+  const TEST = "test.undercroft.not_null_stg_deals_deal_id.a1";
+
+  function testResult(status: "pass" | "fail") {
+    return {
+      unique_id: TEST,
+      status,
+      message: status === "fail" ? "Got 1 result" : null,
+      failures: status === "fail" ? 1 : 0,
+      execution_time: 0.1,
+      relation_name: null,
+    };
+  }
+
+  /** dbt's manifest: the test hangs off stg_deals, and fct_pipeline reads stg_deals. */
+  function writeGraph(dir: string): void {
+    writeFileSync(
+      join(dir, "target", "manifest.json"),
+      JSON.stringify({
+        nodes: {
+          [TEST]: { attached_node: "model.undercroft.stg_deals" },
+          "model.undercroft.stg_deals": { depends_on: { nodes: [] } },
+          "model.undercroft.fct_pipeline": {
+            depends_on: { nodes: ["model.undercroft.stg_deals"] },
+          },
+        },
+      }),
+    );
+  }
+
+  /** A dbt that runs `sql` as the tenant's dbt login and reports `results`. */
+  function dbtThat(sql: string, results: unknown[]): Spawn {
+    return async (_cmd, options) => {
+      await db.asRole("undercroft_dbt_case_1", (tx) => tx.exec(sql));
+      writeResults(options.cwd, results);
+      writeGraph(options.cwd);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    };
+  }
+
+  /** What the BI login -- every dashboard -- reads of a published relation. */
+  async function biReads(relation: string): Promise<unknown[]> {
+    const { rows } = await db.asRole("undercroft_bi_case_1", (tx) =>
+      tx.query<{ deal_id: number | null }>(`SELECT deal_id FROM analytics_case_1.${relation}`),
+    );
+    return rows.map((r) => r.deal_id);
+  }
+
+  beforeEach(async () => {
+    await db.asSuperuser((tx) => provisionTenantRoles(tx, TENANT));
+    await db.asSuperuser((tx) =>
+      saveModel(tx, TENANT, {
+        name: "fct_pipeline",
+        sql: "select * from {{ ref('stg_deals') }}",
+        tests: { columns: {} },
+        updatedBy: "u-1",
+      }),
+    );
+  });
+
+  it("a build whose tests fail keeps the last passing rows published; its own wait in staging", async () => {
+    await runTransform(
+      deps(
+        dbtThat("CREATE TABLE staging_case_1.stg_deals AS SELECT 1 AS deal_id", [
+          PARENT_OK,
+          testResult("pass"),
+        ]),
+      ),
+      { tenantId: TENANT, select: ["stg_deals"] },
+    );
+    expect(await biReads("stg_deals")).toEqual([1]);
+
+    const failing = await runTransform(
+      deps(
+        dbtThat("CREATE TABLE staging_case_1.stg_deals AS SELECT NULL::int AS deal_id", [
+          PARENT_OK,
+          testResult("fail"),
+        ]),
+      ),
+      { tenantId: TENANT, select: ["stg_deals"] },
+    );
+
+    expect(failing.steps.find((s) => s.kind === "model")?.promoted).toBe(false);
+    expect(await biReads("stg_deals")).toEqual([1]);
+    expect(await relationsOf("staging_case_1")).toEqual(["stg_deals"]);
+    // The BI login cannot reach the rows that failed: it has no USAGE on staging.
+    await expect(
+      db.asRole("undercroft_bi_case_1", (tx) => tx.query("SELECT * FROM staging_case_1.stg_deals")),
+    ).rejects.toThrow("permission denied");
+  });
+
+  it("a first build that fails its tests publishes nothing at all", async () => {
+    const outcome = await runTransform(
+      deps(
+        dbtThat("CREATE TABLE staging_case_1.stg_deals AS SELECT NULL::int AS deal_id", [
+          PARENT_OK,
+          testResult("fail"),
+        ]),
+      ),
+      { tenantId: TENANT, select: ["stg_deals"] },
+    );
+
+    expect(outcome.steps.find((s) => s.kind === "model")?.promoted).toBe(false);
+    expect(await relationsOf("analytics_case_1")).toEqual([]);
+  });
+
+  it("a child built over a parent that was held is held with it, and both keep their old versions", async () => {
+    // Published before: the parent, and another model's view that reads it from outside the build.
+    await db.asRole("undercroft_dbt_case_1", (tx) =>
+      tx.exec(`CREATE TABLE analytics_case_1.stg_deals AS SELECT 1 AS deal_id;
+               CREATE TABLE analytics_case_1.fct_pipeline AS SELECT 1 AS deal_id;
+               CREATE VIEW analytics_case_1.v_deals AS SELECT deal_id FROM analytics_case_1.stg_deals`),
+    );
+
+    const outcome = await runTransform(
+      deps(
+        dbtThat(
+          `CREATE TABLE staging_case_1.stg_deals AS SELECT 2 AS deal_id;
+           CREATE TABLE staging_case_1.fct_pipeline AS SELECT * FROM staging_case_1.stg_deals`,
+          [PARENT_OK, testResult("pass"), CHILD_OK],
+        ),
+      ),
+      { tenantId: TENANT, select: ["stg_deals+"] },
+    );
+
+    // The parent passed its tests, but dropping its published version would take the view with
+    // it: it is held, and the child, built from its staging rows, is held too.
+    expect(
+      outcome.steps.filter((s) => s.kind === "model").map((s) => [s.name, s.promoted]),
+    ).toEqual([
+      ["stg_deals", false],
+      ["fct_pipeline", false],
+    ]);
+    expect(outcome.heldByViews).toEqual(new Map([["stg_deals", ["v_deals"]]]));
+    expect(await biReads("stg_deals")).toEqual([1]);
+    expect(await biReads("fct_pipeline")).toEqual([1]);
+  });
+
+  it("a view promoted with the table it reads replaces both, and BI reads the new rows through it", async () => {
+    await db.asRole("undercroft_dbt_case_1", (tx) =>
+      tx.exec(`CREATE TABLE analytics_case_1.stg_deals AS SELECT 1 AS deal_id;
+               CREATE VIEW analytics_case_1.fct_pipeline AS
+                 SELECT deal_id FROM analytics_case_1.stg_deals`),
+    );
+
+    const outcome = await runTransform(
+      deps(
+        dbtThat(
+          `CREATE TABLE staging_case_1.stg_deals AS SELECT 2 AS deal_id;
+           CREATE VIEW staging_case_1.fct_pipeline AS SELECT deal_id FROM staging_case_1.stg_deals`,
+          [PARENT_OK, testResult("pass"), CHILD_OK],
+        ),
+      ),
+      { tenantId: TENANT, select: ["stg_deals+"] },
+    );
+
+    expect(outcome.steps.filter((s) => s.promoted === true).map((s) => s.name)).toEqual([
+      "stg_deals",
+      "fct_pipeline",
+    ]);
+    expect(await biReads("fct_pipeline")).toEqual([2]);
+    expect(await relationsOf("staging_case_1")).toEqual([]);
   });
 });

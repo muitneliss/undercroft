@@ -163,6 +163,13 @@ export interface RunStep {
    * exactly one model, and for a step recorded before the attribution existed. Absent is `null`.
    */
   readonly model?: string | null | undefined;
+  /**
+   * Whether this build of a model or seed was promoted into the analytics schema the BI login
+   * reads (ADR 0131): `true` published, `false` held back in staging, its previous version
+   * still serving. `null` for a test step, and for a step recorded before write-audit-publish,
+   * when a successful build was itself the served version. Absent is `null`.
+   */
+  readonly promoted?: boolean | null | undefined;
 }
 
 /**
@@ -452,14 +459,16 @@ export async function recordSteps(
   }
   await exec.query(
     `INSERT INTO ops.run_step
-       (run_id, unique_id, kind, name, status, failures, relation, message, execution_ms, model)
+       (run_id, unique_id, kind, name, status, failures, relation, message, execution_ms, model,
+        promoted)
      SELECT $1, s->>'uniqueId', s->>'kind', s->>'name', s->>'status',
             (s->>'failures')::int, s->>'relation', left(s->>'message', $3), (s->>'executionMs')::int,
-            s->>'model'
+            s->>'model', (s->>'promoted')::boolean
      FROM jsonb_array_elements($2::jsonb) AS s
      ON CONFLICT (run_id, unique_id) DO UPDATE SET
        status = EXCLUDED.status, failures = EXCLUDED.failures, relation = EXCLUDED.relation,
-       message = EXCLUDED.message, execution_ms = EXCLUDED.execution_ms, model = EXCLUDED.model`,
+       message = EXCLUDED.message, execution_ms = EXCLUDED.execution_ms, model = EXCLUDED.model,
+       promoted = EXCLUDED.promoted`,
     [runId, JSON.stringify(steps), MAX_ERROR_CHARS],
   );
 }
@@ -1056,8 +1065,10 @@ export async function stepsFor(exec: SqlExecutor, runId: string): Promise<RunSte
     message: string | null;
     execution_ms: number | null;
     model: string | null;
+    promoted: boolean | null;
   }>(
-    `SELECT unique_id, kind, name, status, failures, relation, message, execution_ms, model
+    `SELECT unique_id, kind, name, status, failures, relation, message, execution_ms, model,
+            promoted
      FROM ops.run_step WHERE run_id = $1 ORDER BY kind, name`,
     [runId],
   );
@@ -1071,5 +1082,6 @@ export async function stepsFor(exec: SqlExecutor, runId: string): Promise<RunSte
     message: r.message,
     executionMs: r.execution_ms,
     model: r.model,
+    promoted: r.promoted,
   }));
 }

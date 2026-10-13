@@ -94,6 +94,7 @@ export {
   latestTestsPerModel,
   type ModelTestRecord,
   type TestStepRecord,
+  type UnpublishedBuild,
 } from "./testOutcomes.ts";
 export {
   claimExternalRun,

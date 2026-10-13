@@ -72,3 +72,56 @@ export function testedModels(manifest: unknown): Map<string, string> {
   }
   return byTest;
 }
+
+/** The prefixes of the manifest nodes a build makes a relation for: what may be promoted. */
+const RELATION_NODES = ["model.", "seed."] as const;
+
+function relationNodeName(id: unknown): string | null {
+  if (typeof id !== "string" || !RELATION_NODES.some((prefix) => id.startsWith(prefix))) {
+    return null;
+  }
+  const name = id.split(".")[2] ?? "";
+  return name === "" ? null : name;
+}
+
+/** The models and seeds a manifest node depends on, by name. */
+function relationDependencies(node: Record<string, unknown>): string[] {
+  const dependsOn = isRecord(node.depends_on) ? node.depends_on : {};
+  const nodes = Array.isArray(dependsOn.nodes) ? dependsOn.nodes : [];
+  return [...new Set(nodes.flatMap((id) => relationNodeName(id) ?? []))];
+}
+
+/**
+ * What a build's graph says promotion needs to know (ADR 0131), from dbt's manifest:
+ *
+ * - `parents`: each model and seed, by name, with the models and seeds it reads. A child must
+ *   not be published over a parent this build held back: it was built from that parent's
+ *   staging rows, and a view over them would read staging from analytics.
+ * - `testReads`: each test, by unique id, with the models and seeds it reads -- the nodes a
+ *   failing test the attribution could not place may be about.
+ *
+ * A node the manifest does not list is absent, which the promotion reads as "not known", never
+ * as "has no parents". A manifest that is not dbt's shape gives two empty maps.
+ */
+export function buildGraph(manifest: unknown): {
+  readonly parents: Map<string, string[]>;
+  readonly testReads: Map<string, string[]>;
+} {
+  const nodes = isRecord(manifest) && isRecord(manifest.nodes) ? manifest.nodes : {};
+  const parents = new Map<string, string[]>();
+  const testReads = new Map<string, string[]>();
+  for (const [uniqueId, node] of Object.entries(nodes)) {
+    if (!isRecord(node)) {
+      continue;
+    }
+    if (uniqueId.startsWith("test.")) {
+      testReads.set(uniqueId, relationDependencies(node));
+      continue;
+    }
+    const name = relationNodeName(uniqueId);
+    if (name !== null) {
+      parents.set(name, relationDependencies(node));
+    }
+  }
+  return { parents, testReads };
+}

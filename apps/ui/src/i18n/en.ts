@@ -1469,6 +1469,10 @@ export const en = {
     testsWarnings_other: "{{countText}} warnings",
     failingTestsNote: "Failing tests in build {{runId}}: {{tests}}.",
     warningTestsNote: "Tests that warned in build {{runId}}: {{tests}}.",
+    unpublishedNote:
+      "Reports read the last passing version, from build {{runId}}. Build {{heldRunId}} did not pass, so it was not published.",
+    noPassingVersionNote:
+      "No passing version yet: build {{heldRunId}} did not pass, so it was not published, and Reports cannot read this model yet.",
     parentTestsUnknown:
       "This build read parent models with no test record: {{models}}. Check them before trusting its figures.",
     buildOk: "Built",
@@ -1794,6 +1798,10 @@ export const en = {
     qualifierFailingNoRun: "Tests failing on {{table}}.",
     qualifierFailingTests: "Failing tests: {{tests}}.",
     qualifierUnknown: "No test record for {{table}}.",
+    qualifierHeld:
+      "{{table}} is the last passing version, from run {{runId}}; the current build, run {{heldRunId}}, is failing and was not published.",
+    qualifierHeldNoVersion:
+      "The current build of {{table}}, run {{heldRunId}}, is failing and was not published.",
     qualifiersNotKnown: "The test state of the tables this answer read is not known.",
     viewerNote: "You can read and run this question. Editing and saving need the member role.",
     viewerNew: "Asking a new question needs the member role.",

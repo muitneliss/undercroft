@@ -6,8 +6,9 @@
  * qualifiers (`answerQualifiers.ts`), and the guard in front of a build that would copy a
  * parent's rows (`modelBuild.ts`) -- so the three cannot word one ledger three ways.
  *
- * The record is the ledger's (`latestTestsPerModel`): the model's latest SUCCESSFUL build and
- * the tests attributed to it in that run. From it:
+ * The record is the ledger's (`latestTestsPerModel`): the model's latest PUBLISHED build -- the
+ * one promoted into analytics, whose rows are served (ADR 0131) -- and the tests attributed to it
+ * in that run, plus the newest build since that was held back in staging. From it:
  *
  * - `failing` when any of those tests failed (`fail`) or could not run (`error`): the same two
  *   statuses the run's own `testsFailed` counts, so a model and its run never disagree.
@@ -17,10 +18,18 @@
  * - `unknown` otherwise: the model never built, its build ran no test attributed to it (it has
  *   none, or every one was skipped), or its steps predate the attribution. NEVER passing: the
  *   absence of a failing test is not a passing one (CLAUDE.md rule 2).
+ *
+ * Beside the state, `unpublished` names a newer build that was held back: "the last passing
+ * version is from run X; the current build, run Y, is failing". With `runId` null it is the
+ * first build of a model that has never had a passing version, and nothing of it is served.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
-import { latestTestsPerModel, type ModelTestRecord } from "@undercroft/db/repos";
+import {
+  latestTestsPerModel,
+  type ModelTestRecord,
+  type UnpublishedBuild,
+} from "@undercroft/db/repos";
 
 export type TestStateName = "passing" | "failing" | "unknown";
 
@@ -40,9 +49,15 @@ export interface TestSummary {
   readonly failing: number | null;
   /** How many tests warned; `null` when the state is unknown. */
   readonly warnings: number | null;
-  /** The build whose tests these are; `null` when the model never built successfully. */
+  /** The published build whose tests these are; `null` when none was ever published. */
   readonly runId: string | null;
   readonly endedAt: string | null;
+  /**
+   * The newest build since the published one that was held back in staging -- it failed, its
+   * tests did, or a parent of it did (ADR 0131) -- or `null` when there is none. Its rows are
+   * not served; the published version's are, if there is one.
+   */
+  readonly unpublished: UnpublishedBuild | null;
 }
 
 /** A model's test state in full, as `get` shows it: which tests failed and which warned. */
@@ -62,13 +77,14 @@ function viewOf(test: ModelTestRecord["tests"][number]): TestStepView {
 
 /** The state one ledger record comes to; no record at all is a model that never built. */
 export function testStateOf(record: ModelTestRecord | undefined): TestDetail {
-  if (record === undefined) {
+  if (record === undefined || record.runId === null) {
     return {
       state: "unknown",
       failing: null,
       warnings: null,
       runId: null,
       endedAt: null,
+      unpublished: record?.unpublished ?? null,
       failingTests: [],
       warningTests: [],
     };
@@ -85,6 +101,7 @@ export function testStateOf(record: ModelTestRecord | undefined): TestDetail {
     warnings: state === "unknown" ? null : warningTests.length,
     runId: record.runId,
     endedAt: record.endedAt,
+    unpublished: record.unpublished,
     failingTests,
     warningTests,
   };
@@ -98,6 +115,7 @@ export function summaryOf(detail: TestDetail): TestSummary {
     warnings: detail.warnings,
     runId: detail.runId,
     endedAt: detail.endedAt,
+    unpublished: detail.unpublished,
   };
 }
 
