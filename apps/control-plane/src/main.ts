@@ -351,6 +351,9 @@ if (publicUrl === undefined || (email === undefined && lark === undefined)) {
 const uiDist = optional("UNDERCROFT_UI_DIST");
 // The tag the image was built from (telemetry reads it too), which `/mcp` reports as its version.
 const release = optional("UNDERCROFT_RELEASE");
+// The CLI the image packed from its own sources (ADR 0135); unset from a checkout, which then
+// serves none rather than whatever an earlier pack left in `apps/cli/dist`.
+const cliTarball = optional("UNDERCROFT_CLI_TARBALL");
 const app = createServer({
   exec,
   // Not spread conditionally: an empty set is the honest answer for an install that names
@@ -368,9 +371,9 @@ const app = createServer({
   ...(worker === undefined ? {} : { worker }),
   ...(assistant === undefined ? {} : { assistant }),
   ...(judge === undefined ? {} : { judge }),
-  // `/mcp`'s widgets and skills, and the specs the card judges a grant by: a failure in any is
-  // logged and serves without it.
-  ...(await readImageFiles(log)),
+  // `/mcp`'s widgets and skills, the specs the card judges a grant by, and the CLI tarball the
+  // image packed: a failure in any is logged and serves without it.
+  ...(await readImageFiles(log, cliTarball === undefined ? {} : { cliTarball })),
   log,
 });
 

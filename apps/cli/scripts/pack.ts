@@ -1,9 +1,15 @@
 /**
  * Pack the CLI as the tarball each release attaches: `undercroft-cli-X.Y.Z.tgz`.
  *
- * Distribution is a GitHub release asset, not an npm registry (ADR 0044): the skill runs
- * `npx -y --package=<release URL> undercroft ...`, so installing the skill is how the CLI
- * gets installed, and there is no second place a version can be published from.
+ * Distribution is not an npm registry (ADR 0044). The control plane's image packs it with this
+ * script and serves it at `/cli/undercroft-cli.tgz`, so a person installs the CLI of the very
+ * server they sign in to (ADR 0135); each release also attaches it, for a person with access to
+ * the repository.
+ *
+ * Packed by `bun pm pack`, not `npm pack`, because the image that builds it has Bun and no Node:
+ * the tarball is the same npm layout (`package/...`), and `task ci:cli-pack-check` proves npm
+ * installs and runs it. Bun also stamps every entry with one fixed time, so the same sources
+ * pack to the same bytes wherever they are packed.
  *
  * The package is staged from nothing rather than packed from `apps/cli`, whose `package.json`
  * is a workspace manifest -- `workspace:*` dependencies, a build that needs the router. What
@@ -57,22 +63,17 @@ export async function packCli(outdir: string): Promise<string> {
     );
     copyFileSync(join(REPO, "LICENSE"), join(staging, "LICENSE"));
     mkdirSync(outdir, { recursive: true });
-    const packed = Bun.spawnSync(["npm", "pack", "--json", "--pack-destination", outdir], {
-      cwd: staging,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    // Named here rather than read back from the tool's output, so the file is the release's
+    // name whatever the packer's own naming rules become.
+    const tarball = join(outdir, `undercroft-cli-${version}.tgz`);
+    const packed = Bun.spawnSync(
+      [process.execPath, "pm", "pack", "--quiet", "--ignore-scripts", "--filename", tarball],
+      { cwd: staging, stdout: "pipe", stderr: "pipe" },
+    );
     if (packed.exitCode !== 0) {
-      throw new Error(`npm pack failed:\n${packed.stderr.toString()}`);
+      throw new Error(`bun pm pack failed:\n${packed.stderr.toString()}`);
     }
-    const listing: unknown = JSON.parse(packed.stdout.toString());
-    const [first] = Array.isArray(listing) ? listing : [];
-    const filename: unknown =
-      typeof first === "object" && first !== null ? Reflect.get(first, "filename") : null;
-    if (typeof filename !== "string") {
-      throw new Error("npm pack did not name the tarball it wrote");
-    }
-    return join(outdir, filename);
+    return tarball;
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }

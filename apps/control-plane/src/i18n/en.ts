@@ -241,4 +241,8 @@ export const en = {
     notFound:
       "There is no such export. A link expires after {{minutes}} minutes and works only for the person who asked for it; ask for the export again.",
   },
+  cli: {
+    absent:
+      "No CLI is served at this address. A server built from a release serves its own CLI at /cli/undercroft-cli.tgz; one started from a source checkout serves none.",
+  },
 };

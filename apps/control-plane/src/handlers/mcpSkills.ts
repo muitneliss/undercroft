@@ -60,8 +60,8 @@ export const NO_SKILLS: readonly Skill[] = [];
 const TTL_MS = 5 * 60 * 1000;
 
 /**
- * The same for every caller: the skills are the public repository's, and no answer depends on
- * who asked. So a host may share what it cached across the people it serves.
+ * The same for every caller: the skills are the files this release carries, and no answer
+ * depends on who asked. So a host may share what it cached across the people it serves.
  */
 const CACHE = { resultType: "complete", ttlMs: TTL_MS, cacheScope: "public" } as const;
 

@@ -35,8 +35,9 @@ The skills need a door. Give the agent one of these:
 
 - **MCP:** connect the host to `https://<your control plane>/mcp`, as
   [connecting over MCP](mcp-setup.md) describes. The skills then use the `undercroft` tools.
-- **The CLI:** nothing to do. With no MCP tools present, the `undercroft` skill installs its
-  pinned CLI release on first use. [The CLI](cli.md#as-an-agent) covers it.
+- **The CLI:** nothing to do. With no MCP tools present, the `undercroft` skill installs the
+  CLI from your own server on first use, and asks you for its address.
+  [The CLI](cli.md#running-it) covers it.
 
 ### Moving from `undercroft-cli`
 

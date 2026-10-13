@@ -133,6 +133,45 @@ describe("a deploy reaches a tab that is already open", () => {
   });
 });
 
+describe("the server hands out the CLI of its own build (ADR 0135)", () => {
+  // Any bytes do: the route's promise is to serve what the image carried, unchanged.
+  const tarball = new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0x2a]);
+
+  it("serves the tarball the image carried, as a tarball", async () => {
+    const app = createServer({ exec: noDatabase, uiDist: dist, cliTarball: tarball });
+
+    const response = await app.fetch(new Request("http://c/cli/undercroft-cli.tgz"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/gzip");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(tarball);
+  });
+
+  it("is a 404 in the caller's language, not the app shell, where the image carried none", async () => {
+    // A server started from a checkout. Behind the catch-all this was a 200 of index.html, which
+    // npm fails on as TAR_BAD_ARCHIVE -- a corrupt release, as far as the person can tell.
+    const app = createServer({ exec: noDatabase, uiDist: dist });
+
+    const response = await app.fetch(
+      new Request("http://c/cli/undercroft-cli.tgz", { headers: { "accept-language": "en" } }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-type")).toContain("text/plain");
+    expect(await response.text()).toContain("No CLI is served at this address");
+  });
+
+  it("is a 404 for any other name under /cli/, even where the tarball is carried", async () => {
+    // The versioned name a release attaches is a guess an agent makes; it gets no HTML either.
+    const app = createServer({ exec: noDatabase, uiDist: dist, cliTarball: tarball });
+
+    const response = await app.fetch(new Request("http://c/cli/undercroft-cli-1.0.0.tgz"));
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).not.toContain("<title>");
+  });
+});
+
 describe("a refusal over /trpc names its code and nothing of the server", () => {
   it("a caller with no session gets the code without a stack (issue 152)", async () => {
     // Anyone on the internet can reach this branch. tRPC attaches `data.stack` -- absolute

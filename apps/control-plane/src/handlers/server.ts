@@ -22,6 +22,7 @@ import { adminStandingIn } from "../services/authz.ts";
 import { NO_SUPERADMINS } from "../services/superadmin.ts";
 import { unavailableJudge } from "../services/assistant/judge.ts";
 import { registerAssistantRoutes } from "./chat.ts";
+import { registerCliRoute } from "./cli.ts";
 import {
   apiContext,
   bearerContext,
@@ -247,6 +248,10 @@ export function createServer(deps: ServerDeps): Hono {
   });
 
   registerExportDownload(app, deps);
+
+  // The CLI of this build (ADR 0135). Before the catch-all, so a server with no tarball answers
+  // npm a 404 rather than a 200 of HTML it would fail on as a corrupt archive.
+  registerCliRoute(app, deps.cliTarball);
 
   // Registered LAST, so /api and /trpc above always win over the catch-all. A request for a
   // real built asset gets that file; anything else gets index.html, because the router lives

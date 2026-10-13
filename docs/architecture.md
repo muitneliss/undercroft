@@ -194,15 +194,16 @@ does not. Only the control plane is reachable from the internet, through Dokploy
 Routes are registered in `apps/control-plane/src/handlers/server.ts`, in this order. The order
 matters, because the SPA catch-all comes last.
 
-| Route                                                    | What it serves                                                                                                                                      |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/health`                                        | Liveness, used by the deploy smoke test                                                                                                             |
-| `ALL /api/auth/*`, `ALL /.well-known/*`                  | Better Auth: sessions, the email code, Google sign-in, and the OAuth authorization server for MCP                                                   |
-| `GET /oauth/:provider/callback`                          | Where Google or Xero sends an admin back after consenting a connection                                                                              |
-| `ALL /trpc/*`                                            | `appRouter`, cookie session only. Used by the SPA and the CLI.                                                                                      |
-| `POST /api/assistant/chat`, `GET /api/assistant/history` | The assistant ([ADR 0029](adr/0029-the-assistant-is-an-interleaf.md))                                                                               |
-| `ALL /mcp`                                               | Stateless MCP server, bearer only                                                                                                                   |
-| `GET /*`                                                 | The SPA. A missing `/assets/` file is a 404, never `index.html` ([ADR 0070](adr/0070-a-tab-a-deploy-left-behind-reloads-when-it-loses-nothing.md)). |
+| Route                                                    | What it serves                                                                                                                                         |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/health`                                        | Liveness, used by the deploy smoke test                                                                                                                |
+| `ALL /api/auth/*`, `ALL /.well-known/*`                  | Better Auth: sessions, the email code, Google sign-in, and the OAuth authorization server for MCP                                                      |
+| `GET /oauth/:provider/callback`                          | Where Google or Xero sends an admin back after consenting a connection                                                                                 |
+| `ALL /trpc/*`                                            | `appRouter`, cookie session only. Used by the SPA and the CLI.                                                                                         |
+| `POST /api/assistant/chat`, `GET /api/assistant/history` | The assistant ([ADR 0029](adr/0029-the-assistant-is-an-interleaf.md))                                                                                  |
+| `ALL /mcp`                                               | Stateless MCP server, bearer only                                                                                                                      |
+| `GET /cli/undercroft-cli.tgz`                            | The CLI tarball packed in this image, unauthenticated; 404 under `/cli/` where there is none ([ADR 0135](adr/0135-the-instance-serves-its-own-cli.md)) |
+| `GET /*`                                                 | The SPA. A missing `/assets/` file is a 404, never `index.html` ([ADR 0070](adr/0070-a-tab-a-deploy-left-behind-reloads-when-it-loses-nothing.md)).    |
 
 ### The worker's HTTP surface
 

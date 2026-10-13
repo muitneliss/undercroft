@@ -6,11 +6,14 @@
  * through the same `readSkills` `/mcp` uses. This suite holds what only the release and the
  * repository's own files can say, and every failure here is silent anywhere else.
  *
- * The `undercroft` skill runs the CLI from a pinned release URL, in `references/cli.md`: if
- * release-please bumped the root version without bumping that one (its `extra-files`), every
- * agent would keep running the last release's CLI against this release's server, with
- * nothing to say so. The CLI's own `package.json` version is what names the tarball that URL
- * fetches, so it is held to the same number.
+ * The `undercroft` skill installs the CLI from the person's own server, which serves the CLI of
+ * its own build (ADR 0135), and `references/cli.md` names the release whose commands and codes
+ * it describes. An agent compares that with `undercroft --version` to know whether the file it
+ * is following is the one for the CLI it is running: if release-please bumped the root version
+ * without bumping that one (its `extra-files`), every agent following this release's file would
+ * read its own CLI as a mismatch, or the last release's file as a match, with nothing to say so.
+ * The CLI's own `package.json` version is what the tarball and `--version` report, so it is
+ * held to the same number.
  *
  * No network: it reads the files. `task ci:skill-check` is the network half.
  */
@@ -32,16 +35,16 @@ function versionOf(file: string): string {
 
 // release-please bumps the pinned block (`extra-files`), so it is held to the release. The
 // README pins nothing: it is an index, and a person's install lines live in the CLI runbook.
-it("pins the CLI of the release it ships in", () => {
+it("names the release it ships in as the one it describes", () => {
   const pinned =
     /<!-- x-release-please-start-version -->(?<block>[\s\S]*?)<!-- x-release-please-end -->/u.exec(
       CLI,
     )?.groups?.block;
   const versions = [...(pinned ?? "").matchAll(/\d+\.\d+\.\d+/gu)].map(([version]) => version);
 
-  // Exactly ONE mention, which the tag and the tarball's name both read through `$v`.
-  // release-please's generic updater rewrites only the first version on a line, so the 1.20.0
-  // release left `.../download/v1.20.0/undercroft-cli-1.19.1.tgz` -- a URL that 404s.
+  // Exactly ONE mention. release-please's generic updater rewrites only the first version on a
+  // line, so a second one would be left behind: the 1.20.0 release, when this block was the
+  // install URL, left `.../download/v1.20.0/undercroft-cli-1.19.1.tgz` -- a URL that 404s.
   expect(versions).toEqual([versionOf("package.json")]);
 });
 

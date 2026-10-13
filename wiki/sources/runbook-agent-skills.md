@@ -5,7 +5,7 @@ date: 2026-10-13
 tags: []
 source: docs/runbook/agent-skills.md
 source_path: docs/runbook/agent-skills.md
-source_hash: e9bd6e2a0e7c7d2105759986221184844c6f3bf119f502cd9c850ecf7ce189e6
+source_hash: cc355f8db39d86171e063a8abf49b49780fbe9ab5fcfb8b8aa202950e21af463
 ingested: 2026-10-13
 ---
 
@@ -15,7 +15,7 @@ How to install, use and add Undercroft's published Agent Skills; the decisions a
 
 **The skills.** `undercroft` is the entry: which door to use, how an operation is spelled on each, what a refusal means, what only the person can do, how to report a defect; read before any other. `undercroft-model-builder` turns data into an answer, a report or a model ([[ADR 0114 The Model Builder Finds Out What Is Needed Before It Builds Anything]]): it inventories what the tenant already has, finds out what the person needs, and picks the smallest change -- a look at the data, a question or dashboard over existing models, a change to a model or macro, or a new model. Nothing is written before the plan is approved; a model is checked with `models.check`, previewed with `models.preview` ([[ADR 0132 A Model Is Previewed by Compiling It, Not by Building It]]), and saved and built on two separate yeses. Both live in `skills/` at the repository root, the only copy.
 
-**Installing.** `npx skills add muitneliss/undercroft` installs every skill; `--skill <name> --agent claude-code|codex -y` installs one without prompts, `-g` for every project. With MCP tools present the skills use them; otherwise the `undercroft` skill installs its pinned CLI release on first use. Moving from releases before 1.41: `npx skills remove undercroft-cli`, then `npx skills add muitneliss/undercroft`; the CLI's commands, error codes and the MCP tools are unchanged.
+**Installing.** `npx skills add muitneliss/undercroft` installs every skill; `--skill <name> --agent claude-code|codex -y` installs one without prompts, `-g` for every project. With MCP tools present the skills use them; otherwise the `undercroft` skill installs the CLI from the person's own server on first use, asking for its address ([[ADR 0135 The Instance Serves Its Own CLI]]). Moving from releases before 1.41: `npx skills remove undercroft-cli`, then `npx skills add muitneliss/undercroft`; the CLI's commands, error codes and the MCP tools are unchanged.
 
 **Over MCP.** `/mcp` serves the same skills through the MCP Skills extension (`skills/list`, files at `skill://<name>/<path>`), declared only when it has skills to serve. As of September 2026 no Claude host reads them and ChatGPT reads a static snapshot, so Claude Code and Codex install with `npx skills`. `npx @modelcontextprotocol/inspector --cli <url>/mcp --transport http --header "Authorization: Bearer upat_…" --method skills/list --verify` checks a server: exit 0 conforms, 7 is a violation.
 

@@ -27,7 +27,21 @@ COPY apps ./apps
 RUN bun install --frozen-lockfile
 RUN cd apps/ui && bun run build
 
-# --- stage 2: the runtime ----------------------------------------------------
+# --- stage 2: pack the CLI ---------------------------------------------------
+#
+# The CLI of this very build, which the server hands out at `/cli/undercroft-cli.tgz` (ADR
+# 0135): a person installs it from the server they sign in to, and it lists exactly the
+# procedures this image's router has. Packed by the script every release packs with
+# (`build:cli-pack`), on the dev install stage 1 already made -- the bundle reads the router at
+# build time -- and renamed to the one name the server is told. The script copies the
+# repository's LICENSE into the package, so it comes too. JavaScript, like stage 1, so on the
+# build platform.
+FROM ui AS cli
+
+COPY LICENSE ./
+RUN mv "$(bun run --silent build:cli-pack)" /app/undercroft-cli.tgz
+
+# --- stage 3: the runtime ----------------------------------------------------
 FROM oven/bun:1.4.2-slim
 
 WORKDIR /app
@@ -42,6 +56,11 @@ ENV UNDERCROFT_UI_DIST=/app/apps/ui/dist
 ARG UNDERCROFT_RELEASE=""
 ENV UNDERCROFT_RELEASE=${UNDERCROFT_RELEASE}
 
+# The CLI tarball from stage 2, which the server serves. Named here rather than looked for, so a
+# process started from a checkout, which sets none, serves none (`apps/control-plane/src/
+# cliTarball.ts`).
+ENV UNDERCROFT_CLI_TARBALL=/app/cli/undercroft-cli.tgz
+
 COPY package.json bun.lock ./
 COPY packages ./packages
 COPY apps ./apps
@@ -50,6 +69,7 @@ RUN bun install --frozen-lockfile --production
 # The built assets, from stage 1. `apps/ui/dist` is not in the source tree, so this brings
 # it in on top of the source copied above.
 COPY --from=ui /app/apps/ui/dist ./apps/ui/dist
+COPY --from=cli /app/undercroft-cli.tgz /app/cli/undercroft-cli.tgz
 
 # The Kestra flows and the script that delivers them. The host's checkout is `main`, not the
 # release, so the `kestra-flows` one-shot runs from this image and a flow ships with the
