@@ -49,8 +49,8 @@ tasks:
     desc: >-
       Attach the packed CLI to the GitHub release TAG (after task build:cli-pack), under its
       versioned name and as undercroft-cli.tgz. Usage: task cd:cli-upload TAG=v1.2.3 -- needs
-      GH_TOKEN. The versioned file is what the skill pins; the plain one is what the README's
-      releases/latest/download URL installs.
+      GH_TOKEN. A server serves its own CLI (ADR 0135); these are for a person with access to
+      the repository whose server is older and serves none.
     requires:
       vars: [TAG]
     vars:

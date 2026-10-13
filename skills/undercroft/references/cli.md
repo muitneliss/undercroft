@@ -5,28 +5,43 @@ CLI's source, in `apps/cli/src/services/output.ts`; this page states it for a re
 
 ## Install it
 
-This file is written for one release of the CLI, and this line installs it:
+Install the CLI from the person's own Undercroft: the address they open in a browser to sign
+in, which you ask them for when you do not know it. Each server serves the CLI of its own
+build, so its commands are always that server's:
+
+```sh
+npm install -g "https://<their Undercroft>/cli/undercroft-cli.tgz"
+```
 
 <!-- x-release-please-start-version -->
 
-```sh
-v=1.76.0; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"
-```
+This file describes the commands and error codes of release 1.76.0.
 
 <!-- x-release-please-end -->
 
 Before your first command in a session, run `undercroft --version`. It prints
 `undercroft/<version> <platform> <node>`.
 
-- **It prints the version in the line above.** The CLI is ready.
-- **The command is not found.** Tell the person you are installing the Undercroft CLI, then
-  run the line above.
-- **It prints a different version.** The person installed another release. Ask them before
-  you replace it with the line above, because this file's commands and error codes are the
-  ones that release has.
+- **It prints the version above.** The CLI is ready.
+- **The command is not found.** Tell the person you are installing the Undercroft CLI from
+  their server, then run the line above.
+- **It prints a different version.** Either the CLI came from another server, or their
+  server runs another release than this file describes. Ask the person before you replace it
+  with the line above, because the CLI their server serves is the one that matches it. If the
+  version still differs after that, the server is the other release: before each command, run
+  `undercroft describe <command> --agent`, which describes the installed CLI exactly, and
+  trust it over this file.
+- **npm fails with `404` or `TAR_BAD_ARCHIVE`.** The server serves no CLI: it runs a release
+  from before servers served one, or it was started from a source checkout. The release it
+  runs, such as `v1.2.3`, is printed at the foot of every page of its web UI and on its
+  sign-in page; ask the person for it. With access to the Undercroft repository
+  (`gh auth status` says so), download that release's CLI and install the file:
+  `gh release download v1.2.3 --repo muitneliss/undercroft --pattern 'undercroft-cli-1.2.3.tgz'`,
+  then `npm install -g ./undercroft-cli-1.2.3.tgz`. Without access, tell the person. Do not
+  install a different release instead.
 - **`npm install -g` fails with `EACCES`.** Do not use `sudo`. Run each command through `npx`
   from the same URL instead:
-  `npx -y --package="<the URL above, with the version filled in>" undercroft <command> --agent`.
+  `npx -y --package="https://<their Undercroft>/cli/undercroft-cli.tgz" undercroft <command> --agent`.
 
 The CLI needs Node 22 or newer. When `node --version` is older, stop and tell the person.
 

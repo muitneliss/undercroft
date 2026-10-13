@@ -449,4 +449,14 @@ export const vi = {
     notFound:
       "Không có bản xuất này. Liên kết hết hạn sau {{minutes}} phút và chỉ dùng được cho người đã yêu cầu; hãy yêu cầu xuất lại.",
   },
+
+  /**
+   * `/cli/` (ADR 0135): what a person or npm is told where no CLI tarball is served -- a server
+   * started from a checkout, or a name under `/cli/` that is not the tarball's. A 404, never the
+   * app shell, which npm would fail on as a corrupt archive.
+   */
+  cli: {
+    absent:
+      "Không có CLI nào ở địa chỉ này. Máy chủ dựng từ một bản phát hành phục vụ CLI của chính nó tại /cli/undercroft-cli.tgz; máy chủ chạy từ mã nguồn thì không có.",
+  },
 };

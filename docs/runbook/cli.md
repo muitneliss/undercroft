@@ -6,31 +6,43 @@ how to change it.
 
 ## Running it
 
-| Where                        | Command                                                                                                              |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| In this repo                 | `task dev:cli -- <command>`: builds the bundle, then runs it under `node`                                            |
-| Anywhere, the newest release | `npm install -g https://github.com/muitneliss/undercroft/releases/latest/download/undercroft-cli.tgz`                |
-| Anywhere, one exact release  | `v=X.Y.Z; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"`     |
-| For an agent, via a skill    | `npx skills add muitneliss/undercroft --skill undercroft [--agent claude-code\|codex] -y`, and the skill installs it |
+| Where                          | Command                                                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| In this repo                   | `task dev:cli -- <command>`: builds the bundle, then runs it under `node`                                                                        |
+| From the server you sign in to | `npm install -g https://<your Undercroft>/cli/undercroft-cli.tgz`                                                                                |
+| One exact release, from GitHub | `gh release download vX.Y.Z --repo muitneliss/undercroft --pattern 'undercroft-cli-X.Y.Z.tgz'`, then `npm install -g ./undercroft-cli-X.Y.Z.tgz` |
+| For an agent, via a skill      | `npx skills add muitneliss/undercroft --skill undercroft [--agent claude-code\|codex] -y`, and the skill installs it                             |
 
 It needs Node 22 or newer. `npm uninstall -g undercroft-cli` removes it.
 
-Each release attaches the same tarball twice, as `undercroft-cli-X.Y.Z.tgz` and as
-`undercroft-cli.tgz`. GitHub resolves `releases/latest/download/<name>` only for a name that
-every release shares, so the unversioned copy is what gives "the newest release" one fixed
-URL. `task cd:cli-upload` attaches both. ADR 0046.
+Every server serves the CLI of its own build at `/cli/undercroft-cli.tgz`, with no sign-in, so
+the CLI you install from it lists exactly the commands that server has. Run the line again
+after the server is upgraded. ADR 0135.
 
-The skill pins its release instead of taking the newest one, because its text documents one
-release's commands and error codes. Before its first command, the agent runs
-`undercroft --version`. It installs the pinned release when the CLI is missing, and asks the
-person first when a different release is installed. When a global install is refused, it
-runs the same pinned URL through `npx` instead.
+A server answers that URL with a 404 when it carries no CLI: one started from a checkout
+(`task dev:run`), where `task dev:cli` is the way in. A server whose release is older than the
+first to serve one answers with its web page instead, and npm fails with `TAR_BAD_ARCHIVE`.
+For either, with access to the repository, install the release the server runs from GitHub, as
+in the table: the release is printed at the foot of every page and on the sign-in page. The
+repository is private (ADR 0121), so a GitHub release URL given straight to npm is a 404 even to
+someone who can read it; `gh` downloads it with your own sign-in.
 
-The version is written ONCE, in `v`, because release-please's generic updater rewrites only
-the first version on a line. The 1.20.0 release bumped the tag in the pinned URL and left the
-tarball's name at 1.19.1, which is a 404. `skills/undercroft/references/cli.md` pins its line
-this way, and `scripts/skills.test.ts` fails when its pinned block holds more than one version or a
-version other than the release's. The README pins nothing; it links here.
+The image packs the tarball in its own build with `apps/cli/scripts/pack.ts`, the script behind
+`task build:cli-pack` and so the same one that packs the file each release attaches, and names
+it in `UNDERCROFT_CLI_TARBALL`. A server with that unset serves no CLI, even when a tarball from an
+earlier pack is lying in `apps/cli/dist/`, because that one need not match it.
+
+The skill installs the CLI from the person's server too. Before its first command, the agent
+runs `undercroft --version` and compares it with the release
+`skills/undercroft/references/cli.md` says it describes. It installs the CLI when it is
+missing, and asks the person first when a different release is installed. When a global
+install is refused, it runs the same URL through `npx` instead.
+
+That release is written ONCE in the file's pinned block, because release-please's generic
+updater rewrites only the first version on a line: the 1.20.0 release, when the block was a
+GitHub URL, bumped the tag and left the tarball's name at 1.19.1, which is a 404.
+`scripts/skills.test.ts` fails when the pinned block holds more than one version or a version
+other than the release's. The README pins nothing; it links here.
 
 ## First use, as a person
 
@@ -143,22 +155,25 @@ It never prints the session itself.
   `@undercroft/control-plane/testing`.
 - **The package** is checked by `task ci:cli-pack-check`, which packs the tarball and runs it
   through `npx`. **The skill** is checked by `task ci:skill-check`, which needs the network.
-- **A release** attaches the tarball on its own, under both names. The `release-cli` job in
-  `release.yml` runs `task build:cli-pack`, then `task cd:cli-upload TAG=vX.Y.Z`.
+- **A release** carries the tarball twice. The control plane's image packs it in its own
+  build stage and serves it at `/cli/undercroft-cli.tgz` (`deploy/Dockerfile.control-plane`).
+  The `release-cli` job in `release.yml` runs `task build:cli-pack`, then
+  `task cd:cli-upload TAG=vX.Y.Z`, which attaches it to the release under both names.
   release-please bumps the version in `skills/undercroft/references/cli.md` and
   `apps/cli/package.json` along with the root.
 
 ## When it goes wrong
 
-| Symptom                                                    | Cause                                                                                                                                     |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `CONFIG_REQUIRED`                                          | No `--profile`, `--url` or default profile, a profile that does not exist, or an unreadable config file. Run `config set-profile`.        |
-| `AUTHENTICATION_REQUIRED` right after signing in           | A different origin: `localhost` and `127.0.0.1` are two. Check `config show`.                                                             |
-| `WRITES_DISABLED`                                          | The profile does not allow writes, or you used `--url`. A person turns it on at a terminal.                                               |
-| `PERMISSION_DENIED` from `auth login` on a desktop install | The profile says `127.0.0.1` and the install is at `localhost`, or the other way round. The message names the address to use.             |
-| `INVALID_ARGUMENT` from `auth login --local`               | The URL is not on this machine. Signing in without a code works only on loopback; use `--email`.                                          |
-| `auth login` asks for an email on a desktop install        | The server offers the emailed code as well, or is too old to say what it offers. Pass `--local`.                                          |
-| `CONFLICT` with `TENANT_DEACTIVATED` in its details        | An admin deactivated the customer. Every command on it is refused until an admin reactivates it, on the web or with `tenants reactivate`. |
-| `NETWORK_ERROR` against a URL that is up                   | Nothing there answers `/trpc` as tRPC. Use the control plane's origin, or the Vite dev server that proxies to it.                         |
-| No colour in human mode                                    | `--no-color`, or `NO_COLOR` set in the environment.                                                                                       |
-| `npm install -g` fails with `EACCES`                       | Node is installed system-wide. Use a Node you own (nvm, fnm, Homebrew) rather than `sudo`.                                                |
+| Symptom                                                           | Cause                                                                                                                                                                 |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CONFIG_REQUIRED`                                                 | No `--profile`, `--url` or default profile, a profile that does not exist, or an unreadable config file. Run `config set-profile`.                                    |
+| `AUTHENTICATION_REQUIRED` right after signing in                  | A different origin: `localhost` and `127.0.0.1` are two. Check `config show`.                                                                                         |
+| `WRITES_DISABLED`                                                 | The profile does not allow writes, or you used `--url`. A person turns it on at a terminal.                                                                           |
+| `PERMISSION_DENIED` from `auth login` on a desktop install        | The profile says `127.0.0.1` and the install is at `localhost`, or the other way round. The message names the address to use.                                         |
+| `INVALID_ARGUMENT` from `auth login --local`                      | The URL is not on this machine. Signing in without a code works only on loopback; use `--email`.                                                                      |
+| `auth login` asks for an email on a desktop install               | The server offers the emailed code as well, or is too old to say what it offers. Pass `--local`.                                                                      |
+| `CONFLICT` with `TENANT_DEACTIVATED` in its details               | An admin deactivated the customer. Every command on it is refused until an admin reactivates it, on the web or with `tenants reactivate`.                             |
+| `NETWORK_ERROR` against a URL that is up                          | Nothing there answers `/trpc` as tRPC. Use the control plane's origin, or the Vite dev server that proxies to it.                                                     |
+| `npm install` from a server fails with `404` or `TAR_BAD_ARCHIVE` | The server serves no CLI: it was started from a checkout, or its release is older than the first to serve one. Install that release from GitHub, as under Running it. |
+| No colour in human mode                                           | `--no-color`, or `NO_COLOR` set in the environment.                                                                                                                   |
+| `npm install -g` fails with `EACCES`                              | Node is installed system-wide. Use a Node you own (nvm, fnm, Homebrew) rather than `sudo`.                                                                            |

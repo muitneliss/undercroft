@@ -35,12 +35,12 @@ import type { Assistant } from "../services/assistant/agent.ts";
 import type { Judge } from "../services/assistant/judge.ts";
 import type { Auth } from "./auth.ts";
 import { type OAuthRefused, oauthCredential } from "./mcpAccessToken.ts";
-import type { Skill } from "./mcpSkills.ts";
-import type { Widgets } from "./mcpWidgets.ts";
+import type { ImageFiles } from "./imageFiles.ts";
 import { channelOf } from "./channel.ts";
 import type { Context, SessionUser, Via } from "./trpc.ts";
 
-export interface ServerDeps {
+/** What the server is built from: its configuration, plus what the image carries. */
+export interface ServerDeps extends ImageFiles {
   readonly exec: SqlExecutor;
   /**
    * Sign-in. When unset — a test of static serving, or a process deliberately started with
@@ -102,24 +102,6 @@ export interface ServerDeps {
    * `services/assistant/judge.ts`; a gate that fails open is not a gate.
    */
   readonly judge?: Judge;
-  /**
-   * The model-context door's widgets, built once at boot (`widgets.ts`). Absent -- a build that
-   * failed, or a suite that does not draw -- and `/mcp` answers exactly as before, text and
-   * structured content, which every host shows. ADR 0061.
-   */
-  readonly widgets?: Widgets;
-  /**
-   * The repository's skills, read once at boot (`skills.ts`), which `/mcp` serves through the
-   * MCP Skills extension. Absent or empty -- a tree that failed to read -- and the extension
-   * is not declared; every tool is served exactly as before. ADR 0067.
-   */
-  readonly skills?: readonly Skill[];
-  /**
-   * The lists each connector spec the image carries reads, read once at boot (`specs.ts`), by
-   * which the card judges whether a grant still reads any of them (ADR 0073). Absent -- a suite
-   * that lists no cards, or a tree that failed to read -- and every grant is judged whole.
-   */
-  readonly specReads?: SpecReads;
   /**
    * Where a failed procedure is recorded, with the request's trace id. Absent in a suite that
    * does not read it; the process always passes one, because an internal error the browser is
