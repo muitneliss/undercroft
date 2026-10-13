@@ -77,7 +77,7 @@ export const procedureSentences: SentenceTable = {
     "One hash for each of the customer's models, macros and questions and one over all of them, from what each save wrote: equal means nothing changed.",
   "models.get": "One dbt model, its SQL and tests, with their hashes.",
   "models.save":
-    "Store a dbt model; runs nothing. The SQL and tests already stored answer unchanged: true and change nothing. Admins.",
+    "Store a dbt model; runs nothing. tests: columns maps a column to not_null, unique, {kind: accepted_values, values, quote?} or {kind: relationships, to, field}; sql lists SQL tests {name, sql}, each a select of the rows that break a rule; any test takes severity error or warn. A SQL test or relationships that models.check finds an error in is refused and nothing is written. The SQL and tests already stored answer unchanged: true and change nothing. Admins.",
   "models.delete":
     "Delete a dbt model with the table it built and the rows its tests stored; deletes nothing if the table could not be dropped. Admins.",
   "models.build":
@@ -87,7 +87,7 @@ export const procedureSentences: SentenceTable = {
   "models.reference":
     "Reference material for a model's author: the sources, the platform's macros and the customer's own. parts for only some of sources, platformMacros and tenantMacros; the first two are the same text on every call.",
   "models.check":
-    "Check a model's SQL before saving it, running nothing: certain errors, suspicions, and what could not be checked.",
+    "Check a model's SQL and its tests before saving it, running nothing: certain errors, suspicions, and what could not be checked; a finding in a test names it in test.",
   "macros.list":
     "The customer's own dbt macros, each with what it is for, its parameters and the hashes of its definition and description, no definition. names or match to narrow.",
   "macros.get": "One of the customer's dbt macros, its definition and their hashes.",

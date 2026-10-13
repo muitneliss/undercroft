@@ -22,12 +22,20 @@ export function findingSentence(locale: Locale, code: FindingCode, subject: stri
   return messages(locale)(`modelCheck.finding.${code}`, { subject: subject ?? "" });
 }
 
+/** A finding's sentence, led by the test it is in when it is about one of the model's tests. */
+export function testedFindingSentence(locale: Locale, finding: Finding): string {
+  const message = findingSentence(locale, finding.code, finding.subject);
+  return finding.test === undefined
+    ? message
+    : messages(locale)("modelCheck.inTest", { test: finding.test, message });
+}
+
 export function wordCheck(locale: Locale, checked: ModelCheck): WordedCheck {
   const t = messages(locale);
   return {
     findings: checked.findings.map((finding) => ({
       ...finding,
-      message: findingSentence(locale, finding.code, finding.subject),
+      message: testedFindingSentence(locale, finding),
     })),
     unverified: checked.unverified.map((code) => ({
       code,
