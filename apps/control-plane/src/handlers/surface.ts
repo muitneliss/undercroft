@@ -53,6 +53,12 @@ export type { CLI_HEADER } from "./channel.ts";
  * in the browser spells them as `typeof READ_SCOPE`, so the two cannot drift.
  */
 export type { READ_SCOPE, WRITE_SCOPE } from "../services/connectedApps.ts";
+/**
+ * What a `/mcp` result carries beyond the procedure's answer, as TYPES a widget spells its reads
+ * with (`typeof WIDGET_CALL_META`), each defined beside the one function that writes it.
+ */
+export type { CLIPPED_NOTES_FIELD } from "./mcpAnswers.ts";
+export type { WIDGET_ANSWER_META, WIDGET_CALL_META } from "./mcpWidgets.ts";
 
 type RouterRecord = AppRouter["_def"]["record"];
 
@@ -299,23 +305,24 @@ export type WidgetPaths<W extends WidgetId> = {
 }[keyof typeof MCP_WIDGETS];
 
 /**
- * The `_meta` key a widget-drawn result carries, saying which procedure answered and for which
- * tenant (`resultMeta` in `mcpWidgets.ts`). A widget reads it as `typeof WIDGET_CALL_META`, so
- * the two cannot spell it differently.
+ * The procedures a widget asks for itself, through the host (`app.callServerTool`), and which
+ * widget asks. The run widget polls the run and its feed (`runStatus.ts`). A widget may call only
+ * a path named here -- its tool names are typed against this table -- because a widget reads its
+ * answer whole from `_meta` (`WIDGET_ANSWER_META`), and the door puts it there only for a path
+ * some widget reads.
  */
-export const WIDGET_CALL_META = "undercroft/call";
-
-export interface WidgetCall {
-  readonly path: ProcedurePath;
-  /** The tenant the call named, echoed; `null` for a call that named none. */
-  readonly tenantId: string | null;
-}
+export const WIDGET_READS = {
+  "runs.get": "run",
+  "runs.events": "run",
+} as const satisfies WidgetTable;
 
 /**
- * What a procedure's answer is as a tool's `structuredContent`: the wire form (`OutputOf`), and
- * because structured content must be an object, a list as `{ items }` and anything else that is
- * not an object as `{ value }`. `mcpAnswers.ts` does this at run time; this is the same rule for
- * the compiler, so a widget reading `items` breaks when a procedure stops answering a list.
+ * What a procedure's answer is as a tool's content: the wire form (`OutputOf`), and because
+ * structured content must be an object, a list as `{ items }` and anything else that is not an
+ * object as `{ value }`. `mcpAnswers.ts` does this at run time; this is the same rule for the
+ * compiler, so a widget reading `items` breaks when a procedure stops answering a list. It is the
+ * shape of the whole answer in `_meta` (`WIDGET_ANSWER_META`) and of `structuredContent`, whose
+ * top-level lists may be clipped.
  */
 export type ToolContentOf<P extends ProcedurePath> =
   OutputOf<P> extends readonly unknown[]

@@ -6,7 +6,8 @@
  * result and may call tools itself, through the host, over this same door and this same
  * credential. A host that does not speak it ignores all of this and shows the text and the
  * structured content every result carries anyway -- a widget is a way of drawing an answer,
- * never the only place the answer is.
+ * never the only place the answer is. Those two are bounded for the model's sake (ADR 0122), so
+ * the widget's copy of the answer, the whole one, travels in the result's `_meta`.
  *
  * What this module owns is the door's half: which `ui://` address each widget has, what a
  * widget-drawn tool says about itself, and what a widget-drawn result carries so the widget
@@ -21,13 +22,27 @@
 
 import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 import type { ReadResourceResult, Resource } from "@modelcontextprotocol/server";
-import {
-  MCP_WIDGETS,
-  type ProcedurePath,
-  type WidgetCall,
-  type WidgetId,
-  WIDGET_CALL_META,
-} from "./surface.ts";
+import { MCP_WIDGETS, type ProcedurePath, type WidgetId, WIDGET_READS } from "./surface.ts";
+
+/**
+ * The `_meta` key a widget-drawn result carries, saying which procedure answered and for which
+ * tenant (`resultMeta`). A widget reads it as `typeof WIDGET_CALL_META`, re-exported as a type by
+ * `surface.ts`, so the two cannot spell it differently.
+ */
+export const WIDGET_CALL_META = "undercroft/call";
+
+/**
+ * The `_meta` key a result carries its WHOLE answer under, for a path a widget draws or reads
+ * (`MCP_WIDGETS`, `WIDGET_READS`): the tool content (`ToolContentOf`) before any clip. Typed for
+ * the widgets the same way. ADR 0122.
+ */
+export const WIDGET_ANSWER_META = "undercroft/answer";
+
+interface WidgetCall {
+  readonly path: ProcedurePath;
+  /** The tenant the call named, echoed; `null` for a call that named none. */
+  readonly tenantId: string | null;
+}
 
 /** Each widget's page, as built at boot. An empty map is a door with no widgets. */
 export type Widgets = ReadonlyMap<WidgetId, string>;
@@ -46,11 +61,20 @@ const NAMES: Readonly<Record<WidgetId, string>> = {
 };
 
 const WIDGETS_BY_PATH: ReadonlyMap<string, WidgetId> = new Map(Object.entries(MCP_WIDGETS));
+const READERS_BY_PATH: ReadonlyMap<string, WidgetId> = new Map(Object.entries(WIDGET_READS));
+
+function built(id: WidgetId | undefined, widgets: Widgets): WidgetId | null {
+  return id !== undefined && widgets.has(id) ? id : null;
+}
 
 /** The widget that draws `path`'s answer, if one does and it was built. */
 function widgetFor(path: ProcedurePath, widgets: Widgets): WidgetId | null {
-  const id = WIDGETS_BY_PATH.get(path);
-  return id !== undefined && widgets.has(id) ? id : null;
+  return built(WIDGETS_BY_PATH.get(path), widgets);
+}
+
+/** The widget that asks for `path` itself, if one does and it was built. */
+function readerFor(path: ProcedurePath, widgets: Widgets): WidgetId | null {
+  return built(READERS_BY_PATH.get(path), widgets);
 }
 
 /**
@@ -69,8 +93,17 @@ export function toolMeta(
 }
 
 /**
- * A result's `_meta` for a widget-drawn tool: which procedure answered and for which tenant.
+ * A result's `_meta` for a path a widget draws or reads, or `undefined` for one no built widget
+ * touches.
  *
+ * It carries the WHOLE answer (`WIDGET_ANSWER_META`), because what reaches the model is bounded
+ * (`answered` in `mcpAnswers.ts`) and a widget draws every row it was given, up to its own cap:
+ * a grid of the first 50 rows of a 500-row answer, or a run's feed missing its latest events,
+ * would show a person less than they asked for. MCP Apps hands a result's `_meta` to the widget
+ * and keeps it out of the model's context, both for the result the host draws and for one the
+ * widget asks for itself (`WIDGET_READS`). ADR 0122.
+ *
+ * A drawn result also says which procedure answered and for which tenant (`WIDGET_CALL_META`).
  * The widget needs both and cannot be sure of either otherwise. The host's context names the
  * tool only optionally, and the run widget asks `runs.get` about a run it knows by id alone --
  * `runs.trigger` answers `{ runId }` -- so it needs the tenant the call was made in. Both are
@@ -80,13 +113,14 @@ export function resultMeta(
   path: ProcedurePath,
   args: Record<string, unknown> | undefined,
   widgets: Widgets,
+  whole: Record<string, unknown>,
 ): Record<string, unknown> | undefined {
   if (widgetFor(path, widgets) === null) {
-    return undefined;
+    return readerFor(path, widgets) === null ? undefined : { [WIDGET_ANSWER_META]: whole };
   }
   const tenantId = args?.tenantId;
   const call: WidgetCall = { path, tenantId: typeof tenantId === "string" ? tenantId : null };
-  return { [WIDGET_CALL_META]: call };
+  return { [WIDGET_CALL_META]: call, [WIDGET_ANSWER_META]: whole };
 }
 
 export function listResources(widgets: Widgets): Resource[] {

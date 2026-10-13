@@ -41,7 +41,7 @@ import type { Hono } from "hono";
 import { messages } from "../i18n/index.ts";
 import { READ_SCOPE } from "../services/connectedApps.ts";
 import type { BearerRefusal, RefusalReason } from "./context.ts";
-import { answered, refused, refusedBy } from "./mcpAnswers.ts";
+import { answered, refused, refusedBy, toolContent } from "./mcpAnswers.ts";
 import {
   NO_SKILLS,
   readSkillFile,
@@ -172,8 +172,9 @@ async function callTool(
   return procedure(args ?? {}).then(
     (result) => {
       logCall(deps, { ctx, tool, outcome: "ok" });
-      const meta = resultMeta(spec.path, args, widgets);
-      return { ...answered(ctx.locale, result), ...(meta === undefined ? {} : { _meta: meta }) };
+      const whole = toolContent(result);
+      const meta = resultMeta(spec.path, args, widgets, whole);
+      return { ...answered(ctx.locale, whole), ...(meta === undefined ? {} : { _meta: meta }) };
     },
     (error: unknown) => failed(deps, ctx, tool, error),
   );

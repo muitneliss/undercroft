@@ -25,7 +25,9 @@ import { procedureSentences as en } from "../i18n/procedures.en.ts";
 import { z } from "zod";
 import { readSkills, SKILLS_ROOT } from "../skills.ts";
 import { createContext } from "./context.ts";
+import { CLIPPED_NOTES_FIELD } from "./mcpAnswers.ts";
 import { SKILLS_EXTENSION } from "./mcpSkills.ts";
+import { WIDGET_ANSWER_META } from "./mcpWidgets.ts";
 import { appRouter } from "./router.ts";
 import { MCP_EXCLUDED, SESSION_ONLY } from "./surface.ts";
 
@@ -292,7 +294,20 @@ describe("another tenant's data", () => {
 });
 
 describe("a long answer", () => {
-  it("is whole in structuredContent, and the model's text says where it was cut", async () => {
+  /** The text blocks a result carries: the JSON first, then one note per cut. */
+  function texts(result: { content?: unknown }): string[] {
+    return (result.content as { type: string; text: string }[]).map((part) => part.text);
+  }
+
+  /** The whole answer a result carries for a widget, if it carries one. */
+  function whole(result: { _meta?: unknown }): Record<string, unknown> | null {
+    const meta: unknown = result._meta;
+    const answer: unknown =
+      typeof meta === "object" && meta !== null ? Reflect.get(meta, WIDGET_ANSWER_META) : null;
+    return typeof answer === "object" && answer !== null ? { ...answer } : null;
+  }
+
+  it("is clipped alike in the text and in structuredContent, each naming the cut", async () => {
     await plane.db.query(
       `INSERT INTO ops.run (id, tenant_id, source, verb, status)
        SELECT 'run-' || g, $1, 'xero', 'ingest', 'ok' FROM generate_series(1, 60) g`,
@@ -305,12 +320,76 @@ describe("a long answer", () => {
     });
     await client.close();
 
-    const { items } = content(result);
-    const texts = (result.content as { type: string; text: string }[]).map((part) => part.text);
-    expect({ whole: Array.isArray(items) ? items.length : null, note: texts[1] }).toEqual({
-      whole: 60,
-      note: "This text shows 50 of the 60 items in items. The complete result is in structuredContent.",
+    const { items, [CLIPPED_NOTES_FIELD]: notes } = content(result);
+    const note =
+      "This answer holds 50 of the 60 items in items. The rest was not sent: call again with a narrower scope (a filter, a limit or a cursor, where the tool takes one) to read it.";
+    expect({
+      structured: Array.isArray(items) ? items.length : null,
+      notes,
+      text: texts(result).slice(1),
+      widget: whole(result),
+    }).toEqual({ structured: 50, notes: [note], text: [note], widget: null });
+  });
+
+  it("past the bound, has no structuredContent; a widget still gets every row", async () => {
+    const wide = "x".repeat(1500);
+    plane.worker.answering({
+      columns: [{ name: "wide", type: "text" }],
+      rows: Array.from({ length: 120 }, () => [wide]),
+      truncated: false,
     });
+    const client = await connect(await mint("read"), "en");
+    const result = await client.callTool({
+      name: "bi_answer",
+      arguments: { tenantId: OWN, definition: { kind: "sql", sql: "select wide" } },
+    });
+    await client.close();
+
+    const [json = "", ...notes] = texts(result);
+    const { rows } = whole(result) ?? {};
+    expect({
+      structured: result.structuredContent,
+      textBytes: new TextEncoder().encode(json).length <= 60 * 1024,
+      notes,
+      widgetRows: Array.isArray(rows) ? rows.length : null,
+    }).toEqual({
+      structured: undefined,
+      textBytes: true,
+      notes: [
+        "This answer holds 50 of the 120 items in rows. The rest was not sent: call again with a narrower scope (a filter, a limit or a cursor, where the tool takes one) to read it.",
+        "This answer was cut at 60 KB and has no structuredContent. The rest was not sent: call again with a narrower scope (a filter, a limit or a cursor, where the tool takes one) to read it.",
+      ],
+      widgetRows: 120,
+    });
+  });
+
+  it("that a widget polls for itself is whole for the widget, newest events included", async () => {
+    await plane.db.asSuperuser(async (tx) => {
+      await tx.query(
+        "INSERT INTO ops.run (id, tenant_id, source, verb, status) VALUES ('run-1', $1, 'xero', 'ingest', 'running')",
+        [OWN],
+      );
+      await tx.query(
+        `INSERT INTO ops.run_event (run_id, level, event)
+         SELECT 'run-1', 'info', 'step-' || g FROM generate_series(1, 60) g`,
+      );
+    });
+    const client = await connect(await mint("read"), "en");
+    const result = await client.callTool({
+      name: "runs_events",
+      arguments: { tenantId: OWN, runId: "run-1" },
+    });
+    await client.close();
+
+    function newest(feed: unknown): unknown {
+      return Array.isArray(feed)
+        ? feed.map((event: { event?: unknown }) => event.event).at(-1)
+        : null;
+    }
+    expect({
+      model: newest(content(result).items),
+      widget: newest(whole(result)?.items),
+    }).toEqual({ model: "step-50", widget: "step-60" });
   });
 });
 

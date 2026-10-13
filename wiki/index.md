@@ -125,6 +125,7 @@
 - [ADR 0119 Who Has Access to a Customer Is Read by Its Admin Alone](sources/adr-0119-who-has-access-to-a-customer-is-read-by-its-admin-alone.md)
 - [ADR 0120 An Agent's Reads, and Every Sign-In Event, Are on the Record](sources/adr-0120-an-agent-s-reads-and-every-sign-in-event-are-on-the-record.md)
 - [ADR 0121 Dokploy Clones the Private Repository over SSH, with a Read-Only Deploy Key](sources/adr-0121-dokploy-clones-the-private-repository-over-ssh-with-a-read-only-deploy-key.md)
+- [ADR 0122 What a Model Reads over MCP Is Bounded in Every Copy](sources/adr-0122-what-a-model-reads-over-mcp-is-bounded-in-every-copy.md)
 - [ADR 0125 A Read Names Its Target: Lineage, Schema and Scope Reads Narrow, and Never Guess](sources/adr-0125-a-read-names-its-target-lineage-schema-and-scope-reads-narrow-and-never-guess.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)

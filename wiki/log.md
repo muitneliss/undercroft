@@ -359,4 +359,7 @@
 ## [2026-10-10] ingest | ADR 0120 An Agent's Reads, and Every Sign-In Event, Are on the Record
 ## [2026-10-11] ingest | ADR 0121 Dokploy Clones the Private Repository over SSH, with a Read-Only Deploy Key
 ## [2026-10-11] ingest | Runbook Deployment
+## [2026-10-13] ingest | ADR 0122 What a Model Reads over MCP Is Bounded in Every Copy
+## [2026-10-13] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-13] ingest | ADR 0122 What a Model Reads over MCP Is Bounded in Every Copy
 ## [2026-10-13] ingest | ADR 0125 A Read Names Its Target: Lineage, Schema and Scope Reads Narrow, and Never Guess

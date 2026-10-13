@@ -1,14 +1,23 @@
 /**
- * What a tool call answers over `/mcp`: a result, or a refusal. ADR 0060.
+ * What a tool call answers over `/mcp`: a result, or a refusal. ADR 0060, ADR 0122.
  *
- * A RESULT is the whole answer in `structuredContent`, as it would have crossed `/trpc`, and a
- * JSON text for the model beside it. The text is bounded -- a model's context is not a data
- * channel -- and every cut is named in a worded note, because a list cut off silently reads as
- * all the rows there are (rule 2). Nothing is ever cut from `structuredContent`.
+ * A RESULT is bounded wherever a model might read it. It goes out as a JSON text and, beside it,
+ * the same answer as `structuredContent`, and a client may put either in the model's context --
+ * Claude Code puts the structured one. So both get the same clip: at most `ROWS_SHOWN` items of
+ * any top-level list, with one worded note per cut, because a list cut off silently reads as all
+ * the rows there are (rule 2). The text carries its notes as text beside it; the structured copy
+ * carries them in its own `CLIPPED_NOTES_FIELD`. An answer still over `KILOBYTES` after that is
+ * too big to be anyone's context: its text is cut at the bound and says so, and it has no
+ * structured copy at all, which no tool needs -- none declares an `outputSchema`.
+ *
+ * The whole answer is not lost: the procedure's own filters and pages reach the rest, and a
+ * widget, which needs every row it draws, gets it whole in `_meta` (`resultMeta` in
+ * `mcpWidgets.ts`), the lane MCP Apps delivers to the widget and keeps from the model.
  *
  * A REFUSAL is `isError` with the surface's own `code` -- the one the CLI's envelope carries and
  * an agent matches on -- a sentence in the caller's language, the facts the router named, and
  * the request's trace id, which is the one handle that leads an operator to the server's side.
+ * It is small, so its structured copy is never clipped.
  */
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
@@ -20,13 +29,21 @@ import { messages } from "../i18n/index.ts";
 import { BY_TRPC_CODE, type SurfaceErrorCode } from "./surface.ts";
 import { refusalFacts } from "./trpc.ts";
 
-/** How many items of any one list the model's text carries before the note takes over. */
-const ROWS_IN_TEXT = 50;
-/** The ceiling on the model's text, in kilobytes. The structured result is never clipped. */
-const TEXT_KILOBYTES = 60;
-const TEXT_BYTES = TEXT_KILOBYTES * 1024;
+/** How many items of any one top-level list a result carries before a note takes over. */
+const ROWS_SHOWN = 50;
+/** The ceiling on what a result carries for a model to read, in kilobytes of JSON. */
+const KILOBYTES = 60;
+const BOUND_BYTES = KILOBYTES * 1024;
 /** A replacement character left where a byte cut split a UTF-8 sequence. */
 const SPLIT_CHARACTER = /�$/u;
+
+/**
+ * The field of a clipped `structuredContent` that holds the worded notes on what was cut from it,
+ * one per cut, in the caller's language; absent when nothing was cut. Spelled with a `/` so it
+ * cannot be a procedure's own field, every one of which is a bare identifier. A widget reads it as
+ * `typeof CLIPPED_NOTES_FIELD`, re-exported as a type by `surface.ts`.
+ */
+export const CLIPPED_NOTES_FIELD = "undercroft/clipped";
 
 /** What a refusal is called here: the surface's codes, and the grant's own. */
 export type RefusalCode = SurfaceErrorCode | "WRITES_DISABLED";
@@ -36,11 +53,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * The answer as it would have crossed `/trpc`: JSON, no transformer (`OutputOf` in
- * `surface.ts`), so a `Date` is the ISO string the other doors see. `structuredContent` must
- * be an object, so a list is `{ items }` and a bare value is `{ value }`.
+ * The answer as it would have crossed `/trpc` (`ToolContentOf` in `surface.ts`): JSON, no
+ * transformer (`OutputOf`), so a `Date` is the ISO string the other doors see. Tool content must
+ * be an object, so a list is `{ items }` and a bare value is `{ value }`. This is the WHOLE answer;
+ * `answered` bounds it.
  */
-function structured(result: unknown): Record<string, unknown> {
+export function toolContent(result: unknown): Record<string, unknown> {
   const wire: unknown = result === undefined ? null : JSON.parse(JSON.stringify(result));
   if (isRecord(wire)) {
     return wire;
@@ -48,37 +66,43 @@ function structured(result: unknown): Record<string, unknown> {
   return Array.isArray(wire) ? { items: wire } : { value: wire };
 }
 
+function texts(json: string, notes: readonly string[]): CallToolResult["content"] {
+  return [
+    { type: "text", text: json },
+    ...notes.map((note) => ({ type: "text" as const, text: note })),
+  ];
+}
+
 /**
- * The text the model reads: the same JSON, clipped to `ROWS_IN_TEXT` items per top-level list
- * and to `TEXT_KILOBYTES`, with one worded note per cut naming what was cut.
+ * A procedure's answer (`toolContent`), as a tool's result: the bounded text and structured
+ * copy the module note describes. The whole answer is the caller's to carry elsewhere.
  */
-function forTheModel(locale: Locale, result: Record<string, unknown>): CallToolResult["content"] {
+export function answered(locale: Locale, whole: Record<string, unknown>): CallToolResult {
   const t = messages(locale);
   const notes: string[] = [];
   const shown: Record<string, unknown> = {};
-  for (const [field, value] of Object.entries(result)) {
-    if (Array.isArray(value) && value.length > ROWS_IN_TEXT) {
-      shown[field] = value.slice(0, ROWS_IN_TEXT);
+  for (const [field, value] of Object.entries(whole)) {
+    if (Array.isArray(value) && value.length > ROWS_SHOWN) {
+      shown[field] = value.slice(0, ROWS_SHOWN);
       notes.push(
-        t("mcp.rowsClipped", { shown: String(ROWS_IN_TEXT), total: String(value.length), field }),
+        t("mcp.rowsClipped", { shown: String(ROWS_SHOWN), total: String(value.length), field }),
       );
     } else {
       shown[field] = value;
     }
   }
-  let text = JSON.stringify(shown);
-  const bytes = new TextEncoder().encode(text);
-  if (bytes.length > TEXT_BYTES) {
-    text = new TextDecoder().decode(bytes.subarray(0, TEXT_BYTES)).replace(SPLIT_CHARACTER, "");
-    notes.push(t("mcp.textClipped", { kilobytes: String(TEXT_KILOBYTES) }));
+  const json = JSON.stringify(shown);
+  const bytes = new TextEncoder().encode(json);
+  if (bytes.length <= BOUND_BYTES) {
+    return {
+      structuredContent: notes.length === 0 ? shown : { ...shown, [CLIPPED_NOTES_FIELD]: notes },
+      content: texts(json, notes),
+    };
   }
-  return [{ type: "text", text }, ...notes.map((note) => ({ type: "text" as const, text: note }))];
-}
-
-/** A procedure's answer, as a tool's result. */
-export function answered(locale: Locale, result: unknown): CallToolResult {
-  const whole = structured(result);
-  return { structuredContent: whole, content: forTheModel(locale, whole) };
+  const cut = new TextDecoder().decode(bytes.subarray(0, BOUND_BYTES)).replace(SPLIT_CHARACTER, "");
+  return {
+    content: texts(cut, [...notes, t("mcp.textClipped", { kilobytes: String(KILOBYTES) })]),
+  };
 }
 
 export function refused(code: RefusalCode, message: string, details?: unknown): CallToolResult {

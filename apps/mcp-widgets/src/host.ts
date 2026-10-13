@@ -21,7 +21,12 @@ import {
   type McpUiHostContext,
   type McpUiToolResultNotification,
 } from "@modelcontextprotocol/ext-apps/app-with-deps";
-import type { WIDGET_CALL_META } from "@undercroft/control-plane/surface";
+import type {
+  CLIPPED_NOTES_FIELD,
+  WIDGET_ANSWER_META,
+  WIDGET_CALL_META,
+  WIDGET_READS,
+} from "@undercroft/control-plane/surface";
 import type { Locale } from "@undercroft/core/locale";
 import { localeOf, type Words, wordsFor } from "./i18n.ts";
 
@@ -47,8 +52,11 @@ export interface Host {
   readonly onTeardown: (stop: () => void) => void;
 }
 
-/** The key the door writes a call's identity under; typed against the door's own constant. */
+/** The keys the door writes a result's call and whole answer under; typed against its own. */
 const CALL_META: typeof WIDGET_CALL_META = "undercroft/call";
+const ANSWER_META: typeof WIDGET_ANSWER_META = "undercroft/answer";
+/** The field of a clipped `structuredContent` holding the door's notes on what it cut. */
+const CLIPPED_FIELD: typeof CLIPPED_NOTES_FIELD = "undercroft/clipped";
 
 /**
  * The page's own style. Every colour is the host's variable where it sends one and the
@@ -117,6 +125,50 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function refusalMessage(result: ToolResult): string {
   const content: unknown = result.structuredContent;
   return isRecord(content) && typeof content.message === "string" ? content.message : "";
+}
+
+/** What a widget draws from. */
+export interface Answer {
+  /** The procedure's answer as `ToolContentOf` shapes it, or `null` when the host gave neither copy. */
+  readonly content: Record<string, unknown> | null;
+  /** The door's worded notes on what `content` leaves out, in the caller's language; empty when whole. */
+  readonly clipped: readonly string[];
+}
+
+/**
+ * The answer a result carries for a widget: whole from its `_meta`, where the door puts it for
+ * every path a widget draws or reads (`resultMeta` in the control plane, ADR 0122).
+ *
+ * `structuredContent` is the model's copy, and bounded: each top-level list clipped, and none at
+ * all for an answer that is still too big. A host that relays a result without its `_meta` leaves
+ * only that, so it is read as a fallback, with the notes the door wrote on what it cut -- a widget
+ * that drew the first 50 rows of 300 as if they were all of them would be the silent cut the
+ * notes exist to prevent.
+ */
+export function answerOf(result: ToolResult): Answer {
+  const whole = result._meta?.[ANSWER_META];
+  if (isRecord(whole)) {
+    return { content: whole, clipped: [] };
+  }
+  const bounded = result.structuredContent;
+  if (!isRecord(bounded)) {
+    return { content: null, clipped: [] };
+  }
+  const notes = bounded[CLIPPED_FIELD];
+  return {
+    content: bounded,
+    clipped: Array.isArray(notes)
+      ? notes.filter((note: unknown): note is string => typeof note === "string")
+      : [],
+  };
+}
+
+/**
+ * The tool a widget calls for `path`, as the door names it (`toolName` in `mcpTools.ts`). Only a
+ * path in `WIDGET_READS`: the door carries the whole answer in `_meta` for no other.
+ */
+export function toolFor(path: keyof typeof WIDGET_READS): string {
+  return path.replaceAll(".", "_");
 }
 
 /** The call a result names in its `_meta`, which the door writes for every drawn tool. */
