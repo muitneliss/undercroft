@@ -18,6 +18,7 @@ import {
 } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
+import { lineage } from "../services/lineage.ts";
 import { buildModels } from "../services/modelBuild.ts";
 import {
   REFERENCE_PARTS,
@@ -36,7 +37,7 @@ import { notRun } from "./answers.ts";
 import { testedFindingSentence, wordCheck } from "./checkWords.ts";
 import { ANSWER_SECONDS } from "./holdOpen.ts";
 import { StepQuery } from "./inputs.ts";
-import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
+import { cursorRefusal, listingOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
 import { buildHeld, parentTestsFailing, previewRefused } from "./modelRefusals.ts";
 import { actorOf, refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
 
@@ -52,11 +53,13 @@ export const modelsRouter = router({
   /**
    * The tenant's models with their last build: names, hashes and column counts, no SQL. Any
    * member may read what is built for them. `include: ["columns"]` adds each build's columns.
+   * `limit` or `cursor` answers a page, `{ items, nextCursor }`, rather than the array (ADR 0133).
    */
   list: tenantProcedure
     .input(
       z.object({
         ...NameFilterInput,
+        ...PageInput,
         include: z
           .array(z.enum(["columns"]))
           .min(1)
@@ -64,7 +67,11 @@ export const modelsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) =>
-      listedOrRefusal(ctx.locale, await models.list(ctx.exec, input.tenantId, input)),
+      listingOrRefusal(
+        ctx.locale,
+        "models.list",
+        await models.list(ctx.exec, input.tenantId, input),
+      ),
     ),
 
   /**
@@ -315,6 +322,9 @@ export const modelsRouter = router({
    * this model" needs; the whole graph of a large tenant overflowed every client it was sent
    * to (issue 443). A name no node carries is NOT_FOUND, never an empty graph -- an empty one
    * would say the model exists and reads nothing.
+   *
+   * `limit` or `cursor` answers that part a page at a time: at most `limit` nodes and `limit`
+   * edges, with `nextCursor` (ADR 0133). The browser draws the graph whole and never asks.
    */
   lineage: tenantProcedure
     .input(
@@ -322,6 +332,7 @@ export const modelsRouter = router({
         name: z.string().min(1).max(MAX_LINEAGE_NAME_CHARS).optional(),
         direction: z.enum(["up", "down", "both"]).default("both"),
         depth: z.number().int().positive().optional(),
+        ...PageInput,
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -329,15 +340,18 @@ export const modelsRouter = router({
         input.name === undefined
           ? null
           : { name: input.name, direction: input.direction, depth: input.depth ?? null };
-      const graph = await models.lineage(ctx.exec, input.tenantId, target);
-      if (graph === null) {
-        throw refusal(
-          "NOT_FOUND",
-          messages(ctx.locale)("error.lineageNameUnknown", { name: input.name ?? "" }),
-          { reason: "unknown-name", name: input.name ?? null },
-        );
+      const answer = await lineage(ctx.exec, input.tenantId, target, input);
+      if (answer.ok) {
+        return answer.value;
       }
-      return graph;
+      if (answer.reason === "unknown-cursor") {
+        throw cursorRefusal(ctx.locale, "models.lineage");
+      }
+      throw refusal(
+        "NOT_FOUND",
+        messages(ctx.locale)("error.lineageNameUnknown", { name: input.name ?? "" }),
+        { reason: "unknown-name", name: input.name ?? null },
+      );
     }),
 
   /**

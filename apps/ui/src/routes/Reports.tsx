@@ -25,6 +25,7 @@ import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
+import { wholeList } from "@/lib/listAnswers.ts";
 import { formatCount } from "@/lib/money.ts";
 import { byName, REPORT_QUERY } from "@/lib/reportSearch.ts";
 import { relativeTime } from "@/lib/when.ts";
@@ -40,7 +41,7 @@ const QUESTIONS_VIEW = "questions";
 export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const [search] = useSearchParams();
-  const questions = trpc.bi.questions.list.useQuery({ tenantId });
+  const questions = trpc.bi.questions.list.useQuery({ tenantId }, { select: wholeList });
   const dashboards = trpc.bi.dashboards.list.useQuery({ tenantId });
   const tenant = trpc.tenants.get.useQuery({ tenantId });
 

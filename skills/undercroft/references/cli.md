@@ -128,7 +128,11 @@ Failure:
   `retry-later`, `omit-parent`, `restart` or `none`). `credential-expired` means the stored
   credential could not be refreshed and the connection now reads `expired`: reconnect it, with
   nothing new to grant. `--parent-id <id>` browses one level; the top level is `parentId: null`,
-  which only JSON can spell: `--input-json '{"parentId": null}'`. A refused `bi schema` or
+  which only JSON can spell: `--input-json '{"parentId": null}'`. A refused page of
+  `models list`, `macros list`, `bi questions list` or `models lineage` gives `procedure`,
+  `reason: "unknown-cursor"` and `remedy: "restart"` when the item its `--cursor` continues
+  after is gone: read again without `--cursor`. With `--limit` or `--cursor`, each answers
+  `{ items, nextCursor }` (the lineage `{ nodes, edges, nextCursor }`) rather than its table. A refused `bi schema` or
   `lake query-schema` names the tables it does not hold in `tables`. A HubSpot `connections set-scope` has no size limit: every
   property of every object may be chosen at once. A refused `connections set-cadence` gives
   `source` and `reason`: `cron-fields`, `cron-invalid`, `cron-never` or `cron-too-frequent`

@@ -72,7 +72,7 @@ export const procedureSentences: SentenceTable = {
   "documentKinds.publish":
     "Publish the catalogue's draft, so every document is classified against it again. Admins.",
   "models.list":
-    "The customer's dbt models with their last build: sqlSha256 and testsSha256 to compare a copy, and the column count, no SQL. names or match to narrow; include: [\"columns\"] for each build's columns. lastTests is what the tests of the published build serving each model's rows found: passing, failing (failing counts them) or unknown (no test record, never a pass); unpublished names a newer build held back because it or its tests failed, and runId null with unpublished set is a model with no passing version yet.",
+    "The customer's dbt models with their last build: sqlSha256 and testsSha256 to compare a copy, and the column count, no SQL. names or match to narrow; include: [\"columns\"] for each build's columns; limit and cursor to page, which answers { items, nextCursor }. lastTests is what the tests of the published build serving each model's rows found: passing, failing (failing counts them) or unknown (no test record, never a pass); unpublished names a newer build held back because it or its tests failed, and runId null with unpublished set is a model with no passing version yet.",
   "models.revision":
     "One hash for each of the customer's models, macros, reference tables and questions and one over all of them, from what each save wrote: equal means nothing changed.",
   "models.get":
@@ -84,7 +84,7 @@ export const procedureSentences: SentenceTable = {
   "models.build":
     "Build models in one dbt build: name for one model, or names for up to 20, each name, +name (with the models upstream) or name+ (with those downstream); every name must be one of the customer's models. Before it runs, the parents it reads without rebuilding are checked: one whose latest tests failed is PRECONDITION_FAILED naming the parent, its tests and the run (rebuild it, or build +name); one with no test record is named in parentTestsUnknown. By default it waits and answers waited true with ok, verdict (clean, tests-failing or failed: success is clean; ok with failing tests is tests-failing), testsFailed, stepSummary (counts by kind and status), the steps asked for (steps: none, problems by default, or all; narrow with stepStatus, stepKind, stepName; read the next page with runs.get on runId with stepCursor), rowCounts (each named model's rows; null means not counted, never 0) and preview when one model is named. A build is written to staging and only what built, passed its error-severity tests and whose parents in the build were published is published for Reports; each model step's promoted says whether it was, and a held model keeps its last passing version, so rowCounts and preview are null for it. wait false answers at once with waited false and runId; wait on that run with runs.get and waitSeconds. While another build runs it is a CONFLICT naming that run's runId and startedAt. Admins.",
   "models.lineage":
-    "Which models read which models, reference tables and raw lake tables, from the models' and macros' own ref() and source() declarations. name for the part around one model, reference table or raw table (raw.records), direction up, down or both, and depth to bound the steps.",
+    "Which models read which models, reference tables and raw lake tables, from the models' and macros' own ref() and source() declarations. name for the part around one model, reference table or raw table (raw.records), direction up, down or both, and depth to bound the steps; limit and cursor to page, at most limit nodes and limit edges a page, with nextCursor.",
   "models.reference":
     "Reference material for a model's author: the sources, the platform's macros and the customer's own. parts for only some of sources, platformMacros and tenantMacros; the first two are the same text on every call.",
   "models.check":
@@ -92,7 +92,7 @@ export const procedureSentences: SentenceTable = {
   "models.preview":
     "See what a model returns before saving it: dbt compiles sql as the model name in the customer's project, in place of the saved model of that name or beside the others, and the SQL it compiled runs read-only. Answers columns, rows, truncated and compiled; query runs over the model instead and reads it by its name, to count its rows or its distinct keys. Saves and builds nothing. A model that does not compile is BAD_REQUEST with dbt's cause. Admins.",
   "macros.list":
-    "The customer's own dbt macros, each with what it is for, its parameters and the hashes of its definition and description, no definition. names or match to narrow.",
+    "The customer's own dbt macros, each with what it is for, its parameters and the hashes of its definition and description, no definition. names or match to narrow; limit and cursor to page, which answers { items, nextCursor }.",
   "macros.get": "One of the customer's dbt macros, its definition and their hashes.",
   "macros.check":
     "Check a macro's definition before saving it, running nothing: what would be refused, suspicions, and what could not be checked.",
@@ -115,7 +115,7 @@ export const procedureSentences: SentenceTable = {
   "bi.schema":
     "The tables and columns reports can read; tables for exactly those, match for names containing a fragment (case-insensitive), columns: false for table names alone.",
   "bi.questions.list":
-    'The saved questions: kind, chart type and definitionSha256, no SQL. names or match to narrow; include: ["definition", "chart"] for either in full.',
+    'The saved questions: kind, chart type and definitionSha256, no SQL. names or match to narrow; include: ["definition", "chart"] for either in full; limit and cursor to page, which answers { items, nextCursor }.',
   "bi.questions.get": "One saved question.",
   "bi.questions.answer":
     "A saved question's answer under parameters, with qualifiers as bi.answer gives them.",

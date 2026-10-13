@@ -13,7 +13,15 @@
  * The cut is made after the read, here, rather than in each repo's SQL: a tenant's lists are
  * small to read and what was expensive was sending them (issue 444's measurements), and one
  * rule in one place cannot drift into four.
+ *
+ * **A list pages after it narrows** (`listed`, ADR 0133): `limit` and `cursor` cut what the
+ * names left, by `listPage.ts`'s rule, so a name nothing carries is still refused before any
+ * page is cut. Asked no page, a list answers the array it always has; asked one, it answers
+ * `{ items, nextCursor }`. The shape follows the question rather than always being a page,
+ * because the browser, the assistant and every client already reading these arrays never ask.
  */
+
+import { type Page, type PageKey, type PageRequest, pageAfter, pageAsked } from "./listPage.ts";
 
 /** What a reader asked to see of a list. Each field is optional and only ever narrows. */
 export interface NameFilter {
@@ -68,4 +76,36 @@ export function narrowByName<T>(
 /** Apply `shape` to every item a narrowing kept, and pass a refusal through unchanged. */
 export function mapNarrowed<T, U>(narrowed: Narrowed<T>, shape: (item: T) => U): Narrowed<U> {
   return narrowed.ok ? { ok: true, items: narrowed.items.map(shape) } : narrowed;
+}
+
+/** A list's whole request, for a list that also pages. */
+export interface PagedListRequest<Include extends string>
+  extends ListRequest<Include>,
+    PageRequest {}
+
+/** What a list answers: every item it kept, one page of them, or why it answered neither. */
+export type Listing<T> =
+  | { readonly ok: true; readonly value: T[] | Page<T> }
+  /** The names in `names` no item carries, in the order they were asked for. */
+  | { readonly ok: false; readonly reason: "unknown-names"; readonly missing: readonly string[] }
+  | { readonly ok: false; readonly reason: "unknown-cursor" };
+
+/**
+ * A narrowed list as its reader asked for it: the items whole when `page` names neither a
+ * `limit` nor a `cursor`, else the page of them it names (`pageAsked`, whose `defaultLimit` a
+ * list may lower). `keyOf` must tell every item apart in the list's own order.
+ */
+export function listed<T>(
+  narrowed: Narrowed<T>,
+  keyOf: (item: T) => PageKey,
+  page: PageRequest,
+  defaultLimit?: number,
+): Listing<T> {
+  if (!narrowed.ok) {
+    return { ok: false, reason: "unknown-names", missing: narrowed.missing };
+  }
+  const asked = pageAsked(page, defaultLimit);
+  return asked === null
+    ? { ok: true, value: narrowed.items }
+    : pageAfter(narrowed.items, keyOf, asked);
 }

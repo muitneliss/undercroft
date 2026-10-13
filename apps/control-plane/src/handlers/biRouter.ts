@@ -23,7 +23,7 @@ import * as bi from "../services/bi.ts";
 import * as questions from "../services/biQuestions.ts";
 import * as biExports from "../services/biExports.ts";
 import { exportPath, exportUrl } from "./exportLink.ts";
-import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
+import { listingOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
 import { SchemaFilterInput, schemaOrRefusal } from "./schemaFilter.ts";
 import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
 
@@ -88,11 +88,13 @@ export const biRouter = router({
     /**
      * The saved questions as summaries -- kind, chart type, the definition's hash -- and no SQL.
      * `include` adds the `definition` or the `chart` in full, which a dashboard's tiles need.
+     * `limit` or `cursor` answers a page, `{ items, nextCursor }`, rather than the array (ADR 0133).
      */
     list: tenantProcedure
       .input(
         z.object({
           ...NameFilterInput,
+          ...PageInput,
           include: z
             .array(z.enum(["definition", "chart"]))
             .min(1)
@@ -100,8 +102,9 @@ export const biRouter = router({
         }),
       )
       .query(async ({ ctx, input }) =>
-        listedOrRefusal(
+        listingOrRefusal(
           ctx.locale,
+          "bi.questions.list",
           await questions.listQuestionViews(ctx.exec, input.tenantId, input),
         ),
       ),
