@@ -97,6 +97,23 @@ door with this rule.
 6. **Report what the platform said, not what you expected.** Success is the operation's
    answer, never your assumption.
 
+## Runs
+
+- **Ask for the run you want, not every run.** `runs.list` narrows by `kind` (one or several),
+  `status`, `trigger`, `parentRunId`, `chained`, `startedAfter` / `startedBefore` and up to 50
+  `ids`, in any combination. "The last failed build" is `kind: ["build"]`, `status: "failed"`,
+  `limit: 1`; "the transform that ingest started" is `parentRunId: <the ingest's id>`. An
+  empty page means nothing matched.
+- **Wait with `runs.get`, never with a loop.** After `runs.trigger`, call `runs.get` with its
+  `runId` and `waitSeconds` (at most 50). It answers as soon as the run is no longer
+  `running`; an ingest that ended `ok` names the transform it started in `childRun`, which you
+  wait for the same way. When the wait runs out the run still says `running`, and you call
+  again. Do not sleep and list runs in a shell loop.
+- **Read a run's steps from its summary.** `runs.get` answers with `stepSummary` -- every dbt
+  step counted by kind and status -- and lists only the steps that did not pass. Ask for
+  `steps: "all"`, or narrow with `stepStatus`, `stepKind` or `stepName`, only when you need
+  more, and page with `stepCursor`. A `skipped` step is not a pass.
+
 ## Workflows
 
 Each workflow is its own skill. Follow it when the person's request matches.
@@ -135,7 +152,13 @@ Both doors refuse with the same codes. Branch on the code, and give the person t
   `tenants.get` still answers, and its `deactivatedAt` says since when. Reactivating is the
   admin's decision: ask them, never reactivate a customer to finish a task.
 - **Retry once:** `NETWORK_ERROR` and `TIMEOUT`.
-- **Fix, then retry:** `VALIDATION_FAILED`, using the issues in its details.
+- **Fix, then retry:** `VALIDATION_FAILED`, using the issues in its details. A `lake.search`
+  that ran past its time limit is refused this way with no issues. The same search will stop
+  again, so do not repeat it. Narrow it: one kind, more words, or a quoted phrase.
+
+`lake.search` ranks only each kind's newest matches. When a kind had more, the answer's
+`capped` names it and how many were ranked. Matches older than those are on no page, so tell
+the person rather than reading the result as everything that matched.
 
 A refusal is the platform working as designed. `INTERNAL_ERROR`, a value you do not believe,
 or an answer that breaks the contract in `references/cli.md` or `references/mcp.md` is a

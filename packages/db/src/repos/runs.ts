@@ -17,7 +17,8 @@
 import type { SqlExecutor } from "../executor.ts";
 import { decodeCursor, encodeCursor } from "./cursor.ts";
 
-export type RunStatus = "running" | "ok" | "failed";
+export const RUN_STATUSES = ["running", "ok", "failed"] as const;
+export type RunStatus = (typeof RUN_STATUSES)[number];
 /**
  * What a run was doing. The SQL column is free text with no CHECK, deliberately, so a new
  * verb is a type change here and not a migration -- see `020_control_plane.sql`.
@@ -27,7 +28,47 @@ export type RunStatus = "running" | "ok" | "failed";
  * index on `(tenant_id, source, verb)` lets the two run beside each other. ADR 0024.
  */
 export type RunVerb = "ingest" | "transform" | "extract" | "semantic" | "semantic-init";
-export type RunTrigger = "schedule" | "manual" | "build" | "lake-api";
+/**
+ * Who started a run. There is no `chain`: a chained run copies its parent's trigger
+ * (`startIngestJob`), and what makes it chained is `parentRunId`.
+ */
+export const RUN_TRIGGERS = ["schedule", "manual", "build", "lake-api"] as const;
+export type RunTrigger = (typeof RUN_TRIGGERS)[number];
+
+/**
+ * What a run is, as the ledger names it: `verb` and `trigger` read together.
+ *
+ * `build` is a transform the editor started and `lake-api` an ingest an external script landed;
+ * both share the row shape and the one-running-per-pair guard with the scheduled kinds, so a
+ * stored column would be a second copy of `verb` + `trigger` to keep in step. `extract` is its
+ * own verb (ADR 0024), so it is its own kind: read as an ingest, it put two identical lines on
+ * the journal for one source.
+ *
+ * Derived in SQL ({@link KIND_OF_ROW}), once, because the ledger is both read by kind and
+ * filtered by it: a TypeScript derivation beside a SQL filter would be two definitions of one
+ * word, free to disagree about a verb added tomorrow.
+ */
+export const RUN_KINDS = [
+  "ingest",
+  "extract",
+  "semantic",
+  "semantic-init",
+  "transform",
+  "build",
+  "lake-api",
+] as const;
+export type RunKind = (typeof RUN_KINDS)[number];
+
+/**
+ * A row's kind, as an SQL expression over its own columns. A verb this does not name reads as
+ * an ingest, which is what every verb before `extract` was.
+ */
+const KIND_OF_ROW = `CASE
+    WHEN verb = 'transform' THEN CASE WHEN trigger = 'build' THEN 'build' ELSE 'transform' END
+    WHEN verb IN ('extract', 'semantic', 'semantic-init') THEN verb
+    WHEN trigger = 'lake-api' THEN 'lake-api'
+    ELSE 'ingest'
+  END`;
 
 export interface Run {
   readonly id: string;
@@ -36,6 +77,8 @@ export interface Run {
   readonly source: string;
   readonly verb: RunVerb;
   readonly trigger: RunTrigger;
+  /** What the ledger calls it -- see {@link RunKind}. */
+  readonly kind: RunKind;
   /** An `app_user` uuid, or `""` for the scheduler. Never an address: BI reads this table. */
   readonly triggeredBy: string;
   readonly parentRunId: string | null;
@@ -741,6 +784,7 @@ interface RunRow {
   source: string;
   verb: RunVerb;
   trigger: RunTrigger;
+  kind: RunKind;
   triggered_by: string;
   parent_run_id: string | null;
   status: RunStatus;
@@ -756,9 +800,9 @@ interface RunRow {
   pending_before: number | null;
 }
 
-const RUN_COLUMNS = `id, tenant_id, source, verb, trigger, triggered_by, parent_run_id, status,
-  created, changed, unchanged, refused, tests_failed, error, started_at, ended_at,
-  release_tag, pending_before`;
+const RUN_COLUMNS = `id, tenant_id, source, verb, trigger, ${KIND_OF_ROW} AS kind, triggered_by,
+  parent_run_id, status, created, changed, unchanged, refused, tests_failed, error, started_at,
+  ended_at, release_tag, pending_before`;
 
 function toRun(row: RunRow): Run {
   return {
@@ -767,6 +811,7 @@ function toRun(row: RunRow): Run {
     source: row.source,
     verb: row.verb,
     trigger: row.trigger,
+    kind: row.kind,
     triggeredBy: row.triggered_by,
     parentRunId: row.parent_run_id,
     status: row.status,
@@ -826,22 +871,54 @@ export async function findChildRun(
 }
 
 /**
- * A page of runs, newest first, keyed by an opaque cursor: every run of the tenant, or one
- * source's.
+ * Which runs a page of the ledger is drawn from. Every field narrows, and every field left out
+ * (or `null`) narrows nothing, so they combine with each other and with the cursor freely.
+ */
+export interface RunFilter {
+  /**
+   * One account, matched exactly (ADR 0043): `gmail` does not bring `gmail.3fa9c1d2e0ab` with
+   * it, because the journal filtered from a card is that card's account's runs and no other's.
+   */
+  readonly source?: string | null;
+  /** Any of these kinds. */
+  readonly kinds?: readonly RunKind[] | null;
+  readonly status?: RunStatus | null;
+  readonly trigger?: RunTrigger | null;
+  /** The runs chained from this one: the transform an ingest started, found without a scan. */
+  readonly parentRunId?: string | null;
+  /** `true`: only runs some other run chained into; `false`: only runs nothing chained. */
+  readonly chained?: boolean | null;
+  /** Started at or after this instant. */
+  readonly startedAfter?: string | null;
+  /** Started strictly before this instant, so two adjacent windows never share a run. */
+  readonly startedBefore?: string | null;
+  /** Any of these run ids. */
+  readonly ids?: readonly string[] | null;
+}
+
+/** A list filter as the JSON array a statement expands, or `null` for "no filter". */
+function jsonList(values: readonly string[] | null | undefined): string | null {
+  return values === null || values === undefined ? null : JSON.stringify(values);
+}
+
+/**
+ * A page of runs, newest first, keyed by an opaque cursor, narrowed by `filter`.
  *
  * The cursor is `startedAt|id` in base64url: the pair the index is ordered by, so a page
- * boundary is exact even when two runs share a start instant. Opaque to the caller, which
- * only ever hands it back.
+ * boundary is exact even when two runs share a start instant -- and since every filter is a
+ * condition on the same rows rather than a different ordering, a cursor stays exact under any
+ * of them. Opaque to the caller, which only ever hands it back. An empty page is "nothing
+ * matched", never "unknown".
  *
- * `source` is matched exactly, as ONE account (ADR 0043): `gmail` does not bring
- * `gmail.3fa9c1d2e0ab` with it, because the journal filtered from a card is that card's
- * account's runs and no other's. `null` is every source. `run_tenant_source_started`
- * (440_run_scope.sql) serves the filtered read.
+ * No index of its own: `run_tenant_started` walks the tenant's runs newest first and the
+ * filters are checked row by row until the page is full, which costs at most one tenant's ledger
+ * for a filter matching nothing. `run_tenant_source_started` (440_run_scope.sql) serves a source,
+ * `run_parent` (170_run_child.sql) a parent and the primary key a list of ids.
  */
 export async function listRuns(
   exec: SqlExecutor,
   tenantId: string,
-  page: { limit: number; cursor?: string | null; source?: string | null },
+  page: { limit: number; cursor?: string | null } & RunFilter,
 ): Promise<{ items: Run[]; nextCursor: string | null }> {
   const after = decodeCursor(page.cursor);
   const { rows } = await exec.query<RunRow>(
@@ -849,8 +926,30 @@ export async function listRuns(
      WHERE tenant_id = $1
        AND ($3::text IS NULL OR source = $3::text)
        AND ($4::timestamptz IS NULL OR (started_at, id) < ($4::timestamptz, $5::text))
+       AND ($6::jsonb IS NULL OR (${KIND_OF_ROW}) IN (SELECT jsonb_array_elements_text($6::jsonb)))
+       AND ($7::text IS NULL OR status = $7::text)
+       AND ($8::text IS NULL OR trigger = $8::text)
+       AND ($9::text IS NULL OR parent_run_id = $9::text)
+       AND ($10::boolean IS NULL OR (parent_run_id IS NOT NULL) = $10::boolean)
+       AND ($11::timestamptz IS NULL OR started_at >= $11::timestamptz)
+       AND ($12::timestamptz IS NULL OR started_at < $12::timestamptz)
+       AND ($13::jsonb IS NULL OR id IN (SELECT jsonb_array_elements_text($13::jsonb)))
      ORDER BY started_at DESC, id DESC LIMIT $2`,
-    [tenantId, page.limit + 1, page.source ?? null, after?.at ?? null, after?.id ?? null],
+    [
+      tenantId,
+      page.limit + 1,
+      page.source ?? null,
+      after?.at ?? null,
+      after?.id ?? null,
+      jsonList(page.kinds),
+      page.status ?? null,
+      page.trigger ?? null,
+      page.parentRunId ?? null,
+      page.chained ?? null,
+      page.startedAfter ?? null,
+      page.startedBefore ?? null,
+      jsonList(page.ids),
+    ],
   );
   const items = rows.slice(0, page.limit).map(toRun);
   const last = items.at(-1);

@@ -7,7 +7,7 @@ date: 2026-10-13
 tags: []
 source: docs/adr/0127-lists-answer-summaries-and-the-server-hashes-what-it-stores.md
 source_path: docs/adr/0127-lists-answer-summaries-and-the-server-hashes-what-it-stores.md
-source_hash: c2107ba1b79ebb0c199e29c841edb9574ccf2c90b8af5b36ed179e41124c890f
+source_hash: bf5b504a63436e270335fbea7de69991f30301ad0950819990031bc4c7a78df6
 ingested: 2026-10-13
 ---
 

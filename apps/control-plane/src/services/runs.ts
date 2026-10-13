@@ -4,11 +4,11 @@
  * Values in, values out. `get` answers `null` for a run that is not this tenant's, and the
  * handler decides that is NOT_FOUND -- the same shape as every other decision in this layer.
  *
- * `kind` is derived here rather than stored: `build` is a transform run the editor started,
- * `lake-api` an ingest run an external script landed, and both share the row shape and the
- * one-running-per-pair guard with the scheduled kinds. A stored column would be a second
- * copy of `verb` + `trigger` to keep in step. `extract` is its own verb (ADR 0024), so it is
- * its own kind: read as an ingest, it put two identical lines on the journal for one source.
+ * `kind` is the repo's, derived in SQL from `verb` + `trigger` (see `RunKind` in the runs repo),
+ * because the ledger is filtered by it as well as read by it.
+ *
+ * `get` can wait for a run to settle first (`runWait.ts`), and reports its dbt steps as a summary
+ * and the page asked for (`stepReport.ts`).
  */
 
 import { needsScope } from "@undercroft/contracts";
@@ -23,27 +23,29 @@ import {
   type RecordedScope,
   recordedScope,
   refusalsFor,
+  RUN_KINDS,
+  RUN_STATUSES,
+  RUN_TRIGGERS,
   type Run,
   type RunEntity,
   type RunEvent,
+  type RunFilter,
+  type RunKind,
   type RunReasonCount,
   type RunRefusal,
-  type RunStep,
   SOURCE_OF_TRANSFORM,
   stepsFor,
 } from "@undercroft/db/repos";
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { type ConnectionConfig, configOf } from "./connections.ts";
+import { type RunWait, settled } from "./runWait.ts";
+import { reportSteps, type StepQuery, type StepReport } from "./stepReport.ts";
 import type { TriggerOutcome, WorkerClient } from "./workerClient.ts";
 
-export type RunKind =
-  | "ingest"
-  | "extract"
-  | "semantic"
-  | "semantic-init"
-  | "transform"
-  | "build"
-  | "lake-api";
+export type { RunFilter, RunKind } from "@undercroft/db/repos";
+
+/** The values each of `runs.list`'s enumerated filters takes: the ledger's own vocabulary. */
+export const RUN_FILTERS = { kind: RUN_KINDS, status: RUN_STATUSES, trigger: RUN_TRIGGERS };
 
 export interface RunView {
   readonly id: string;
@@ -86,7 +88,11 @@ export interface RunLink {
   readonly testsFailed: number | null;
 }
 
-export interface RunDetail extends RunView {
+/**
+ * One run in full. Its dbt steps are a {@link StepReport}: a summary of every step, then the
+ * page of them the caller asked for (`stepReport.ts`).
+ */
+export interface RunDetail extends RunView, StepReport {
   readonly entityCounts: RunEntity[];
   readonly refusals: (RunRefusal & { at: string })[];
   /**
@@ -103,7 +109,6 @@ export interface RunDetail extends RunView {
    * a count with nothing behind it -- so the difference is computed once, named, and sent.
    */
   readonly refusalsPruned: boolean;
-  readonly steps: RunStep[];
   /** The run this one was chained from, if `parentRunId` names one that still exists. */
   readonly parentRun: RunLink | null;
   /** The run this one chained into, once it exists -- `null` before or without one. */
@@ -138,20 +143,10 @@ function scopeOf(source: string, recorded: RecordedScope | null): RunDetail["sco
   return needsScope(source, selectionJson) ? null : configOf(source, selectionJson);
 }
 
-function kindOf(run: Run): RunKind {
-  if (run.verb === "transform") {
-    return run.trigger === "build" ? "build" : "transform";
-  }
-  if (run.verb === "extract" || run.verb === "semantic" || run.verb === "semantic-init") {
-    return run.verb;
-  }
-  return run.trigger === "lake-api" ? "lake-api" : "ingest";
-}
-
 function toLink(run: Run): RunLink {
   return {
     id: run.id,
-    kind: kindOf(run),
+    kind: run.kind,
     source: run.source === SOURCE_OF_TRANSFORM ? null : run.source,
     status: run.status,
     testsFailed: run.testsFailed,
@@ -186,7 +181,7 @@ function present(run: Run, entities: RunEntity[]): RunView {
   const landed = entities.reduce((sum, e) => sum + e.landed, 0);
   return {
     id: run.id,
-    kind: kindOf(run),
+    kind: run.kind,
     source: run.source === SOURCE_OF_TRANSFORM ? null : run.source,
     entities: entities.map((e) => e.entity),
     status: run.status,
@@ -203,13 +198,14 @@ function present(run: Run, entities: RunEntity[]): RunView {
 }
 
 /**
- * A page of the ledger: every run of the tenant, or one source's -- one account (ADR 0043), as
- * the journal opened from that account's card asks for it.
+ * A page of the ledger, narrowed by any of `RunFilter`'s fields: one account's runs (ADR 0043),
+ * as the journal opened from that account's card asks for them, or the failed builds since ten
+ * o'clock, as an agent asks for them instead of listing everything and filtering it itself.
  */
 export async function list(
   exec: SqlExecutor,
   tenantId: string,
-  page: { limit: number; cursor?: string | null; source?: string | null },
+  page: { limit: number; cursor?: string | null } & RunFilter,
 ): Promise<{ items: RunView[]; nextCursor: string | null }> {
   const { items, nextCursor } = await listRuns(exec, tenantId, page);
   const entities = await entitiesForRuns(
@@ -248,12 +244,30 @@ export async function trigger(
   return outcome;
 }
 
+/** What `get` is asked: which steps to list, and whether to wait for the run to settle first. */
+export interface RunRead {
+  readonly steps: StepQuery;
+  readonly wait?: RunWait | undefined;
+}
+
+/**
+ * One run in full, or `null` for a run that is not this tenant's.
+ *
+ * With `wait`, it is answered once the run has settled (see `settled`), or when the wait runs out
+ * -- and then the answer is exactly what an immediate read would have said: `running`, with no
+ * counts and no verdict. Its dbt steps are reported by `reportSteps`, so the summary always comes
+ * and the steps come as `read.steps` asks.
+ */
 export async function get(
   exec: SqlExecutor,
   tenantId: string,
   runId: string,
+  read: RunRead,
 ): Promise<RunDetail | null> {
-  const run = await getRun(exec, tenantId, runId);
+  const run =
+    read.wait === undefined
+      ? await getRun(exec, tenantId, runId)
+      : await settled(exec, tenantId, runId, read.wait);
   if (run === null) {
     return null;
   }
@@ -268,6 +282,7 @@ export async function get(
   ]);
   return {
     ...present(run, entities),
+    ...reportSteps(steps, read.steps),
     entityCounts: entities,
     refusals,
     reasonCounts,
@@ -275,7 +290,6 @@ export async function get(
     // a run from before the rollup existed has neither, and claiming its detail was pruned
     // would be inventing a history for it.
     refusalsPruned: reasonCounts.length > 0 && refusals.length === 0,
-    steps,
     parentRun: parentRun === null ? null : toLink(parentRun),
     childRun: childRun === null ? null : toLink(childRun),
     scope: scopeOf(run.source, recorded),

@@ -22,9 +22,9 @@ removed.
   - `unpublishedChanges`: whether the draft differs from that version.
   - `readableDocuments`: how many documents a publish would send to the classifier.
 - `documentKinds.initialise` (admin) draws a first catalogue for a customer that has none. It
-  starts a run and answers with its `runId`; follow it with `runs.get`. It samples about 450
-  texts, and keeps every generic kind seen in at least 1% of the sample, plus `other`. Nothing
-  is published. It is refused with `CONFLICT` when a catalogue already exists.
+  starts a run and answers with its `runId`; follow it with `runs.get` and `waitSeconds`. It
+  samples about 450 texts, and keeps every generic kind seen in at least 1% of the sample, plus
+  `other`. Nothing is published. It is refused with `CONFLICT` when a catalogue already exists.
 - `documentKinds.add`, `documentKinds.update` and `documentKinds.remove` (admin) edit the
   draft. A generic kind needs only its name; a kind of the customer's own also needs a
   description that says what sets it apart from the others. `other` cannot be removed. Edits
@@ -35,9 +35,10 @@ removed.
   `documentKinds.list`) and wait for their yes to that number. A publish whose draft is
   unchanged makes no new version and answers `changed: false`.
 
-Classifying runs every half hour, at most 500 documents per source per run. `runs.list` shows
-those runs with the kind `semantic`; a first classification, or one after a publish, takes
-hours to days depending on how many documents there are.
+Classifying runs every half hour, at most 500 documents per source per run. `runs.list` with
+`kind: ["semantic"]` shows those runs, and `kind: ["semantic-init"]` a first catalogue's run. A
+first classification, or one after a publish, takes hours to days depending on how many
+documents there are.
 
 The web UI has the same catalogue on the Lake division's **Document kinds** page.
 

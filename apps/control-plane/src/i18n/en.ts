@@ -130,6 +130,8 @@ export const en = {
       "The query could not be run. The processing service did not answer; try again in a few minutes.",
     searchNotRun:
       "The search could not be run. The processing service did not answer; try again in a few minutes.",
+    searchTimedOut:
+      "The search ran past its time limit and was stopped; running it again unchanged will stop again. Narrow it: search one kind (records or documents), add words, or put a phrase in quotes.",
     workerBusy:
       "This customer's database is busy (a model build, or many queries at once). Try again in a few seconds.",
     paramMissing: "The question needs a value for {{name}}. Set that filter and run again.",

@@ -74,6 +74,7 @@ function caller(user: SessionUser, locale: Locale = DEFAULT_LOCALE) {
     signInMethods: [],
     channel: "web",
     publicUrl: null,
+    holdOpen: () => undefined,
   };
   return appRouter.createCaller(ctx);
 }

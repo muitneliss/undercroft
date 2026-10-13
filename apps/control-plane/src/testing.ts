@@ -59,7 +59,22 @@ export interface ControlPlaneOptions {
    * `createLogger` whose `sink` keeps the lines in memory.
    */
   readonly log?: Logger;
+  /**
+   * Bun's idle timeout, in seconds: ten by default, as both servers keep it. A suite proving what
+   * lifts it (ADR 0124) sets it short, so a request that was not lifted is cut within the test.
+   */
+  readonly idleTimeout?: number;
 }
+
+/** Bun's own default, which both servers keep. */
+const BUN_IDLE_TIMEOUT_SECONDS = 10;
+
+/**
+ * The app's `fetch`, as `Bun.serve` calls it: the request, and the server as the app's `env` --
+ * as `main.ts`'s `export default { fetch }` passes it, since it is what a route lifts its idle
+ * timeout on (`liftIdleTimeout`).
+ */
+type Answer = (request: Request, env: unknown) => Response | Promise<Response>;
 
 function isDescriptor(value: unknown): value is PropertyDescriptor {
   return typeof value === "object" && value !== null;
@@ -139,6 +154,11 @@ export function inMemoryAuthStore(): BetterAuthOptions["database"] {
   return memoryAdapter(Object.fromEntries(AUTH_TABLES.map((name) => [name, []])));
 }
 
+/** `Bun.serve` on a free port, answering through whichever app `current` names at the time. */
+function listen(idleTimeout: number, current: () => Answer): ReturnType<typeof Bun.serve> {
+  return Bun.serve({ port: 0, idleTimeout, fetch: (request, env) => current()(request, env) });
+}
+
 export async function startControlPlane(options: ControlPlaneOptions = {}): Promise<ControlPlane> {
   const restoreDom = liftDom();
   const db = await createMigratedTestDatabase();
@@ -148,8 +168,8 @@ export async function startControlPlane(options: ControlPlaneOptions = {}): Prom
 
   // Better Auth needs its `baseUrl` -- also its only trusted origin -- before the socket that
   // decides it is bound, so the server answers through a reference filled in afterwards.
-  let handler: (request: Request) => Response | Promise<Response> = () => new Response(null);
-  const server = Bun.serve({ port: 0, fetch: (request) => handler(request) });
+  let handler: Answer = () => new Response(null);
+  const server = listen(options.idleTimeout ?? BUN_IDLE_TIMEOUT_SECONDS, () => handler);
   const { origin } = server.url;
 
   const auth = createAuth({

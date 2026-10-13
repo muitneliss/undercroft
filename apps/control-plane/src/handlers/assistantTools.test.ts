@@ -54,6 +54,7 @@ function context(user: SessionUser | null, superadmin = false, exec: SqlExecutor
     signInMethods: [],
     channel: "web",
     publicUrl: null,
+    holdOpen: () => undefined,
   };
 }
 

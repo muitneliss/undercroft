@@ -84,8 +84,9 @@ export const READ_TOOLS = {
   },
   runDetail: {
     description:
-      "One run in full: every step, what it landed, and every row it REFUSED with the reason. " +
-      "This is how to answer 'why was that row not imported?'.",
+      "One run in full: its dbt steps counted by status with the ones that did not pass, what " +
+      "it landed, and every row it REFUSED with the reason. This is how to answer 'why was " +
+      "that row not imported?'.",
     inputSchema: inTenant.extend({ runId: z.string().min(1) }),
     tier: "read",
     plate: "facts",
@@ -101,7 +102,9 @@ export const READ_TOOLS = {
   searchLake: {
     description:
       "Full-text search across everything landed for one customer, in Vietnamese or English. " +
-      "Diacritics are folded, so 'hop dong' finds 'Hợp đồng'. Admin only.",
+      "Diacritics are folded, so 'hop dong' finds 'Hợp đồng'. Each kind ranks only its newest " +
+      "matches, and `capped` names a kind that had more: say so rather than calling the hits " +
+      "everything that matched. Admin only.",
     inputSchema: inTenant.extend({
       q: z.string().min(1).describe("What to look for, in the reader's own words."),
       limit: z.number().int().min(1).max(25).default(10),

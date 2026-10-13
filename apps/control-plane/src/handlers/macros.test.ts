@@ -58,6 +58,7 @@ function caller(userId: string, email: string) {
     signInMethods: [],
     channel: "web",
     publicUrl: null,
+    holdOpen: () => undefined,
   };
   return appRouter.createCaller(ctx);
 }

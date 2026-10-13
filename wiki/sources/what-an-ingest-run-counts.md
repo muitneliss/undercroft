@@ -1,15 +1,13 @@
 ---
 title: What an ingest run counts
 type: source
-date: 2026-10-06
+date: 2026-10-13
 tags: []
 source: docs/reference/run-counts.md
 source_path: docs/reference/run-counts.md
-source_hash: db9cc5147e7a6884c3b55e9925cc819ba5823cbc9d14bde96c992eb782a9c704
-ingested: 2026-10-06
+source_hash: 4ae717fc9d80009a10fec190b0a18bf771a475f9caa652b2a097db5e35e7bb8b
+ingested: 2026-10-13
 ---
-
-# What an ingest run counts
 
 # What an ingest run counts
 
@@ -30,3 +28,7 @@ The reference page for the five per-entity numbers an ingest run reports, which 
 **From a count to its records.** For an admin, New and Changed link to the Raw lake narrowed to the run (`?run=`; `lake records --run-id`, `lake documents --run-id` for `documents`). A member or viewer sees plain figures. A raw record names only the run that last wrote it, so the page lists what no later run rewrote and answers `ofRun`: `wrote` (New + Changed), `current` (still naming the run), `rewritten` (the difference) — `null` when it cannot be subtracted honestly (still running, no count for the stream, more rows than counted). [[ADR 0091 A Run Keeps the Scope It Read With and Its Counts Open Its Rows]].
 
 **Scope and account.** A run records the scope it read with as it reads it; the run detail and `runs get` show it as `scope`, and an older run shows an em dash, never today's scope. A source card's runs link opens the Journal filtered to that account (`?source=`; `runs list --source`).
+
+**Narrowing the ledger.** `runs list` also takes `kind` (one or several; read off `verb` and `trigger`, never stored: `build` is an editor's transform, `lake-api` a pushed ingest, `extract`/`semantic`/`semantic-init` their own verbs), `status`, `trigger`, `parentRunId`, `chained`, `startedAfter` (inclusive) / `startedBefore` (exclusive) and up to 50 `ids`, combined with each other and the cursor; an empty page means nothing matched (issue #439).
+
+**A run's dbt steps.** `runs get` reports them as `stepSummary` (total, counts by kind and dbt status, how many are problems) and the page asked for: `steps` is `none`, `problems` (default: anything not `success`, `pass` or `skipped`, an unknown status included) or `all`, narrowed by `stepStatus`/`stepKind`/`stepName` (a filter without `steps` reads all), paged by `stepLimit` (at most 2,000) and `stepCursor`. A skipped step is counted as skipped, never as a pass. The Journal asks for every step (issue #441). With `waitSeconds` it answers once the run has ended ([[ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does]]).

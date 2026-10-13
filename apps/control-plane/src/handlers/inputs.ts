@@ -6,7 +6,9 @@
  * others import a sibling for a rule that belongs to none of them in particular.
  */
 
+import { MAX_STEP_PAGE } from "@undercroft/contracts/runs";
 import { z } from "zod";
+import { STEP_VIEWS } from "../services/stepReport.ts";
 
 export const Role = z.enum(["viewer", "member", "admin"]);
 
@@ -33,3 +35,24 @@ export const TenantId = z
  * written in different case from the address someone signs in with would never be redeemed.
  */
 export const Email = z.string().trim().toLowerCase().email().max(320); // the longest address RFC 5321 allows
+
+/** How many dbt steps one answer lists unless asked for more: a page an agent can read. */
+const DEFAULT_STEP_PAGE = 100;
+
+/**
+ * Which of a run's dbt steps an answer lists (issue 441): `services/stepReport.ts` reads these
+ * fields by these names, so a procedure that reports steps extends this and passes them on.
+ * `runs.get` does; `models.build` is the other answer with steps to report.
+ *
+ * `steps` has no default here on purpose: left out it means `problems`, unless a step filter is
+ * given -- see `StepQuery` in the service, which decides it for every answer at once. The page is
+ * bounded by `MAX_STEP_PAGE`, which the web leaf asks for to list every step of a run.
+ */
+export const StepQuery = z.object({
+  steps: z.enum(STEP_VIEWS).optional(),
+  stepStatus: z.string().trim().min(1).max(32).optional(),
+  stepKind: z.enum(["model", "test"]).optional(),
+  stepName: z.string().trim().min(1).max(256).optional(),
+  stepCursor: z.string().min(1).optional(),
+  stepLimit: z.number().int().min(1).max(MAX_STEP_PAGE).default(DEFAULT_STEP_PAGE),
+});

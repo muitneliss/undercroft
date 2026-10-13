@@ -61,6 +61,7 @@ function caller(userId: string, email: string, worker: WorkerClient, locale: "vi
     signInMethods: [],
     channel: "web",
     publicUrl: null,
+    holdOpen: () => undefined,
   };
   return appRouter.createCaller(ctx);
 }

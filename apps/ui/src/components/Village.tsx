@@ -31,7 +31,7 @@ import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { customerPagePath, division, divisionPath } from "@/lib/divisions.ts";
 import { MISSING } from "@/lib/money.ts";
-import { describeRun, journalPath, sourceLabel } from "@/lib/runs.ts";
+import { describeRun, EVERY_STEP, journalPath, sourceLabel } from "@/lib/runs.ts";
 import { PLACES } from "@/lib/village/layout.ts";
 import { Film } from "@/lib/village/film.ts";
 import { type Actor, deriveVillage, type VillageScene } from "@/lib/village/script.ts";
@@ -83,7 +83,7 @@ export function Village({ tenantId }: { tenantId: string }): React.JSX.Element {
       (run) => (run.kind === "transform" || run.kind === "build") && run.status !== "running",
     )?.id ?? null;
   const lastBuild = trpc.runs.get.useQuery(
-    { tenantId, runId: lastBuildId ?? "" },
+    { tenantId, runId: lastBuildId ?? "", ...EVERY_STEP },
     { enabled: lastBuildId !== null },
   );
 

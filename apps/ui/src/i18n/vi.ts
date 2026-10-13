@@ -778,12 +778,19 @@ export const vi = {
     searchSubmit: "Tìm",
     searching: "Đang tìm…",
     searchIdle: "Nhập từ khoá rồi nhấn Tìm.",
-    searchNotLoaded: "Không tìm được. Hãy thử lại sau ít phút.",
     /** Absence, worded as absence. The lake is not broken; this word is not in it. */
     searchNothing: "Không có bản ghi hay tài liệu nào khớp với “{{q}}”.",
     searchHits_other: "{{count, number}} kết quả",
     /** Said only when the page was cut, so a reader knows to narrow rather than to conclude. */
     searchMore: "Còn kết quả khác. Hãy thêm từ khoá để thu hẹp.",
+    /**
+     * A kind matched more than a search ranks, so the hits are the best of its newest matches,
+     * not of all of them (ADR 0123). Said, rather than left to look like the whole answer.
+     */
+    searchCappedRecords_other:
+      "Có hơn {{count, number}} bản ghi khớp; chỉ {{count, number}} bản ghi mới nhất được xếp hạng. Hãy thêm từ khoá để thu hẹp.",
+    searchCappedDocuments_other:
+      "Có hơn {{count, number}} tài liệu khớp; chỉ {{count, number}} tài liệu mới nhất được xếp hạng. Hãy thêm từ khoá để thu hẹp.",
     searchColWhere: "Ở đâu",
     searchColMatch: "Nội dung khớp",
     searchKindRecord: "Bản ghi",
@@ -1567,6 +1574,7 @@ export const vi = {
     },
 
     stepsHead: "Các bước dbt",
+    stepsCut: "Đang hiện {{shown}} trong {{total}} bước; lần chạy này có nhiều bước hơn một trang.",
     colStep: "Bước",
     colStatus: "Trạng thái",
     colFailures: "Dòng lỗi",

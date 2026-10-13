@@ -54,6 +54,7 @@ function caller(user: SessionUser, door: Partial<Context> = {}) {
     googlePicker: null,
     signInMethods: [],
     publicUrl: null,
+    holdOpen: () => undefined,
     ...door,
   });
 }

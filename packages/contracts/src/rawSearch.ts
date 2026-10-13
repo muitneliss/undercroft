@@ -101,5 +101,16 @@ export const RawSearchResponse = z.object({
    * here", and only one of them means keep looking.
    */
   truncated: z.boolean(),
+  /**
+   * The kinds that had more matches than a search ranks, and how many it ranked: the newest
+   * `ranked` of them, by the date each hit shows (ADR 0123).
+   *
+   * Ranking a match is the expensive part of a search, so each kind ranks a bounded set. When
+   * the set was cut, the answer says so here. Paging still covers only the ranked set, so a
+   * match older than the newest `ranked` is not on any page. A reader who needs it adds a word
+   * or picks a kind; nothing about the search makes it look like there was nothing more. Empty
+   * when every match was ranked.
+   */
+  capped: z.array(z.object({ kind: SearchKind, ranked: z.number().int().positive() })),
 });
 export type RawSearchResponse = z.infer<typeof RawSearchResponse>;
