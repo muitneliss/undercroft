@@ -10,27 +10,43 @@
  * outlives the half hour is still one `runs_get` away.
  *
  * What the two procedures answer is typed from the router (`ToolContentOf`), so a change to a
- * run's shape breaks this file's compile rather than this page in somebody's chat.
+ * run's shape breaks this file's compile rather than this page in somebody's chat. Both are read
+ * whole from the result's `_meta` (`answerOf`): a run's detail can hold a thousand dbt steps and
+ * its feed three hundred events, past what the door lets a model read, and the latest events --
+ * the ones this page lists -- are the ones a clip would drop.
  */
 
 import type { ToolContentOf } from "@undercroft/control-plane/surface";
 import type { Locale } from "@undercroft/core/locale";
 import { MISSING } from "@undercroft/core/money";
-import { element, type Host, mount, refusalMessage, type ToolResult } from "./host.ts";
+import {
+  answerOf,
+  element,
+  type Host,
+  mount,
+  refusalMessage,
+  type ToolResult,
+  toolFor,
+} from "./host.ts";
 import type { Words } from "./i18n.ts";
 import { cellText } from "./table.ts";
 
 type Run = ToolContentOf<"runs.get">;
 type RunEvents = ToolContentOf<"runs.events">["items"];
 
+/** A run's feed as last read, and the door's notes if what arrived was the model's clipped copy. */
+interface Feed {
+  readonly items: RunEvents;
+  readonly clipped: readonly string[];
+}
+
 const POLL_MS = 2000;
 const FOLLOW_FOR_MS = 30 * 60 * 1000;
 /** How many of the latest events the page lists. The journal in the web UI has the rest. */
 const EVENTS_SHOWN = 8;
 
-/** A tool's name for a procedure path, as the door names it (`toolName` in `mcpTools.ts`). */
-const RUNS_GET = "runs_get";
-const RUNS_EVENTS = "runs_events";
+const RUNS_GET = toolFor("runs.get");
+const RUNS_EVENTS = toolFor("runs.events");
 
 /**
  * Times read in Asia/Singapore whatever the language, as the web UI's `@/lib/when` does: a time
@@ -54,7 +70,7 @@ function statusWord(run: Run, t: Words): string {
   return run.status === "ok" ? t("runOk") : t("runFailed");
 }
 
-function drawRun(host: Host, run: Run, events: RunEvents | null, stopped: string | null): void {
+function drawRun(host: Host, run: Run, feed: Feed | null, stopped: string | null): void {
   const t = host.t();
   const locale = host.locale();
   const facts = [
@@ -69,7 +85,7 @@ function drawRun(host: Host, run: Run, events: RunEvents | null, stopped: string
           }),
         ]),
   ];
-  const latest = (events ?? []).slice(-EVENTS_SHOWN);
+  const latest = (feed?.items ?? []).slice(-EVENTS_SHOWN);
   host.root.replaceChildren(
     element(
       "div",
@@ -93,6 +109,7 @@ function drawRun(host: Host, run: Run, events: RunEvents | null, stopped: string
             ),
           ),
         ),
+    ...(feed?.clipped ?? []).map((note) => element("p", "note", note)),
     ...(stopped === null ? [] : [element("p", "note", stopped)]),
   );
 }
@@ -102,22 +119,31 @@ function drawProblem(host: Host, message: string): void {
 }
 
 /**
- * A tool result's structured content, as the procedure `P` answers it.
+ * A tool result's answer (`answerOf`), as the procedure `P` answers it, or `null` when the host
+ * handed over neither copy.
  *
  * The door built it from that procedure's own typed output, as `gridOf` in `table.ts` explains;
  * this is the one place the run widget takes the door at its word.
  */
 function contentOf<P extends "runs.get" | "runs.events" | "runs.trigger">(
   result: ToolResult,
-): ToolContentOf<P> {
+): ToolContentOf<P> | null {
   // biome-ignore lint/nursery/noUnsafeTypeAssertion: the door built this from the named procedure's typed output; see `table.ts`.
-  return result.structuredContent as ToolContentOf<P>;
+  return answerOf(result).content as ToolContentOf<P> | null;
+}
+
+/** The feed a `runs_events` answer carries, or the one already drawn when it carries none. */
+function feedOf(result: ToolResult, previous: Feed | null): Feed | null {
+  const items = result.isError === true ? null : contentOf<"runs.events">(result)?.items;
+  return items === undefined || items === null
+    ? previous
+    : { items, clipped: answerOf(result).clipped };
 }
 
 /** Follow one run: draw it, ask again every `POLL_MS`, stop at the first reason to. */
 function follow(host: Host, tenantId: string, runId: string, first: Run | null): void {
   const started = Date.now();
-  let events: RunEvents | null = null;
+  let feed: Feed | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let paused = false;
   let last = first;
@@ -127,13 +153,13 @@ function follow(host: Host, tenantId: string, runId: string, first: Run | null):
     if (document.hidden) {
       paused = true;
       if (last !== null) {
-        drawRun(host, last, events, host.t()("runStoppedHidden"));
+        drawRun(host, last, feed, host.t()("runStoppedHidden"));
       }
       return;
     }
     paused = false;
     const args = { tenantId, runId };
-    const [got, feed] = await Promise.all([
+    const [got, fed] = await Promise.all([
       host.app.callServerTool({ name: RUNS_GET, arguments: args }),
       host.app.callServerTool({ name: RUNS_EVENTS, arguments: args }),
     ]);
@@ -141,17 +167,22 @@ function follow(host: Host, tenantId: string, runId: string, first: Run | null):
       drawProblem(host, host.t()("runUnreadable", { message: refusalMessage(got) }));
       return;
     }
-    last = contentOf<"runs.get">(got);
-    events = feed.isError === true ? events : contentOf<"runs.events">(feed).items;
-    if (last.status !== "running") {
-      drawRun(host, last, events, null);
+    const run = contentOf<"runs.get">(got);
+    if (run === null) {
+      drawProblem(host, host.t()("unavailable"));
+      return;
+    }
+    last = run;
+    feed = feedOf(fed, feed);
+    if (run.status !== "running") {
+      drawRun(host, run, feed, null);
       return;
     }
     if (Date.now() - started >= FOLLOW_FOR_MS) {
-      drawRun(host, last, events, host.t()("runStoppedLong"));
+      drawRun(host, run, feed, host.t()("runStoppedLong"));
       return;
     }
-    drawRun(host, last, events, null);
+    drawRun(host, run, feed, null);
     timer = setTimeout(() => void ask(), POLL_MS);
   }
 
@@ -186,11 +217,20 @@ function draw(result: ToolResult, host: Host): void {
   }
   if (call.path === "runs.get") {
     const run = contentOf<"runs.get">(result);
+    if (run === null) {
+      drawProblem(host, t("unavailable"));
+      return;
+    }
     follow(host, call.tenantId, run.id, run);
     return;
   }
   if (call.path === "runs.trigger") {
-    follow(host, call.tenantId, contentOf<"runs.trigger">(result).runId, null);
+    const triggered = contentOf<"runs.trigger">(result);
+    if (triggered === null) {
+      drawProblem(host, t("unavailable"));
+      return;
+    }
+    follow(host, call.tenantId, triggered.runId, null);
     return;
   }
   drawProblem(host, t("runUnknown"));

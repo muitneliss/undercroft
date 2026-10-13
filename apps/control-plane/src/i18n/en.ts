@@ -236,9 +236,9 @@ export const en = {
     unknownTool: "There is no tool named {{tool}} for this token.",
     unknownResource: "There is no resource called {{uri}}.",
     rowsClipped:
-      "This text shows {{shown}} of the {{total}} items in {{field}}. The complete result is in structuredContent.",
+      "This answer holds {{shown}} of the {{total}} items in {{field}}. The rest was not sent: call again with a narrower scope (a filter, a limit or a cursor, where the tool takes one) to read it.",
     textClipped:
-      "This text was cut at {{kilobytes}} KB. The complete result is in structuredContent.",
+      "This answer was cut at {{kilobytes}} KB and has no structuredContent. The rest was not sent: call again with a narrower scope (a filter, a limit or a cursor, where the tool takes one) to read it.",
   },
   export: {
     unnamed: "Result",
