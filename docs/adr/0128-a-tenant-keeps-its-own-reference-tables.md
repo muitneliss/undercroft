@@ -108,7 +108,10 @@ value dbt loads.
 **`dbt_project.yml` carries the seeds' configuration.** `+quote_columns: true` for every seed, so
 a column called `order` stays a column
 (<https://docs.getdbt.com/reference/resource-configs/quote_columns>), and under each seed its
-`+column_types`, one entry per column. dbt loads an existing seed table by truncating it and
+`+column_types`, one entry per column. Every seed and column name is written as a quoted YAML
+key: dbt reads its YAML with PyYAML's `SafeLoader`, which follows YAML 1.1, so a bare `on`, `no`
+or `null` -- each a valid identifier here -- would read as a boolean or as nothing, and the seed
+or column it names would lose its declared type without a word. dbt loads an existing seed table by truncating it and
 inserting the file's rows (`default__reset_csv_table`,
 [dbt-adapters `materializations/seeds/helpers.sql`](https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/include/global_project/macros/materializations/seeds/helpers.sql)).
 That is right while the standing table has exactly the declared columns and wrong the moment it

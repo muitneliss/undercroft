@@ -177,15 +177,9 @@ export const modelsRouter = router({
           },
         );
       }
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: t(
-          outcome.reason === "seed-named" ? "error.modelNameIsSeed" : "error.modelNameTaken",
-          {
-            name: input.name,
-          },
-        ),
-      });
+      const taken =
+        outcome.reason === "seed-named" ? "error.modelNameIsSeed" : "error.modelNameTaken";
+      throw new TRPCError({ code: "CONFLICT", message: t(taken, { name: input.name }) });
     }),
 
   /**

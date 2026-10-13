@@ -34,6 +34,8 @@ describe("a typed cell", () => {
     ["timestamptz", "2026-10-13T24:00:00Z", "not-timestamp", "2026-10-13T23:59:59.123456Z"],
     ["text", "NULL", "reads-as-null", "NULL value"],
     ["text", " \u0085", "reads-as-null", "-"],
+    // Python does not strip a byte-order mark, so dbt loads it as the text it is.
+    ["text", "\t", "reads-as-null", "\ufeff"],
     ["text", "a\r\nb", "carriage-return", "a\nb"],
     ["text", "a\u0000b", "unstorable-character", "a b"],
     ["text", "\ud800", "unstorable-character", "😀"],

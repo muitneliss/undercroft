@@ -18,7 +18,7 @@
 -- `columns` is `[{"name": ..., "type": ...}]` and `rows` is an array of arrays of string or
 -- null, one string per declared column. Neither is ever a number: an amount is the text it was
 -- written as (`.claude/rules/money.md`). What a cell may be for its column's type, and the
--- bounds, are decided in `packages/db/src/services/seedTable.ts`, one place; the CHECKs here
+-- bounds, are decided in `packages/contracts/src/seeds.ts`, one place; the CHECKs here
 -- are belt and braces on the shape.
 
 CREATE TABLE IF NOT EXISTS app.seed (

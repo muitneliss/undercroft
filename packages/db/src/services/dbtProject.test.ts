@@ -123,17 +123,36 @@ describe("renderProject, with the tenant's seeds (ADR 0128)", () => {
     expect(yml).toContain(`seeds:
   undercroft:
     +quote_columns: true
-    account_groups:
+    "account_groups":
       +column_types:
-        code: "text"
-        order: "integer"
-    payment_terms:
+        "code": "text"
+        "order": "integer"
+    "payment_terms":
       +column_types:
-        code: "text"
-        order: "integer"
+        "code": "text"
+        "order": "integer"
       +full_refresh: true
 `);
     expect(yml.match(/full_refresh/gu)).toHaveLength(1);
+  });
+
+  it("quotes a seed or column named like a YAML 1.1 boolean, so it keeps its declared type", () => {
+    const yml =
+      renderProject({
+        slug: "case_0042",
+        database: { host: "undercroft-postgres", port: 5432, dbname: "undercroft" },
+        models: [],
+        macros: [],
+        seeds: [
+          {
+            name: "on",
+            columns: [{ name: "no", type: "text" }],
+            csv: "no\n",
+            fullRefresh: false,
+          },
+        ],
+      })["dbt_project.yml"] ?? "";
+    expect(yml).toContain('    "on":\n      +column_types:\n        "no": "text"\n');
   });
 
   it("writes no seed file for a tenant with none", () => {

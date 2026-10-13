@@ -27,11 +27,12 @@
  *   empty string" to it, so an empty or `null`-looking text cell is refused, and the author
  *   sends `null` for a missing value -- which renders as an empty field and loads as NULL.
  *   "Whitespace" here is Python's, which `str.strip` uses: JavaScript's `\s` plus the four
- *   information separators and NEL, which JavaScript does not count and Python does.
+ *   information separators and NEL, which Python counts, and less the byte-order mark, which it
+ *   does not.
  * - The loader opens the file in Python's universal-newline mode, so a carriage return inside a
  *   quoted field reaches the table as a line feed. A cell holding `\r` is refused.
- * - A NUL character stops Python's CSV reader, and Postgres text cannot hold one; a lone UTF-16
- *   surrogate cannot be written as UTF-8 at all. Both are refused, and so is a cell longer than
+ * - Postgres text cannot hold a NUL character (and Python's CSV reader before 3.11 stops at
+ *   one); a lone UTF-16 surrogate cannot be written as UTF-8 at all. Both are refused, and so is a cell longer than
  *   the reader's field limit (`MAX_SEED_CELL_CHARS`), which dbt does not raise.
  *
  * TYPED CELLS are checked against the text forms Postgres reads into each type, strictly: what
@@ -146,8 +147,12 @@ type CellProblem = Exclude<
   | "row-width"
 >;
 
-/** Python's `str.isspace`, which agate's `strip()` uses: JS's `\s` plus `\x1c`-`\x1f` and NEL. */
-const PY_SPACE = "[\\s\\x1c-\\x1f\\x85]";
+/**
+ * Python's `str.isspace`, which agate's `strip()` uses, spelled out: JavaScript's `\s` would add
+ * the byte-order mark, which Python does not count, and miss `\x1c`-`\x1f` and NEL, which it does.
+ */
+const PY_SPACE =
+  "[\\t\\n\\v\\f\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
 const PY_STRIP = new RegExp(`^${PY_SPACE}+|${PY_SPACE}+$`, "gu");
 /** The texts agate reads as NULL in a text column, once stripped and lower-cased. */
 const TEXT_NULLS: ReadonlySet<string> = new Set(["", "null"]);

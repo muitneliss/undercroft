@@ -365,14 +365,16 @@ function yamlString(value: string): string {
  * The `seeds:` block: every seed's column types, so dbt reads every cell as text and Postgres
  * casts it into the declared type -- no type is inferred (ADR 0128) -- and, for a seed whose
  * standing table no longer matches, a full refresh. Column names are quoted as written, which
- * keeps a column called `order` a column.
+ * keeps a column called `order` a column. Every key is a quoted YAML string too: dbt reads YAML
+ * 1.1, where a bare `on`, `no` or `null` -- each a valid identifier -- is a boolean or nothing,
+ * and the seed or column it names would silently lose its declared type.
  */
 function seedsYml(seeds: readonly ProjectSeed[]): string {
   const lines = ["seeds:", "  undercroft:", "    +quote_columns: true"];
   for (const seed of seeds) {
-    lines.push(`    ${seed.name}:`, "      +column_types:");
+    lines.push(`    ${yamlString(seed.name)}:`, "      +column_types:");
     for (const column of seed.columns) {
-      lines.push(`        ${column.name}: ${yamlString(column.type)}`);
+      lines.push(`        ${yamlString(column.name)}: ${yamlString(column.type)}`);
     }
     if (seed.fullRefresh) {
       lines.push("      +full_refresh: true");
@@ -429,8 +431,8 @@ function profilesYml(slug: string, database: DatabaseAddress): string {
  *
  * Model, macro, seed and column names have been validated against the contract's identifier
  * rule before they reach a row, and the slug is Postgres's own folding; nothing here is quoted
- * for YAML except the values that come from configuration and a seed column's type. A tenant's macro has its own
- * directory, so its file can never be one of the platform's whatever it is named -- and a name
+ * for YAML except the values that come from configuration and the seeds block (`seedsYml`). A
+ * tenant's macro has its own directory, so its file can never be one of the platform's whatever it is named -- and a name
  * that would override one of the platform's macros never reaches a row (`macroDefinition.ts`).
  */
 export function renderProject(input: ProjectInput): Record<string, string> {

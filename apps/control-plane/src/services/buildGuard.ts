@@ -23,7 +23,7 @@
 
 import { type ModelSelector, selectedModel } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
-import { listMacros, listModels } from "@undercroft/db/repos";
+import { listMacros, listModels, listSeedSummaries } from "@undercroft/db/repos";
 import { type Lineage, lineageAround, modelLineage } from "@undercroft/db/services";
 
 import { readTestStates, type TestDetail } from "./testState.ts";
@@ -102,11 +102,15 @@ export async function guardParents(
   tenantId: string,
   select: readonly ModelSelector[],
 ): Promise<GuardOutcome> {
-  const [models, macros] = await Promise.all([
+  const [models, macros, seeds] = await Promise.all([
     listModels(exec, tenantId),
     listMacros(exec, tenantId),
+    listSeedSummaries(exec, tenantId),
   ]);
-  const outside = parentsOutside(modelLineage({ models, macros }), select);
+  // A seed is never a parent read without building: the build loads every seed its selection
+  // reaches (ADR 0128), so only models are guarded here.
+  const lineage = modelLineage({ models, macros, seeds: seeds.map((seed) => seed.name) });
+  const outside = parentsOutside(lineage, select);
   if (outside.size === 0) {
     return { ok: true, unknown: [] };
   }

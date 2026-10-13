@@ -16,8 +16,7 @@
  *
  * `,` is dbt's intersection and `resource_type` its method, both in dbt 1.9's selector grammar
  * (`graph/cli.py`, `graph/selector_methods.py`). A build with no selection is the whole project,
- * every seed included. A tenant with no seeds gets none of these: `resource_type:seed` matching
- * nothing is a warning in dbt's log, and the build it would decorate loads nothing anyway.
+ * every seed included, and so is a tenant with no seeds (`withSeedSelectors`).
  *
  * HOW. dbt loads an existing seed table by truncating it and inserting the file's rows. That is
  * right while the table has exactly the declared columns, and wrong the moment it does not: an
@@ -50,7 +49,7 @@ const STANDING_TYPE: ReadonlyMap<string, string> = new Map(
 );
 
 /** The seeds a selection's selectors reach, as dbt selectors, one per argv item. */
-export function seedSelectors(select: readonly string[]): string[] {
+function seedSelectors(select: readonly string[]): string[] {
   return select.map((selector) => {
     if (selector.endsWith("+")) {
       return `@${selector.slice(0, -1)},resource_type:seed`;
@@ -59,6 +58,21 @@ export function seedSelectors(select: readonly string[]): string[] {
       ? `${selector},resource_type:seed`
       : `1+${selector},resource_type:seed`;
   });
+}
+
+/**
+ * A build's request with the seeds its selection reaches added to that selection, or the request
+ * as it was: for a build of everything, or a tenant with no seeds -- `resource_type:seed` matching
+ * nothing is a warning in dbt's log, and would load nothing anyway.
+ */
+export function withSeedSelectors<Input extends { readonly select?: readonly string[] }>(
+  input: Input,
+  hasSeeds: boolean,
+): Input {
+  if (input.select === undefined || !hasSeeds) {
+    return input;
+  }
+  return { ...input, select: [...input.select, ...seedSelectors(input.select)] };
 }
 
 /** Whether the standing table is exactly the declaration: same names, same order, same types. */

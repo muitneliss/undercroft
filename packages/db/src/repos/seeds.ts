@@ -4,7 +4,7 @@
  * Shared between the control plane, which saves, lists and deletes them, and the worker, which
  * reads every seed of a tenant to write a build's project directory. Whether a table may be
  * stored at all -- its bounds, and every cell against its column's type -- is decided one layer
- * up (`seedTable.ts`); this only reads and writes.
+ * up (`@undercroft/contracts`, `seeds.ts`); this only reads and writes.
  *
  * A seed's content is its declared columns and its rows, together, so it carries ONE hash: the
  * SHA-256 of `[columns, rows]` as Postgres prints that `jsonb`, computed over what it holds

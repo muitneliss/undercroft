@@ -234,6 +234,60 @@ describe("POST /v1/models/build", () => {
     expect(body.preview).toBeNull();
   });
 
+  it("a seed that failed to load fails the run, its step kept in the ledger as a seed's (ADR 0128)", async () => {
+    await db.asSuperuser((tx) =>
+      tx.query("INSERT INTO app.seed (tenant_id, name, columns, rows) VALUES ($1, $2, $3, $4)", [
+        TENANT,
+        "account_groups",
+        JSON.stringify([{ name: "code", type: "text" }]),
+        JSON.stringify([["511"]]),
+      ]),
+    );
+    const seedBroke: Spawn = (_cmd, options) => {
+      writeResults(options.cwd, [
+        {
+          unique_id: "seed.undercroft.account_groups",
+          status: "error",
+          message: "permission denied for schema analytics_case_1",
+          failures: null,
+          execution_time: 0.1,
+          relation_name: null,
+        },
+        {
+          unique_id: "model.undercroft.stg_deals",
+          status: "skipped",
+          message: null,
+          failures: null,
+          execution_time: 0,
+          relation_name: null,
+        },
+      ]);
+      return Promise.resolve({ exitCode: 1, stdout: "Database Error", stderr: "" });
+    };
+
+    const res = await post(api(seedBroke), "/v1/models/build", {
+      tenantId: TENANT,
+      model: "stg_deals",
+    });
+    const body = (await res.json()) as { ok: boolean; error: string | null; runId: string };
+
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("permission denied for schema analytics_case_1");
+    const { rows: run } = await db.query<{ status: string }>(
+      "SELECT status FROM ops.run WHERE id = $1",
+      [body.runId],
+    );
+    expect(run[0]?.status).toBe("failed");
+    const { rows: steps } = await db.query<{ kind: string; name: string; model: string | null }>(
+      "SELECT kind, name, model FROM ops.run_step WHERE run_id = $1 ORDER BY kind",
+      [body.runId],
+    );
+    expect(steps).toEqual([
+      { kind: "model", name: "stg_deals", model: null },
+      { kind: "seed", name: "account_groups", model: null },
+    ]);
+  });
+
   // #336: the run kept the first 500 characters of dbt's last lines, the banner filled them,
   // and the cause was cut off at the "E" of "Encountered".
   it("a build dbt stopped before its first model records dbt's own cause, not its banner", async () => {

@@ -54,7 +54,7 @@ import {
 } from "@undercroft/db/services";
 
 import { columnsOf } from "../repos/relations.ts";
-import { projectSeeds, seedSelectors } from "./seedLoad.ts";
+import { projectSeeds, withSeedSelectors } from "./seedLoad.ts";
 import { TenantNotProvisioned, type TenantSessions } from "./tenantSession.ts";
 
 export interface SpawnOptions {
@@ -251,9 +251,8 @@ function attributed(steps: readonly RunStep[], manifest: unknown): RunStep[] {
 }
 
 /**
- * Why the build is not ok, in dbt's own words for the model -- or the seed -- that broke. A seed
- * that did not load is a failed build: the models reading it were skipped, or would have read
- * whatever the last load left (ADR 0128).
+ * Why the build is not ok, in dbt's own words for the model or seed that broke: a seed that did
+ * not load left its readers skipped, or reading whatever the last load left (ADR 0128).
  */
 function errorOf(steps: readonly RunStep[], tail: string): string | null {
   const broken = steps.find((s) => s.kind !== "test" && s.status === "error");
@@ -374,12 +373,7 @@ export async function runTransform(
         seeds: loads,
       }),
     );
-    // The seeds each selector reaches follow it, or a model would read a seed nothing loaded.
-    // Only for a tenant that has one: `resource_type:seed` matching nothing is a dbt warning.
-    const selected =
-      input.select === undefined || seeds.length === 0
-        ? input
-        : { ...input, select: [...input.select, ...seedSelectors(input.select)] };
+    const selected = withSeedSelectors(input, seeds.length > 0);
     const { exitCode, output } = await spawnDbt(deps, selected, dir);
     const parsed = parseRunResults(await readTarget(dir, "run_results.json"));
     const steps = attributed(parsed.steps, await readTarget(dir, "manifest.json"));

@@ -341,7 +341,7 @@ describe("runTransform, with the tenant's seeds (ADR 0128)", () => {
       'code,budget\n"0511","12345678901234.5678"\n"642",\n',
     );
     expect(files["dbt_project.yml"]).toContain(
-      '    account_groups:\n      +column_types:\n        code: "text"\n        budget: "numeric(18,4)"\n',
+      '    "account_groups":\n      +column_types:\n        "code": "text"\n        "budget": "numeric(18,4)"\n',
     );
     // A seed never loaded has no table to compare, so it is created by its first load.
     expect(files["dbt_project.yml"]).not.toContain("+full_refresh");
@@ -410,7 +410,7 @@ describe("runTransform, with the tenant's seeds (ADR 0128)", () => {
     const changed = await yml();
 
     expect(matching).not.toContain("+full_refresh");
-    expect(changed).toContain("    account_groups:\n");
+    expect(changed).toContain('    "account_groups":\n');
     expect(changed).toContain("      +full_refresh: true\n");
   });
 });
