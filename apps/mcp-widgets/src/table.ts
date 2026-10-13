@@ -1,7 +1,7 @@
 /**
  * A tool's answer, as the rows and columns the grid widget prints. Pure: no DOM, no host.
  *
- * Seven procedures are drawn as a grid (`MCP_WIDGETS` in the control plane's `surface.ts`), and
+ * Eight procedures are drawn as a grid (`MCP_WIDGETS` in the control plane's `surface.ts`), and
  * they answer in three shapes: a query's `TableResult`, a page of search hits, a page of raw
  * records or documents. Each is read here by a function typed against what that procedure
  * ANSWERS (`ToolContentOf`), so a change to a procedure's output, or a procedure added to the
@@ -59,6 +59,9 @@ const READERS: { readonly [P in GridPath]: Reader<P> } = {
   "bi.answer": queryResult,
   "bi.runQuestion": queryResult,
   "bi.questions.answer": queryResult,
+  // A preview is a query's answer with the SQL dbt compiled beside it, which the grid leaves to
+  // the structured content (ADR 0132).
+  "models.preview": queryResult,
 
   "lake.search": (content, t) => ({
     columns: [

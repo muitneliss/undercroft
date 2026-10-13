@@ -580,6 +580,7 @@ export const vi = {
       models_reference: "Xem tài liệu tham khảo mô hình",
       models_revision: "Xem phiên bản của dự án mô hình",
       models_check: "Kiểm tra mô hình",
+      models_preview: "Xem trước mô hình",
       models_save: "Lưu mô hình",
       models_build: "Dựng mô hình",
       models_delete: "Xoá mô hình",

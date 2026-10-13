@@ -464,6 +464,7 @@ export const en = {
       models_reference: "Read the modelling reference",
       models_revision: "Read the models' revision",
       models_check: "Checked a model",
+      models_preview: "Previewed a model",
       models_save: "Saved a model",
       models_build: "Built a model",
       models_delete: "Deleted a model",

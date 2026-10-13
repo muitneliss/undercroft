@@ -705,6 +705,26 @@ describe("POST /v1/queries/raw/run, the tenant's login busy", () => {
   });
 });
 
+describe("POST /v1/models/preview (ADR 0132)", () => {
+  withDatabase();
+
+  it("refuses a caller without the service token, and a model dbt refused is 400 compile_failed with dbt's cause", async () => {
+    await db.asSuperuser((tx) => provisionTenantRoles(tx, TENANT));
+    const body = { tenantId: TENANT, name: "stg_deals", sql: "select {{ oops( }}" };
+    const app = api(stoppedEarly("Encountered an error:\nCompilation Error in model stg_deals"));
+
+    expect((await post(app, "/v1/models/preview", body, "nope")).status).toBe(401);
+
+    const res = await post(app, "/v1/models/preview", body);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      code: "compile_failed",
+      message: "Encountered an error:\nCompilation Error in model stg_deals",
+      details: [],
+    });
+  });
+});
+
 describe("POST /v1/dq/failures", () => {
   withDatabase();
 

@@ -31,7 +31,7 @@ const SETUP_MS = 30_000;
  * records; one that declares it without a record shows up here first.
  */
 describe("which procedures hold their request open", () => {
-  it("is runs.get, for its wait, and models.build, for the worker's deadline, each with its answer", () => {
+  it("is runs.get, for its wait, and models.build and models.preview, for the worker's deadline, each with its answer", () => {
     const held = Object.entries(appRouter._def.procedures).flatMap(([path, procedure]) => {
       const seconds: unknown = Reflect.get(
         Reflect.get(procedure, "_def") ?? {},
@@ -42,8 +42,10 @@ describe("which procedures hold their request open", () => {
 
     // models.build: the control plane's 150 s wait on the worker, plus ten to answer -- under
     // Bun's 255, and under the CLI's 180 s request timeout, so neither cuts a build it waits on.
+    // models.preview: the 95 s wait on the worker's turn, compile and query, plus ten (ADR 0132).
     expect(held).toEqual([
       ["models.build", 160],
+      ["models.preview", 105],
       ["runs.get", 60],
     ]);
   });

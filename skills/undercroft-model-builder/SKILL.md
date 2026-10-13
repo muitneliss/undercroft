@@ -1,6 +1,6 @@
 ---
 name: undercroft-model-builder
-description: Guide a person from a question about their data to the smallest change in Undercroft that answers it, over its MCP tools or its CLI -- an exploratory answer, a report question or dashboard over models they already have, a change to an existing model or macro, or a new dbt model. Use when a person wants to save a query as a model (a raw-lake query, a report question's SQL, SQL they paste) or build one, wants a report or dashboard and may not know which layer it needs, or asks what they can build with their data. It inventories the tenant's lake, models, macros, seeds, questions and dashboards first, asks one question at a time, reads the lake instead of guessing, compares approaches and gets a plan approved before any write, writes the plan down, then checks a model with models.check and asks before it saves and again before it builds. Needs the undercroft skill for how to reach the platform.
+description: Guide a person from a question about their data to the smallest change in Undercroft that answers it, over its MCP tools or its CLI -- an exploratory answer, a report question or dashboard over models they already have, a change to an existing model or macro, or a new dbt model. Use when a person wants to save a query as a model (a raw-lake query, a report question's SQL, SQL they paste) or build one, wants a report or dashboard and may not know which layer it needs, or asks what they can build with their data. It inventories the tenant's lake, models, macros, seeds, questions and dashboards first, asks one question at a time, reads the lake instead of guessing, compares approaches and gets a plan approved before any write, writes the plan down, then checks a model with models.check, previews what it returns with models.preview, and asks before it saves and again before it builds. Needs the undercroft skill for how to reach the platform.
 ---
 
 # From a question to a model, or to something smaller
@@ -77,7 +77,9 @@ These hold for the whole workflow. None of them bends because the person is in a
     model reads it.
 11. **Stop at a refusal.** `PERMISSION_DENIED`, `WRITES_DISABLED` and `HUMAN_REQUIRED` end
     the workflow. Tell the person what was refused and who can change it. Never work around
-    one, for example by running the model's SQL through `lake.query` instead. A `CONFLICT`
+    one. `models.preview` is the one way to run a model's SQL before it is saved: never render
+    its Jinja yourself -- `ref()`, `source()`, a macro -- and run the result through
+    `lake.query`, which answers for what you rendered, not for what dbt compiles. A `CONFLICT`
     is reported, not looped: a deactivated customer refuses every operation until an admin
     reactivates it, and that is not yours to do.
 12. **Success is the platform's answer.** A build succeeded when `models.build` (or, after
@@ -122,9 +124,13 @@ These hold for the whole workflow. None of them bends because the person is in a
 - Reading the raw lake (`lake.records`, `lake.documents`, `lake.querySchema`, `lake.query`),
   saving and building a model (`models.save`, `models.build`), saving a macro
   (`macros.save`) and saving a seed (`seeds.save`) need the `admin` role.
-- Over MCP, `lake.query`, every save and `models.build` need a connection with a write grant.
-  With the CLI, they need a profile that allows writes. `lake.query` counts as a write even
-  though it only reads, because it runs SQL somebody wrote.
+- Previewing an unsaved model (`models.preview`) needs the `admin` role and the write grant
+  below, as `lake.query` does: it saves nothing, but it runs the draft as the login that reads
+  the raw lake.
+- Over MCP, `lake.query`, `models.preview`, every save and `models.build` need a connection
+  with a write grant. With the CLI, they need a profile that allows writes. `lake.query` and
+  `models.preview` count as writes even though they only read, because each runs SQL somebody
+  wrote.
 
 If the person lacks one of these, say so at the start, before the interview. Do not find out
 halfway through. A person who can read but not write can still be helped to the end of
@@ -251,28 +257,50 @@ Run `models.check` with the name, the SQL and the tests.
 
 - Fix every `error` yourself, and check again. If the same error is still there after three
   tries, stop and show the person the SQL and the finding.
-- Keep the `warning` findings and the unverified list for the next step. Change the SQL for
-  a warning only when the brief supports the change.
+- Keep the `warning` findings and the unverified list for the step after next. Change the SQL
+  for a warning only when the brief supports the change.
 
-### M4. Confirm the save
+### M4. Preview
+
+Run `models.preview` with the name and the SQL. dbt compiles the draft in the customer's own
+project -- in place of the saved model of that name, or beside the others -- and the answer is a
+sample of its rows with `compiled`, the SQL dbt produced. Nothing is saved or built. It runs
+the draft against the customer's data, as `lake.query` does: ask the person before the first
+one, and keep `limit` small.
+
+- Read the sample for meaning: what one row is, and whether missing values stayed missing.
+- Check the grain with `query`, an outer query that reads the model by its own name, such as
+  `select count(*), count(distinct deal_id) from stg_deals`. Equal counts mean the key is
+  unique; unequal ones are a join that multiplied rows or a key that is not one.
+- `BAD_REQUEST` with `reason: "COMPILE_FAILED"` is dbt's account of why the project would not
+  compile. A broken saved model fails it too, so read which model it names. Fix the draft and go
+  back to M3. `reason: "QUERY_FAILED"` is Postgres's sentence about the compiled SQL or your
+  outer query.
+- A parent is read as published, which is what a build of this model alone would read. A parent
+  that is itself an unsaved draft cannot be previewed with it: save and build it first, with the
+  person's yes, or preview each over the saved versions of the others.
+- Without the `admin` role or a write grant (above), skip this step and say so in the next.
+
+### M5. Confirm the save
 
 Show the person:
 
 - the model's name, and the table it becomes;
 - the SQL, whole;
 - the tests, column by column;
+- what the preview showed: a few rows and the grain check, or that it was not run and why;
 - every warning from the check, with its message, and what you did or did not do about it;
 - the check's unverified list, in one line: what only the build can tell.
 
 Ask whether to save it. Changes go back to M2. A change that departs from the approved plan
 goes back to the plan.
 
-### M5. Save
+### M6. Save
 
 Call `models.save` with `create: true`. With the CLI, dry-run it first. On `CONFLICT`, follow
 guardrail 8. On success, the model is stored and nothing has run yet: say exactly that.
 
-### M6. Confirm the build, then build
+### M7. Confirm the build, then build
 
 Ask whether to build it now, and say that a build replaces the table any report on it reads.
 When the change touched several models, or models read from the one you changed, ask once for

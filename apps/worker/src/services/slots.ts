@@ -65,6 +65,11 @@ export interface RunTurns {
    * an open transaction for as long as its reader takes, so it waits its turn like one.
    */
   readonly export?: Slots;
+  /**
+   * Model previews (ADR 0132). Not a run either, but each is a `dbt compile` -- a Python process
+   * of a few hundred megabytes -- and then a tenant connection, while a person waits on it.
+   */
+  readonly preview?: Slots;
 }
 
 /** No limit: `work` runs at once. What a run gets when no limit was configured for its kind. */

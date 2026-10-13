@@ -246,6 +246,14 @@ export const vi = {
     noPassingVersion:
       "{{model}} chưa có phiên bản nào đạt kiểm thử: lần dựng ở lần chạy {{runId}} không đạt kiểm thử hoặc không dựng được, nên chưa có gì của nó được công bố cho Báo cáo. Hãy sửa mô hình rồi dựng lại.",
     queryFailed: "Câu truy vấn không chạy được: {{message}}",
+    /**
+     * A model preview dbt would not compile (ADR 0132). dbt's own account follows the colon; it
+     * quotes the tenant's model text and nothing else, and names a broken sibling model too.
+     */
+    previewCompileFailed:
+      "Không biên dịch được mô hình {{name}}, nên chưa chạy gì và chưa lưu gì: {{cause}}",
+    previewNotRun:
+      "Không xem trước được mô hình. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     queryNotRun:
       "Không chạy được câu truy vấn. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     /**

@@ -83,9 +83,10 @@ Each token carries a **grant** you choose when you mint it:
 | `read` (Chỉ đọc)     | only the tools classified `read` | look at runs, the lake, models, reports, and people if you are an admin |
 | `write` (Đọc và ghi) | every tool your role allows      | also trigger runs, save and delete, invite and remove                   |
 
-What counts as a read is `EFFECTS` in `apps/control-plane/src/handlers/surface.ts`. Two things
+What counts as a read is `EFFECTS` in `apps/control-plane/src/handlers/surface.ts`. Some things
 that look harmless are **not** reads: `lake_query` runs SQL an admin wrote against the raw lake,
-and every `*_delete` / `*_revoke` / `*_disconnect` is destructive. Mint `read` unless you mean the
+`models_preview` runs an unsaved model's SQL as the same login (ADR 0132), and every `*_delete` /
+`*_revoke` / `*_disconnect` is destructive. Mint `read` unless you mean the
 agent to change things: an agent reading a customer's mail can be talked into acting by it.
 
 A token lives at most a year (30, 90 or 365 days), is shown **once**, and cannot mint or revoke
@@ -193,9 +194,12 @@ token as an environment variable, as above, so it stays off every process's comm
   count. Waiting, it holds the call at most 160 seconds (ADR 0126); a host whose tool timeout is
   shorter passes `wait: false`, which answers with the run at once, and waits on it with
   `runs_get`. A build refused because another is running names that run.
+- **Previews.** `models_preview` answers what an unsaved model returns, or an outer `query` over
+  it, compiled by dbt and run read-only; it saves and builds nothing, and holds the call at most
+  105 seconds (ADR 0132).
 - **Widgets.** In a host that draws MCP Apps (claude.ai, Claude Desktop), a query result
-  (`lake_query`, `lake_search`, `lake_records`, `lake_documents`, `bi_answer`, `bi_runQuestion`,
-  `bi_questions_answer`) is drawn as a table, up to 500 rows, amounts printed digit for digit;
+  (`lake_query`, `lake_search`, `lake_records`, `lake_documents`, `models_preview`, `bi_answer`,
+  `bi_runQuestion`, `bi_questions_answer`) is drawn as a table, up to 500 rows, amounts printed digit for digit;
   `runs_trigger` and `runs_get` draw the run, followed live until it ends. A host without the
   extension shows the same answer as text.
 - **Skills.** The server also serves Undercroft's own Agent Skills through the MCP Skills

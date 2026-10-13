@@ -27,7 +27,7 @@ import {
   UnknownSource,
   UnknownTenant,
 } from "../services/ingest.ts";
-import { QueryFailed } from "../services/queryRunner.ts";
+import { AuthorTextRefused } from "../services/authorTextRefused.ts";
 import { QueryTimedOut } from "../services/queryTimeout.ts";
 import { TenantBusy } from "../services/tenantBusy.ts";
 import { TenantNotProvisioned } from "../services/tenantSession.ts";
@@ -51,10 +51,11 @@ export function failureOf(error: unknown): Failure {
   if (error instanceof ScopeNotChosen) {
     return { status: 409, code: "scope_not_chosen", message: error.message, details: [] };
   }
-  // The author's SQL, refused by Postgres: the message quotes their own text and is the
-  // one thing that lets them fix it. A 400, because the request was the fault.
-  if (error instanceof QueryFailed) {
-    return { status: 400, code: "query_failed", message: error.message, details: [] };
+  // The author's SQL refused by Postgres (`query_failed`), or their model refused by dbt before
+  // anything ran (`compile_failed`, ADR 0132): the message quotes their own text and no row, and
+  // is the one thing that lets them fix it. A 400, because the request was the fault.
+  if (error instanceof AuthorTextRefused) {
+    return { status: 400, code: error.code, message: error.message, details: [] };
   }
   if (error instanceof TenantNotProvisioned) {
     return { status: 404, code: "not_found", message: error.message, details: [] };

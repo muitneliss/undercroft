@@ -127,6 +127,39 @@ describe("reading a refused model drop", () => {
   });
 });
 
+describe("reading a refused model preview (ADR 0132)", () => {
+  function answeringWith(envelope: unknown, status: number): WorkerClient {
+    return createHttpWorkerClient({
+      baseUrl: "https://worker.test",
+      triggerToken: "t",
+      fetch: () => Promise.resolve(Response.json(envelope, { status })),
+    });
+  }
+  const input = { tenantId: "CASE-0042", name: "stg_deals", sql: "select 1", limit: 10 };
+
+  it("a 400 says which text was refused, dbt's model or Postgres's SQL, and quotes why", async () => {
+    // Both are 400s, and the author fixes them in different places: the model, or the query.
+    const compile = await answeringWith(
+      { code: "compile_failed", message: "Compilation Error in model stg_deals", details: [] },
+      400,
+    ).previewModel(input);
+    const query = await answeringWith(
+      { code: "query_failed", message: 'column "nope" does not exist', details: [] },
+      400,
+    ).previewModel(input);
+    const other = await answeringWith(
+      { code: "invalid_request", message: "tenantId, name and sql are required", details: [] },
+      400,
+    ).previewModel(input);
+
+    expect([compile, query, other]).toEqual([
+      { ok: false, reason: "compile-failed", message: "Compilation Error in model stg_deals" },
+      { ok: false, reason: "query-failed", message: 'column "nope" does not exist' },
+      { ok: false, reason: "refused" },
+    ]);
+  });
+});
+
 describe("reading a browse answer from a worker of another build", () => {
   it("a worker built before `partial` and `kind` is read as what it was: whole, unclassified", async () => {
     // Worker and control plane deploy separately, so for a while one answers the other in an

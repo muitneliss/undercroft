@@ -5,7 +5,7 @@ date: 2026-10-13
 tags: []
 source: docs/runbook/agent-skills.md
 source_path: docs/runbook/agent-skills.md
-source_hash: 73950dafcde0750a329550102a62b64cf77dd211fb5ba8b16b7861e2e9857483
+source_hash: e9bd6e2a0e7c7d2105759986221184844c6f3bf119f502cd9c850ecf7ce189e6
 ingested: 2026-10-13
 ---
 
@@ -13,7 +13,7 @@ ingested: 2026-10-13
 
 How to install, use and add Undercroft's published Agent Skills; the decisions are [[ADR 0067: The published skills are one family, installed by npx skills and served by /mcp]]. The skills teach workflows; the agent carries them out through either door, the MCP tools at `/mcp` ([[Runbook: Connecting an agent over MCP]]) or the `undercroft` CLI ([[Runbook: The undercroft CLI]]).
 
-**The skills.** `undercroft` is the entry: which door to use, how an operation is spelled on each, what a refusal means, what only the person can do, how to report a defect; read before any other. `undercroft-model-builder` turns data into an answer, a report or a model ([[ADR 0114 The Model Builder Finds Out What Is Needed Before It Builds Anything]]): it inventories what the tenant already has, finds out what the person needs, and picks the smallest change -- a look at the data, a question or dashboard over existing models, a change to a model or macro, or a new model. Nothing is written before the plan is approved; a model is checked with `models.check` and saved and built on two separate yeses. Both live in `skills/` at the repository root, the only copy.
+**The skills.** `undercroft` is the entry: which door to use, how an operation is spelled on each, what a refusal means, what only the person can do, how to report a defect; read before any other. `undercroft-model-builder` turns data into an answer, a report or a model ([[ADR 0114 The Model Builder Finds Out What Is Needed Before It Builds Anything]]): it inventories what the tenant already has, finds out what the person needs, and picks the smallest change -- a look at the data, a question or dashboard over existing models, a change to a model or macro, or a new model. Nothing is written before the plan is approved; a model is checked with `models.check`, previewed with `models.preview` ([[ADR 0132 A Model Is Previewed by Compiling It, Not by Building It]]), and saved and built on two separate yeses. Both live in `skills/` at the repository root, the only copy.
 
 **Installing.** `npx skills add muitneliss/undercroft` installs every skill; `--skill <name> --agent claude-code|codex -y` installs one without prompts, `-g` for every project. With MCP tools present the skills use them; otherwise the `undercroft` skill installs its pinned CLI release on first use. Moving from releases before 1.41: `npx skills remove undercroft-cli`, then `npx skills add muitneliss/undercroft`; the CLI's commands, error codes and the MCP tools are unchanged.
 

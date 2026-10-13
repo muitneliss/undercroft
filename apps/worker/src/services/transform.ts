@@ -37,9 +37,6 @@
  * A tenant with no models and no seeds spawns nothing and reports an empty, successful build.
  */
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
 import { ConnectorError } from "@undercroft/core";
 import type { DatabaseAddress, SqlExecutor } from "@undercroft/db";
 import {
@@ -51,17 +48,13 @@ import {
   setModelColumns,
   tenantRolesFor,
 } from "@undercroft/db/repos";
-import {
-  parseRunResults,
-  PASSWORD_VAR,
-  renderProject,
-  testedModels,
-} from "@undercroft/db/services";
+import { parseRunResults, PASSWORD_VAR, testedModels } from "@undercroft/db/services";
 
 import { columnsOf } from "../repos/relations.ts";
 import { causeOf, errorOf, tailOf } from "./dbtOutput.ts";
 import { publishBuild } from "./promote.ts";
-import { projectSeeds, withSeedSelectors } from "./seedLoad.ts";
+import { withSeedSelectors } from "./seedLoad.ts";
+import { inProjectDir, readTarget, tenantProjectFiles } from "./tenantProject.ts";
 import { TenantNotProvisioned, type TenantSessions } from "./tenantSession.ts";
 
 export interface SpawnOptions {
@@ -186,8 +179,15 @@ const CHILD_ENV: readonly string[] = [
   "SSL_CERT_DIR",
 ];
 
-/** The child's environment: `CHILD_ENV` of the parent's, plus the tenant's one password. */
-function childEnv(parent: NodeJS.ProcessEnv | undefined, password: string): Record<string, string> {
+/**
+ * The child's environment: `CHILD_ENV` of the parent's, plus the tenant's one password. A child
+ * that must not log in at all -- a preview's `dbt compile` (ADR 0132) -- is given `""`, so the
+ * profile's `env_var()` still resolves and there is nothing to authenticate with.
+ */
+export function childEnv(
+  parent: NodeJS.ProcessEnv | undefined,
+  password: string,
+): Record<string, string> {
   const env: Record<string, string> = {};
   for (const key of CHILD_ENV) {
     const value = parent?.[key];
@@ -197,23 +197,6 @@ function childEnv(parent: NodeJS.ProcessEnv | undefined, password: string): Reco
   }
   env[PASSWORD_VAR] = password;
   return env;
-}
-
-async function writeProject(dir: string, files: Record<string, string>): Promise<void> {
-  for (const [path, text] of Object.entries(files)) {
-    const full = join(dir, path);
-    await mkdir(dirname(full), { recursive: true });
-    await writeFile(full, text, "utf8");
-  }
-}
-
-/** One of the JSON files dbt writes under `target/`, or `null` when it wrote none readable. */
-async function readTarget(dir: string, file: string): Promise<unknown> {
-  try {
-    return JSON.parse(await readFile(join(dir, "target", file), "utf8"));
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -326,23 +309,14 @@ export async function runTransform(
   }
 
   const macros = await listMacros(deps.exec, input.tenantId);
-  const loads = await projectSeeds(deps.sessions, {
+  const files = await tenantProjectFiles(deps, {
     tenantId: input.tenantId,
-    schema: roles.stagingSchema,
+    roles,
+    models,
+    macros,
     seeds,
   });
-  const dir = await mkdtemp(join(deps.workDir ?? tmpdir(), "undercroft-dbt-"));
-  try {
-    await writeProject(
-      dir,
-      renderProject({
-        slug: roles.slug,
-        database: deps.database,
-        models: models.map((m) => ({ name: m.name, sql: m.sql, tests: m.tests })),
-        macros: macros.map((m) => ({ name: m.name, sql: m.sql })),
-        seeds: loads,
-      }),
-    );
+  return inProjectDir(deps.workDir, files, async (dir) => {
     const selected = withSeedSelectors(input, seeds.length > 0);
     const { exitCode, output } = await spawnDbt(deps, selected, dir);
     const { steps: ran, testsFailed } = parseRunResults(await readTarget(dir, "run_results.json"));
@@ -369,7 +343,5 @@ export async function runTransform(
       heldByViews: published.heldByViews,
       models: models.length,
     };
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
+  });
 }

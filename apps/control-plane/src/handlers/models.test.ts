@@ -8,6 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
+import type { ModelPreview } from "@undercroft/contracts";
 import { closeRun, openRun, recordSteps } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
@@ -775,6 +776,98 @@ describe("models.check", () => {
       caller(admin, "a@example.test", "vi", { grant: "read" }).models.save(DRAFT),
     );
     expect(got.code).toBe("FORBIDDEN");
+  });
+});
+
+describe("models.preview (ADR 0132)", () => {
+  const SAMPLE = {
+    columns: [{ name: "deal_id", type: "integer" }],
+    rows: [[1], [2]],
+    truncated: false,
+    compiled: 'select deal_id from "analytics_case_0042"."base"',
+  };
+  const PREVIEW = {
+    tenantId: TENANT,
+    name: "stg_deals",
+    sql: "select deal_id from {{ ref('base') }}",
+  };
+
+  /** A worker whose every preview answers `answer`. */
+  function previewing(answer: ModelPreview): InMemoryWorkerClient {
+    const worker = new InMemoryWorkerClient();
+    worker.previews.answering(answer);
+    return worker;
+  }
+
+  it("an admin gets the rows and the SQL dbt compiled, and nothing is saved", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = previewing(SAMPLE);
+    const api = caller(admin, "a@example.test", "vi", { worker });
+    await api.models.save({ ...DRAFT, create: true });
+
+    expect(await api.models.preview(PREVIEW)).toEqual(SAMPLE);
+    expect((await api.models.get({ tenantId: TENANT, name: "stg_deals" })).sql).toBe("select 1");
+    expect((await api.models.list({ tenantId: TENANT })).map((m) => m.name)).toEqual(["stg_deals"]);
+  });
+
+  it("an outer query goes to the worker with the draft, and its answer comes back", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const counted = { ...SAMPLE, columns: [{ name: "n", type: "bigint" }], rows: [["2"]] };
+    const worker = previewing(counted);
+    const api = caller(admin, "a@example.test", "vi", { worker });
+
+    const got = await api.models.preview({
+      ...PREVIEW,
+      query: " select count(*) as n from stg_deals ",
+    });
+
+    expect(got.rows).toEqual([["2"]]);
+    expect(worker.previews.asked).toEqual([
+      { ...PREVIEW, query: "select count(*) as n from stg_deals", limit: 1000 },
+    ]);
+  });
+
+  it("a member is refused, and so is an admin's read-only credential: it runs SQL as the login that reads raw", async () => {
+    const member = await seedMember("m@example.test", "member");
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = previewing(SAMPLE);
+
+    const asMember = await refusal(() =>
+      caller(member, "m@example.test", "vi", { worker }).models.preview(PREVIEW),
+    );
+    const readOnly = await refusal(() =>
+      caller(admin, "a@example.test", "vi", { worker, grant: "read" }).models.preview(PREVIEW),
+    );
+
+    expect([asMember.code, readOnly.code]).toEqual(["FORBIDDEN", "FORBIDDEN"]);
+    expect(worker.previews.asked).toEqual([]);
+  });
+
+  it("a model dbt would not compile is BAD_REQUEST carrying dbt's cause, in the caller's language", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient();
+    worker.previews.refusingCompile("Compilation Error in model base2 (models/base2.sql)");
+
+    const got = await refusal(() =>
+      caller(admin, "a@example.test", "en", { worker }).models.preview(PREVIEW),
+    );
+
+    expect(got.code).toBe("BAD_REQUEST");
+    expect(got.message).toBe(
+      "The model stg_deals did not compile, so nothing ran and nothing was saved: Compilation Error in model base2 (models/base2.sql)",
+    );
+  });
+
+  it("SQL Postgres refused is BAD_REQUEST carrying Postgres's sentence", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient().refusingQueries('column "nope" does not exist');
+
+    const got = await refusal(() =>
+      caller(admin, "a@example.test", "en", { worker }).models.preview(PREVIEW),
+    );
+
+    expect(got.code).toBe("BAD_REQUEST");
+    expect(got.message).toBe('The query did not run: column "nope" does not exist');
   });
 });
 

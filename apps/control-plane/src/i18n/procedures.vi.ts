@@ -103,6 +103,8 @@ export const procedureSentences: SentenceTable = {
     "Tài liệu tham khảo cho người viết mô hình: các nguồn, macro của nền tảng và macro riêng của khách hàng. parts để chỉ lấy một số trong sources, platformMacros và tenantMacros; hai phần đầu giống hệt nhau ở mọi lần gọi.",
   "models.check":
     "Kiểm tra SQL và các kiểm thử của một mô hình trước khi lưu, không chạy gì: lỗi chắc chắn, điều đáng ngờ, và những gì không kiểm được; phát hiện nằm trong một kiểm thử thì ghi tên nó ở test.",
+  "models.preview":
+    "Xem một mô hình trả về gì trước khi lưu: dbt biên dịch sql thành mô hình name trong dự án của khách hàng, thay cho mô hình đã lưu cùng tên hoặc đặt cạnh các mô hình khác, rồi chạy SQL đã biên dịch ở chế độ chỉ đọc. Trả về columns, rows, truncated và compiled; có query thì chạy query trên mô hình và gọi mô hình bằng chính tên của nó, chẳng hạn để đếm số dòng hay số khoá khác nhau. Không lưu và không dựng gì. Mô hình không biên dịch được thì BAD_REQUEST kèm nguyên nhân dbt nêu. Quản trị.",
   "macros.list":
     "Các macro dbt riêng của khách hàng, mỗi macro kèm công dụng, tham số và mã băm của định nghĩa và mô tả, không kèm định nghĩa. names hoặc match để lọc.",
   "macros.get": "Một macro dbt của khách hàng, định nghĩa của nó và các mã băm.",

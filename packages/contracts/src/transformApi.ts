@@ -11,7 +11,7 @@
 
 import { z } from "zod";
 
-import { MAX_BUILD_SELECTORS, ModelName, ModelSelector } from "./models.ts";
+import { MAX_BUILD_SELECTORS, MAX_MODEL_SQL_BYTES, ModelName, ModelSelector } from "./models.ts";
 import { SeedName } from "./seeds.ts";
 
 export const Cell = z.union([z.string(), z.number(), z.boolean(), z.null()]);
@@ -215,6 +215,28 @@ export const QueryAnswer = TableResult.extend({
   relations: z.array(z.string()).nullable().optional(),
 });
 export type QueryAnswer = z.infer<typeof QueryAnswer>;
+
+/**
+ * Preview a model nobody has saved: compile `sql` as the model `name` inside the tenant's own
+ * project, and run what dbt compiled in the read-only frame as the tenant's dbt login (ADR 0132).
+ *
+ * `sql` replaces the saved model of the same name, or joins the project beside the saved ones;
+ * nothing is stored and nothing is built. With no `query` the answer is a sample of the model's
+ * rows. With one, it is `query` run over the model, which it names as `name` -- `select count(*),
+ * count(distinct k) from <name>` -- so a question about the model is answered without a table.
+ */
+export const PreviewModelRequest = z.object({
+  tenantId: z.string().min(1),
+  name: ModelName,
+  sql: z.string().min(1).max(MAX_MODEL_SQL_BYTES),
+  query: z.string().min(1).max(MAX_QUERY_SQL_BYTES).optional(),
+  limit: z.number().int().min(1).max(MAX_QUERY_ROWS).default(DEFAULT_QUERY_ROWS),
+});
+export type PreviewModelRequest = z.infer<typeof PreviewModelRequest>;
+
+/** A preview's rows, and the SQL dbt compiled the model to: what a build would run. */
+export const ModelPreview = TableResult.extend({ compiled: z.string() });
+export type ModelPreview = z.infer<typeof ModelPreview>;
 
 /**
  * Stream every row one SELECT answers, as CSV, as the tenant's read-only login (ADR 0111).

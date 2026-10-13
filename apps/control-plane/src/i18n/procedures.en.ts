@@ -89,6 +89,8 @@ export const procedureSentences: SentenceTable = {
     "Reference material for a model's author: the sources, the platform's macros and the customer's own. parts for only some of sources, platformMacros and tenantMacros; the first two are the same text on every call.",
   "models.check":
     "Check a model's SQL and its tests before saving it, running nothing: certain errors, suspicions, and what could not be checked; a finding in a test names it in test.",
+  "models.preview":
+    "See what a model returns before saving it: dbt compiles sql as the model name in the customer's project, in place of the saved model of that name or beside the others, and the SQL it compiled runs read-only. Answers columns, rows, truncated and compiled; query runs over the model instead and reads it by its name, to count its rows or its distinct keys. Saves and builds nothing. A model that does not compile is BAD_REQUEST with dbt's cause. Admins.",
   "macros.list":
     "The customer's own dbt macros, each with what it is for, its parameters and the hashes of its definition and description, no definition. names or match to narrow.",
   "macros.get": "One of the customer's dbt macros, its definition and their hashes.",

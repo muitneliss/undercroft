@@ -391,3 +391,6 @@
 ## [2026-10-13] ingest | What an ingest run counts
 ## [2026-10-13] ingest | Architecture
 ## [2026-10-13] ingest | ADR 0131 A Build Publishes Only What Passed
+## [2026-10-13] ingest | ADR 0132 A Model Is Previewed by Compiling It, Not by Building It
+## [2026-10-13] ingest | Runbook: Agent skills
+## [2026-10-13] ingest | Runbook: Connecting an agent over MCP

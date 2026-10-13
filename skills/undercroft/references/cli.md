@@ -191,8 +191,8 @@ tRPC's codes map as follows:
 | `destructive` | That, and `--yes` in agent mode.                                                                                                                                                                                           |
 | `local`       | No `allowWrites` and no `--yes`: `auth login` / `logout` / `status`, `config show` / `set-profile` / `use` and `describe`. The `auth` commands still reach the server. `config google` is a procedure (`read`), not local. |
 
-`lake query` is `write` although it changes nothing: it runs SQL an admin wrote against the raw
-lake, so it takes the same per-profile opt-in.
+`lake query` and `models preview` are `write` although they change nothing: each runs SQL an
+admin wrote as the login that reads the raw lake, so each takes the same per-profile opt-in.
 
 `--dry-run` works on any command that calls a procedure; the `local` commands ignore it. It applies the `allowWrites` check, then stops before any
 call and answers:
