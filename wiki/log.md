@@ -400,3 +400,5 @@
 ## [2026-10-13] ingest | Runbook: The undercroft CLI
 ## [2026-10-13] ingest | Architecture
 ## [2026-10-13] ingest | Runbook: The undercroft CLI
+## [2026-10-13] ingest | ADR 0136 Deploy on Push, Built on the Host, While GitHub Actions Is Out of Minutes
+## [2026-10-13] ingest | Runbook Deployment

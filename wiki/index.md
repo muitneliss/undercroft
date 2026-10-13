@@ -139,6 +139,7 @@
 - [ADR 0133 The Inventory Reads Page After an Item, and Stay Arrays When No Page Is Asked](sources/adr-0133-the-inventory-reads-page-after-an-item-and-stay-arrays-when-no-page-is-asked.md)
 - [ADR 0134 The CLI Signs In With a Personal Token When Nobody Is at Its Terminal](sources/adr-0134-the-cli-signs-in-with-a-personal-token-when-nobody-is-at-its-terminal.md)
 - [ADR 0135 The Instance Serves Its Own CLI](sources/adr-0135-the-instance-serves-its-own-cli.md)
+- [ADR 0136 Deploy on Push, Built on the Host, While GitHub Actions Is Out of Minutes](sources/adr-0136-deploy-on-push-built-on-the-host-while-github-actions-is-out-of-minutes.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)
