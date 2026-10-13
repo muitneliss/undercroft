@@ -37,9 +37,11 @@ again, but some of its tests are failing" in orange for a build whose verdict is
 
 **A test belongs to the model dbt's manifest attaches it to.** After each build the worker reads
 `target/manifest.json` beside `run_results.json` and writes each test step's model to the new
-`ops.run_step.model` (`560_run_step_model.sql`): a generic test's `attached_node`; for a test
-with none, the one model it depends on; depending on several, the one its file name leads with
-before the last `__` (the singular-test naming of ADR 0130), and otherwise none. Reading the
+`ops.run_step.model` (`560_run_step_model.sql`): a generic test's `attached_node` (column tests,
+`accepted_values` and `relationships` included: a relationships test reads its target too, but
+hangs off the model it is declared on); for a SQL test of ADR 0130, named `<model>__<name>`, the
+model before the last `__` when the test reads it, and none when it does not; for any other test
+with no attached node, the one model it depends on, and otherwise none. Reading the
 model out of a test's name was rejected: `not_null_a_b_c` is column `b_c` of `a` or column `c`
 of `a_b`, and dbt hashes a long name. A test that cannot be attributed, and every step recorded
 before this, belongs to no model.

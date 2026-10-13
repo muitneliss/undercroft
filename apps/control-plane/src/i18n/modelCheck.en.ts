@@ -45,7 +45,15 @@ export const modelCheck = {
       "The name passed to {{subject}} is not written out as plain text, so whether it exists cannot be checked.",
     "test-column-unmentioned":
       "There is a test for column {{subject}}, but the SQL never mentions that column.",
+    "test-forbidden-call":
+      "A SQL test may not call {{subject}}(). A test is one select returning the rows that break the rule; its severity is declared with the test's severity.",
+    "test-model-unread":
+      "A SQL test must read its own model, {{subject}}, through ref(), so dbt runs it after that model is built and together with it.",
+    "test-name-too-long":
+      "The name {{subject}} is longer than 63 characters, which Postgres would cut. Give the test a shorter name.",
   },
+  /** A finding inside one of the model's tests rather than its SQL: which test, then what. */
+  inTest: "Test {{test}}: {{message}}",
   unverified: {
     compiles: "Whether the SQL compiles and runs: only a build knows.",
     "payload-keys": "Whether the keys read from the payload exist in the data.",

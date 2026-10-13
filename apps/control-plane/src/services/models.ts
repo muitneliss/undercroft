@@ -15,7 +15,12 @@
  * changed what", and the SQL is in the table beside it.
  */
 
-import { type DqFailuresRequest, ModelTests, type TableResult } from "@undercroft/contracts";
+import {
+  canonicalTests,
+  type DqFailuresRequest,
+  ModelTests,
+  type TableResult,
+} from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   deleteModelUnlessBuilding,
@@ -30,6 +35,8 @@ import {
 } from "@undercroft/db/repos";
 import {
   checkModel,
+  checkTests,
+  type Finding,
   type Lineage,
   type LineageTarget,
   lineageAround,
@@ -190,10 +197,17 @@ export async function get(
 
 export type SaveOutcome =
   | { readonly ok: true; readonly unchanged: boolean }
-  | { readonly ok: false; readonly reason: "name-taken" };
+  | { readonly ok: false; readonly reason: "name-taken" }
+  | { readonly ok: false; readonly reason: "test-refused"; readonly finding: Finding };
 
 /**
  * Store the model. With `create`, a name already in use is refused and nothing is written.
+ *
+ * The tests are stored in their one canonical spelling (`canonicalTests`), so the same tests
+ * hash and compare the same however a caller wrote them. A test `checkTests` finds an error in
+ * -- a SQL test that is not one safe SELECT of its own model, a `relationships` to a model the
+ * tenant lacks -- refuses the save with that finding and writes nothing (ADR 0130). The model's
+ * own SQL is still never refused here: a saved mistake in it is a row, not a broken table.
  *
  * Saving exactly the SQL and tests already stored is `unchanged`: the row keeps its
  * `updatedAt` and `updatedBy`, and no audit row is written, because nothing took effect
@@ -211,7 +225,12 @@ export async function save(
     actorId: string;
   },
 ): Promise<SaveOutcome> {
-  const model = { name: input.name, sql: input.sql, tests: input.tests, updatedBy: input.actorId };
+  const tests = canonicalTests(input.tests);
+  const refused = await refusedTest(exec, input.tenantId, input.name, tests);
+  if (refused !== null) {
+    return { ok: false, reason: "test-refused", finding: refused };
+  }
+  const model = { name: input.name, sql: input.sql, tests, updatedBy: input.actorId };
   const result = input.create
     ? (await insertModel(exec, input.tenantId, model))
       ? "written"
@@ -229,6 +248,34 @@ export async function save(
     });
   }
   return { ok: true, unchanged: result === "unchanged" };
+}
+
+/** The first error `checkTests` finds in `tests`, or `null`; reads the tenant only when needed. */
+async function refusedTest(
+  exec: SqlExecutor,
+  tenantId: string,
+  name: string,
+  tests: ModelTests,
+): Promise<Finding | null> {
+  const relates = Object.values(tests.columns).some((declaredTests) =>
+    declaredTests.some(
+      (declared) => typeof declared !== "string" && declared.kind === "relationships",
+    ),
+  );
+  if (!relates && (tests.sql ?? []).length === 0) {
+    return null;
+  }
+  const [existing, macros] = await Promise.all([
+    listModels(exec, tenantId),
+    listMacros(exec, tenantId),
+  ]);
+  const findings = checkTests({
+    name,
+    tests,
+    existingModels: existing.map((model) => model.name),
+    existingMacros: macros.map((macro) => macro.name),
+  });
+  return findings.find((found) => found.severity === "error") ?? null;
 }
 
 /**

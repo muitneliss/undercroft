@@ -113,6 +113,7 @@ export const en = {
       "The catalogue has no kind besides other, so publishing it would classify every document as nothing. Add a kind or initialise the catalogue first.",
     modelNameTaken:
       "A model named {{name}} already exists. Open it to edit, or choose another name.",
+    modelTestRefused: "Nothing was saved. {{reason}} models.check shows every finding.",
     buildInProgress:
       "A build is already running for this customer. Wait for it to finish, then try again.",
     buildInProgressAs:

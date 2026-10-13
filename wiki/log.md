@@ -378,6 +378,4 @@
 ## [2026-10-13] ingest | Runbook: Connecting an agent over MCP
 ## [2026-10-13] remove | ADR 0125 A Build Is Several Models in One Run, and Need Not Be Waited For
 ## [2026-10-13] ingest | ADR 0127 Lists Answer Summaries, the Server Hashes What It Stores, and an Identical Save Writes Nothing
-## [2026-10-13] ingest | ADR 0129 A Failing Test Is Visible Wherever the Figure Is Read
-## [2026-10-13] ingest | ADR 0129 A Failing Test Is Visible Wherever the Figure Is Read
-## [2026-10-13] ingest | What an ingest run counts
+## [2026-10-13] ingest | ADR 0130 A Rule About a Model's Rows Is a Test of That Model, Not a Model of Its Own

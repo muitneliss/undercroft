@@ -15,8 +15,33 @@
 import type { SqlExecutor } from "../executor.ts";
 import { SOURCE_OF_TRANSFORM } from "./runs.ts";
 
+/**
+ * One column test as stored: a bare kind (`"not_null"`), or an object naming its kind and its
+ * arguments. The contract's `ColumnTest` says which kinds and arguments exist (ADR 0130); this
+ * is the structure every reader below the contract can rely on.
+ */
+export type ColumnTestJson =
+  | string
+  | {
+      readonly kind: string;
+      readonly severity?: string | undefined;
+      readonly values?: readonly string[] | undefined;
+      readonly quote?: boolean | undefined;
+      readonly to?: string | undefined;
+      readonly field?: string | undefined;
+    };
+
+/** A model-level SQL test as stored: a SELECT of the rows that break a rule (ADR 0130). */
+export interface SqlTestJson {
+  readonly name: string;
+  readonly sql: string;
+  readonly severity?: string | undefined;
+}
+
 export interface ModelTestsJson {
-  readonly columns: Record<string, readonly string[]>;
+  readonly columns: Record<string, readonly ColumnTestJson[]>;
+  /** Absent on every row saved before ADR 0130, and on any model with no SQL tests. */
+  readonly sql?: readonly SqlTestJson[] | undefined;
 }
 
 export interface Model {

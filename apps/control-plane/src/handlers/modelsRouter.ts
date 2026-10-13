@@ -30,7 +30,7 @@ import * as models from "../services/models.ts";
 import { revision } from "../services/revision.ts";
 import { BUILD_DEADLINE_MS } from "../services/workerBuild.ts";
 import { notRun } from "./answers.ts";
-import { wordCheck } from "./checkWords.ts";
+import { testedFindingSentence, wordCheck } from "./checkWords.ts";
 import { ANSWER_SECONDS } from "./holdOpen.ts";
 import { StepQuery } from "./inputs.ts";
 import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
@@ -157,13 +157,28 @@ export const modelsRouter = router({
         actor: actorOf(ctx),
         actorId: ctx.user.userId,
       });
-      if (!outcome.ok) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: messages(ctx.locale)("error.modelNameTaken", { name: input.name }),
-        });
+      if (outcome.ok) {
+        return outcome;
       }
-      return outcome;
+      const t = messages(ctx.locale);
+      if (outcome.reason === "test-refused") {
+        throw refusal(
+          "BAD_REQUEST",
+          t("error.modelTestRefused", {
+            reason: testedFindingSentence(ctx.locale, outcome.finding),
+          }),
+          {
+            reason: "TEST_REFUSED",
+            code: outcome.finding.code,
+            test: outcome.finding.test ?? null,
+            subject: outcome.finding.subject,
+          },
+        );
+      }
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: t("error.modelNameTaken", { name: input.name }),
+      });
     }),
 
   /**

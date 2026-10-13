@@ -22,16 +22,20 @@ describe("testedModels", () => {
           attached_node: "model.undercroft.fct",
           depends_on: { nodes: ["model.undercroft.dim_owner", "model.undercroft.fct"] },
         },
-        // A singular test has no attached node: the one model it reads.
+        // A SQL test (ADR 0130) has no attached node: the model it is named for and reads...
         "test.undercroft.fct__totals_balance.3": {
           attached_node: null,
           depends_on: { macros: [], nodes: ["model.undercroft.fct"] },
         },
-        // Reading several, it is the one its file name leads with...
+        // ...also when it reads others beside it...
         "test.undercroft.fct__owners_known.4": {
           depends_on: { nodes: ["model.undercroft.dim_owner", "model.undercroft.fct"] },
         },
-        // ...and with no such lead, it is nobody's rather than a guess.
+        // ...and named for a model it does not read, it is nobody's, not the one it reads...
+        "test.undercroft.fct__reads_another.6": {
+          depends_on: { nodes: ["model.undercroft.dim_owner"] },
+        },
+        // ...and with no such lead, reading several, it is nobody's rather than a guess.
         "test.undercroft.owners_match.5": {
           depends_on: { nodes: ["model.undercroft.dim_owner", "model.undercroft.fct"] },
         },

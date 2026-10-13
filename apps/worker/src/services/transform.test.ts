@@ -134,7 +134,7 @@ describe("runTransform", () => {
     expect(files["models/stg_deals.sql"]).toBe("select 1 as deal_id");
     expect(files["profiles.yml"]).toContain("user: undercroft_dbt_case_1");
     expect(files["profiles.yml"]).toContain("schema: analytics_case_1");
-    expect(files["models/schema.yml"]).toContain("data_tests: [not_null]");
+    expect(files["models/schema.yml"]).toContain("        data_tests:\n          - not_null\n");
     // The password: in the child's environment, in no file, and the directory is gone.
     const password = spawnOptions.env[PASSWORD_VAR] ?? "";
     expect(password.length).toBeGreaterThan(20);

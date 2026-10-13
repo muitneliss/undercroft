@@ -31,13 +31,15 @@ function testedModelOf(uniqueId: string, node: Record<string, unknown>): string 
     return node.attached_node.split(".")[2] ?? null;
   }
   const models = [...new Set(modelDependencies(node))];
-  if (models.length === 1) {
-    return models[0] ?? null;
-  }
   const name = uniqueId.split(".")[2] ?? "";
   const at = name.lastIndexOf(SINGULAR_SEPARATOR);
-  const named = at > 0 ? name.slice(0, at) : null;
-  return named !== null && models.includes(named) ? named : null;
+  if (at > 0) {
+    // A SQL test of ours, `<model>__<name>` (ADR 0130): its model is the one it is named for,
+    // and only when it reads that model -- one named for a model it does not read is nobody's.
+    const named = name.slice(0, at);
+    return models.includes(named) ? named : null;
+  }
+  return models.length === 1 ? (models[0] ?? null) : null;
 }
 
 /**
@@ -48,9 +50,9 @@ function testedModelOf(uniqueId: string, node: Record<string, unknown>): string 
  * ambiguous as soon as a name holds an underscore -- `not_null_a_b_c` is column `b_c` of `a`
  * or column `c` of `a_b` -- and dbt hashes a long one past recognition. The manifest is
  * dbt's own record of the graph it ran: a generic test's `attached_node` is the model its
- * `schema.yml` entry hangs off, which is exact; a test with none (a singular test) is
- * attributed to the one model it depends on, or, depending on several, to the one its file
- * name leads with (`<model>__<what>`) when that is among them.
+ * `schema.yml` entry hangs off, which is exact. A test with none is a singular test: one of
+ * ours is named `<model>__<what>` and must `ref()` its model (ADR 0130), so it is that model's
+ * when it reads it and nobody's when it does not; any other is the one model it reads, if one.
  *
  * A test this cannot attribute is absent from the map rather than given a model: its step
  * keeps `model: null`, and a model none of whose tests are attributed reads as "unknown"
