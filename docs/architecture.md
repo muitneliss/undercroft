@@ -100,7 +100,7 @@ flowchart LR
     bi["External SQL / BI tool<br/>optional"]
 
     person -->|"HTTPS: SPA, /trpc, /api/assistant"| cp
-    cli -->|"HTTPS /trpc with session cookie"| cp
+    cli -->|"HTTPS /trpc with session cookie or personal token"| cp
     agent -->|"HTTPS /mcp with bearer token"| cp
     script -->|"POST /v1/lake/records"| worker
     cp -->|"service token"| worker
@@ -117,7 +117,9 @@ flowchart LR
 - **People** use the web UI. Sign-in is invite-only, through Google or an emailed one-time code
   ([ADR 0010](adr/0010-invite-only-sign-in-with-better-auth.md)).
 - **The CLI** sends every router procedure to `/trpc` with the person's own session cookie
-  ([ADR 0044](adr/0044-an-agent-reaches-undercroft-as-a-caller.md)).
+  ([ADR 0044](adr/0044-an-agent-reaches-undercroft-as-a-caller.md)), or, run unattended, with
+  their personal access token read from an environment variable
+  ([ADR 0134](adr/0134-the-cli-signs-in-with-a-personal-token.md)).
 - **MCP clients** call `/mcp` with a personal access token or an OAuth access token
   ([ADR 0060](adr/0060-an-agent-reaches-undercroft-over-mcp.md),
   [ADR 0061](adr/0061-an-mcp-client-signs-its-person-in-and-draws-two-widgets.md)).
@@ -692,14 +694,15 @@ an unconfigured judge denies rather than allows
 
 ### Doors and what each one admits
 
-| Door                            | Credential                                     | Grant                                                                                | Reaches                               |
-| ------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------- |
-| Web UI                          | Better Auth session cookie                     | always `write`                                                                       | `/trpc`, `/api/assistant`             |
-| CLI                             | the same session cookie, stored with mode 0600 | `write`, but the CLI refuses writes until a person sets `allowWrites` on the profile | `/trpc`                               |
-| MCP                             | personal access token, or OAuth access token   | `read` or `write`, chosen by the person                                              | `/mcp`, minus session-only procedures |
-| Assistant                       | the reader's session                           | per tool: read, navigate, write, privileged                                          | `appRouter.createCaller`              |
-| Kestra, control plane to worker | `UNDERCROFT_TRIGGER_TOKEN`                     | service                                                                              | the worker's `/v1/*`                  |
-| Scripts                         | tenant ingest key, stored as a SHA-256 digest  | one tenant, optionally some sources                                                  | `POST /v1/lake/records` only          |
+| Door                            | Credential                                     | Grant                                                                                | Reaches                                |
+| ------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------- |
+| Web UI                          | Better Auth session cookie                     | always `write`                                                                       | `/trpc`, `/api/assistant`              |
+| CLI                             | the same session cookie, stored with mode 0600 | `write`, but the CLI refuses writes until a person sets `allowWrites` on the profile | `/trpc`                                |
+| CLI, unattended                 | personal access token, read from a variable    | the token's, and still the profile's `allowWrites` on top                            | `/trpc`, minus session-only procedures |
+| MCP                             | personal access token, or OAuth access token   | `read` or `write`, chosen by the person                                              | `/mcp`, minus session-only procedures  |
+| Assistant                       | the reader's session                           | per tool: read, navigate, write, privileged                                          | `appRouter.createCaller`               |
+| Kestra, control plane to worker | `UNDERCROFT_TRIGGER_TOKEN`                     | service                                                                              | the worker's `/v1/*`                   |
+| Scripts                         | tenant ingest key, stored as a SHA-256 digest  | one tenant, optionally some sources                                                  | `POST /v1/lake/records` only           |
 
 Every door into the router goes through the same base procedures in
 `apps/control-plane/src/handlers/trpc.ts`:

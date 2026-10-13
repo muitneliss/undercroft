@@ -136,6 +136,7 @@
 - [ADR 0130 A Rule About a Model's Rows Is a Test of That Model, Not a Model of Its Own](sources/adr-0130-a-rule-about-a-model-s-rows-is-a-test-of-that-model-not-a-model-of-its-own.md)
 - [ADR 0131 A Build Publishes Only What Passed](sources/adr-0131-a-build-publishes-only-what-passed.md)
 - [ADR 0132 A Model Is Previewed by Compiling It, Not by Building It](sources/adr-0132-a-model-is-previewed-by-compiling-it-not-by-building-it.md)
+- [ADR 0134 The CLI Signs In With a Personal Token When Nobody Is at Its Terminal](sources/adr-0134-the-cli-signs-in-with-a-personal-token-when-nobody-is-at-its-terminal.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

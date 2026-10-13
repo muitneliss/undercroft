@@ -40,7 +40,7 @@ import { ZodError } from "zod";
 import { messages } from "../i18n/index.ts";
 import { recordAction } from "../services/audit.ts";
 import { EXPORT_MINUTES, type ExportRow } from "../services/biExports.ts";
-import type { BearerRefusal } from "./context.ts";
+import type { BearerRefusal } from "./identity.ts";
 import { EXPORT_ROUTE } from "./exportLink.ts";
 import { appRouter } from "./router.ts";
 import { BY_TRPC_CODE, type SurfaceErrorCode } from "./surface.ts";

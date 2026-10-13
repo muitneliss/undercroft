@@ -40,7 +40,7 @@ import { describeError, type Logger } from "@undercroft/core";
 import type { Hono } from "hono";
 import { messages } from "../i18n/index.ts";
 import { READ_SCOPE } from "../services/connectedApps.ts";
-import type { BearerRefusal, RefusalReason } from "./context.ts";
+import type { BearerRefusal, RefusalReason } from "./identity.ts";
 import { holdFor } from "./holdOpen.ts";
 import { answered, refused, refusedBy, toolContent } from "./mcpAnswers.ts";
 import {

@@ -66,7 +66,9 @@ things about it are load-bearing enough to state here rather than only in the AD
   excluded, whether they asked for this action. An unconfigured gate DENIES -- one that failed
   open would not be a gate. `docs/runbook/assistant-setup.md` covers turning it on.
 - **An agent OUTSIDE the platform uses the same door, over HTTP.** `apps/cli` (ADR 0044) sends
-  every router procedure to `/trpc` with the person's own Better Auth session. It never uses a
+  every router procedure to `/trpc` with the person's own Better Auth session, or -- unattended --
+  their own personal access token, read from the environment variable it was told the name of
+  and never stored (ADR 0134). It never uses a
   DSN, a service token or an in-process caller, and `cli-no-backdoor` fails the gate on one.
   Its guard against injected text is a per-profile `allowWrites` that only a person at a
   terminal can set.
