@@ -11,6 +11,7 @@
 import { describe, expect, test as it } from "bun:test";
 
 import { MACROS } from "./dbtProject.ts";
+import { lineageAround } from "./lineageAround.ts";
 import { type Lineage, type LineageNode, modelLineage } from "./modelLineage.ts";
 
 const STG_DEALS = `select source_record_id as deal_id
@@ -211,5 +212,56 @@ describe("a macro's declarations", () => {
       const graph = lineage({ caller: `select * from {{ ${macro.name}() }} x` });
       expect(reasons(graph, "caller")).toEqual([]);
     }
+  });
+});
+
+describe("the part of the graph around one node (issue 443)", () => {
+  // raw.records -> stg_deals -> mart_pipeline -> fct_board, and raw.documents -> stg_files ->
+  // mart_pipeline: stg_files is stg_deals's sibling, related to it only through their child.
+  const graph = lineage({
+    fct_board: "select * from {{ ref('mart_pipeline') }}",
+    mart_pipeline: MART,
+    stg_deals: STG_DEALS,
+    stg_files: STG_FILES,
+  });
+
+  function around(name: string, direction: "up" | "down" | "both", depth: number | null) {
+    const part = lineageAround(graph, { name, direction, depth });
+    return part === null ? null : part.nodes.map((node) => node.id);
+  }
+
+  it("walks up and down from a model, and never turns round to reach a sibling", () => {
+    expect(around("stg_deals", "both", null)).toEqual([
+      "raw:raw.records",
+      "model:fct_board",
+      "model:mart_pipeline",
+      "model:stg_deals",
+    ]);
+  });
+
+  it("stops at the depth asked, and walks only the way asked", () => {
+    expect(around("stg_deals", "down", 1)).toEqual(["model:mart_pipeline", "model:stg_deals"]);
+    expect(around("mart_pipeline", "up", 1)).toEqual([
+      "model:mart_pipeline",
+      "model:stg_deals",
+      "model:stg_files",
+    ]);
+  });
+
+  it("starts from a raw table named schema.table, with only the edges between nodes it kept", () => {
+    // `stg_files -> mart_pipeline` ends at a kept node and starts at one that is not.
+    const part = lineageAround(graph, { name: "raw.records", direction: "down", depth: null });
+
+    expect(part === null ? null : edges(part)).toEqual([
+      "model:mart_pipeline -> model:fct_board",
+      "model:stg_deals -> model:mart_pipeline",
+      "raw:raw.records -> model:stg_deals",
+    ]);
+  });
+
+  it("answers null for a name no node carries, rather than an empty graph", () => {
+    expect(lineageAround(graph, { name: "stg_dealz", direction: "both", depth: null })).toBeNull();
+    // The node's id is not its name: `raw:raw.records` names nothing.
+    expect(around("raw:raw.records", "both", null)).toBeNull();
   });
 });

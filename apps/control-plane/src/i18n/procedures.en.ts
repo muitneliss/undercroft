@@ -29,7 +29,7 @@ export const procedureSentences: SentenceTable = {
   "connections.get": "One source and how it is connected.",
   "connections.startOAuth": "Begin an OAuth grant; returns the URL to open in a browser. Admins.",
   "connections.browseScope":
-    "What may be chosen for a source's scope: Gmail labels, Xero organisations, Google Drive folders with their paths and the file types present, or each HubSpot object's properties, the portal's own included. Admins.",
+    "What may be chosen for a source's scope: Gmail labels, Xero organisations, Google Drive folders with their paths and the file types present, or each HubSpot object's properties, the portal's own included. parentId for one level of the folder or label tree (null for the top), query to search names and paths, limit and cursor to page; partial still says when the listing is incomplete. Admins.",
   "connections.setScope":
     "Set what a source reads. For HubSpot, the properties chosen for each object are read as well as the standard ones, never instead of them. Admins.",
   "connections.setToken": "Connect a source with a pasted token. Admins.",
@@ -57,7 +57,8 @@ export const procedureSentences: SentenceTable = {
   "lake.query": "Run one SELECT over the raw lake. Admins.",
   "lake.search":
     "Full-text search over the raw lake. Each kind ranks only its newest matches, and the answer says when that cut any. Admins.",
-  "lake.querySchema": "The tables and columns lake query can read. Admins.",
+  "lake.querySchema":
+    "The tables and columns lake query can read; tables for exactly those, match for names containing a fragment (case-insensitive), columns: false for table names alone. Admins.",
   "documentKinds.list":
     "The customer's catalogue of document kinds, what is published, and how many documents a publish would classify.",
   "documentKinds.add":
@@ -77,7 +78,7 @@ export const procedureSentences: SentenceTable = {
   "models.build":
     "Build models in one dbt build: name for one model, or names for up to 20, each name, +name (with the models upstream) or name+ (with those downstream); every name must be one of the customer's models. By default it waits and answers waited true with ok, testsFailed, stepSummary (counts by kind and status), the steps asked for (steps: none, problems by default, or all; narrow with stepStatus, stepKind, stepName; read the next page with runs.get on runId with stepCursor), rowCounts (each named model's rows; null means not counted, never 0) and preview when one model is named. wait false answers at once with waited false and runId; wait on that run with runs.get and waitSeconds. While another build runs it is a CONFLICT naming that run's runId and startedAt. Admins.",
   "models.lineage":
-    "Which models read which models and raw lake tables, from the models' and macros' own ref() and source() declarations.",
+    "Which models read which models and raw lake tables, from the models' and macros' own ref() and source() declarations. name for the part around one model or raw table (raw.records), direction up, down or both, and depth to bound the steps.",
   "models.reference":
     "Reference material for a model's author: the sources, the platform's macros and the customer's own.",
   "models.check":
@@ -92,7 +93,8 @@ export const procedureSentences: SentenceTable = {
   "bi.answer": "Answer a question definition. Members and above.",
   "bi.runQuestion": "Run a saved question with parameters.",
   "bi.compile": "Compile a question definition to SQL. Members and above.",
-  "bi.schema": "The tables and columns reports can read.",
+  "bi.schema":
+    "The tables and columns reports can read; tables for exactly those, match for names containing a fragment (case-insensitive), columns: false for table names alone.",
   "bi.questions.list": "The saved questions.",
   "bi.questions.get": "One saved question.",
   "bi.questions.answer": "A saved question's answer under parameters.",

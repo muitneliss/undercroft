@@ -53,6 +53,12 @@ function buildHeld(locale: Locale, holder: BuildHolder | null): TRPCError {
   );
 }
 
+/**
+ * The longest lineage `name` worth reading: a model's name, or a source table as
+ * `schema.table`. Generous, since a missing dependency is named as its author wrote it.
+ */
+const MAX_LINEAGE_NAME_CHARS = 255;
+
 export const modelsRouter = router({
   /** The tenant's models with their last build. Any member may read what is built for them. */
   list: tenantProcedure.query(({ ctx, input }) => models.list(ctx.exec, input.tenantId)),
@@ -230,8 +236,35 @@ export const modelsRouter = router({
    * `source()`, through any macro it calls. Any member may, as they may read the models it is
    * read from. Declared relations only (ADR 0092): a model whose upstream its text cannot
    * show carries why, and a ref to a deleted model stays as a missing dependency.
+   *
+   * With a `name`, only the part around that node, which is what an agent asking "what reads
+   * this model" needs; the whole graph of a large tenant overflowed every client it was sent
+   * to (issue 443). A name no node carries is NOT_FOUND, never an empty graph -- an empty one
+   * would say the model exists and reads nothing.
    */
-  lineage: tenantProcedure.query(({ ctx, input }) => models.lineage(ctx.exec, input.tenantId)),
+  lineage: tenantProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).max(MAX_LINEAGE_NAME_CHARS).optional(),
+        direction: z.enum(["up", "down", "both"]).default("both"),
+        depth: z.number().int().positive().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const target =
+        input.name === undefined
+          ? null
+          : { name: input.name, direction: input.direction, depth: input.depth ?? null };
+      const graph = await models.lineage(ctx.exec, input.tenantId, target);
+      if (graph === null) {
+        throw refusal(
+          "NOT_FOUND",
+          messages(ctx.locale)("error.lineageNameUnknown", { name: input.name ?? "" }),
+          { reason: "unknown-name", name: input.name ?? null },
+        );
+      }
+      return graph;
+    }),
 
   /**
    * The sources and macros every project carries, and the tenant's own macros, for the

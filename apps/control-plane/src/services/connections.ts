@@ -51,7 +51,13 @@ import {
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { missingScopes, requestedScopeFor } from "./oauth.ts";
-import type { WorkerClient } from "./workerClient.ts";
+import {
+  type ChoiceFilter,
+  type ChoicePage,
+  type ChoiceRefusal,
+  narrowChoices,
+} from "./scopeChoices.ts";
+import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 
 export type { Connection } from "@undercroft/db/repos";
 
@@ -321,6 +327,24 @@ const BROWSE_LISTINGS: ReadonlyMap<string, BrowseListing> = new Map<string, Brow
  */
 export function browseListingFor(source: string): BrowseListing | null {
   return BROWSE_LISTINGS.get(sourceKind(source)) ?? null;
+}
+
+/** A browse that was answered, cut as asked, or why it was not. */
+export type BrowseOutcome =
+  | WorkerOutcome<ChoicePage>
+  | { readonly ok: false; readonly reason: ChoiceRefusal };
+
+/**
+ * One listing through the worker, which alone may open the live token it needs, then cut to
+ * the level, search or page asked for (`scopeChoices.ts`). With no filter, the listing whole.
+ */
+export async function browse(
+  worker: WorkerClient,
+  input: { source: string; tenantId: string; kind: BrowseListing },
+  filter: ChoiceFilter = {},
+): Promise<BrowseOutcome> {
+  const outcome = await worker.browseScope(input);
+  return outcome.ok ? narrowChoices(outcome.value, filter) : outcome;
 }
 
 /**

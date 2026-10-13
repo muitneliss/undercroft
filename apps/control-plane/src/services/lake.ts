@@ -27,6 +27,7 @@ import type { RawSearchResponse, SearchKind } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import { entitiesForRuns, getRun, type Run } from "@undercroft/db/repos";
 
+import { readSchema, type SchemaFilter, type SchemaOutcome } from "./tableSchema.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 import {
   countDocumentsOfRun,
@@ -205,4 +206,16 @@ export function search(
     limit: input.limit,
     offset: input.offset,
   });
+}
+
+/**
+ * The `raw` schema's tables and columns, as the tenant's own login sees them, narrowed to
+ * what `filter` names (`tableSchema.ts`). Through the worker for the reason `search` is.
+ */
+export function querySchema(
+  worker: WorkerClient,
+  tenantId: string,
+  filter: SchemaFilter = {},
+): Promise<SchemaOutcome> {
+  return readSchema(() => worker.readRawSchema({ tenantId }), filter);
 }

@@ -74,14 +74,21 @@ door with this rule.
    run ID from `runs.list`, a model name from `models.list`, a macro name from `macros.list`
    and a source name from `connections.list`. Tenant IDs look like `CASE-0042`. When an ID is not in what you read,
    stop and ask the person. Do not construct one.
-3. **Say what you will change, then change it.** Before a `write` or `destructive`
+3. **Name the target of a read.** A whole tenant's lineage, schema or Drive folders is more
+   than your context will hold. `models.lineage` takes a `name` (a model, or a raw table as
+   `raw.records`) with `direction` and `depth`; `bi.schema` and `lake.querySchema` take
+   `tables` or `match`, and `columns: false` for names alone; `connections.browseScope` takes
+   `parentId` (`null` for the top level), `query`, `limit` and `cursor`. A name that is not
+   there is refused as `NOT_FOUND`, never answered empty; a browse's `partial` still says when
+   the listing behind a page was incomplete.
+4. **Say what you will change, then change it.** Before a `write` or `destructive`
    operation, tell the person what it will do and to what. With the CLI, run it with
    `--dry-run` first.
-4. **A destructive operation needs the person's yes for that exact act.** Deleting,
+5. **A destructive operation needs the person's yes for that exact act.** Deleting,
    revoking, disconnecting and removing someone cannot be undone. Over MCP your host may ask
    for confirmation; with the CLI, `--yes` is the confirmation, and you pass it only after the
    person asked for that act.
-5. **Report what the platform said, not what you expected.** Success is the operation's
+6. **Report what the platform said, not what you expected.** Success is the operation's
    answer, never your assumption.
 
 ## Runs

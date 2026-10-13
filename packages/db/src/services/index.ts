@@ -46,3 +46,4 @@ export {
   type Undeclared,
   type UndeclaredCode,
 } from "./modelLineage.ts";
+export { type LineageDirection, type LineageTarget, lineageAround } from "./lineageAround.ts";
