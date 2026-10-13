@@ -269,6 +269,7 @@ describe("lake.search", () => {
     const worker = new InMemoryWorkerClient().answersSearchWith({
       hits: [HIT],
       truncated: false,
+      capped: [{ kind: "document", ranked: 100 }],
     });
 
     const found = await caller(admin, "a@example.test", worker).lake.search({
@@ -277,6 +278,8 @@ describe("lake.search", () => {
     });
 
     expect(found.hits).toEqual([HIT]);
+    // The cut reaches the reader: a ranked subset must never read as the whole answer.
+    expect(found.capped).toEqual([{ kind: "document", ranked: 100 }]);
     expect(worker.searches).toHaveLength(1);
     expect(worker.searches[0]?.tenantId).toBe(TENANT);
     expect(worker.searches[0]?.q).toBe("hop dong");
@@ -328,6 +331,35 @@ describe("lake.search", () => {
         (error: unknown) => (error instanceof TRPCError ? error.message : String(error)),
       );
     expect(refusal).toBe(messages(DEFAULT_LOCALE)("error.workerBusy"));
+  });
+
+  // #447: a search Postgres stopped at its time limit was worded "the service did not answer;
+  // try again", and agents did, with the same question, until they gave up on search.
+  it("a search that ran into its time limit says to narrow it, as the reader's to fix", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient().failing("timed-out");
+    const refusal = await caller(admin, "a@example.test", worker)
+      .lake.search({ tenantId: TENANT, q: "invoice" })
+      .then(
+        () => null,
+        (error: unknown) => (error instanceof TRPCError ? error : null),
+      );
+    expect(refusal?.code).toBe("BAD_REQUEST");
+    expect(refusal?.message).toBe(messages(DEFAULT_LOCALE)("error.searchTimedOut"));
+  });
+
+  it("a search the worker refused for any other reason is not worded as a time limit", async () => {
+    // The quiet side: telling a reader to narrow a question that never ran would send them
+    // rewording one that was never the problem.
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient().failing("refused");
+    const refusal = await caller(admin, "a@example.test", worker)
+      .lake.search({ tenantId: TENANT, q: "invoice" })
+      .then(
+        () => null,
+        (error: unknown) => (error instanceof TRPCError ? error.message : String(error)),
+      );
+    expect(refusal).toBe(messages(DEFAULT_LOCALE)("error.searchNotRun"));
   });
 
   it("refuses a blank question before it reaches the worker", async () => {

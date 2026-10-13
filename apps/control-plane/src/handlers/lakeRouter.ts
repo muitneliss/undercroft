@@ -168,9 +168,18 @@ export const lakeRouter = router({
         offset: input.offset,
       });
       if (!outcome.ok) {
+        // A search that ran into its time limit is the reader's to fix -- by narrowing it --
+        // so it is BAD_REQUEST, which every door words as "change the input", and never the
+        // "did not answer; try again" below, which sent agents round the same query (#447).
+        if (outcome.reason === "timed-out") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: messages(ctx.locale)("error.searchTimedOut"),
+          });
+        }
         // No `query-failed` branch: there is no author's SQL here for Postgres to have an
-        // opinion about. A search that did not run is a precondition, like every other
-        // refusal from a worker that answered.
+        // opinion about. Any other search that did not run is a precondition, like every
+        // other refusal from a worker that answered.
         throw notRun(ctx.locale, outcome.reason, "error.searchNotRun");
       }
       return outcome.value;

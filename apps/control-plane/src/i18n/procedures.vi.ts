@@ -70,7 +70,8 @@ export const procedureSentences: SentenceTable = {
   "lake.documents":
     "Các tài liệu thô của một nguồn, hoặc những tài liệu một lần chạy đã ghi. Quản trị.",
   "lake.query": "Chạy một câu SELECT trên hồ dữ liệu thô. Quản trị.",
-  "lake.search": "Tìm kiếm toàn văn trên hồ dữ liệu thô. Quản trị.",
+  "lake.search":
+    "Tìm kiếm toàn văn trên hồ dữ liệu thô. Mỗi loại chỉ xếp hạng các kết quả khớp mới nhất, và câu trả lời nói rõ khi bị cắt. Quản trị.",
   "lake.querySchema": "Các bảng và cột mà lake query đọc được. Quản trị.",
   "documentKinds.list":
     "Catalogue loại tài liệu của khách hàng, phiên bản đã publish, và số tài liệu một lần publish sẽ phân loại.",
