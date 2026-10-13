@@ -24,6 +24,7 @@ import {
   insertMacro,
   listMacros,
   listModels,
+  listSeedSummaries,
   type Macro,
   saveMacro,
 } from "@undercroft/db/repos";
@@ -92,22 +93,24 @@ export async function get(
 }
 
 /**
- * What can be said about a macro before it is saved, against the tenant's own models and
- * macros. Reads, stores nothing.
+ * What can be said about a macro before it is saved, against the tenant's own models, macros
+ * and seeds. Reads, stores nothing.
  */
 export async function check(
   exec: SqlExecutor,
   input: { tenantId: string; name: string; sql: string },
 ): Promise<ModelCheck> {
-  const [models, macros] = await Promise.all([
+  const [models, macros, seeds] = await Promise.all([
     listModels(exec, input.tenantId),
     listMacros(exec, input.tenantId),
+    listSeedSummaries(exec, input.tenantId),
   ]);
   return checkMacro({
     name: input.name,
     sql: input.sql,
     existingModels: models.map((model) => model.name),
     existingMacros: macros.map((macro) => macro.name),
+    existingSeeds: seeds.map((seed) => seed.name),
   });
 }
 

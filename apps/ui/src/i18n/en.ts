@@ -472,6 +472,10 @@ export const en = {
       macros_check: "Checked a macro",
       macros_save: "Saved a macro",
       macros_delete: "Deleted a macro",
+      seeds_list: "Listed reference tables",
+      seeds_get: "Read a reference table",
+      seeds_save: "Saved a reference table",
+      seeds_delete: "Deleted a reference table",
       bi_answer: "Answered a question",
       bi_runQuestion: "Ran a question",
       bi_compile: "Compiled a question to SQL",
@@ -1552,6 +1556,10 @@ export const en = {
     tenantMacrosHead: "The customer's macros",
     tenantMacrosNone:
       "This customer has no macros of its own yet. One is saved with macros.save, from the CLI, MCP or an agent.",
+    seedsHead: "The customer's reference tables",
+    seedsNone:
+      "This customer has no reference tables yet. One is saved with seeds.save, from the CLI, MCP or an agent, and a model reads it with ref().",
+    seedSize: "{{columns, number}} columns, {{rows, number}} rows",
     deleteHead: "Delete model",
     deleteLead:
       "Delete {{name}} with the table it built and the rows its tests stored. A report reading that table will find nothing. Models that ref it keep the ref; lineage shows it as a missing dependency.",
@@ -1573,6 +1581,7 @@ export const en = {
     showAll: "Show every node",
     groupModels: "Models",
     groupRaw: "Raw lake tables",
+    groupSeeds: "Reference tables",
     groupMissing: "Missing dependencies",
     unknownModel: "There is no model or table named {{name}}.",
     drawingLabel: "Lineage drawing; the same relations are written out as text below",
@@ -1583,10 +1592,11 @@ export const en = {
     nodeCount: "{{total}} nodes",
     litCount: "{{lit}} / {{total}} nodes on the selection's chains; the rest dimmed",
     laneRaw: "Raw lake · declared dbt sources",
-    laneInputs: "Raw lake and missing dependencies",
+    laneInputs: "Inputs · the raw lake, reference tables, missing dependencies",
     lane: "Level {{step, number}}",
     levelsHead: "All nodes by level",
     declaredSource: "▭ Declared dbt source",
+    seedNote: "▤ Kept by hand, saved with seeds.save",
     undeclaredMark: "? Upstream not declared",
     resetLayout: "Reset layout",
     notArranged:
@@ -1600,6 +1610,7 @@ export const en = {
     minimap: "Mini map",
     model: "Model",
     rawTable: "Raw lake table",
+    seed: "Reference table",
     missing: "Missing dependency",
     missingShort: "◇ No longer exists",
     undeclared: "Upstream not declared",
@@ -1611,6 +1622,7 @@ export const en = {
       "Select a card to see its last build, its columns, its SQL, what it reads and what reads it.",
     factModels: "Models",
     factRaw: "Raw lake tables",
+    factSeeds: "Reference tables",
     factMissing: "Missing dependencies",
     factUndeclared: "Not declared",
     factUpstream: "Upstream",
@@ -1630,6 +1642,8 @@ export const en = {
     columnsUnknown: "Never built, so its columns are not known yet.",
     sqlHead: "SQL",
     rawTableLong: "A raw lake table, declared as a dbt source.",
+    seedLong:
+      "A small reference table the customer keeps (a dbt seed), saved with seeds.save and loaded before the models that read it with ref().",
     missingLong:
       "A ref to a model that no longer exists. The next build of the model that refs it fails and says why.",
     readsNothing: "Declares nothing it reads.",

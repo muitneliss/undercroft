@@ -500,6 +500,64 @@ describe("the audit log is append-only in the database", () => {
   });
 });
 
+describe("a tenant's stored seeds are the control plane's to write and the worker's to read", () => {
+  // ADR 0128. The worker renders every seed into a build and writes none; a model's SQL runs as
+  // a dbt role and must reach the cells only as the table dbt loaded, never the stored copy.
+  async function plantSeed(): Promise<void> {
+    await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042')");
+    await db.asRole("undercroft_app", (tx) =>
+      tx.query(
+        `INSERT INTO app.seed (tenant_id, name, columns, rows)
+         VALUES ('CASE-0042', 'account_groups', '[{"name":"code","type":"text"}]', '[["511"]]')`,
+      ),
+    );
+  }
+
+  it("the control plane writes one and the worker reads it back", async () => {
+    await plantSeed();
+    const seen = await db.asRole("undercroft_worker", (tx) =>
+      tx.query<{ rows: unknown }>("SELECT rows FROM app.seed WHERE name = 'account_groups'"),
+    );
+    expect(seen.rows[0]?.rows).toEqual([["511"]]);
+  });
+
+  it("the worker may not change one, and neither dbt nor BI may read one", async () => {
+    await plantSeed();
+    await db.asRole("undercroft_worker", async (tx) => {
+      await expectDenied(() => tx.query("UPDATE app.seed SET rows = '[]'"));
+      await expectDenied(() => tx.query("DELETE FROM app.seed"));
+    });
+    for (const role of ["undercroft_dbt", "undercroft_bi"] as const) {
+      await db.asRole(role, async (tx) => {
+        await expectDenied(() => tx.query("SELECT * FROM app.seed"));
+      });
+    }
+  });
+
+  it("a build's ledger takes a seed step beside its models and tests, and nothing else", async () => {
+    await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042')");
+    await db.asRole("undercroft_worker", async (tx) => {
+      await tx.query(
+        `INSERT INTO ops.run (id, tenant_id, source, verb, trigger)
+         VALUES ('r1', 'CASE-0042', 'dbt', 'transform', 'manual')`,
+      );
+      await tx.query(
+        `INSERT INTO ops.run_step (run_id, unique_id, kind, name, status)
+         VALUES ('r1', 'seed.undercroft.account_groups', 'seed', 'account_groups', 'success')`,
+      );
+    });
+    const refused = await refusalOf(() =>
+      db.asRole("undercroft_worker", (tx) =>
+        tx.query(
+          `INSERT INTO ops.run_step (run_id, unique_id, kind, name, status)
+           VALUES ('r1', 'snapshot.undercroft.x', 'snapshot', 'x', 'success')`,
+        ),
+      ),
+    );
+    expect(refused).toContain("run_step_kind_check");
+  });
+});
+
 /** Every ordinary table in schema app, enumerated rather than named so the next one counts. */
 async function appTables(): Promise<string[]> {
   const { rows } = await db.query<{ table_name: string }>(

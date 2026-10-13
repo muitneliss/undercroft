@@ -381,3 +381,8 @@
 ## [2026-10-13] ingest | ADR 0130 A Rule About a Model's Rows Is a Test of That Model, Not a Model of Its Own
 ## [2026-10-13] ingest | ADR 0129 A Failing Test Is Visible Wherever the Figure Is Read
 ## [2026-10-13] ingest | What an ingest run counts
+## [2026-10-13] ingest | ADR 0128 A Tenant Keeps Its Own Reference Tables, Typed by Its Author and Loaded by the Build That Reads Them
+## [2026-10-13] ingest | ADR 0128 A Tenant Keeps Its Own Reference Tables, Typed by Its Author and Loaded by the Build That Reads Them
+## [2026-10-13] ingest | Architecture
+## [2026-10-13] ingest | Runbook: Agent skills
+## [2026-10-13] ingest | What an ingest run counts

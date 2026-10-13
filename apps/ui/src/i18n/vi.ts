@@ -588,6 +588,10 @@ export const vi = {
       macros_check: "Kiểm tra macro",
       macros_save: "Lưu macro",
       macros_delete: "Xoá macro",
+      seeds_list: "Xem các bảng tham chiếu",
+      seeds_get: "Xem một bảng tham chiếu",
+      seeds_save: "Lưu bảng tham chiếu",
+      seeds_delete: "Xoá bảng tham chiếu",
       bi_answer: "Trả lời một câu hỏi",
       bi_runQuestion: "Chạy câu hỏi",
       bi_compile: "Dịch một câu hỏi thành SQL",
@@ -1848,6 +1852,11 @@ export const vi = {
     tenantMacrosHead: "Macro của khách hàng",
     tenantMacrosNone:
       "Khách hàng này chưa có macro riêng. Macro được lưu bằng macros.save, qua CLI, MCP hoặc một trợ lý.",
+    /** A seed is a reference table a person keeps; a model reads it with ref() (ADR 0128). */
+    seedsHead: "Bảng tham chiếu của khách hàng",
+    seedsNone:
+      "Khách hàng này chưa có bảng tham chiếu nào. Bảng được lưu bằng seeds.save, qua CLI, MCP hoặc một trợ lý, và mô hình đọc nó bằng ref().",
+    seedSize: "{{columns, number}} cột, {{rows, number}} dòng",
     deleteHead: "Xoá mô hình",
     deleteLead:
       "Xoá {{name}} cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu. Báo cáo đang đọc bảng này sẽ không còn dữ liệu. Mô hình nào ref nó vẫn giữ ref; dòng dữ liệu hiện nó là phụ thuộc bị thiếu.",
@@ -1870,6 +1879,7 @@ export const vi = {
     showAll: "Hiện mọi nút",
     groupModels: "Mô hình",
     groupRaw: "Bảng hồ thô",
+    groupSeeds: "Bảng tham chiếu",
     groupMissing: "Phụ thuộc bị thiếu",
     unknownModel: "Không có mô hình hay bảng nào tên {{name}}.",
     drawingLabel: "Sơ đồ dòng dữ liệu; các quan hệ này có cả dạng chữ ở bên dưới",
@@ -1880,11 +1890,12 @@ export const vi = {
     nodeCount: "{{total}} nút",
     litCount: "{{lit}} / {{total}} nút thuộc chuỗi của nút đang chọn; còn lại bị làm mờ",
     laneRaw: "Hồ thô · nguồn dbt đã khai báo",
-    laneInputs: "Hồ thô và phụ thuộc bị thiếu",
+    laneInputs: "Đầu vào · hồ thô, bảng tham chiếu, phụ thuộc bị thiếu",
     lane: "Tầng {{step, number}}",
     /** On a phone, under a trace: the board's columns as folded lists. */
     levelsHead: "Mọi nút theo tầng",
     declaredSource: "▭ Nguồn dbt đã khai báo",
+    seedNote: "▤ Bảng do người giữ, lưu bằng seeds.save",
     undeclaredMark: "? Thượng nguồn chưa khai báo",
     resetLayout: "Sắp lại như ban đầu",
     /** When the layout engine could not place the board; the text beneath still holds. */
@@ -1898,6 +1909,7 @@ export const vi = {
     minimap: "Bản đồ thu nhỏ",
     model: "Mô hình",
     rawTable: "Bảng hồ thô",
+    seed: "Bảng tham chiếu",
     missing: "Phụ thuộc bị thiếu",
     missingShort: "◇ Không còn tồn tại",
     undeclared: "Thượng nguồn chưa khai báo",
@@ -1909,6 +1921,7 @@ export const vi = {
       "Chọn một thẻ để xem lần dựng gần nhất, các cột, SQL, những gì nó đọc và những gì đọc nó.",
     factModels: "Mô hình",
     factRaw: "Bảng hồ thô",
+    factSeeds: "Bảng tham chiếu",
     factMissing: "Phụ thuộc bị thiếu",
     factUndeclared: "Chưa khai báo",
     factUpstream: "Thượng nguồn",
@@ -1927,6 +1940,8 @@ export const vi = {
     columnsUnknown: "Chưa dựng lần nào, nên chưa biết cột.",
     sqlHead: "SQL",
     rawTableLong: "Bảng hồ thô, được khai báo làm nguồn dbt.",
+    seedLong:
+      "Bảng tham chiếu nhỏ mà khách hàng tự giữ (một seed dbt), lưu bằng seeds.save và được nạp trước các mô hình đọc nó bằng ref().",
     missingLong:
       "Một ref tới mô hình không còn tồn tại. Lần dựng tới của mô hình ref nó sẽ lỗi và nói lý do.",
     readsNothing: "Không khai báo đọc gì.",

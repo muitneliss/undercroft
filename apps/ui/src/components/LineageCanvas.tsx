@@ -56,7 +56,7 @@ import {
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { cssToken } from "@/lib/cssToken.ts";
 import { useFullscreen } from "@/lib/fullscreen.ts";
-import { type Focus, laneLabel, nodeState } from "@/lib/lineage.ts";
+import { type Focus, isOtherInput, laneLabel, nodeState } from "@/lib/lineage.ts";
 import { type Arrangement, CARD_H, CARD_W, edgeId, useArrangement } from "@/lib/lineageArrange.ts";
 import { BoardContext } from "@/lib/lineageBoard.ts";
 
@@ -89,7 +89,7 @@ function toNodes(t: TFunction, drawn: Graph, arrangement: Arrangement): Node[] {
     connectable: false,
   }));
   // A missing dependency stands in the first column, beside the raw lake tables.
-  const missing = drawn.nodes.some((node) => node.kind === "missing");
+  const missing = drawn.nodes.some(isOtherInput);
   const heads: HeadNode[] = arrangement.columns.map(({ column, x }) => ({
     id: `head:${String(column)}`,
     type: "head",

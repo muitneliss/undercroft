@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./models": "./src/models.ts",
+    "./seeds": "./src/seeds.ts",
     "./bi": "./src/bi.ts",
     "./csv": "./src/csv.ts",
     "./results": "./src/transformApi.ts",

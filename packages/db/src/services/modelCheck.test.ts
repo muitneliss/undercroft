@@ -27,7 +27,12 @@ select * from deals
 
 function check(
   sql: string,
-  options: { name?: string; tests?: Record<string, string[]>; existing?: string[] } = {},
+  options: {
+    name?: string;
+    tests?: Record<string, string[]>;
+    existing?: string[];
+    seeds?: string[];
+  } = {},
 ): ModelCheck {
   return checkModel({
     name: options.name ?? "stg_deals",
@@ -35,6 +40,7 @@ function check(
     tests: { columns: options.tests ?? {} },
     existingModels: options.existing ?? [],
     existingMacros: [],
+    existingSeeds: options.seeds ?? [],
   });
 }
 
@@ -218,6 +224,17 @@ describe("errors", () => {
     expect(codes(check(sql, { name: "fct_deals", existing: ["stg_deals"] }))).toEqual([]);
   });
 
+  it("unknown-ref: stays quiet on one of the tenant's seeds, which ref() reads like a model (ADR 0128)", () => {
+    const sql = "select * from {{ ref('account_groups') }}";
+    expect(codes(check(sql, { seeds: ["account_groups"] }))).toEqual([]);
+    expect(codes(check(sql))).toEqual(["unknown-ref"]);
+  });
+
+  it("analytics-direct: fires on a seed's table named by its schema, past ref()", () => {
+    const sql = "select * from analytics_case_0042.account_groups";
+    expect(codes(check(sql, { seeds: ["account_groups"] }))).toContain("analytics-direct");
+  });
+
   it("report-parameter: fires on a report question's {{ name }} left in the SQL", () => {
     // A question's parameter and a Jinja variable are spelled alike. dbt renders an unknown
     // name as an empty string, so the filter would vanish from a build that succeeds.
@@ -357,12 +374,17 @@ describe("Jinja", () => {
 });
 
 describe("a model's SQL tests and relationships (ADR 0130)", () => {
-  function testFindings(sql: string, existing: string[] = []): [FindingCode, string | undefined][] {
+  function testFindings(
+    sql: string,
+    existing: string[] = [],
+    seeds: string[] = [],
+  ): [FindingCode, string | undefined][] {
     return checkTests({
       name: "stg_payments",
       tests: { columns: {}, sql: [{ name: "paid_on_time", sql }] },
       existingModels: existing,
       existingMacros: [],
+      existingSeeds: seeds,
     })
       .filter((found) => found.severity === "error")
       .map((found) => [found.code, found.test]);
@@ -394,6 +416,12 @@ describe("a model's SQL tests and relationships (ADR 0130)", () => {
     ]);
   });
 
+  it("lets a test read one of the tenant's seeds beside its model (ADR 0128)", () => {
+    const reads = `${SAFE} and status not in (select code from {{ ref('payment_statuses') }})`;
+    expect(testFindings(reads, [], ["payment_statuses"])).toEqual([]);
+    expect(testFindings(reads)).toEqual([["unknown-ref", "paid_on_time"]]);
+  });
+
   it("refuses a test that reads no ref() of its model, or calls what could move its rows", () => {
     expect(testFindings("select 1 as one where false")).toEqual([
       ["test-model-unread", "paid_on_time"],
@@ -413,9 +441,11 @@ describe("a model's SQL tests and relationships (ADR 0130)", () => {
         tests: { columns: { invoice_id: [{ kind: "relationships", to, field: "invoice_id" }] } },
         existingModels: ["stg_invoices"],
         existingMacros: [],
+        existingSeeds: ["payment_terms"],
       }).map((found) => [found.code, found.subject, found.test]);
     }
     expect(relates("stg_invoices")).toEqual([]);
+    expect(relates("payment_terms")).toEqual([]);
     expect(relates("stg_payments")).toEqual([]);
     expect(relates("stg_gone")).toEqual([["unknown-ref", "stg_gone", "invoice_id.relationships"]]);
   });
@@ -427,6 +457,7 @@ describe("a model's SQL tests and relationships (ADR 0130)", () => {
       tests: { columns: {}, sql: [{ name: "paid_on_time", sql: "select 1" }] },
       existingModels: [],
       existingMacros: [],
+      existingSeeds: [],
     });
     expect(codes(checked)).toEqual(["test-model-unread"]);
   });

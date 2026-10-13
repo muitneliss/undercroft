@@ -243,5 +243,15 @@ export function modelsAnswers(role: Role): Answers {
     "models.lineage": LINEAGE,
     "models.get": (input: unknown) => modelDetail(nameOf(input) ?? ""),
     "models.reference": { sourcesYml: "version: 2\n", macros: [], tenantMacros: [] },
+    "seeds.list": [
+      {
+        name: "account_groups",
+        columnCount: 3,
+        rowCount: 42,
+        updatedBy: "demo-admin",
+        updatedAt: "2026-10-01T09:00:00.000Z",
+        sha256: "0".repeat(64),
+      },
+    ],
   };
 }

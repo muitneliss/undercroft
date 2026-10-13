@@ -51,7 +51,7 @@ const DEFAULT_STEP_PAGE = 100;
 export const StepQuery = z.object({
   steps: z.enum(STEP_VIEWS).optional(),
   stepStatus: z.string().trim().min(1).max(32).optional(),
-  stepKind: z.enum(["model", "test"]).optional(),
+  stepKind: z.enum(["model", "test", "seed"]).optional(),
   stepName: z.string().trim().min(1).max(256).optional(),
   stepCursor: z.string().min(1).optional(),
   stepLimit: z.number().int().min(1).max(MAX_STEP_PAGE).default(DEFAULT_STEP_PAGE),

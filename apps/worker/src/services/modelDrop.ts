@@ -28,6 +28,11 @@
  *   RESTRICT, never CASCADE: a person deleting one model has not decided to delete another,
  *   and the refusal names the dependents so they can.
  * All drops are one transaction, so a refusal or a failure part-way leaves everything as it was.
+ *
+ * A SEED'S TABLE goes the same way (ADR 0128): a seed's row is its cells, and what a dashboard
+ * reads is the table dbt loaded from them into `analytics_<slug>`. A seed makes that one
+ * relation -- dbt loads it in place, with no working copies and no tests of ours -- so that is
+ * all `dropSeedRelations` takes, under the same refusals.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -70,38 +75,80 @@ interface ModelShape {
  * Throws `RunInProgress` while a build of the tenant runs. A tenant never provisioned has no
  * login and so no relation, and answers with nothing dropped.
  */
-export async function dropModelRelations(
+export function dropModelRelations(
   deps: DropDeps,
   input: { tenantId: string; model: string },
 ): Promise<DropOutcome> {
-  const roles = await tenantRolesFor(deps.exec, input.tenantId);
+  return dropOwned(deps, input.tenantId, (models, present, schemas) => {
+    // The row is normally still there -- the control plane deletes it after this answers. A
+    // model already gone is dropped by its name alone: its declared tests are not known.
+    const own = models.find((m) => m.name === input.model) ?? {
+      name: input.model,
+      tests: { columns: {} },
+    };
+    const others = models.filter((m) => m.name !== input.model);
+    return relationsToDrop(own, others, present, schemas);
+  });
+}
+
+/**
+ * Drop the table the tenant's `seed` was loaded into, or refuse and drop none, under the same
+ * refusals as a model's. Never a relation one of the tenant's models makes: a model and a seed
+ * cannot share a name, and if a row somehow did, the table is the model's to drop.
+ */
+export function dropSeedRelations(
+  deps: DropDeps,
+  input: { tenantId: string; seed: string },
+): Promise<DropOutcome> {
+  return dropOwned(deps, input.tenantId, (models, present, schemas) => {
+    const theirs = new Set(models.flatMap((model) => relationsOfModel(model).analytics));
+    return present.filter(
+      (relation) =>
+        relation.schema === schemas.analytics &&
+        relation.name === input.seed &&
+        !theirs.has(relation.name),
+    );
+  });
+}
+
+interface Schemas {
+  readonly analytics: string;
+  readonly dq: string;
+}
+
+/**
+ * Drop the relations `pick` chooses from those present in the tenant's two schemas, or refuse
+ * and drop none: the refusals, the login and the one transaction every drop shares. `pick` is
+ * handed the tenant's models, whose relations are never another node's to take.
+ */
+async function dropOwned(
+  deps: DropDeps,
+  tenantId: string,
+  pick: (
+    models: readonly ModelShape[],
+    present: readonly Relation[],
+    schemas: Schemas,
+  ) => Relation[],
+): Promise<DropOutcome> {
+  const roles = await tenantRolesFor(deps.exec, tenantId);
   if (roles === null) {
     return { ok: true, dropped: [] };
   }
   const building = await runningRun(deps.exec, {
-    tenantId: input.tenantId,
+    tenantId,
     source: SOURCE_OF_TRANSFORM,
     verb: "transform",
   });
   if (building !== null) {
-    throw new RunInProgress("transform", input.tenantId, building);
+    throw new RunInProgress("transform", tenantId, building);
   }
-  const models = await listModels(deps.exec, input.tenantId);
-  // The row is normally still there -- the control plane deletes it after this answers. A
-  // model already gone is dropped by its name alone: its declared tests are not known.
-  const own = models.find((m) => m.name === input.model) ?? {
-    name: input.model,
-    tests: { columns: {} },
-  };
-  const others = models.filter((m) => m.name !== input.model);
+  const models = await listModels(deps.exec, tenantId);
+  const schemas: Schemas = { analytics: roles.analyticsSchema, dq: roles.dqSchema };
 
-  return deps.sessions.as({ tenantId: input.tenantId, kind: "dbt" }, (exec) =>
+  return deps.sessions.as({ tenantId, kind: "dbt" }, (exec) =>
     inTransaction(exec, async (): Promise<DropOutcome> => {
       const present = await relationsIn(exec, [roles.analyticsSchema, roles.dqSchema]);
-      const doomed = relationsToDrop(own, others, present, {
-        analytics: roles.analyticsSchema,
-        dq: roles.dqSchema,
-      });
+      const doomed = pick(models, present, schemas);
       const blocking = await dependentsOutside(exec, doomed);
       if (blocking.length > 0) {
         return { ok: false, reason: "depended-on", dependents: blocking };
@@ -150,7 +197,7 @@ function relationsToDrop(
   model: ModelShape,
   others: readonly ModelShape[],
   present: readonly Relation[],
-  schemas: { readonly analytics: string; readonly dq: string },
+  schemas: Schemas,
 ): Relation[] {
   const ours = relationsOfModel(model);
   const theirs = others.map((other) => relationsOfModel(other));

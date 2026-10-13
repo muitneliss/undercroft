@@ -52,6 +52,8 @@ export interface StepSummary {
   readonly byStatus: {
     readonly model: Readonly<Record<string, number>>;
     readonly test: Readonly<Record<string, number>>;
+    /** The seeds the build loaded (ADR 0128); empty for a build that reached none. */
+    readonly seed: Readonly<Record<string, number>>;
   };
   /** How many steps are problems -- see {@link isProblem}. */
   readonly problems: number;
@@ -131,17 +133,20 @@ function decodeStepCursor(cursor: string | undefined): StepKey | null {
 }
 
 function summarise(all: readonly RunStep[]): StepSummary {
-  const model: Record<string, number> = {};
-  const test: Record<string, number> = {};
+  const byStatus: Record<RunStep["kind"], Record<string, number>> = {
+    model: {},
+    test: {},
+    seed: {},
+  };
   let problems = 0;
   for (const step of all) {
-    const tally = step.kind === "model" ? model : test;
+    const tally = byStatus[step.kind];
     tally[step.status] = (tally[step.status] ?? 0) + 1;
     if (isProblem(step)) {
       problems += 1;
     }
   }
-  return { total: all.length, byStatus: { model, test }, problems };
+  return { total: all.length, byStatus, problems };
 }
 
 function viewOf(query: StepQuery): StepView {

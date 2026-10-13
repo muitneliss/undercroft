@@ -204,14 +204,20 @@ export function edgeState(focus: Focus, from: string, to: string): NodeState {
 
 /**
  * A column's heading, on the board and in the text list's levels alike. The first holds the raw
- * lake tables, and a missing dependency too, which has no chain below it to count; every later
- * column is how many steps it stands from them.
+ * lake tables, and a reference table or a missing dependency too, none of which has a chain below
+ * it to count; every later column is how many steps it stands from them. `inputs` says the first
+ * holds something besides raw tables, which only then is named as more than the raw lake.
  */
-export function laneLabel(t: TFunction, column: number, missing: boolean): string {
+export function laneLabel(t: TFunction, column: number, inputs: boolean): string {
   if (column > 0) {
     return t("lineage.lane", { step: column });
   }
-  return missing ? t("lineage.laneInputs") : t("lineage.laneRaw");
+  return inputs ? t("lineage.laneInputs") : t("lineage.laneRaw");
+}
+
+/** Whether a node is one of the first column's that is not a raw table: a seed, or a missing one. */
+export function isOtherInput(node: LineageNode): boolean {
+  return node.kind === "seed" || node.kind === "missing";
 }
 
 /**
@@ -224,6 +230,8 @@ export function nodeWords(t: TFunction, node: LineageNode, state: NodeState): st
   const words: string[] = [];
   if (node.kind === "raw") {
     words.push(t("lineage.rawTable"));
+  } else if (node.kind === "seed") {
+    words.push(t("lineage.seed"));
   } else if (node.kind === "missing") {
     words.push(t("lineage.missing"));
   } else if (node.undeclared.length > 0) {
@@ -275,6 +283,8 @@ export function kindWord(t: TFunction, node: LineageNode): string {
   switch (node.kind) {
     case "raw":
       return t("lineage.rawTable");
+    case "seed":
+      return t("lineage.seed");
     case "missing":
       return t("lineage.missing");
     default:

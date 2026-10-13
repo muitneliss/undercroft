@@ -74,7 +74,7 @@ export const procedureSentences: SentenceTable = {
   "models.list":
     "The customer's dbt models with their last build: sqlSha256 and testsSha256 to compare a copy, and the column count, no SQL. names or match to narrow; include: [\"columns\"] for each build's columns. lastTests is what the tests of the build serving each model's rows found: passing, failing (failing counts them) or unknown (no test record, never a pass).",
   "models.revision":
-    "One hash for each of the customer's models, macros and questions and one over all of them, from what each save wrote: equal means nothing changed.",
+    "One hash for each of the customer's models, macros, reference tables and questions and one over all of them, from what each save wrote: equal means nothing changed.",
   "models.get":
     "One dbt model, its SQL and tests, with their hashes, and lastTests: passing, failing or unknown, with failingTests and warningTests by name.",
   "models.save":
@@ -84,7 +84,7 @@ export const procedureSentences: SentenceTable = {
   "models.build":
     "Build models in one dbt build: name for one model, or names for up to 20, each name, +name (with the models upstream) or name+ (with those downstream); every name must be one of the customer's models. Before it runs, the parents it reads without rebuilding are checked: one whose latest tests failed is PRECONDITION_FAILED naming the parent, its tests and the run (rebuild it, or build +name); one with no test record is named in parentTestsUnknown. By default it waits and answers waited true with ok, verdict (clean, tests-failing or failed: success is clean; ok with failing tests is tests-failing), testsFailed, stepSummary (counts by kind and status), the steps asked for (steps: none, problems by default, or all; narrow with stepStatus, stepKind, stepName; read the next page with runs.get on runId with stepCursor), rowCounts (each named model's rows; null means not counted, never 0) and preview when one model is named. wait false answers at once with waited false and runId; wait on that run with runs.get and waitSeconds. While another build runs it is a CONFLICT naming that run's runId and startedAt. Admins.",
   "models.lineage":
-    "Which models read which models and raw lake tables, from the models' and macros' own ref() and source() declarations. name for the part around one model or raw table (raw.records), direction up, down or both, and depth to bound the steps.",
+    "Which models read which models, reference tables and raw lake tables, from the models' and macros' own ref() and source() declarations. name for the part around one model, reference table or raw table (raw.records), direction up, down or both, and depth to bound the steps.",
   "models.reference":
     "Reference material for a model's author: the sources, the platform's macros and the customer's own. parts for only some of sources, platformMacros and tenantMacros; the first two are the same text on every call.",
   "models.check":
@@ -97,6 +97,14 @@ export const procedureSentences: SentenceTable = {
   "macros.save":
     "Store a dbt macro, one whole {% macro %} definition that every model can call; runs nothing. The definition and description already stored answer unchanged: true and change nothing. Admins.",
   "macros.delete": "Delete a dbt macro; refused while a model or another macro calls it. Admins.",
+  "seeds.list":
+    "The customer's reference tables (dbt seeds), which models read with ref(): names, column and row counts and a hash of the content, no cells. names or match to narrow.",
+  "seeds.get":
+    "One reference table whole: its columns with their declared types, every row with each cell a string or null, and its hash.",
+  "seeds.save":
+    "Store a small reference table: columns is [{name, type}] with type one of text, integer, bigint, numeric(18,4), boolean, date, timestamptz; rows are arrays of strings or null, one cell per column. No type is inferred: a cell its column cannot hold is refused, naming the row and column. At most 10,000 rows, 100 columns and 1 MB. A table identical to the stored one answers unchanged: true. Admins.",
+  "seeds.delete":
+    "Delete a reference table and the table loaded from it; refused while a model reads it by ref(). Admins.",
   "bi.answer":
     "Answer a question definition: columns, rows and truncated, and qualifiers naming each table it read whose latest tests fail or are unknown (null when the tables read are not known); rows are never withheld. Members and above.",
   "bi.runQuestion":

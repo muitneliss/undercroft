@@ -52,8 +52,8 @@ export class InMemoryWorkerClient implements WorkerClient {
   /** Every catalogue this double was asked to initialise, and did. */
   readonly initialised: { tenantId: string; triggeredBy: string }[] = [];
   #catalogueExists = false;
-  /** Every model whose relations this double was asked to drop, and did. */
-  readonly dropped: { tenantId: string; model: string }[] = [];
+  /** Every model and seed whose relations this double was asked to drop, and did, in order. */
+  readonly dropped: ({ tenantId: string } & ({ model: string } | { seed: string }))[] = [];
   /** Which listing each browse asked for: the one fact about a browse only its caller decides. */
   readonly browsed: { source: string; tenantId: string; kind: BrowseListing }[] = [];
   #choices: BrowseScopeResponse = { items: [], partial: [] };
@@ -216,12 +216,12 @@ export class InMemoryWorkerClient implements WorkerClient {
     return this;
   }
 
-  /**
-   * Drop nothing and say so. What the worker drops is decided against a real catalogue and is
-   * proven there (`apps/worker/src/handlers/models.test.ts`); this models the answers a caller
-   * has to handle -- dropped, refused with the dependents' names, or not reached at all.
-   */
-  dropModel(input: { tenantId: string; model: string }): Promise<DropOutcome> {
+  readonly dropModel: WorkerClient["dropModel"] = (input) => this.#drop(input);
+  readonly dropSeed: WorkerClient["dropSeed"] = (input) => this.#drop(input);
+
+  // Drop nothing and say so: dropped, refused naming dependents, or not reached. What the worker
+  // drops is proven against a real catalogue (`apps/worker/src/handlers/models.test.ts`).
+  #drop(input: InMemoryWorkerClient["dropped"][number]): Promise<DropOutcome> {
     if (this.#failWith !== null) {
       return this.#fail();
     }

@@ -14,6 +14,7 @@ export {
   type ProjectInput,
   type ProjectMacro,
   type ProjectModel,
+  type ProjectSeed,
   relationsOfModel,
   renderProject,
   SOURCES_YML,

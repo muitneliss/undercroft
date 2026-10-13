@@ -145,9 +145,12 @@ export interface RunRefusal {
   readonly reason: string;
 }
 
+/** What one dbt node of a build was: a model built, a test run, or a seed loaded (ADR 0128). */
+export type RunStepKind = "model" | "test" | "seed";
+
 export interface RunStep {
   readonly uniqueId: string;
-  readonly kind: "model" | "test";
+  readonly kind: RunStepKind;
   readonly name: string;
   readonly status: string;
   readonly failures: number | null;
@@ -1045,7 +1048,7 @@ export async function refusalsFor(
 export async function stepsFor(exec: SqlExecutor, runId: string): Promise<RunStep[]> {
   const { rows } = await exec.query<{
     unique_id: string;
-    kind: "model" | "test";
+    kind: RunStepKind;
     name: string;
     status: string;
     failures: number | null;

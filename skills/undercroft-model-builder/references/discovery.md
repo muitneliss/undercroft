@@ -19,14 +19,15 @@ Read the tenant before you ask the person anything detailed. The point is to giv
 interview real choices: "this tenant has Xero invoices and HubSpot deals" is a question a
 person can answer; "which source do you want?" is not.
 
-Read all six, once, at the start. The lists answer summaries -- names, kinds, hashes and
-counts, never an item's body -- so reading all six is cheap; take a body from `get`, or ask a
+Read all seven, once, at the start. The lists answer summaries -- names, kinds, hashes and
+counts, never an item's body -- so reading all seven is cheap; take a body from `get`, or ask a
 list for it with `include`, only for the items that bear on the request.
 
 | Read                 | What it tells you                                                                   |
 | -------------------- | ----------------------------------------------------------------------------------- |
 | `models.list`        | The models that exist, each with its last build and how many columns it found.      |
 | `macros.list`        | The customer's own macros, what each is for and its parameters; no definitions.     |
+| `seeds.list`         | The customer's reference tables (seeds): columns and rows counted, no cells.        |
 | `models.reference`   | The sources a model can read and the platform's macros: `parts`, once (see below).  |
 | `lake.summary`       | The sources and entities the lake holds, how many records each, how fresh.          |
 | `bi.questions.list`  | The saved questions: kind and chart type. `include: ["definition"]` for the models. |
@@ -45,6 +46,7 @@ request, and keep the rest to yourself:
 Sources:     xero (invoices, contacts, payments), hubspot (deals, companies)
 Models:      stg_xero_invoices, fct_revenue, dim_customer, and 9 more
 Macros:      parse_amount (platform), normalise_company_name (tenant)
+Seeds:       account_groups (3 columns, 40 rows)
 Questions:   Monthly revenue (reads fct_revenue), Deals by stage (reads stg_hubspot_deals)
 Dashboards:  Finance overview (3 questions)
 ```
@@ -60,6 +62,8 @@ Read these when the request touches them:
   what reads it, `"up"` for what it reads, and `depth` to stop after a few steps. The whole
   graph of a large tenant will not fit in your context.
 - `macros.get` when a macro's description leaves you unsure what it returns.
+- `seeds.get` for a reference table that might already hold the mapping the request needs:
+  its columns with their declared types, and every row.
 - `bi.questions.get` and `bi.dashboards.get` for a report that might already answer the
   request, or that the request would change.
 - `bi.schema` for the columns a report can read in each built model. Pass `tables` with the
@@ -75,18 +79,21 @@ Read these when the request touches them:
 A session that read the tenant an hour ago, or keeps the customer's SQL in a repository, does
 not need to read it all again to know whether it changed.
 
-- `models.revision` answers one hash each for the models, the macros and the questions, and
-  one over all three. Equal to the one you kept means nothing a save writes has changed since;
-  different means something did, and the part that moved says which kind. Read it before a
-  plan you made earlier is carried out, and again before each save if time has passed.
+- `models.revision` answers one hash each for the models, the macros, the seeds and the
+  questions, and one over all four. Equal to the one you kept means nothing a save writes has
+  changed since; different means something did, and the part that moved says which kind. Read
+  it before a plan you made earlier is carried out, and again before each save if time has
+  passed.
 - Each model carries `sqlSha256` and `testsSha256`, each macro `sqlSha256` and
-  `descriptionSha256`, each question `definitionSha256`, on the list and on `get`. A `*Sha256`
-  of text (a model's or a macro's SQL, a description) is the SHA-256 of its UTF-8 bytes: hash
-  your local file the same way, and equal means the server holds exactly your text, with no
-  need to fetch it. `testsSha256` and `definitionSha256` are of the JSON as the server stores
-  it, which you cannot reproduce: compare them only with a hash the server gave you before.
-- Saving a model or a macro with exactly what is stored answers `unchanged: true` and changes
-  nothing, `updatedAt` included. It is safe, but it is not a write: do not report it as one.
+  `descriptionSha256`, each question `definitionSha256` and each seed `sha256`, on the list and
+  on `get`. A `*Sha256` of text (a model's or a macro's SQL, a description) is the SHA-256 of
+  its UTF-8 bytes: hash your local file the same way, and equal means the server holds exactly
+  your text, with no need to fetch it. `testsSha256`, `definitionSha256` and a seed's `sha256`
+  are of the JSON as the server stores it, which you cannot reproduce: compare them only with a
+  hash the server gave you before.
+- Saving a model, a macro or a seed with exactly what is stored answers `unchanged: true` and
+  changes nothing, `updatedAt` included. It is safe, but it is not a write: do not report it as
+  one.
 
 ## 2. The interview: the outcome before the implementation
 
@@ -215,6 +222,7 @@ Look for an owner in this order, and stop at the first that correctly owns the l
 an existing question or dashboard
     -> an existing model
     -> an existing macro
+    -> an existing seed
     -> an existing raw entity
     -> a change to an existing component
     -> a new component
@@ -226,6 +234,8 @@ that should own the logic:
 - another grouping or filter over a model that already means the right thing: a question;
 - a business definition that more than one report needs: a model;
 - an expression repeated across models: a macro;
+- a table a person keeps by hand, such as accounts mapped to groups: a seed, read with
+  `ref()`, never a `VALUES` list inside a model;
 - the data is not understood yet: Explore;
 - an existing model already answers it: reuse it, and say so.
 
@@ -246,7 +256,9 @@ inventory, and do not add to them:
   only renames or filters another model;
 - a cluster of models around one concept with overlapping grains, so nobody can say which
   one is authoritative;
-- a formula copied into many models before it became a macro.
+- a formula copied into many models before it became a macro;
+- a `VALUES` list of a hand-kept table inside a model's SQL, or the same list in several
+  models, where one seed would be read by each.
 
 When one bears on the request, tell the person. Do not fix it unasked: that is its own plan.
 
@@ -419,6 +431,8 @@ Check for duplication once more, now that it exists:
 - Does an existing model now overlap the new one?
 - Is the same business concept defined in two places?
 - Was an expression copied where a macro should have been called or proposed?
+- Was a hand-kept table written into a model as `VALUES` where a seed should have been read
+  or proposed?
 - Did business logic that other reports need end up inside one question?
 - Was a model created for one report when a question over an existing model would do?
 - Is it obvious which component is authoritative for the concept?

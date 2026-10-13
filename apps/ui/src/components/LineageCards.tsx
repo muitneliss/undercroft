@@ -70,6 +70,9 @@ function Foot({
   if (node.kind === "raw") {
     return <span className="lineage-card__note">{t("lineage.declaredSource")}</span>;
   }
+  if (node.kind === "seed") {
+    return <span className="lineage-card__note">{t("lineage.seedNote")}</span>;
+  }
   if (node.kind === "missing") {
     return (
       <span className="lineage-card__note lineage-card__note--errata">

@@ -78,6 +78,10 @@ export const AUDITED: AuditTable = {
   "macros.save": "service",
   "macros.delete": "service",
 
+  // Named, never a cell: the service's row says which seed, and the cells are in the table.
+  "seeds.save": "service",
+  "seeds.delete": "service",
+
   "documentKinds.add": "service",
   "documentKinds.update": "service",
   "documentKinds.remove": "service",

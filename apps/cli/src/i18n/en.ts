@@ -25,6 +25,7 @@ export const en = {
     lake: "The raw lake.",
     models: "dbt models.",
     macros: "The customer's own dbt macros, which every model can call.",
+    seeds: "The customer's small reference tables (dbt seeds), which models read with ref().",
     documentKinds: "The customer's catalogue of document kinds.",
     people: "Who has access, and invitations.",
     audit:

@@ -1,6 +1,6 @@
 ---
 name: undercroft-model-builder
-description: Guide a person from a question about their data to the smallest change in Undercroft that answers it, over its MCP tools or its CLI -- an exploratory answer, a report question or dashboard over models they already have, a change to an existing model or macro, or a new dbt model. Use when a person wants to save a query as a model (a raw-lake query, a report question's SQL, SQL they paste) or build one, wants a report or dashboard and may not know which layer it needs, or asks what they can build with their data. It inventories the tenant's lake, models, macros, questions and dashboards first, asks one question at a time, reads the lake instead of guessing, compares approaches and gets a plan approved before any write, writes the plan down, then checks a model with models.check and asks before it saves and again before it builds. Needs the undercroft skill for how to reach the platform.
+description: Guide a person from a question about their data to the smallest change in Undercroft that answers it, over its MCP tools or its CLI -- an exploratory answer, a report question or dashboard over models they already have, a change to an existing model or macro, or a new dbt model. Use when a person wants to save a query as a model (a raw-lake query, a report question's SQL, SQL they paste) or build one, wants a report or dashboard and may not know which layer it needs, or asks what they can build with their data. It inventories the tenant's lake, models, macros, seeds, questions and dashboards first, asks one question at a time, reads the lake instead of guessing, compares approaches and gets a plan approved before any write, writes the plan down, then checks a model with models.check and asks before it saves and again before it builds. Needs the undercroft skill for how to reach the platform.
 ---
 
 # From a question to a model, or to something smaller
@@ -31,7 +31,7 @@ These hold for the whole workflow. None of them bends because the person is in a
    SQL waits for its brief -- purpose, grain, source, columns, filters, name, tests -- which
    `references/interview.md` gets from the person.
 2. **No write before the plan is approved.** Until the person explicitly approves the plan
-   you showed, save, overwrite, build, configure and delete nothing -- no model, macro,
+   you showed, save, overwrite, build, configure and delete nothing -- no model, macro, seed,
    question or dashboard. Reading, sampling, bounded queries and drafting are allowed. The
    approval covers that plan only; a changed plan is shown again.
 3. **Never guess the data.** Read entity names from `lake.summary` and payload keys from a
@@ -65,11 +65,13 @@ These hold for the whole workflow. None of them bends because the person is in a
    on it reads. Ask again before `models.build`, even after the save was agreed. When several
    models changed, ask once for the set and build them in one call with `names` -- naming each,
    and saying when a `+` brings in the models upstream (`+name`) or downstream (`name+`) too.
-10. **Never delete.** This workflow does not call `models.delete` or `macros.delete`, and
-    never removes a report or a dashboard. If the person wants a model gone, tell them it is a
-    separate, destructive act -- it drops the table the model built and the failing rows its
-    tests stored -- and let them ask for it on its own. A macro is the same: its own act, its
-    own yes, and refused while any model or other macro still calls it.
+10. **Never delete.** This workflow does not call `models.delete`, `macros.delete` or
+    `seeds.delete`, and never removes a report or a dashboard. If the person wants a model
+    gone, tell them it is a separate, destructive act -- it drops the table the model built and
+    the failing rows its tests stored -- and let them ask for it on its own. A macro is the
+    same: its own act, its own yes, and refused while any model or other macro still calls it.
+    So is a seed: deleting it drops the table it was loaded into, and it is refused while any
+    model reads it.
 11. **Stop at a refusal.** `PERMISSION_DENIED`, `WRITES_DISABLED` and `HUMAN_REQUIRED` end
     the workflow. Tell the person what was refused and who can change it. Never work around
     one, for example by running the model's SQL through `lake.query` instead. A `CONFLICT`
@@ -88,20 +90,34 @@ These hold for the whole workflow. None of them bends because the person is in a
     text. The evidence, the plan or the SQL goes in the message; the tool carries the
     question and two to four options, yours first. A dismissed question is not a yes.
     `references/discovery.md`, "How to ask", has the detail.
+14. **A table a person keeps by hand is a seed, not a `VALUES` list.** A mapping or a list no
+    source holds -- accounts to groups, codes to labels, the people a reviewer listed -- goes
+    in a reference table (a dbt seed) that models read with `{{ ref('name') }}`, never inside
+    a model's SQL, where each model that needs it carries its own copy and one changed row
+    means saving the whole model again. Look in `seeds.list` for one the customer already
+    keeps, and read it with `seeds.get`. To propose one, give every column a declared type
+    (`text`, `integer`, `bigint`, `numeric(18,4)`, `boolean`, `date` or `timestamptz`) and
+    every cell as a string or `null`: nothing is inferred, a code with a leading zero is
+    `text`, and an amount is a string in `numeric(18,4)`. A missing cell is `null`; an empty or
+    `null`-looking text cell is refused, because dbt would load it as NULL. Show the person the
+    columns, their types and the rows, and save with `seeds.save` and `create: true` only after
+    their yes. A refusal names the row (`rows[n]`) and the column: fix that cell with the
+    person, never coerce it. A changed row is the whole table sent again to `seeds.save`, not a
+    model save, and the next build that reads the seed loads it.
 
 ## Who can do what
 
 - Anyone who can see the customer may run `models.list`, `models.get`, `models.reference`,
   `models.revision`, `models.check` and `models.lineage`, `macros.list`, `macros.get` and
-  `macros.check`,
+  `macros.check`, `seeds.list` and `seeds.get`,
   `lake.summary`, and `bi.questions.list`, `bi.questions.get`, `bi.dashboards.list`,
   `bi.dashboards.get` and `bi.schema`.
 - Running a definition against the built models (`bi.answer`, `bi.compile`) and saving a
   question or dashboard (`bi.questions.save`, `bi.dashboards.save`) need the `member` role
   or above.
 - Reading the raw lake (`lake.records`, `lake.documents`, `lake.querySchema`, `lake.query`),
-  saving and building a model (`models.save`, `models.build`) and saving a macro
-  (`macros.save`) need the `admin` role.
+  saving and building a model (`models.save`, `models.build`), saving a macro
+  (`macros.save`) and saving a seed (`seeds.save`) need the `admin` role.
 - Over MCP, `lake.query`, every save and `models.build` need a connection with a write grant.
   With the CLI, they need a profile that allows writes. `lake.query` counts as a write even
   though it only reads, because it runs SQL somebody wrote.
@@ -127,12 +143,13 @@ the person's role and grant allow (above).
 
 ### 2. Reconnaissance
 
-Read `models.list`, `macros.list`, `models.reference`, `lake.summary`, `bi.questions.list` and
-`bi.dashboards.list`, and give the person a short inventory of what bears on the request.
+Read `models.list`, `macros.list`, `seeds.list`, `models.reference`, `lake.summary`,
+`bi.questions.list` and `bi.dashboards.list`, and give the person a short inventory of what
+bears on the request.
 The lists are summaries; `references/discovery.md` says what each leaves out and how to ask
 for it, and how `models.revision` and the content hashes tell you whether what you read is
 still current.
-Read further -- `models.get`, `models.lineage`, `macros.get`, `bi.questions.get`,
+Read further -- `models.get`, `models.lineage`, `macros.get`, `seeds.get`, `bi.questions.get`,
 `bi.dashboards.get`, `lake.records` -- when the request touches it. Before changing a model,
 or building one beside it, read `models.lineage` for the models that `ref` it: they read what
 it builds. Name the model (`name`, with `direction: "down"`) rather than reading the whole

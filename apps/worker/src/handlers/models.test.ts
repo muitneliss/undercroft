@@ -234,6 +234,60 @@ describe("POST /v1/models/build", () => {
     expect(body.preview).toBeNull();
   });
 
+  it("a seed that failed to load fails the run, its step kept in the ledger as a seed's (ADR 0128)", async () => {
+    await db.asSuperuser((tx) =>
+      tx.query("INSERT INTO app.seed (tenant_id, name, columns, rows) VALUES ($1, $2, $3, $4)", [
+        TENANT,
+        "account_groups",
+        JSON.stringify([{ name: "code", type: "text" }]),
+        JSON.stringify([["511"]]),
+      ]),
+    );
+    const seedBroke: Spawn = (_cmd, options) => {
+      writeResults(options.cwd, [
+        {
+          unique_id: "seed.undercroft.account_groups",
+          status: "error",
+          message: "permission denied for schema analytics_case_1",
+          failures: null,
+          execution_time: 0.1,
+          relation_name: null,
+        },
+        {
+          unique_id: "model.undercroft.stg_deals",
+          status: "skipped",
+          message: null,
+          failures: null,
+          execution_time: 0,
+          relation_name: null,
+        },
+      ]);
+      return Promise.resolve({ exitCode: 1, stdout: "Database Error", stderr: "" });
+    };
+
+    const res = await post(api(seedBroke), "/v1/models/build", {
+      tenantId: TENANT,
+      model: "stg_deals",
+    });
+    const body = (await res.json()) as { ok: boolean; error: string | null; runId: string };
+
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("permission denied for schema analytics_case_1");
+    const { rows: run } = await db.query<{ status: string }>(
+      "SELECT status FROM ops.run WHERE id = $1",
+      [body.runId],
+    );
+    expect(run[0]?.status).toBe("failed");
+    const { rows: steps } = await db.query<{ kind: string; name: string; model: string | null }>(
+      "SELECT kind, name, model FROM ops.run_step WHERE run_id = $1 ORDER BY kind",
+      [body.runId],
+    );
+    expect(steps).toEqual([
+      { kind: "model", name: "stg_deals", model: null },
+      { kind: "seed", name: "account_groups", model: null },
+    ]);
+  });
+
   // #336: the run kept the first 500 characters of dbt's last lines, the banner filled them,
   // and the cause was cut off at the "E" of "Encountered".
   it("a build dbt stopped before its first model records dbt's own cause, not its banner", async () => {
@@ -767,6 +821,57 @@ describe("POST /v1/models/drop", () => {
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ code: "run_in_progress", details: ["run-building"] });
     expect(await relations()).toEqual(["analytics_case_1.stg_deals"]);
+  });
+});
+
+describe("POST /v1/seeds/drop (ADR 0128)", () => {
+  withDatabase();
+
+  async function built(sql: string): Promise<void> {
+    await provisionTenantRoles(db, TENANT);
+    await db.asRole("undercroft_dbt_case_1", (tx) => tx.exec(sql));
+  }
+
+  async function tables(): Promise<string[]> {
+    const { rows } = await db.asSuperuser((tx) =>
+      tx.query<{ name: string }>(
+        `SELECT c.relname AS name FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'analytics_case_1' AND c.relkind IN ('r', 'v') ORDER BY 1`,
+      ),
+    );
+    return rows.map((r) => r.name);
+  }
+
+  it("drops the table the seed's loads made, and nothing a model built", async () => {
+    await built(`
+      CREATE TABLE analytics_case_1.account_groups (code text);
+      CREATE TABLE analytics_case_1.stg_deals AS SELECT 1 AS deal_id`);
+
+    const res = await post(api(), "/v1/seeds/drop", { tenantId: TENANT, seed: "account_groups" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      dropped: [{ schema: "analytics_case_1", name: "account_groups", kind: "table" }],
+    });
+    // A name a model holds is never a seed's table to take, whatever the request says.
+    const model = await post(api(), "/v1/seeds/drop", { tenantId: TENANT, seed: "stg_deals" });
+    expect(await model.json()).toEqual({ dropped: [] });
+    expect(await tables()).toEqual(["stg_deals"]);
+  });
+
+  it("refuses, dropping nothing, while a model's view reads from it", async () => {
+    await built(`
+      CREATE TABLE analytics_case_1.account_groups (code text);
+      CREATE VIEW analytics_case_1.stg_accounts AS SELECT code FROM analytics_case_1.account_groups`);
+
+    const res = await post(api(), "/v1/seeds/drop", { tenantId: TENANT, seed: "account_groups" });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      code: "relation_depended_on",
+      details: ["stg_accounts"],
+    });
+    expect(await tables()).toEqual(["account_groups", "stg_accounts"]);
   });
 });
 

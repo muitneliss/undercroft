@@ -40,6 +40,7 @@ const PROJECT = renderProject({
     { name: "stg_contacts", sql: "select 2 as contact_id", tests: { columns: {} } },
   ],
   macros: [{ name: "trimmed", sql: "{% macro trimmed(x) %}btrim({{ x }}){% endmacro %}" }],
+  seeds: [],
 });
 
 describe("renderProject", () => {
@@ -90,6 +91,75 @@ describe("renderProject", () => {
   });
 });
 
+describe("renderProject, with the tenant's seeds (ADR 0128)", () => {
+  const COLUMNS = [
+    { name: "code", type: "text" },
+    { name: "order", type: "integer" },
+  ];
+  const SEEDED = renderProject({
+    slug: "case_0042",
+    database: { host: "undercroft-postgres", port: 5432, dbname: "undercroft" },
+    models: [],
+    macros: [],
+    seeds: [
+      {
+        name: "account_groups",
+        columns: COLUMNS,
+        csv: 'code,order\n"511","1"\n',
+        fullRefresh: false,
+      },
+      { name: "payment_terms", columns: COLUMNS, csv: "code,order\n", fullRefresh: true },
+    ],
+  });
+
+  it("writes each seed's file under seeds/, which the project names as its seed path", () => {
+    expect(SEEDED["seeds/account_groups.csv"]).toBe('code,order\n"511","1"\n');
+    expect(SEEDED["seeds/payment_terms.csv"]).toBe("code,order\n");
+    expect(SEEDED["dbt_project.yml"]).toContain('seed-paths: ["seeds"]');
+  });
+
+  it("types every column, quotes every column name, and fully refreshes only the seed marked so", () => {
+    const yml = SEEDED["dbt_project.yml"] ?? "";
+    expect(yml).toContain(`seeds:
+  undercroft:
+    +quote_columns: true
+    "account_groups":
+      +column_types:
+        "code": "text"
+        "order": "integer"
+    "payment_terms":
+      +column_types:
+        "code": "text"
+        "order": "integer"
+      +full_refresh: true
+`);
+    expect(yml.match(/full_refresh/gu)).toHaveLength(1);
+  });
+
+  it("quotes a seed or column named like a YAML 1.1 boolean, so it keeps its declared type", () => {
+    const yml =
+      renderProject({
+        slug: "case_0042",
+        database: { host: "undercroft-postgres", port: 5432, dbname: "undercroft" },
+        models: [],
+        macros: [],
+        seeds: [
+          {
+            name: "on",
+            columns: [{ name: "no", type: "text" }],
+            csv: "no\n",
+            fullRefresh: false,
+          },
+        ],
+      })["dbt_project.yml"] ?? "";
+    expect(yml).toContain('    "on":\n      +column_types:\n        "no": "text"\n');
+  });
+
+  it("writes no seed file for a tenant with none", () => {
+    expect(Object.keys(PROJECT).filter((path) => path.startsWith("seeds/"))).toEqual([]);
+  });
+});
+
 describe("renderProject, the tests beyond not_null and unique (ADR 0130)", () => {
   const RICH = renderProject({
     slug: "case_0042",
@@ -119,6 +189,7 @@ describe("renderProject, the tests beyond not_null and unique (ADR 0130)", () =>
       },
     ],
     macros: [],
+    seeds: [],
   });
 
   it("writes accepted_values and relationships in dbt 1.9's top-level form, severity under config", () => {
@@ -177,7 +248,7 @@ describe("the workbook date macros", () => {
 });
 
 describe("parseRunResults", () => {
-  it("one step per model or test, with the failing tests counted", () => {
+  it("one step per model, test or seed, with the failing tests counted", () => {
     const parsed = parseRunResults({
       results: [
         {
@@ -204,16 +275,33 @@ describe("parseRunResults", () => {
           execution_time: 0.05,
           relation_name: null,
         },
-        { unique_id: "seed.undercroft.rates", status: "success" },
+        {
+          unique_id: "seed.undercroft.account_groups",
+          status: "error",
+          message: 'invalid input syntax for type numeric: "x"',
+          failures: null,
+          execution_time: 0.03,
+          relation_name: '"undercroft"."analytics_case_0042"."account_groups"',
+        },
+        {
+          unique_id: "snapshot.undercroft.deals_history",
+          status: "success",
+          message: null,
+          failures: null,
+          execution_time: 0.1,
+          relation_name: null,
+        },
         { not: "a node" },
       ],
     });
 
     expect(parsed.testsFailed).toBe(1);
+    // A seed's load is a step, so one that failed is visible (ADR 0128); a snapshot is not ours.
     expect(parsed.steps.map((s) => [s.kind, s.name, s.status, s.failures, s.executionMs])).toEqual([
       ["model", "stg_deals", "success", null, 432],
       ["test", "not_null_stg_deals_deal_id", "fail", 2, 100],
       ["test", "unique_stg_deals_deal_id", "pass", 0, 50],
+      ["seed", "account_groups", "error", null, 30],
     ]);
   });
 

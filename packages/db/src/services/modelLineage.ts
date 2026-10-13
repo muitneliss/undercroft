@@ -25,11 +25,16 @@
  * `join`, such as `raw.document_text`), and a query run from inside Jinja (`run_query`,
  * `statement`), whose SQL is a string no reader can follow.
  *
+ * A SEED IS A NODE WHETHER OR NOT ANYTHING READS IT (ADR 0128). `ref('name')` reads a tenant's
+ * reference table exactly as it reads a model, so a ref to a seed is an edge from it, never a
+ * missing dependency. And a seed nothing reads yet is still the tenant's: asking about it must
+ * answer with the node, not with "no such name", as a model nothing reads does.
+ *
  * WHY A MISSING DEPENDENCY IS KEPT. Deleting a model leaves the models that ref it in place,
  * and their next build fails and says why (ADR 0077). The ref is still a declaration; dropping
  * its edge would hide the one thing about that model a reader most needs to see.
  *
- * Pure: the tenant's models and macros are the caller's to read.
+ * Pure: the tenant's models, macros and seeds are the caller's to read.
  */
 
 import { MACROS } from "./dbtProject.ts";
@@ -49,6 +54,8 @@ export interface LineageInput {
   readonly models: readonly LineageText[];
   /** The tenant's own macros. The platform's (`MACROS`) are known here already. */
   readonly macros: readonly LineageText[];
+  /** The names of the tenant's seeds, which a `ref()` reads like a model's. */
+  readonly seeds: readonly string[];
 }
 
 export type UndeclaredCode =
@@ -67,9 +74,9 @@ export interface Undeclared {
 }
 
 /**
- * A model; a raw lake table a source declares, named `schema.table`; or a declared relation
- * to something the project does not hold -- a model since deleted, a source table never
- * declared -- named as it was written.
+ * A model; a raw lake table a source declares, named `schema.table`; a seed, the tenant's own
+ * reference table; or a declared relation to something the project does not hold -- a model
+ * since deleted, a source table never declared -- named as it was written.
  */
 export type LineageNode =
   | {
@@ -80,6 +87,7 @@ export type LineageNode =
       readonly undeclared: readonly Undeclared[];
     }
   | { readonly kind: "raw"; readonly id: string; readonly name: string }
+  | { readonly kind: "seed"; readonly id: string; readonly name: string }
   | { readonly kind: "missing"; readonly id: string; readonly name: string };
 
 /** `from` is read by the model `to`. */
@@ -96,8 +104,14 @@ export interface Lineage {
 }
 
 interface Parent {
-  readonly kind: "model" | "raw" | "missing";
+  readonly kind: "model" | "raw" | "seed" | "missing";
   readonly name: string;
+}
+
+/** What a `ref()` may name: the tenant's models, and its seeds. */
+interface Refable {
+  readonly models: ReadonlySet<string>;
+  readonly seeds: ReadonlySet<string>;
 }
 
 /** What one text declares by itself, before the macros it calls are followed. */
@@ -121,12 +135,15 @@ function nodeId(kind: Parent["kind"], name: string): string {
 /** A literal `ref()` or `source()` as the node it names. */
 function parentOf(
   { fn, args }: JinjaReference & { args: readonly string[] },
-  models: ReadonlySet<string>,
+  refable: Refable,
 ): Parent {
   if (fn === "ref") {
-    // `ref('model')` or `ref('package', 'model')`: the model is the last argument.
-    const model = args.at(-1) ?? "";
-    return { kind: models.has(model) ? "model" : "missing", name: model };
+    // `ref('model')` or `ref('package', 'model')`: the node is the last argument.
+    const name = args.at(-1) ?? "";
+    if (refable.models.has(name)) {
+      return { kind: "model", name };
+    }
+    return { kind: refable.seeds.has(name) ? "seed" : "missing", name };
   }
   const [name = "", table = ""] = args;
   const source = SOURCES.find((declared) => declared.name === name);
@@ -157,10 +174,11 @@ function schemaReads(tokens: readonly Token[]): string[] {
   });
 }
 
-/** Every relation the SQL names directly, past `ref()` and `source()`. */
-function directReads(sql: string, models: ReadonlySet<string>): string[] {
+/** Every relation the SQL names directly, past `ref()` and `source()`: a seed's table too. */
+function directReads(sql: string, refable: Refable): string[] {
   const tokens = lex(sql);
-  const named = [...sqlFindings(tokens), ...bareModelFindings(tokens, models)].flatMap((found) => {
+  const nodes = new Set([...refable.models, ...refable.seeds]);
+  const named = [...sqlFindings(tokens), ...bareModelFindings(tokens, nodes)].flatMap((found) => {
     if (found.code === "raw-direct") {
       return [sourceRelation(found.subject ?? "")];
     }
@@ -185,7 +203,7 @@ function ownNames(macro: LineageText | null): ReadonlySet<string> {
 function read(
   text: LineageText,
   macro: LineageText | null,
-  models: ReadonlySet<string>,
+  refable: Refable,
   macros: ReadonlySet<string>,
 ): Reading {
   const jinja = readJinja(text.sql);
@@ -197,7 +215,7 @@ function read(
     if (args === null) {
       undeclared.push({ code: "dynamic-reference", subject: reference.fn });
     } else {
-      parents.push(parentOf({ ...reference, args }, models));
+      parents.push(parentOf({ ...reference, args }, refable));
     }
   }
   const calls: string[] = [];
@@ -213,7 +231,7 @@ function read(
       undeclared.push({ code: "unknown-macro", subject: name });
     }
   }
-  for (const relation of directReads(jinja.text, models)) {
+  for (const relation of directReads(jinja.text, refable)) {
     undeclared.push({ code: "direct-read", subject: relation });
   }
   return { parents, undeclared, calls };
@@ -262,24 +280,34 @@ function byName(a: { name: string }, b: { name: string }): number {
 }
 
 /**
- * The tenant's models as a graph of what each declares it reads: a node per model, per raw
- * lake table read and per declared relation to something absent; an edge per declaration.
+ * The tenant's models as a graph of what each declares it reads: a node per model and per
+ * seed, per raw lake table read and per declared relation to something absent; an edge per
+ * declaration.
  */
 export function modelLineage(input: LineageInput): Lineage {
   const models = new Set(input.models.map((model) => model.name));
+  const refable: Refable = { models, seeds: new Set(input.seeds) };
   const platform = new Set(MACROS.map((macro) => macro.name));
   // A tenant's macro cannot take a platform macro's name (`macroDefinition.ts`); if a row
   // somehow did, the platform's is the one dbt would call.
   const allMacros = [...MACROS, ...input.macros.filter((macro) => !platform.has(macro.name))];
   const macroNames = new Set(allMacros.map((macro) => macro.name));
   const macroReadings = new Map(
-    allMacros.map((macro) => [macro.name, read(macro, macro, models, macroNames)]),
+    allMacros.map((macro) => [macro.name, read(macro, macro, refable, macroNames)]),
   );
 
   const nodes = new Map<string, LineageNode>();
+  for (const seed of refable.seeds) {
+    // A model of the same name is refused at save, both ways; if one slipped by, dbt refuses
+    // the project and the model is the node a ref resolves to here.
+    if (!models.has(seed)) {
+      const id = nodeId("seed", seed);
+      nodes.set(id, { kind: "seed", id, name: seed });
+    }
+  }
   const edges: LineageEdge[] = [];
   for (const model of [...input.models].sort(byName)) {
-    const { parents, undeclared } = resolve(read(model, null, models, macroNames), macroReadings);
+    const { parents, undeclared } = resolve(read(model, null, refable, macroNames), macroReadings);
     const id = nodeId("model", model.name);
     nodes.set(id, {
       kind: "model",
@@ -299,6 +327,7 @@ export function modelLineage(input: LineageInput): Lineage {
   return {
     nodes: [
       ...all.filter((node) => node.kind === "raw").sort(byName),
+      ...all.filter((node) => node.kind === "seed").sort(byName),
       ...all.filter((node) => node.kind === "model"),
       ...all.filter((node) => node.kind === "missing").sort(byName),
     ],

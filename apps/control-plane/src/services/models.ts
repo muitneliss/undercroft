@@ -9,7 +9,9 @@
  *
  * Two ways to write: `create` refuses a name already in use, because a person creating
  * "stg_deals" over a colleague's has to be told; `save` overwrites, because that is what
- * pressing Save on an open editor means. The handler words the refusal.
+ * pressing Save on an open editor means. Either refuses a name one of the tenant's seeds has
+ * (ADR 0128): both are what `ref('name')` reads, and dbt refuses a project holding the two. The
+ * handler words the refusal.
  *
  * The audit row names the model and who saved it, never the SQL: the trail is for "who
  * changed what", and the SQL is in the table beside it.
@@ -30,8 +32,10 @@ import {
   lastBuildPerModel,
   listMacros,
   listModels,
+  listSeedSummaries,
   type Model,
   saveModel,
+  seedExists,
 } from "@undercroft/db/repos";
 import {
   type Finding,
@@ -195,7 +199,7 @@ export async function get(
 
 export type SaveOutcome =
   | { readonly ok: true; readonly unchanged: boolean }
-  | { readonly ok: false; readonly reason: "name-taken" }
+  | { readonly ok: false; readonly reason: "name-taken" | "seed-named" }
   | { readonly ok: false; readonly reason: "test-refused"; readonly finding: Finding };
 
 /**
@@ -223,6 +227,9 @@ export async function save(
     actorId: string;
   },
 ): Promise<SaveOutcome> {
+  if (await seedExists(exec, input.tenantId, input.name)) {
+    return { ok: false, reason: "seed-named" };
+  }
   const tests = canonicalTests(input.tests);
   const refused = await refusedTest(exec, input.tenantId, input.name, tests);
   if (refused !== null) {
@@ -249,8 +256,8 @@ export async function save(
 }
 
 /**
- * Which of the tenant's models read which, and which raw lake tables, read from the saved
- * models' and macros' own declarations and from nothing else (`modelLineage.ts`, ADR 0092).
+ * Which of the tenant's models read which, and which raw lake tables and seeds, read from the
+ * saved models' and macros' own declarations and from nothing else (`modelLineage.ts`, ADR 0092).
  * Computed on every call rather than stored: a stored graph would be one more thing a save
  * could leave stale, and the text it is read from is already here.
  *
@@ -263,11 +270,12 @@ export async function lineage(
   tenantId: string,
   target: LineageTarget | null = null,
 ): Promise<Lineage | null> {
-  const [models, macros] = await Promise.all([
+  const [models, macros, seeds] = await Promise.all([
     listModels(exec, tenantId),
     listMacros(exec, tenantId),
+    listSeedSummaries(exec, tenantId),
   ]);
-  const graph = modelLineage({ models, macros });
+  const graph = modelLineage({ models, macros, seeds: seeds.map((seed) => seed.name) });
   return target === null ? graph : lineageAround(graph, target);
 }
 

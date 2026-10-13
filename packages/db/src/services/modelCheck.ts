@@ -23,8 +23,8 @@
  * facts and decide nothing. `sqlChecks.ts` decides what the SQL's tokens say, this module
  * what the Jinja says, both in the words of `modelFindings.ts`. `source()` and `ref()` are
  * checked against what exists: the sources `SOURCES_YML` declares (`dbtSources.ts`, read
- * from that text so the two cannot drift), and the tenant's own models, which the caller
- * passes in. A call is checked against dbt's context, the platform's macros and the tenant's
+ * from that text so the two cannot drift), and the tenant's own models and seeds (ADR 0128),
+ * which the caller passes in -- a `ref()` reads a reference table exactly as it reads a model. A call is checked against dbt's context, the platform's macros and the tenant's
  * own (ADR 0086), which the caller passes in too.
  *
  * `checkMacro` holds a tenant's macro to the same reading, after `macroDefinition.ts` has said
@@ -56,19 +56,23 @@ export interface ModelCheckInput {
   readonly name: string;
   readonly sql: string;
   readonly tests: ModelTestsJson;
-  /** The tenant's model names, which a `ref()` must name one of. */
+  /** The tenant's model names, which a `ref()` must name one of -- or one of its seeds. */
   readonly existingModels: readonly string[];
   /** The tenant's own macro names, which a model may call like the platform's. */
   readonly existingMacros: readonly string[];
+  /** The tenant's seed names: reference tables a `ref()` reads like a model. */
+  readonly existingSeeds: readonly string[];
 }
 
 export interface MacroCheckInput {
   readonly name: string;
   readonly sql: string;
-  /** The tenant's model names, which a `ref()` in the macro must name one of. */
+  /** The tenant's model names, which a `ref()` in the macro must name one of -- or a seed. */
   readonly existingModels: readonly string[];
   /** The tenant's other macros, which this one may call. */
   readonly existingMacros: readonly string[];
+  /** The tenant's seed names, which a `ref()` in the macro may name too. */
+  readonly existingSeeds: readonly string[];
 }
 
 // ---------------------------------------------------------------------------------------
@@ -105,13 +109,15 @@ function nameFindings(
   ];
 }
 
-/** `self` is the model being checked, which may not read itself; `null` for a macro. */
+/**
+ * `refable` is every name a `ref()` may read: the tenant's models and seeds. `self` is the model
+ * being checked, which may not read itself; `null` for a macro.
+ */
 function referenceFindings(
   jinja: JinjaReading,
-  existingModels: readonly string[],
+  refable: ReadonlySet<string>,
   self: string | null,
 ): Finding[] {
-  const existing = new Set(existingModels);
   return jinja.references.flatMap(({ fn, args, line }): Finding[] => {
     if (args === null) {
       return [finding("dynamic-reference", line, fn)];
@@ -127,7 +133,7 @@ function referenceFindings(
     if (model === self) {
       return [finding("self-ref", line, model)];
     }
-    return existing.has(model) ? [] : [finding("unknown-ref", line, model)];
+    return refable.has(model) ? [] : [finding("unknown-ref", line, model)];
   });
 }
 
@@ -196,11 +202,12 @@ const TEST_FORBIDDEN_CALLS: ReadonlySet<string> = new Set([
 function sqlTestFindings(
   model: string,
   test: SqlTestJson,
-  input: Pick<ModelCheckInput, "existingModels" | "existingMacros">,
+  input: Pick<ModelCheckInput, "existingModels" | "existingMacros" | "existingSeeds">,
 ): Finding[] {
   const jinja = readJinja(test.sql);
   const tokens = lex(jinja.text);
-  const models = [...new Set([...input.existingModels, model])];
+  // A test may read a seed beside its model -- a list of allowed codes, say (ADR 0128).
+  const refable = new Set([...input.existingModels, ...input.existingSeeds, model]);
   const forbidden = [...jinja.calls, ...jinja.names]
     .filter(({ name }) => TEST_FORBIDDEN_CALLS.has(name))
     .map(({ name, line }) => finding("test-forbidden-call", line, name));
@@ -211,9 +218,9 @@ function sqlTestFindings(
   return [
     ...(tooLong ? [finding("test-name-too-long", null, sqlTestName(model, test.name))] : []),
     ...nameFindings(jinja, new Set(input.existingMacros), "report-parameter"),
-    ...referenceFindings(jinja, models, null),
+    ...referenceFindings(jinja, refable, null),
     ...sqlFindings(tokens),
-    ...bareModelFindings(tokens, new Set(models)),
+    ...bareModelFindings(tokens, refable),
     ...forbidden,
     ...(readsModel ? [] : [finding("test-model-unread", null, model)]),
   ].map((found) => inTest(found, test.name));
@@ -221,14 +228,17 @@ function sqlTestFindings(
 
 /**
  * What text alone can say about a model's tests beyond its SQL: each SQL test, and each
- * `relationships` test's `to`, which -- like a `ref()` -- must name a model the tenant has or
- * this one. dbt compiles every test with the project, so either one naming nothing fails the
- * whole tenant's build, not this model's test.
+ * `relationships` test's `to`, which -- like a `ref()` -- must name a model the tenant has, one
+ * of its seeds (ADR 0128), or this one. dbt compiles every test with the project, so either one
+ * naming nothing fails the whole tenant's build, not this model's test.
  */
 export function checkTests(
-  input: Pick<ModelCheckInput, "name" | "tests" | "existingModels" | "existingMacros">,
+  input: Pick<
+    ModelCheckInput,
+    "name" | "tests" | "existingModels" | "existingMacros" | "existingSeeds"
+  >,
 ): Finding[] {
-  const models = new Set([...input.existingModels, input.name]);
+  const models = new Set([...input.existingModels, ...input.existingSeeds, input.name]);
   const relationships = Object.entries(input.tests.columns).flatMap(([column, tests]) =>
     tests.flatMap((test) =>
       typeof test !== "string" && test.kind === "relationships" && !models.has(test.to ?? "")
@@ -247,14 +257,17 @@ export function checkTests(
 export function checkModel(input: ModelCheckInput): ModelCheck {
   const jinja = readJinja(input.sql);
   const tokens = lex(jinja.text);
-  const sql = [...sqlFindings(tokens), ...bareModelFindings(tokens, new Set(input.existingModels))];
+  // A seed's table named bare is read past `ref()` exactly as a model's is: dbt loads it first
+  // only for a model that declares it.
+  const refable = new Set([...input.existingModels, ...input.existingSeeds]);
+  const sql = [...sqlFindings(tokens), ...bareModelFindings(tokens, refable)];
   const whole = sql.some((found) => found.code === "empty")
     ? []
     : wholeModelFindings(tokens, sql, jinja, input);
   return {
     findings: distinct([
       ...nameFindings(jinja, new Set(input.existingMacros), "report-parameter"),
-      ...referenceFindings(jinja, input.existingModels, input.name),
+      ...referenceFindings(jinja, refable, input.name),
       ...sql,
       ...whole,
     ]).concat(checkTests(input)),
@@ -287,7 +300,7 @@ export function checkMacro(input: MacroCheckInput): ModelCheck {
   return {
     findings: distinct([
       ...nameFindings(jinja, defined, "unbound-name"),
-      ...referenceFindings(jinja, input.existingModels, null),
+      ...referenceFindings(jinja, new Set([...input.existingModels, ...input.existingSeeds]), null),
       ...fragmentFindings(lex(jinja.text)),
     ]),
     unverified: UNVERIFIED,
