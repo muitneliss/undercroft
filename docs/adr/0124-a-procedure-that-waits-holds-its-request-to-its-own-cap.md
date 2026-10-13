@@ -69,46 +69,7 @@ that many seconds, because its own cap bounds it; and nothing else lifts it.**
 
 - An agent reaches trigger → ingest → transform in three short calls: `runs.trigger`,
   `runs.get({ runId, waitSeconds })` whose `childRun` names the transform, and the same for it.
-- `models.build` is held the same way; the amendment below records how long, and what else it
-  decided.
-- Every client keeps a timeout above the longest hold: the CLI waits 180 seconds (it was 120, which
-  cut a build the server was still waiting on); an MCP host's tool timeout is its own, and a host
-  whose timeout is shorter uses `wait: false` below.
-
-## Amendment: `models.build` (issue #442, issue #441)
-
-Written into this ADR rather than a new one because it is the second procedure this ADR's
-mechanism holds, decided in the same series of changes before either merged.
-
-1. **`models.build` declares `holdsOpenSeconds: 160`**: the control plane's wait on the worker
-   (`BUILD_DEADLINE_MS`, 150 s -- the worker's two-minute build, its 20-second wait for a turn
-   inside that, then the steps, counts and preview) plus the ten seconds to answer that `runs.get`
-   uses. Under Bun's 255. Any shorter and a build the worker is still legitimately running is cut
-   at the door and reported as nothing; any longer and a hung worker holds a socket past the point
-   anything is still waiting for it. `holdOpen.test.ts` pins both procedures.
-2. **`wait: false`** answers as soon as the worker has opened the run, with `{ waited: false, runId
-}`, and the build continues exactly as a waited one does: the same editor turn (ADR 0088), the
-   same deadline, the same lock. The caller then waits with `runs.get({ runId, waitSeconds })`,
-   which holds for at most 60 seconds per call. The waited answer is `{ waited: true, ... }`: one
-   output, a discriminated union, rather than a second procedure whose input would repeat this
-   one's.
-3. **One run for several models.** `names` takes up to 20 selectors, each `name`, `+name` or
-   `name+` and nothing else of dbt's grammar, passed to one `dbt build` as one argv item each.
-   Every bare name must be a model of the tenant, checked before the worker is called: a selector
-   matching nothing is a green build of nothing, which is a success that did not happen.
-4. **A refused build names its holder.** The worker's 409 already carried the holder's run id;
-   the control plane now reads it, adds `startedAt` from the ledger, and refuses CONFLICT with
-   both as facts and in the sentence. A holder the ledger no longer has is not named.
-5. **The answer leads with a summary** (issue #441): `stepSummary`, then the steps `steps` asks for
-   (`problems` by default), through the same `reportSteps` as `runs.get`, and `rowCounts` -- one
-   per named model, counted as the BI login inside a ten-second budget shared by all of them, and
-   `null`, never `0`, for a model that did not build in this run or a count that could not be read.
-   The preview is kept for a selection of one model only. A further page of steps is read with
-   `runs.get` on the build's run: its cursor is the run's, and a build is not repeated to page.
-
-Rejected: a separate `models.start` for the build not waited for (two procedures with one input
-to keep in step); the full dbt selector grammar (`tag:`, `path:`, `@`, wildcards reach further than
-the names show, and cannot be checked against the tenant's models); counting every model the `+`
-reached (a figure for a model nobody named is an answer the caller did not ask for, and pays for in
-time); and a count in the worker's ledger write (a count is a reading of the table now, not part of
-what the run recorded).
+- `models.build` can be held by declaring `holdsOpenSeconds` (its two-minute build deadline plus a
+  margin) and nothing more.
+- Every client keeps a timeout above 60 seconds for these calls: the CLI waits 120 seconds; an MCP
+  host's tool timeout is its own.

@@ -15,7 +15,7 @@ import { type Envelope, envelopeOf, exchange, type WorkerTransport } from "./wor
 /**
  * How long a build that is waited for may take: the worker's two-minute deadline, and a little
  * for the steps, the counts and the rows. Exported because `models.build` holds its request
- * open this long (ADR 0124).
+ * open this long (ADR 0125).
  */
 export const BUILD_DEADLINE_MS = 150_000;
 

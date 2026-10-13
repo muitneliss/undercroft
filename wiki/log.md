@@ -368,3 +368,8 @@
 ## [2026-10-13] ingest | ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does
 ## [2026-10-13] ingest | Runbook: Connecting an agent over MCP
 ## [2026-10-13] ingest | ADR 0123 A Search Ranks Each Kind's Newest Matches, Found Through the Index by the Owner
+## [2026-10-13] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-13] ingest | What an ingest run counts
+## [2026-10-13] ingest | ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does
+## [2026-10-13] ingest | ADR 0125 A Build Is Several Models in One Run, and Need Not Be Waited For
+## [2026-10-13] ingest | Runbook: Connecting an agent over MCP

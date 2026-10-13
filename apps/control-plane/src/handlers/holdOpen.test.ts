@@ -20,7 +20,7 @@ const TENANT = "CASE-0042";
 const WAIT_SECONDS = 6;
 
 /**
- * The procedures that hold their request open. A procedure added here is a decision ADR 0124
+ * The procedures that hold their request open. A procedure added here is a decision an ADR (0124, 0125)
  * records; one that declares it without a record shows up here first.
  */
 describe("which procedures hold their request open", () => {
