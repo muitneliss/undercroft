@@ -17,8 +17,8 @@
   },
   "dependencies": {
     "croner": "10.0.1",
-    "yaml": "2.6.1",
-    "zod": "3.25.76"
+    "yaml": "2.9.1",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "zod-to-json-schema": "3.24.1"

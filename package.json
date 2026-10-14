@@ -23,7 +23,7 @@
     "topojson-simplify": "3.0.3",
     "typescript": "5.9.3",
     "world-atlas": "2.0.2",
-    "yaml": "2.6.1"
+    "yaml": "2.9.1"
   },
   "description": "An immutable raw lake with declarative connectors and user-defined transforms.",
   "engines": {

@@ -6,14 +6,14 @@
   "dependencies": {
     "@clack/core": "1.5.1",
     "@clack/prompts": "1.8.1",
-    "@oclif/core": "5.0.0",
+    "@oclif/core": "5.1.7",
     "@undercroft/core": "workspace:*",
-    "i18next": "26.4.2"
+    "i18next": "26.4.3"
   },
   "devDependencies": {
     "@undercroft/control-plane": "workspace:*",
     "@undercroft/db": "workspace:*",
-    "ai": "7.0.107",
-    "zod": "3.25.76"
+    "ai": "7.0.137",
+    "zod": "4.6.5"
   }
 }

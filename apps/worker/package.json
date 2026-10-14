@@ -20,8 +20,8 @@
     "@undercroft/db": "workspace:*",
     "@undercroft/lake": "workspace:*",
     "@undercroft/telemetry": "workspace:*",
-    "did-resolver": "4.1.0",
-    "hono": "4.6.14"
+    "did-resolver": "6.0.0",
+    "hono": "4.13.13"
   },
   "devDependencies": {
     "@tradetrust-tt/tradetrust": "6.10.4"
