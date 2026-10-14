@@ -46,10 +46,10 @@
     "zustand": "5.0.15"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "15.11.7",
+    "@happy-dom/global-registrator": "20.14.6",
     "@tailwindcss/vite": "4.3.3",
-    "@testing-library/dom": "10.4.0",
-    "@testing-library/react": "16.1.0",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
     "@trpc/server": "11.0.0",
     "@types/big.js": "6.2.2",
     "@types/geojson": "7946.0.16",
@@ -59,11 +59,11 @@
     "@types/topojson-client": "3.1.5",
     "@types/topojson-specification": "1.0.5",
     "@undercroft/control-plane": "workspace:*",
-    "@vitejs/plugin-react": "4.3.4",
-    "@vitest/browser-playwright": "5.0.2",
-    "playwright": "1.63.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "@vitest/browser-playwright": "5.0.3",
+    "playwright": "1.64.0",
     "tailwindcss": "4.3.3",
-    "vite": "6.4.3",
-    "vitest": "5.0.2"
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
   }
 }
