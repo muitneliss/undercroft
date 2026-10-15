@@ -1,6 +1,6 @@
 /**
- * One model, open: what its last build left, its SQL in the editor, its tests as a form, what
- * it declares it reads and what reads it, and the verbs.
+ * One model, open: what its last build left, its author's description (ADR 0137), its SQL in
+ * the editor, its tests as a form, what it declares it reads and what reads it, and the verbs.
  *
  * Save stores what is on screen and executes nothing. Build runs dbt for this model alone,
  * from the SAVED version, and answers with the run's steps and the table's first rows read
@@ -26,13 +26,14 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import type { ModelDetail } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { ModelDependencies } from "@/components/ModelDependencies.tsx";
+import { ModelDescription } from "@/components/ModelDescription.tsx";
 import { ModelFacts } from "@/components/ModelFacts.tsx";
 import { BuildPanel, Reference, TestsForm } from "@/components/ModelPanels.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StatusLine } from "@/components/StatusLine.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { lineagePath } from "@/lib/lineage.ts";
-import { draftFrom, isDirty, type ModelDraft, testsFor } from "@/lib/modelDraft.ts";
+import { descriptionFor, draftFrom, isDirty, type ModelDraft, testsFor } from "@/lib/modelDraft.ts";
 import { ON_TABLE } from "@/lib/questionDraft.ts";
 import { EVERY_STEP } from "@/lib/runs.ts";
 import { useUiStore } from "@/store.ts";
@@ -259,6 +260,8 @@ function EditorBand({
 
       {isAdmin ? null : <p className="note">{t("models.readOnlyNote")}</p>}
 
+      <ModelDescription draft={draft} canEdit={isAdmin} />
+
       <Suspense fallback={<Skeleton rows={6} />}>
         <SqlEditor
           key={`${tenantId}/${name}/${mounted}`}
@@ -359,7 +362,7 @@ function DeleteBand({
  * reader does not have to hover to find -- because it runs the SAVED version: a Build that
  * quietly ran last night's SQL under this morning's text is a result nobody could reproduce.
  * Discard is the other way out of that state: the draft goes back to what the server holds,
- * SQL and tests alike.
+ * SQL, description and tests alike.
  */
 function ModelVerbs({
   tenantId,
@@ -386,7 +389,14 @@ function ModelVerbs({
           disabled={busy || !dirty}
           type="button"
           onClick={(): void => {
-            save.mutate({ tenantId, name, sql: draft.sql, tests: testsFor(draft), create: false });
+            save.mutate({
+              tenantId,
+              name,
+              sql: draft.sql,
+              tests: testsFor(draft),
+              description: descriptionFor(draft),
+              create: false,
+            });
           }}
         >
           {save.isPending ? t("models.saving") : t("models.save")}

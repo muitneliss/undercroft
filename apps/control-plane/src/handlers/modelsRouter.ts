@@ -12,6 +12,7 @@ import {
   MAX_MODEL_SQL_BYTES,
   MAX_QUERY_ROWS,
   MAX_QUERY_SQL_BYTES,
+  ModelDescription,
   ModelName,
   ModelSelector,
   ModelTests,
@@ -51,9 +52,10 @@ const MAX_LINEAGE_NAME_CHARS = 255;
 
 export const modelsRouter = router({
   /**
-   * The tenant's models with their last build: names, hashes and column counts, no SQL. Any
-   * member may read what is built for them. `include: ["columns"]` adds each build's columns.
-   * `limit` or `cursor` answers a page, `{ items, nextCursor }`, rather than the array (ADR 0133).
+   * The tenant's models with their last build: names, descriptions, hashes and column counts,
+   * no SQL. Any member may read what is built for them. `include: ["columns"]` adds each build's
+   * columns, `["dependsOn"]` what each declares it reads (ADR 0137). `limit` or `cursor` answers
+   * a page, `{ items, nextCursor }`, rather than the array (ADR 0133).
    */
   list: tenantProcedure
     .input(
@@ -61,7 +63,7 @@ export const modelsRouter = router({
         ...NameFilterInput,
         ...PageInput,
         include: z
-          .array(z.enum(["columns"]))
+          .array(z.enum(["columns", "dependsOn"]))
           .min(1)
           .optional(),
       }),
@@ -92,7 +94,8 @@ export const modelsRouter = router({
    * Store a model. Executes nothing: Build is the worker's verb, chosen separately, so a
    * saved mistake is a row and not a broken table. Admin-only, like every write that
    * changes what a customer's dashboards will show. A name taken by a model under `create`,
-   * or by one of the tenant's seeds at all (ADR 0128), is a CONFLICT.
+   * or by one of the tenant's seeds at all (ADR 0128), is a CONFLICT. `description` left out
+   * keeps the stored one and `null` clears it (ADR 0137).
    */
   save: requireRole("admin")
     .input(
@@ -100,6 +103,7 @@ export const modelsRouter = router({
         name: ModelName,
         sql: z.string().max(MAX_MODEL_SQL_BYTES),
         tests: ModelTests,
+        description: ModelDescription.nullable().optional(),
         create: z.boolean().default(false),
       }),
     )
@@ -109,6 +113,7 @@ export const modelsRouter = router({
         name: input.name,
         sql: input.sql,
         tests: input.tests,
+        description: input.description,
         create: input.create,
         actor: actorOf(ctx),
         actorId: ctx.user.userId,

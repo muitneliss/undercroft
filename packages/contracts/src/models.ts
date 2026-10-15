@@ -237,3 +237,27 @@ export function canonicalTests(tests: ModelTests): ModelTests {
 
 /** The most SQL one model may hold. A model is a projection, not a data file. */
 export const MAX_MODEL_SQL_BYTES = 64 * 1024;
+
+/** The longest description a model may carry: a paragraph about its rows, not a document. */
+export const MAX_MODEL_DESCRIPTION_CHARS = 1000;
+
+/**
+ * Neither brace. dbt renders a model's `description` through Jinja when it parses the project,
+ * so `{{ ... }}` in one would be run -- and a description that is not valid Jinja fails the
+ * parse of the WHOLE project, every other model's build with it. The accepted values above
+ * refuse braces for the same reason. A lone `{` is refused too: the ban is on the character,
+ * which a reader can check, not on Jinja's grammar, which a reader would have to guess at.
+ */
+const NO_BRACES = /^[^{}]*$/u;
+
+/**
+ * What the model is, in its author's words: optional, written for the person reading the list,
+ * the agent choosing a model, and dbt's own manifest. Nothing checks what it says (ADR 0137).
+ */
+export const ModelDescription = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MAX_MODEL_DESCRIPTION_CHARS)
+  .regex(NO_BRACES);
+export type ModelDescription = z.infer<typeof ModelDescription>;

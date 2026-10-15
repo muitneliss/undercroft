@@ -94,7 +94,8 @@ door with this rule.
    and `connections.list` take `names` or `match`, and leave out each item's body: a question's
    definition, a connection's chosen names, a build's columns, a macro's definition, a seed's
    rows. Ask `include` for one only when you need it (`include: ["definition", "chart"]`,
-   `["config"]`, `["columns"]`), or `get` the one item. `models.reference` takes `parts`:
+   `["config"]`, `["columns"]`, `["dependsOn"]` for what each model reads), or `get` the one
+   item. `models.reference` takes `parts`:
    ask for `["tenantMacros"]` alone, since the other two parts never change.
    To read past what one answer holds, page. `models.list`, `macros.list`, `bi.questions.list`
    and `models.lineage` take `limit` and `cursor`, as `connections.browseScope` does. With

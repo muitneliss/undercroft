@@ -16,10 +16,12 @@ import { createHash } from "node:crypto";
 
 import type { ColumnTestJson, ModelTestsJson, SqlTestJson } from "../repos/models.ts";
 
-/** The part of a project model its tests are rendered from. */
+/** The part of a project model its `schema.yml` entry and its tests are rendered from. */
 export interface TestedModel {
   readonly name: string;
   readonly tests: ModelTestsJson;
+  /** Its author's description, which dbt carries into its manifest (ADR 0137). */
+  readonly description: string | null;
 }
 
 /** dbt 1.9: a generic test name this long or longer is truncated and hashed. */
@@ -96,17 +98,30 @@ function columnTestLines(test: ColumnTestJson): string[] {
   }
 }
 
-/** `models/schema.yml`: the tests the author chose, per column. Models with none are omitted. */
+/**
+ * `models/schema.yml`: each model's description and the tests the author chose, per column. A
+ * model with neither is omitted -- an empty entry is a warning in dbt's eyes -- and a model
+ * described but untested has no `columns:`. The description is a YAML double-quoted string, so
+ * a newline or a colon in it stays text; the contract has already refused the braces dbt would
+ * render as Jinja (ADR 0137).
+ */
 function schemaYml(models: readonly TestedModel[]): string {
   const lines = ["version: 2", "", "models:"];
-  const tested = models
+  const entries = models
     .map((model) => ({
       name: model.name,
+      description: model.description,
       columns: Object.entries(model.tests.columns).filter(([, tests]) => tests.length > 0),
     }))
-    .filter((model) => model.columns.length > 0);
-  for (const model of tested) {
-    lines.push(`  - name: ${yamlString(model.name)}`, "    columns:");
+    .filter((model) => model.columns.length > 0 || model.description !== null);
+  for (const model of entries) {
+    lines.push(`  - name: ${yamlString(model.name)}`);
+    if (model.description !== null) {
+      lines.push(`    description: ${yamlString(model.description)}`);
+    }
+    if (model.columns.length > 0) {
+      lines.push("    columns:");
+    }
     for (const [column, tests] of model.columns) {
       lines.push(
         `      - name: ${yamlString(column)}`,
@@ -115,7 +130,7 @@ function schemaYml(models: readonly TestedModel[]): string {
       );
     }
   }
-  if (tested.length === 0) {
+  if (entries.length === 0) {
     lines.push("  []");
   }
   lines.push("");
@@ -214,7 +229,7 @@ export function testFiles(models: readonly TestedModel[]): Record<string, string
  * name -- the only form in which Postgres would not cut the name itself. A SQL test is its own
  * name, `<model>__<name>`, which the check holds to 63 characters.
  */
-export function testRelations(model: TestedModel): string[] {
+export function testRelations(model: Pick<TestedModel, "name" | "tests">): string[] {
   const generic = Object.entries(model.tests.columns).flatMap(([column, tests]) =>
     tests.map((test) =>
       typeof test === "string"

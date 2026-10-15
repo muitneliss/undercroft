@@ -1762,6 +1762,10 @@ export const vi = {
     colRun: "Lần dựng",
     colColumns: "Số cột",
     colTests: "Kiểm thử",
+    /** What a model's saved SQL declares it reads, from the lineage (ADR 0137). */
+    colDependsOn: "Phụ thuộc",
+    /** The names beyond the first few a row lists. */
+    dependsOnMore_other: "+{{count, number}} khác",
     /** What the tests of the build serving a model's rows found (ADR 0129). */
     testsPassing: "Đạt",
     testsFailing_other: "{{countText}} không đạt",
@@ -1813,6 +1817,10 @@ export const vi = {
     factColumns: "Số cột dựng được",
     discard: "Bỏ thay đổi",
     sqlLabel: "SQL của mô hình",
+    /** A model's description: its author's words, optional and unchecked (ADR 0137). */
+    descriptionLabel: "Mô tả",
+    descriptionHint:
+      "Tuỳ chọn. Một hai câu về mỗi dòng của mô hình, cho người đọc danh sách, cho trợ lý chọn mô hình và cho dbt. Không dùng dấu ngoặc nhọn { }.",
     readOnlyNote: "Chỉ quản trị viên mới sửa được mô hình. Bạn đang xem bản đã lưu.",
     save: "Lưu",
     saving: "Đang lưu…",

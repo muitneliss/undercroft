@@ -159,6 +159,9 @@ bears on the request.
 The lists are summaries; `references/discovery.md` says what each leaves out and how to ask
 for it, and how `models.revision` and the content hashes tell you whether what you read is
 still current.
+To see what each model reads without walking the graph, ask `models.list` with
+`include: ["dependsOn"]`; each model's own `description`, where its author wrote one, is on the
+list already.
 Read further -- `models.get`, `models.lineage`, `macros.get`, `seeds.get`, `bi.questions.get`,
 `bi.dashboards.get`, `lake.records` -- when the request touches it. Before changing a model,
 or building one beside it, read `models.lineage` for the models that `ref` it: they read what
@@ -299,6 +302,11 @@ goes back to the plan.
 
 Call `models.save` with `create: true`. With the CLI, dry-run it first. On `CONFLICT`, follow
 guardrail 8. On success, the model is stored and nothing has run yet: say exactly that.
+
+Offer the brief's grain sentence as the model's `description` -- "one row per HubSpot deal that
+has not been deleted" -- and save it only if the person agrees: it is optional, and it is their
+words, not a check. Write no `{` or `}` in it; it is refused. Saving a model again without
+`description` keeps the one it has, and `null` clears it.
 
 ### M7. Confirm the build, then build
 

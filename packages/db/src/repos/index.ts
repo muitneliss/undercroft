@@ -85,6 +85,7 @@ export {
   type ModelHashes,
   type ColumnTestJson,
   type ModelTestsJson,
+  type ModelWrite,
   type SaveResult,
   type SqlTestJson,
   saveModel,

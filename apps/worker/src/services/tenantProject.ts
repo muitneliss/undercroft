@@ -41,7 +41,12 @@ export async function tenantProjectFiles(
   return renderProject({
     slug: input.roles.slug,
     database: deps.database,
-    models: input.models.map((m) => ({ name: m.name, sql: m.sql, tests: m.tests })),
+    models: input.models.map((m) => ({
+      name: m.name,
+      sql: m.sql,
+      tests: m.tests,
+      description: m.description,
+    })),
     macros: input.macros.map((m) => ({ name: m.name, sql: m.sql })),
     seeds: loads,
   });

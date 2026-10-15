@@ -266,6 +266,17 @@ describe("models.revision", () => {
       }
     }
   });
+
+  // ADR 0137: an agent that keeps a model's description in its repository must hear of an edit.
+  it("moves when only a model's description changes", async () => {
+    const model = { tenantId: TENANT, name: "stg_deals", sql: MODEL_SQL, tests: TESTS };
+    await api.models.save(model);
+    const before = await api.models.revision({ tenantId: TENANT });
+
+    await api.models.save({ ...model, description: "Một dòng mỗi deal." });
+
+    expect((await api.models.revision({ tenantId: TENANT })).models).not.toBe(before.models);
+  });
 });
 
 describe("an identical re-save", () => {

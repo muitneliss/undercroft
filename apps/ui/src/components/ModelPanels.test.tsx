@@ -26,7 +26,8 @@ const DRAFT: ModelDraft = {
   name: "stg_deals",
   sql: "select 1 as deal_id",
   tests: TESTS,
-  saved: { sql: "select 1 as deal_id", tests: TESTS },
+  description: "",
+  saved: { sql: "select 1 as deal_id", tests: TESTS, description: null },
   stored: { columns: { deal_id: ["not_null", "unique"], stage: ["not_null"] } },
 };
 

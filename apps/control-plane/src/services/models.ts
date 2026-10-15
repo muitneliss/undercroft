@@ -32,12 +32,14 @@ import {
   lastBuildPerModel,
   listModels,
   type Model,
+  type ModelWrite,
   saveModel,
   seedExists,
 } from "@undercroft/db/repos";
-import type { Finding } from "@undercroft/db/services";
+import type { DependsOn, Finding } from "@undercroft/db/services";
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
+import { dependsOnOf } from "./lineage.ts";
 import {
   type Listing,
   listed,
@@ -87,6 +89,11 @@ interface ModelFacts {
    * gave before, never with a hash of a local file: `jsonb` normalises key order and spacing.
    */
   readonly testsSha256: string;
+  /**
+   * What the model is, in its author's words, or `null` when nobody described it (ADR 0137).
+   * Optional and unchecked: `null` is no flag, and a description is a claim, not a test.
+   */
+  readonly description: string | null;
 }
 
 /** One model on the list: what a reader chooses one by, and no SQL. */
@@ -98,6 +105,12 @@ export interface ModelItem extends ModelFacts {
    * `lastBuild.status`: a build whose tests fail still succeeds, and its rows are served.
    */
   readonly lastTests: TestSummary;
+  /**
+   * What the saved SQL declares it reads, only when `include` names `dependsOn` (ADR 0137): the
+   * model's edges of `models.lineage`. Empty `reads` beside non-empty `undeclared` is a model
+   * whose upstream cannot be read, never one that reads nothing.
+   */
+  readonly dependsOn?: DependsOn;
 }
 
 /** One model in full: its SQL, its tests and the columns its last build found. */
@@ -110,7 +123,7 @@ export interface ModelDetail extends ModelFacts {
 }
 
 /** What `list` adds to each model beyond its summary. */
-export type ModelInclude = "columns";
+export type ModelInclude = "columns" | "dependsOn";
 
 function facts(model: Model): ModelFacts {
   return {
@@ -119,6 +132,7 @@ function facts(model: Model): ModelFacts {
     updatedBy: model.updatedBy,
     sqlSha256: model.sqlSha256,
     testsSha256: model.testsSha256,
+    description: model.description,
   };
 }
 
@@ -153,6 +167,10 @@ function summaryOf(
  * (`listFilter.ts`). Each says how many columns its build found; which ones only when `include`
  * names `columns`, because 176 models' column lists were most of a list that overflowed its
  * client (issue 444).
+ *
+ * What each declares it reads only when `include` names `dependsOn`: it is the tenant's whole
+ * lineage, read from every model and macro however few models the page holds, so a list that
+ * did not ask does not pay for it (ADR 0137).
  */
 export async function list(
   exec: SqlExecutor,
@@ -165,11 +183,19 @@ export async function list(
     readTestStates(exec, tenantId),
   ]);
   const columns = request.include?.includes("columns") ?? false;
+  const reads =
+    request.include?.includes("dependsOn") === true
+      ? await dependsOnOf(exec, tenantId, models)
+      : null;
   // `listModels` reads them `ORDER BY name`, and a model's name is unique: the page's key.
   return listed(
     mapNarrowed(
       narrowByName(models, (m) => m.name, request),
-      (m) => summaryOf(m, builds.get(m.name), tests(m.name), columns),
+      (m) => {
+        const item = summaryOf(m, builds.get(m.name), tests(m.name), columns);
+        const dependsOn = reads?.get(m.name);
+        return dependsOn === undefined ? item : { ...item, dependsOn };
+      },
     ),
     (item) => item.name,
     request,
@@ -215,9 +241,12 @@ export type SaveOutcome =
  * tenant lacks -- refuses the save with that finding and writes nothing (ADR 0130). The model's
  * own SQL is still never refused here: a saved mistake in it is a row, not a broken table.
  *
- * Saving exactly the SQL and tests already stored is `unchanged`: the row keeps its
- * `updatedAt` and `updatedBy`, and no audit row is written, because nothing took effect
- * (ADR 0113, ADR 0127). The repo decides it in the upsert itself, not by a read first.
+ * The description has three answers (ADR 0137): a string sets it, `null` clears it, and
+ * leaving it out keeps the one stored -- which is what every caller that never sent one meant.
+ *
+ * Saving exactly what is already stored is `unchanged`: the row keeps its `updatedAt` and
+ * `updatedBy`, and no audit row is written, because nothing took effect (ADR 0113, ADR 0127).
+ * The repo decides it in the upsert itself, not by a read first.
  */
 export async function save(
   exec: SqlExecutor,
@@ -226,6 +255,7 @@ export async function save(
     name: string;
     sql: string;
     tests: ModelTests;
+    description?: string | null | undefined;
     create: boolean;
     actor: Actor;
     actorId: string;
@@ -239,7 +269,13 @@ export async function save(
   if (refused !== null) {
     return { ok: false, reason: "test-refused", finding: refused };
   }
-  const model = { name: input.name, sql: input.sql, tests, updatedBy: input.actorId };
+  const model: ModelWrite = {
+    name: input.name,
+    sql: input.sql,
+    tests,
+    description: input.description,
+    updatedBy: input.actorId,
+  };
   const result = input.create
     ? (await insertModel(exec, input.tenantId, model))
       ? "written"
