@@ -8,7 +8,15 @@ import { describe, expect, test as it } from "bun:test";
 
 import type { ModelLineage } from "@/api/types.ts";
 import { upstreamOf, upstreamPaths } from "./lineage.ts";
-import { arrange, CARD_H, CARD_W, type Point, type Route } from "./lineageArrange.ts";
+import {
+  arrange,
+  CARD_H,
+  CARD_W,
+  edgeId,
+  type Point,
+  placementFor,
+  type Route,
+} from "./lineageArrange.ts";
 import { layout } from "./lineageLayout.ts";
 
 function model(name: string): ModelLineage["nodes"][number] {
@@ -108,6 +116,21 @@ describe("arrange", () => {
     edges: [...GRAPH.edges, edge("raw:raw.records", "model:c")],
   };
 
+  // A tenant's shape: fourteen models a column in thirteen columns, each reading a model in the
+  // column before it and one five, six ... eleven columns back. Placed by network simplex, a
+  // project like this held the main thread for twenty seconds and the board never left its
+  // skeleton.
+  const LARGE: ModelLineage = (() => {
+    const nodes = Array.from({ length: 176 }, (_, at) => model(`m${String(at)}`));
+    const edges = nodes.flatMap((to, at) =>
+      [1, 5, 6, 7, 8, 9, 10, 11]
+        .map((span) => 14 * (Math.floor(at / 14) - span) + ((at + 5 * span) % 14))
+        .filter((from) => from >= 0)
+        .map((from) => edge(`model:m${String(from)}`, to.id)),
+    );
+    return { nodes, edges };
+  })();
+
   it("keeps every node in the column its longest chain gives it, joined to the rest or not", async () => {
     // `lone` declares no upstream, so it stands in the first model column with nothing drawn
     // to it; ELK once laid such a part out apart and put it in the raw lake's column.
@@ -150,5 +173,23 @@ describe("arrange", () => {
     const arranged = await arrange(cyclic, cyclic);
     expect([...(arranged?.cards.keys() ?? [])].sort()).toEqual(["model:x", "model:y"]);
     expect(arranged?.routes.size).toBe(2);
+  });
+
+  // A test's timeout cannot catch the hang: ELK blocks the thread the timer would fire on, so the
+  // old code passed this suite after half a minute. The budget is what stops it, and it is pinned
+  // from both sides below.
+  it("places a project of 176 models and 610 long edges by Brandes-Köpf, not network simplex", () => {
+    expect(LARGE.edges).toHaveLength(610);
+    expect(placementFor(LARGE, LARGE)).toBe("BRANDES_KOEPF");
+  });
+
+  it("keeps network simplex's compact drawing for a board within the budget", () => {
+    expect(placementFor(SPANNING, SPANNING)).toBe("NETWORK_SIMPLEX");
+  });
+
+  it("arranges the large project whole: every card placed and every edge routed", async () => {
+    const arranged = await arrange(LARGE, LARGE);
+    expect(arranged?.cards.size).toBe(176);
+    expect(LARGE.edges.filter((e) => !arranged?.routes.has(edgeId(e.from, e.to)))).toEqual([]);
   });
 });
