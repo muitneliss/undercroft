@@ -403,3 +403,4 @@
 ## [2026-10-13] ingest | ADR 0136 Deploy on Push, Built on the Host, While GitHub Actions Is Out of Minutes
 ## [2026-10-13] ingest | Runbook Deployment
 ## [2026-10-15] ingest | ADR 0137 A Model May Carry Its Author's Description, and the List Says What Each Model Reads
+## [2026-10-15] ingest | ADR 0138 The Lineage Board Bounds Its Layout

@@ -15,6 +15,13 @@
  * layering, and cycle breaking that reverses only an edge pointing back across them). Only the
  * order within a column, the vertical places and the routes are ELK's.
  *
+ * WHY THE PLACEMENT HAS A BUDGET. ELK's bundled build runs on the main thread, and network
+ * simplex, the placement that draws the board compactly, grows about as the square of the cards
+ * and the columns their edges pass through. A tenant's project of 176 models held the page for
+ * twenty seconds behind the board's skeleton. So a board past `NETWORK_SIMPLEX_BUDGET` is placed
+ * by Brandes-Köpf, which grows about linearly and draws taller (`placementFor`, ADR 0138). A
+ * board narrowed to one selection's chains is small, and keeps the compact drawing.
+ *
  * WHY IT IS KEPT, AND READ BY SUBSCRIPTION. ELK runs as a lazily loaded chunk -- half a megabyte
  * that only this board needs -- and answers asynchronously. Each pair of graphs is arranged once
  * and the answer kept, keyed by the graphs' identity: a memo of a pure function, holding nothing
@@ -73,15 +80,43 @@ const OPTIONS = {
   "elk.separateConnectedComponents": "false",
   "elk.layered.cycleBreaking.strategy": "INTERACTIVE",
   "elk.layered.layering.strategy": "INTERACTIVE",
-  // Network simplex keeps a chain level and the drawing compact; Brandes-Köpf drew the same
-  // project half as tall again.
-  "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+  // The node placement is not here: it depends on the board's size (`placementFor`).
   // Splines, not orthogonal: seventy models' orthogonal wires run as one grid of parallel
   // lines, and merging them into buses would ink a whole trunk for one selected chain.
   "elk.edgeRouting": "SPLINES",
   "elk.spacing.nodeNode": String(GAP_Y),
   "elk.layered.spacing.nodeNodeBetweenLayers": String(GAP_X),
 };
+
+/**
+ * The most nodes ELK's layered algorithm may place by network simplex, counting each card and
+ * the dummy node an edge leaves in every column it passes through. Measured with the bundled
+ * build on these cards, network simplex took 0.3 s at 176 such nodes, 0.8 s at 480, 1.9 s at 780
+ * and 5.4 s at 1270, growing about as the square, and twenty seconds on a tenant's project of 176
+ * models whose 618 edges span many columns. ADR 0138.
+ */
+const NETWORK_SIMPLEX_BUDGET = 500;
+
+export type Placement = "NETWORK_SIMPLEX" | "BRANDES_KOEPF";
+
+/**
+ * How ELK places the cards of `drawn`: by network simplex while the board is within the budget,
+ * since it keeps a chain level and the drawing compact (Brandes-Köpf drew a 77-model project 72%
+ * taller, ADR 0103); by Brandes-Köpf beyond it, which placed the twenty-second project in half a
+ * second, so a large board draws taller rather than freezing the page. Decided by the graph
+ * alone, never by a clock, so one graph draws one way on every machine.
+ */
+export function placementFor(graph: ModelLineage, drawn: ModelLineage): Placement {
+  const columnOf = new Map(layout(graph, drawn).placed.map((p) => [p.node.id, p.column]));
+  let layered = drawn.nodes.length;
+  for (const { from, to } of drawn.edges) {
+    if (from !== to) {
+      const span = Math.abs((columnOf.get(to) ?? 0) - (columnOf.get(from) ?? 0));
+      layered += Math.max(0, span - 1);
+    }
+  }
+  return layered <= NETWORK_SIMPLEX_BUDGET ? "NETWORK_SIMPLEX" : "BRANDES_KOEPF";
+}
 
 export function edgeId(from: string, to: string): string {
   return `${from}|${to}`;
@@ -118,7 +153,10 @@ export async function arrange(
   const columnOf = new Map(layout(graph, drawn).placed.map((p) => [p.node.id, p.column]));
   const root: ElkNode = {
     id: "lineage",
-    layoutOptions: OPTIONS,
+    layoutOptions: {
+      ...OPTIONS,
+      "elk.layered.nodePlacement.strategy": placementFor(graph, drawn),
+    },
     children: drawn.nodes.map((node) => ({
       id: node.id,
       width: CARD_W,
