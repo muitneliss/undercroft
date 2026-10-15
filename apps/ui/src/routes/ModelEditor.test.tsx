@@ -34,6 +34,7 @@ function detail(name: string): ModelDetail {
     updatedBy: "u1",
     sqlSha256: "0".repeat(64),
     testsSha256: "0".repeat(64),
+    description: null,
     lastBuild: {
       runId: "run-7",
       status: "success",
@@ -84,9 +85,13 @@ const SEEDS = [
   },
 ];
 
+/** What each `models.save` this suite's server received, in order. */
+const saves: unknown[] = [];
+
 afterEach(() => {
   cleanup();
   useUiStore.setState({ modelDraft: null });
+  saves.length = 0;
 });
 
 function answer(data: unknown): Response {
@@ -99,8 +104,12 @@ function mount(name: string): void {
     links: [
       httpLink({
         url: "/trpc",
-        fetch: (input): Promise<Response> => {
+        fetch: (input, init): Promise<Response> => {
           const path = new URL(String(input), "http://localhost").pathname;
+          if (path.endsWith("/models.save")) {
+            saves.push(JSON.parse(String(init?.body)));
+            return Promise.resolve(answer({ ok: true, unchanged: false }));
+          }
           if (path.endsWith("/tenants.get")) {
             return Promise.resolve(
               answer({ tenantId: TENANT, displayName: "Acme", role: "admin" }),
@@ -161,6 +170,21 @@ describe("an unsaved draft", () => {
     expect(screen.queryByText(HINT)).toBeNull();
     expect(screen.getByText("Đã lưu.")).toBeDefined();
     expect(screen.getByRole("button", { name: "Dựng" }).hasAttribute("disabled")).toBe(false);
+  });
+});
+
+describe("the description (ADR 0137)", () => {
+  it("is sent with the save, as the contract reads it: trimmed", async () => {
+    mount("stg_notes");
+    const field = await screen.findByRole("textbox", { name: "Mô tả" });
+
+    fireEvent.change(field, { target: { value: "  Một dòng mỗi ghi chú.  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Lưu" }));
+
+    await waitFor(() => {
+      expect(saves).toHaveLength(1);
+    });
+    expect(saves[0]).toMatchObject({ name: "stg_notes", description: "Một dòng mỗi ghi chú." });
   });
 });
 

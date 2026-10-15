@@ -1,6 +1,7 @@
 /**
  * What the tenant's models declare they read, as `models.lineage` answers it: the graph, the
- * part of it around one node, or one page of either (ADR 0092, ADR 0125, ADR 0133).
+ * part of it around one node, or one page of either (ADR 0092, ADR 0125, ADR 0133). And the
+ * same graph per model, as `models.list` answers it when asked `dependsOn` (ADR 0137).
  *
  * Split from `models.ts`, which keeps what a model IS -- listed, read, saved, deleted. This is
  * what the models say about one another, read from their text and from nothing else.
@@ -9,6 +10,8 @@
 import type { SqlExecutor } from "@undercroft/db";
 import { listMacros, listModels, listSeedSummaries } from "@undercroft/db/repos";
 import {
+  type DependsOn,
+  dependsOnByModel,
   type Lineage,
   type LineageTarget,
   lineageAround,
@@ -73,4 +76,23 @@ export async function lineage(
   }
   const [nodes, edges] = paged.value.items;
   return { ok: true, value: { nodes, edges, nextCursor: paged.value.nextCursor } };
+}
+
+/**
+ * What each of `models` declares it reads, by name, for `models.list` to answer beside each
+ * model (ADR 0137). `models` is every model of the tenant, which the list has read already, so
+ * only the macros and the seeds' names are read here: which node a `ref()` reaches, and through
+ * which macro, is known only once every model and macro is. The same graph `lineage` answers,
+ * so the list and the lineage cannot disagree; computed on every call, never stored (ADR 0092).
+ */
+export async function dependsOnOf(
+  exec: SqlExecutor,
+  tenantId: string,
+  models: readonly { readonly name: string; readonly sql: string }[],
+): Promise<Map<string, DependsOn>> {
+  const [macros, seeds] = await Promise.all([
+    listMacros(exec, tenantId),
+    listSeedSummaries(exec, tenantId),
+  ]);
+  return dependsOnByModel(modelLineage({ models, macros, seeds: seeds.map((seed) => seed.name) }));
 }

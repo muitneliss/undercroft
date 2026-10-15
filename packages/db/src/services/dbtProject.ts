@@ -376,6 +376,8 @@ export interface ProjectModel {
   readonly name: string;
   readonly sql: string;
   readonly tests: ModelTestsJson;
+  /** Written into `schema.yml`, so dbt's manifest carries it (ADR 0137); `null` writes none. */
+  readonly description: string | null;
 }
 
 /** A tenant's macro: one whole `{% macro %}` definition, as `macroDefinition.ts` admitted it. */

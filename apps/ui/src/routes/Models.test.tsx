@@ -29,6 +29,14 @@ const SHA256 = "0".repeat(64);
 /** mart_pipeline's last build, as `models.get` answers it: the columns themselves. */
 const PIPELINE_COLUMNS = ["deal_id", "stage", "amount"];
 
+/** What a model declares it reads, as `models.list` answers it under `include: ["dependsOn"]`. */
+interface DependsOn {
+  readonly reads: readonly { kind: string; name: string; via: string | null }[];
+  readonly undeclared: readonly { code: string; subject: string | null; via: string | null }[];
+}
+
+const READS_NOTHING: DependsOn = { reads: [], undeclared: [] };
+
 /**
  * One model as `models.list` answers it: how many columns its build found, never which, and
  * `null` for a count the server does not know.
@@ -38,13 +46,15 @@ function built(
   status: string | null,
   columnCount: number | null = null,
   failing: number | null = null,
-): unknown {
+): Record<string, unknown> {
   return {
     name,
     updatedAt: WHEN,
     updatedBy: "u1",
     sqlSha256: SHA256,
     testsSha256: SHA256,
+    description: null,
+    dependsOn: READS_NOTHING,
     lastBuild: status === null ? null : { runId: "run-7", status, endedAt: WHEN, columnCount },
     // `null` failing is no test record: unknown, never passing (ADR 0129).
     lastTests:
@@ -60,12 +70,26 @@ function built(
   };
 }
 
+/** The same model, declaring it reads `dependsOn`. */
+function reading(item: Record<string, unknown>, dependsOn: DependsOn): Record<string, unknown> {
+  return { ...item, dependsOn };
+}
+
 const MODELS = [
-  built("mart_pipeline", "success", PIPELINE_COLUMNS.length, 2),
+  reading(built("mart_pipeline", "success", PIPELINE_COLUMNS.length, 2), {
+    reads: [
+      { kind: "model", name: "stg_deals", via: null },
+      { kind: "model", name: "stg_files", via: null },
+    ],
+    undeclared: [],
+  }),
   built("stg_deals", "success", null, 0),
   built("stg_files", "error"),
   built("stg_notes", null),
-  built("stg_legacy", null),
+  reading(built("stg_legacy", null), {
+    reads: [],
+    undeclared: [{ code: "dynamic-reference", subject: "ref", via: null }],
+  }),
   built("stg_skipped", "skipped"),
 ];
 
@@ -129,6 +153,7 @@ function mount(url: string): ReturnType<typeof createMemoryRouter> {
                 updatedBy: "u1",
                 sqlSha256: SHA256,
                 testsSha256: SHA256,
+                description: null,
                 lastBuild: {
                   runId: "run-7",
                   status: "success",
@@ -306,6 +331,17 @@ describe("a row's last build", () => {
     expect(rowOf("stg_deals")[4]).toBe("Đạt");
     // No test record is not a pass.
     expect(rowOf("stg_notes")[4]).toBe("Chưa có kết quả kiểm thử");
+  });
+});
+
+describe("a row's dependencies (ADR 0137)", () => {
+  it("names what the model declares it reads, and says when its upstream cannot be read", async () => {
+    mount(`/tenants/${TENANT}/models`);
+    await screen.findByRole("table");
+
+    expect(rowOf("mart_pipeline")[5]).toBe("stg_deals, stg_files");
+    // An upstream nobody can read is never "reads nothing" (rule 2).
+    expect(rowOf("stg_legacy")[5]).toBe("Thượng nguồn chưa khai báo");
   });
 });
 

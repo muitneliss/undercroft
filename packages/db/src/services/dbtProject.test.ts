@@ -30,6 +30,9 @@ const JINJA = /\{[{%#]/u;
 /** A file that is one Jinja comment and nothing else. */
 const ONLY_A_COMMENT = /^\{#[^#]*#\}\n$/u;
 
+/** A colon, quotes and a line break: each would be YAML syntax if it were written bare. */
+const NOTES_DESCRIPTION = 'One row per note: "open" or "done".\nFrom HubSpot.';
+
 const PROJECT = renderProject({
   slug: "case_0042",
   database: { host: "undercroft-postgres", port: 5432, dbname: "undercroft" },
@@ -38,8 +41,20 @@ const PROJECT = renderProject({
       name: "stg_deals",
       sql: "select 1 as deal_id",
       tests: { columns: { deal_id: ["not_null", "unique"] } },
+      description: null,
     },
-    { name: "stg_contacts", sql: "select 2 as contact_id", tests: { columns: {} } },
+    {
+      name: "stg_contacts",
+      sql: "select 2 as contact_id",
+      tests: { columns: {} },
+      description: null,
+    },
+    {
+      name: "stg_notes",
+      sql: "select 3 as note_id",
+      tests: { columns: {} },
+      description: NOTES_DESCRIPTION,
+    },
   ],
   macros: [{ name: "trimmed", sql: "{% macro trimmed(x) %}btrim({{ x }}){% endmacro %}" }],
   seeds: [],
@@ -93,6 +108,16 @@ describe("renderProject", () => {
     for (const macro of MACROS) {
       expect(PROJECT[`macros/${macro.name}.sql`]).toBe(macro.sql);
     }
+  });
+
+  // ADR 0137: dbt carries a model's description into its manifest only from schema.yml.
+  it("writes a model's description into schema.yml, even with no tests, as dbt reads it", () => {
+    const read = parse(PROJECT["models/schema.yml"] ?? "", { version: "1.1" }) as {
+      models: { name: string; description?: unknown; columns?: unknown }[];
+    };
+    const notes = read.models.find((model) => model.name === "stg_notes");
+    expect(notes).toEqual({ name: "stg_notes", description: NOTES_DESCRIPTION });
+    expect(read.models.find((model) => model.name === "stg_deals")?.description).toBeUndefined();
   });
 
   it("writes each of the tenant's macros whole, in a directory apart from the platform's", () => {
@@ -209,6 +234,7 @@ describe("renderProject, the tests beyond not_null and unique (ADR 0130)", () =>
             { name: "total_matches", sql: "select * from {{ ref('stg_payments') }} where false" },
           ],
         },
+        description: null,
       },
     ],
     macros: [],
@@ -258,6 +284,7 @@ describe("renderProject, the tests beyond not_null and unique (ADR 0130)", () =>
                 parent_id: [{ kind: "relationships", to: "yes", field: "no" }],
               },
             },
+            description: null,
           },
         ],
         macros: [],

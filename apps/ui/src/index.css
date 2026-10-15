@@ -1540,6 +1540,18 @@
     box-shadow: inset 0 0 0 1px var(--ink);
   }
 
+  /* A box a person writes prose in -- a model's description (ADR 0137) -- set in the prose face
+     and as wide as a prose line. Not resizable: the browser's own textarea grip is the 16px
+     corner `layout.md` refuses (ADR 0042), and three lines that scroll hold the thousand
+     characters a description may be. */
+  .input--prose {
+    font-family: var(--face-prose);
+    font-size: var(--t-prose);
+    line-height: 1.53;
+    max-width: 62ch;
+    resize: none;
+  }
+
   .input:disabled {
     background: #e9e2d0;
     color: var(--ink-3);
@@ -2563,6 +2575,31 @@
   }
 
   .journal__trigger {
+    display: block;
+  }
+
+  /* A model's description under its name on the list (ADR 0137): two lines at most, so one
+     model's paragraph does not make its row ten times the height of the rest. The whole text
+     is the editor's. */
+  .model-row__description {
+    font-family: var(--face-prose);
+    font-size: var(--t-body);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    max-width: 48ch;
+  }
+
+  /* "+2 more", a word's space after the last name it counts on from. */
+  .model-row__more {
+    margin-inline-start: 0.5ch;
+  }
+
+  /* "Upstream not declared", beneath the names a model's row could read: its own line, so it
+     reads as a fact about the list beside it and not as one more name. */
+  .model-row__undeclared {
     display: block;
   }
 

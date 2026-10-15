@@ -11,7 +11,8 @@
  * Above the list, one count per last-build state, and pressing one narrows the list to it with
  * the state in the address (`modelBuild.ts`); beneath them, the list searched by name and put in
  * order, both in the address too (`modelList.ts`). Each row names the run that last built it,
- * so a failed build is one press from its steps. The division's second view is its lineage
+ * so a failed build is one press from its steps, and carries its author's description and what
+ * its saved SQL declares it reads (`ModelRow`, ADR 0137). The division's second view is its lineage
  * (`ModelLineage`, ADR 0092), in the same address with `?view=lineage`: a view of Models and
  * not an eighth division, because the wheel is full (ADR 0019).
  *
@@ -277,7 +278,11 @@ function ModelList({
   const [params] = useSearchParams();
   const locale = useUiStore((state) => state.locale);
   const draft = useUiStore((state) => state.modelDraft);
-  const models = trpc.models.list.useQuery({ tenantId }, { select: wholeList });
+  // What each reads is the tenant's lineage, which the server computes only when asked.
+  const models = trpc.models.list.useQuery(
+    { tenantId, include: ["dependsOn"] },
+    { select: wholeList },
+  );
 
   if (models.isPending) {
     return <Skeleton rows={4} />;
@@ -324,6 +329,7 @@ function ModelList({
                 {t("models.colColumns")}
               </th>
               <th scope="col">{t("models.colTests")}</th>
+              <th scope="col">{t("models.colDependsOn")}</th>
               <th scope="col">{t("models.colUpdated")}</th>
             </tr>
           </thead>

@@ -140,6 +140,7 @@
 - [ADR 0134 The CLI Signs In With a Personal Token When Nobody Is at Its Terminal](sources/adr-0134-the-cli-signs-in-with-a-personal-token-when-nobody-is-at-its-terminal.md)
 - [ADR 0135 The Instance Serves Its Own CLI](sources/adr-0135-the-instance-serves-its-own-cli.md)
 - [ADR 0136 Deploy on Push, Built on the Host, While GitHub Actions Is Out of Minutes](sources/adr-0136-deploy-on-push-built-on-the-host-while-github-actions-is-out-of-minutes.md)
+- [ADR 0137 A Model May Carry Its Author's Description, and the List Says What Each Model Reads](sources/adr-0137-a-model-may-carry-its-author-s-description-and-the-list-says-what-each-model-reads.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

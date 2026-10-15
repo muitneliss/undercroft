@@ -10,6 +10,8 @@
  *
  * Each read carries the SHA-256 of what is stored, computed by Postgres over the bytes it holds
  * (`CONTENT_HASHES`), so "is this the text I have" is answered without the text (ADR 0127).
+ *
+ * `description` is optional (ADR 0137): `null` is a model nobody described, never a flag.
  */
 
 import type { SqlExecutor } from "../executor.ts";
@@ -48,6 +50,8 @@ export interface Model {
   readonly name: string;
   readonly sql: string;
   readonly tests: ModelTestsJson;
+  /** What the model is, in its author's words; `null` when nobody described it (ADR 0137). */
+  readonly description: string | null;
   /** What the last successful build found the relation to have. Empty until one has. */
   readonly columns: string[];
   readonly updatedBy: string;
@@ -60,18 +64,22 @@ export interface Model {
    * and spacing: compare it with a hash this platform gave, never with one of a local file.
    */
   readonly testsSha256: string;
+  /** Hex SHA-256 of the stored description's UTF-8 bytes; `null` when there is none. */
+  readonly descriptionSha256: string | null;
 }
 
 interface ModelRow {
   name: string;
   sql: string;
   tests: ModelTestsJson;
+  description: string | null;
   columns: string[];
   updated_by: string;
   created_at: Date | string;
   updated_at: Date | string;
   sql_sha256: string;
   tests_sha256: string;
+  description_sha256: string | null;
 }
 
 /**
@@ -80,21 +88,25 @@ interface ModelRow {
  * evidence rather than two programs agreeing about a serialisation. ADR 0127.
  */
 const CONTENT_HASHES = `encode(sha256(convert_to(sql, 'UTF8')), 'hex') AS sql_sha256,
-  encode(sha256(convert_to(tests::text, 'UTF8')), 'hex') AS tests_sha256`;
+  encode(sha256(convert_to(tests::text, 'UTF8')), 'hex') AS tests_sha256,
+  encode(sha256(convert_to(description, 'UTF8')), 'hex') AS description_sha256`;
 
-const COLUMNS = `name, sql, tests, columns, updated_by, created_at, updated_at, ${CONTENT_HASHES}`;
+const COLUMNS = `name, sql, tests, description, columns, updated_by, created_at, updated_at,
+  ${CONTENT_HASHES}`;
 
 function toModel(r: ModelRow): Model {
   return {
     name: r.name,
     sql: r.sql,
     tests: r.tests,
+    description: r.description,
     columns: r.columns,
     updatedBy: r.updated_by,
     createdAt: new Date(r.created_at).toISOString(),
     updatedAt: new Date(r.updated_at).toISOString(),
     sqlSha256: r.sql_sha256,
     testsSha256: r.tests_sha256,
+    descriptionSha256: r.description_sha256,
   };
 }
 
@@ -120,6 +132,21 @@ export async function getModel(
   return row === undefined ? null : toModel(row);
 }
 
+/** What a create or a save writes. */
+export interface ModelWrite {
+  readonly name: string;
+  readonly sql: string;
+  readonly tests: ModelTestsJson;
+  readonly updatedBy: string;
+  /**
+   * Three answers, not two (ADR 0137). A string sets it and `null` clears it. Absent writes
+   * none on a create and KEEPS the stored one on a save: the CLI, MCP and every caller written
+   * before descriptions existed save SQL and tests without one, and a save that read "not sent"
+   * as "clear" would erase a description each time somebody fixed a typo in the SQL.
+   */
+  readonly description?: string | null | undefined;
+}
+
 /**
  * Create a model, or report that the name is taken.
  *
@@ -130,14 +157,21 @@ export async function getModel(
 export async function insertModel(
   exec: SqlExecutor,
   tenantId: string,
-  model: { name: string; sql: string; tests: ModelTestsJson; updatedBy: string },
+  model: ModelWrite,
 ): Promise<boolean> {
   const { rows } = await exec.query<{ name: string }>(
-    `INSERT INTO app.model (tenant_id, name, sql, tests, updated_by)
-     VALUES ($1, $2, $3, $4::jsonb, $5)
+    `INSERT INTO app.model (tenant_id, name, sql, tests, description, updated_by)
+     VALUES ($1, $2, $3, $4::jsonb, $5, $6)
      ON CONFLICT (tenant_id, name) DO NOTHING
      RETURNING name`,
-    [tenantId, model.name, model.sql, JSON.stringify(model.tests), model.updatedBy],
+    [
+      tenantId,
+      model.name,
+      model.sql,
+      JSON.stringify(model.tests),
+      model.description ?? null,
+      model.updatedBy,
+    ],
   );
   return rows.length === 1;
 }
@@ -146,31 +180,44 @@ export async function insertModel(
 export type SaveResult = "written" | "unchanged";
 
 /**
- * Write the model's SQL and tests, creating it if absent. Executes nothing.
+ * Write the model's SQL, tests and -- when the caller said one -- its description, creating it
+ * if absent. Executes nothing.
  *
- * A save of the SQL and tests already stored is `unchanged` and touches nothing -- not
- * `updated_at`, not `updated_by` -- because nothing took effect, and an identical re-save that
- * looked like an edit would tell everyone watching that the model changed (ADR 0127). Decided by
- * the upsert's own `WHERE`, so two saves racing cannot both read "different" and both write.
- * `tests` compares as `jsonb`, by value.
+ * A save of what is already stored is `unchanged` and touches nothing -- not `updated_at`, not
+ * `updated_by` -- because nothing took effect, and an identical re-save that looked like an edit
+ * would tell everyone watching that the model changed (ADR 0127). Decided by the upsert's own
+ * `WHERE`, so two saves racing cannot both read "different" and both write. `tests` compares as
+ * `jsonb`, by value. A save that said no description (`$7` false) keeps the stored one and is
+ * compared on the SQL and tests alone, so it cannot read as a change to a description it never
+ * mentioned.
  */
 export async function saveModel(
   exec: SqlExecutor,
   tenantId: string,
-  model: { name: string; sql: string; tests: ModelTestsJson; updatedBy: string },
+  model: ModelWrite,
 ): Promise<SaveResult> {
   const { rows } = await exec.query<{ name: string }>(
-    `INSERT INTO app.model AS stored (tenant_id, name, sql, tests, updated_by)
-     VALUES ($1, $2, $3, $4::jsonb, $5)
+    `INSERT INTO app.model AS stored (tenant_id, name, sql, tests, description, updated_by)
+     VALUES ($1, $2, $3, $4::jsonb, $6::text, $5)
      ON CONFLICT (tenant_id, name) DO UPDATE SET
        sql = EXCLUDED.sql,
        tests = EXCLUDED.tests,
+       description = CASE WHEN $7::boolean THEN EXCLUDED.description ELSE stored.description END,
        updated_by = EXCLUDED.updated_by,
        updated_at = now()
      WHERE stored.sql IS DISTINCT FROM EXCLUDED.sql
         OR stored.tests IS DISTINCT FROM EXCLUDED.tests
+        OR ($7::boolean AND stored.description IS DISTINCT FROM EXCLUDED.description)
      RETURNING name`,
-    [tenantId, model.name, model.sql, JSON.stringify(model.tests), model.updatedBy],
+    [
+      tenantId,
+      model.name,
+      model.sql,
+      JSON.stringify(model.tests),
+      model.updatedBy,
+      model.description ?? null,
+      model.description !== undefined,
+    ],
   );
   return rows.length === 1 ? "written" : "unchanged";
 }
@@ -180,15 +227,26 @@ export interface ModelHashes {
   readonly name: string;
   readonly sqlSha256: string;
   readonly testsSha256: string;
+  /** `null` for a model with no description (ADR 0137). */
+  readonly descriptionSha256: string | null;
 }
 
 /** Every model's hashes, by name, without reading a byte of SQL out of Postgres. */
 export async function listModelHashes(exec: SqlExecutor, tenantId: string): Promise<ModelHashes[]> {
-  const { rows } = await exec.query<{ name: string; sql_sha256: string; tests_sha256: string }>(
-    `SELECT name, ${CONTENT_HASHES} FROM app.model WHERE tenant_id = $1 ORDER BY name`,
-    [tenantId],
-  );
-  return rows.map((r) => ({ name: r.name, sqlSha256: r.sql_sha256, testsSha256: r.tests_sha256 }));
+  const { rows } = await exec.query<{
+    name: string;
+    sql_sha256: string;
+    tests_sha256: string;
+    description_sha256: string | null;
+  }>(`SELECT name, ${CONTENT_HASHES} FROM app.model WHERE tenant_id = $1 ORDER BY name`, [
+    tenantId,
+  ]);
+  return rows.map((r) => ({
+    name: r.name,
+    sqlSha256: r.sql_sha256,
+    testsSha256: r.tests_sha256,
+    descriptionSha256: r.description_sha256,
+  }));
 }
 
 export type DeleteOutcome = "deleted" | "absent" | "building";

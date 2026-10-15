@@ -25,7 +25,7 @@ list for it with `include`, only for the items that bear on the request.
 
 | Read                 | What it tells you                                                                   |
 | -------------------- | ----------------------------------------------------------------------------------- |
-| `models.list`        | The models that exist, each with its last build and how many columns it found.      |
+| `models.list`        | The models that exist, each with its description, last build and column count.      |
 | `macros.list`        | The customer's own macros, what each is for and its parameters; no definitions.     |
 | `seeds.list`         | The customer's reference tables (seeds): columns and rows counted, no cells.        |
 | `models.reference`   | The sources a model can read and the platform's macros: `parts`, once (see below).  |
@@ -62,7 +62,9 @@ Read these when the request touches them:
 
 - `models.get` for a model that might already own the concept: its SQL, its tests, the
   columns of its last build. `models.list` with `include: ["columns"]` gives the columns of
-  every build at once, when you are comparing several.
+  every build at once, when you are comparing several, and `include: ["dependsOn"]` what each
+  model declares it reads. A model whose `reads` is empty and whose `undeclared` is not reads
+  something nobody can name from its SQL; it does not read nothing.
 - `models.lineage` before you propose to change a model, or to build one beside it: the
   models that `ref` it read what it builds, and a second model over the same entity is
   often the first sign of a duplicate. Name the model: `name` with `direction: "down"` for

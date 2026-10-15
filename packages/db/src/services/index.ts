@@ -41,6 +41,7 @@ export {
   type Severity,
   type UnverifiedCode,
 } from "./modelCheck.ts";
+export { type Dependency, type DependsOn, dependsOnByModel } from "./dependsOn.ts";
 export {
   type Lineage,
   type LineageEdge,

@@ -53,6 +53,17 @@ const MODELS: readonly (readonly [string, "error" | "skipped" | "success" | null
   ["churn_watch", "error", { refs: ["dim_customer", "stg_churn_signals"] }],
 ];
 
+/**
+ * What some of the models' authors wrote about them (ADR 0137). The rest were saved without a
+ * description, and their rows show nothing where one would be.
+ */
+const DESCRIPTIONS: Readonly<Record<string, string>> = {
+  revenue_monthly: "Doanh thu theo tháng: một dòng mỗi tháng và phân khúc khách hàng.",
+  orders_daily: "Đơn hàng theo ngày, từ các deal đã chốt.",
+  ar_open_items:
+    "Công nợ phải thu còn mở: một dòng mỗi hoá đơn Xero chưa thanh toán đủ, kèm số ngày quá hạn.",
+};
+
 /** The SQL a model was saved with, written to declare exactly what `Declares` says. */
 function sqlOf(declares: Declares): string {
   const head = "-- Synthetic review fixture.\n";
@@ -158,22 +169,48 @@ const IN_FULL: readonly Omit<ModelDetail, "sql" | "tests">[] = MODELS.map(
       updatedBy: AUTHOR,
       sqlSha256: FIXTURE_SHA256,
       testsSha256: FIXTURE_SHA256,
+      description: DESCRIPTIONS[name] ?? null,
       lastBuild,
       lastTests: lastTestsOf(name, lastBuild),
     };
   },
 );
 
-/** The list as `models.list` answers it: each build's column count, and not its columns. */
+/** What a model declares it reads, as `models.list` answers it under `include: ["dependsOn"]`. */
+function dependsOnOf(declares: Declares): NonNullable<ModelItem["dependsOn"]> {
+  if (declares.dynamic === true) {
+    return { reads: [], undeclared: [{ code: "dynamic-reference", subject: "ref", via: null }] };
+  }
+  if (declares.source !== undefined) {
+    return {
+      reads: [{ kind: "raw", name: `raw.${declares.source}`, via: null }],
+      undeclared: [],
+    };
+  }
+  return {
+    reads: (declares.refs ?? []).map((ref) => ({
+      kind: MODELS.some(([model]) => model === ref) ? ("model" as const) : ("missing" as const),
+      name: ref,
+      via: null,
+    })),
+    undeclared: [],
+  };
+}
+
+/**
+ * The list as `models.list` answers the Models division: each build's column count and not its
+ * columns, and what each model declares it reads, which the division asks for.
+ */
 export const MODEL_LIST: readonly ModelItem[] = IN_FULL.map(
-  ({ lastBuild, lastTests, ...model }) => {
+  ({ lastBuild, lastTests, ...model }, index) => {
     // The list carries each model's test state and counts, and not the tests themselves.
     const { failingTests: _failing, warningTests: _warned, ...testSummary } = lastTests;
+    const dependsOn = dependsOnOf(MODELS[index]?.[2] ?? {});
     if (lastBuild === null) {
-      return { ...model, lastBuild, lastTests: testSummary };
+      return { ...model, lastBuild, lastTests: testSummary, dependsOn };
     }
     const { columns: _listedOnRequest, ...summary } = lastBuild;
-    return { ...model, lastBuild: summary, lastTests: testSummary };
+    return { ...model, lastBuild: summary, lastTests: testSummary, dependsOn };
   },
 );
 

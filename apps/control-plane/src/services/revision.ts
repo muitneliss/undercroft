@@ -67,7 +67,16 @@ async function partsOf(exec: SqlExecutor, tenantId: string): Promise<RevisionPar
     listQuestionHashes(exec, tenantId),
   ]);
   return {
-    models: partRevision(models.map((m) => [m.name, m.sqlSha256, m.testsSha256])),
+    // A description's hash only where there is one (ADR 0137): every model saved without one
+    // keeps the entry -- and the revision -- it had before descriptions existed, rather than
+    // every tenant's models reading as changed on the deploy that added them.
+    models: partRevision(
+      models.map((m) =>
+        m.descriptionSha256 === null
+          ? [m.name, m.sqlSha256, m.testsSha256]
+          : [m.name, m.sqlSha256, m.testsSha256, m.descriptionSha256],
+      ),
+    ),
     macros: partRevision(macros.map((m) => [m.name, m.sqlSha256, m.descriptionSha256])),
     seeds: partRevision(seeds.map((s) => [s.name, s.sha256])),
     // A question is keyed by its id, since two may share a name; renaming one is a change.

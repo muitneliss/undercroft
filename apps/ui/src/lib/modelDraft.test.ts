@@ -18,6 +18,7 @@ const MODEL: ModelDetail = {
   updatedBy: "u-1",
   sqlSha256: "0".repeat(64),
   testsSha256: "0".repeat(64),
+  description: null,
   lastBuild: null,
   lastTests: NO_TEST_RECORD,
 };

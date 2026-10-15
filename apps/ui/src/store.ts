@@ -43,7 +43,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { type DashboardDraft, isDashboardDirty } from "@/lib/dashboardDraft.ts";
-import { isDirty, type ModelDraft } from "@/lib/modelDraft.ts";
+import { isDirty, type ModelDraft, savedOf } from "@/lib/modelDraft.ts";
 import {
   isQuestionDirty,
   patchVisual,
@@ -293,6 +293,8 @@ interface UiState {
   modelDraft: ModelDraft | null;
   setModelDraft: (draft: ModelDraft | null) => void;
   setModelSql: (sql: string) => void;
+  /** The description field's text, as typed; `descriptionFor` reads it for a save. */
+  setModelDescription: (description: string) => void;
   /** Turn one test on or off for one column. */
   setModelTest: (column: string, kind: TestKind, on: boolean) => void;
   addModelTestColumn: (column: string) => void;
@@ -762,6 +764,7 @@ function modelSlice(
   | "modelDraft"
   | "setModelDraft"
   | "setModelSql"
+  | "setModelDescription"
   | "setModelTest"
   | "addModelTestColumn"
   | "removeModelTestColumn"
@@ -773,6 +776,10 @@ function modelSlice(
     setModelSql: (sql): unknown =>
       set((state) =>
         state.modelDraft === null ? {} : { modelDraft: { ...state.modelDraft, sql } },
+      ),
+    setModelDescription: (description): unknown =>
+      set((state) =>
+        state.modelDraft === null ? {} : { modelDraft: { ...state.modelDraft, description } },
       ),
     setModelTest: (column, kind, on): unknown =>
       set((state) => {
@@ -809,7 +816,7 @@ function modelSlice(
         if (draft === null) {
           return {};
         }
-        return { modelDraft: { ...draft, saved: { sql: draft.sql, tests: draft.tests } } };
+        return { modelDraft: { ...draft, saved: savedOf(draft) } };
       }),
   };
 }

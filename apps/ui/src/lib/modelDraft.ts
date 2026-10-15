@@ -11,6 +11,10 @@
  * `accepted_values`, a `relationships`, a SQL test, a severity (ADR 0130) -- is carried through
  * untouched in `stored`, because a save from this editor replaces the model's tests whole and
  * would otherwise delete what the form cannot show.
+ *
+ * The description is held as the field's own text, `""` for none, and leaves the browser as
+ * the contract reads it (`descriptionFor`): trimmed, or `null` when nothing is left (ADR 0137).
+ * "Unsaved" compares that, so a trailing space typed and not yet removed is not an edit.
  */
 
 import {
@@ -24,13 +28,22 @@ import type { ModelDetail } from "@/api/types.ts";
 
 export type TestMap = Readonly<Record<string, readonly TestKind[]>>;
 
+/** What a save leaves the server holding, in the terms the draft compares itself with. */
+export interface DraftSnapshot {
+  readonly sql: string;
+  readonly tests: TestMap;
+  readonly description: string | null;
+}
+
 export interface ModelDraft {
   readonly tenantId: string;
   readonly name: string;
   readonly sql: string;
   readonly tests: TestMap;
+  /** The description as the field holds it; `""` is none. */
+  readonly description: string;
   /** What the server holds, for the unsaved indicator. */
-  readonly saved: { readonly sql: string; readonly tests: TestMap };
+  readonly saved: DraftSnapshot;
   /** The tests the server holds in full, so a save keeps what the form does not edit. */
   readonly stored: ModelTests;
 }
@@ -56,9 +69,21 @@ export function draftFrom(tenantId: string, model: ModelDetail): ModelDraft {
     name: model.name,
     sql: model.sql,
     tests,
-    saved: { sql: model.sql, tests },
+    description: model.description ?? "",
+    saved: { sql: model.sql, tests, description: model.description },
     stored: model.tests,
   };
+}
+
+/** The description as `models.save` takes it: trimmed, or `null` -- cleared -- when empty. */
+export function descriptionFor(draft: Pick<ModelDraft, "description">): string | null {
+  const said = draft.description.trim();
+  return said === "" ? null : said;
+}
+
+/** What the server holds once this draft is saved: the snapshot `isDirty` then compares with. */
+export function savedOf(draft: ModelDraft): DraftSnapshot {
+  return { sql: draft.sql, tests: draft.tests, description: descriptionFor(draft) };
 }
 
 function sameTests(a: TestMap, b: TestMap): boolean {
@@ -75,7 +100,11 @@ function sameTests(a: TestMap, b: TestMap): boolean {
 
 /** Whether the draft differs from what the server holds. Order of tests does not count. */
 export function isDirty(draft: ModelDraft): boolean {
-  return draft.sql !== draft.saved.sql || !sameTests(draft.tests, draft.saved.tests);
+  return (
+    draft.sql !== draft.saved.sql ||
+    !sameTests(draft.tests, draft.saved.tests) ||
+    descriptionFor(draft) !== draft.saved.description
+  );
 }
 
 /**

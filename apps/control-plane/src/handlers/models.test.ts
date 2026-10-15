@@ -232,6 +232,66 @@ describe("models.save", () => {
   });
 });
 
+describe("a model's description (ADR 0137)", () => {
+  const DESCRIBED = { ...DRAFT, description: "Một dòng mỗi deal, từ HubSpot." };
+
+  async function adminApi(): Promise<ReturnType<typeof caller>> {
+    const admin = await seedMember("a@example.test", "admin");
+    return caller(admin, "a@example.test");
+  }
+
+  async function storedDescription(api: ReturnType<typeof caller>): Promise<string | null> {
+    return (await api.models.get({ tenantId: TENANT, name: DRAFT.name })).description;
+  }
+
+  it("is saved and read back, on get and on the list", async () => {
+    const api = await adminApi();
+    await api.models.save({ ...DESCRIBED, create: true });
+
+    expect(await storedDescription(api)).toBe(DESCRIBED.description);
+    expect(wholeList(await api.models.list({ tenantId: TENANT }))[0]?.description).toBe(
+      DESCRIBED.description,
+    );
+  });
+
+  // The CLI, MCP and every caller before ADR 0137 save SQL and tests without one.
+  it("is kept by a save that does not mention it", async () => {
+    const api = await adminApi();
+    await api.models.save({ ...DESCRIBED, create: true });
+
+    await api.models.save({ ...DRAFT, sql: "select 2" });
+
+    expect(await storedDescription(api)).toBe(DESCRIBED.description);
+  });
+
+  it("is cleared by null", async () => {
+    const api = await adminApi();
+    await api.models.save({ ...DESCRIBED, create: true });
+
+    await api.models.save({ ...DRAFT, description: null });
+
+    expect(await storedDescription(api)).toBeNull();
+  });
+
+  it("saved again as it is, beside the same SQL and tests, changes nothing", async () => {
+    const api = await adminApi();
+    await api.models.save({ ...DESCRIBED, create: true });
+
+    expect(await api.models.save(DESCRIBED)).toEqual({ ok: true, unchanged: true });
+  });
+
+  // dbt renders a description through Jinja; one that is not valid Jinja breaks every build.
+  it("holding a brace is refused before anything is written", async () => {
+    const api = await adminApi();
+    const got = await refusal(() =>
+      api.models.save({ ...DRAFT, description: "Tổng {{ amount }} mỗi deal.", create: true }),
+    );
+
+    expect(got.code).toBe("BAD_REQUEST");
+    expect(wholeList(await api.models.list({ tenantId: TENANT }))).toEqual([]);
+  });
+});
+
 describe("models.build", () => {
   /** An admin, and the customer's models these tests build, saved the way an admin saves them. */
   async function adminWithModels(...names: string[]): Promise<string> {
@@ -1054,5 +1114,55 @@ describe("models.lineage", () => {
 
     expect(got.code).toBe("NOT_FOUND");
     expect(got.message).toContain("stg_dealz");
+  });
+});
+
+describe("models.list, asked what each model depends on (ADR 0137)", () => {
+  /** The models listed with `include: ["dependsOn"]`, by name. */
+  async function dependsOn(api: ReturnType<typeof caller>): Promise<Map<string, unknown>> {
+    const listed = wholeList(await api.models.list({ tenantId: TENANT, include: ["dependsOn"] }));
+    return new Map(listed.map((model) => [model.name, model.dependsOn]));
+  }
+
+  it("names the model and the reference table a model refs, as the lineage reads them", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const api = caller(admin, "a@example.test");
+    await api.seeds.save({
+      tenantId: TENANT,
+      name: "account_groups",
+      columns: [{ name: "code", type: "text" }],
+      rows: [["511"]],
+    });
+    await api.models.save({ ...DRAFT, create: true });
+    await api.models.save({
+      ...DRAFT,
+      name: "mart",
+      sql: "select * from {{ ref('stg_deals') }} join {{ ref('account_groups') }} using (code)",
+      create: true,
+    });
+
+    expect((await dependsOn(api)).get("mart")).toEqual({
+      reads: [
+        { kind: "model", name: "stg_deals", via: null },
+        { kind: "seed", name: "account_groups", via: null },
+      ],
+      undeclared: [],
+    });
+  });
+
+  // Rule 2: an upstream nobody can read is said to be unread, never "reads nothing".
+  it("says why a model's upstream cannot be read, rather than listing it as reading nothing", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const api = caller(admin, "a@example.test");
+    await api.models.save({
+      ...DRAFT,
+      sql: "select * from {{ ref(var('target')) }}",
+      create: true,
+    });
+
+    expect((await dependsOn(api)).get("stg_deals")).toEqual({
+      reads: [],
+      undeclared: [{ code: "dynamic-reference", subject: "ref", via: null }],
+    });
   });
 });

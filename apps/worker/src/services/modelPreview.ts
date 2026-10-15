@@ -93,7 +93,10 @@ function withDraft(
   draft: { name: string; sql: string },
 ): ProjectParts["models"] {
   const others = saved.filter((model) => model.name !== draft.name);
-  return [...others, { name: draft.name, sql: draft.sql, tests: { columns: {}, sql: [] } }];
+  return [
+    ...others,
+    { name: draft.name, sql: draft.sql, tests: { columns: {}, sql: [] }, description: null },
+  ];
 }
 
 /** The model's `compiled_code` in the manifest dbt wrote, or `null` when it holds none. */
