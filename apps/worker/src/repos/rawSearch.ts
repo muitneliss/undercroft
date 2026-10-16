@@ -27,12 +27,25 @@ import type { SqlExecutor } from "@undercroft/db";
 
 import { inReadOnlyTransaction } from "./queries.ts";
 
+/** One raw stream a search may look in; a whole source when `entity` is `null`. */
+export interface SearchStream {
+  readonly source: string;
+  readonly entity: string | null;
+}
+
 export interface SearchScope {
   readonly tenantId: string;
   readonly q: string;
   readonly kinds: readonly SearchKind[];
   readonly limit: number;
   readonly offset: number;
+  /**
+   * The streams to look in, or `null` for the whole lake (ADR 0142). Passed INTO the candidate
+   * lookups as two parallel arrays, where they narrow beside the tenant's own condition and before
+   * the cap -- never applied to the page, which would rank, count and cut matches the reader
+   * cannot see and then describe a lake that is not theirs.
+   */
+  readonly streams: readonly SearchStream[] | null;
   /**
    * How long the search may run.
    *
@@ -128,11 +141,11 @@ function isoOrNull(value: Date | string | null): string | null {
 export const SEARCH_STATEMENT = `
   WITH record_candidate AS MATERIALIZED (
          SELECT c.source, c.entity, c.source_record_id, c.ordinal
-         FROM raw.search_record_candidates(current_user, $1, $5 + 1) c
+         FROM raw.search_record_candidates(current_user, $1, $5 + 1, $8::text[], $9::text[]) c
          WHERE 'record' = ANY($7::text[])),
        document_candidate AS MATERIALIZED (
          SELECT c.source, c.document_id, c.ordinal
-         FROM raw.search_document_candidates(current_user, $1, $6 + 1) c
+         FROM raw.search_document_candidates(current_user, $1, $6 + 1, $8::text[], $9::text[]) c
          WHERE 'document' = ANY($7::text[])),
        hit AS (
          SELECT 'record'::text           AS kind,
@@ -202,6 +215,8 @@ export function searchLake(exec: SqlExecutor, scope: SearchScope): Promise<Searc
       scope.caps.record,
       scope.caps.document,
       scope.kinds,
+      scope.streams === null ? null : scope.streams.map((stream) => stream.source),
+      scope.streams === null ? null : scope.streams.map((stream) => stream.entity),
     ]);
     // An empty page is still one row -- the `capped` row with nothing joined to it -- so the
     // cut is reported when there is nothing left to show, which is exactly when it matters.

@@ -14,11 +14,13 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 
 // The side effect is the point: without it every key renders as itself. See `@/i18n`.
 import "@/i18n/index.ts";
+import { translatorFor } from "@/i18n/index.ts";
 import { Dashboard } from "@/routes/Dashboard.tsx";
 import { useUiStore } from "@/store.ts";
 import { held } from "@/test/access.ts";
 import { type Answer, mountRoute } from "@/test/mountRoute.tsx";
 
+const t = translatorFor("vi");
 const TENANT = "CASE-0042";
 const DASHBOARD = "00000000-0000-4000-8000-00000000000d";
 const REVENUE = "00000000-0000-4000-8000-000000000001";
@@ -80,6 +82,7 @@ function served(role: string): Record<string, Answer> {
       filters: [],
       updatedAt: WHEN,
       updatedBy: "u1",
+      ungranted: [],
     }),
     "bi.questions.answer": () => ({
       columns: [{ name: "month", type: "text" }],
@@ -206,6 +209,30 @@ describe("a tile read from a table whose tests fail (issue 456)", () => {
     expect(within(ledger).getByText("2026-09")).toBeDefined();
     const revenue = screen.getByRole("region", { name: "Doanh thu" });
     expect(within(revenue).queryByText(/Kiểm thử không đạt/u)).toBeNull();
+  });
+});
+
+describe("a tile whose question the reader may not open (ADR 0142)", () => {
+  it("says it is not granted, in place, and never that it was deleted", async () => {
+    mount(`${PATH}?edit=1`, "member", {
+      // The server lists only the questions the reader reaches, and names the tile it held back.
+      "bi.questions.list": () => QUESTIONS.filter((question) => question.id === REVENUE),
+      "bi.dashboards.get": () => ({
+        id: DASHBOARD,
+        name: "Hiệu quả kinh doanh",
+        layout: LAYOUT,
+        filters: [],
+        updatedAt: WHEN,
+        updatedBy: "u1",
+        ungranted: [LEDGER],
+      }),
+    });
+    const notGranted = t("dashboard.questionNotGranted");
+
+    expect(await screen.findByRole("region", { name: notGranted })).toBeDefined();
+    expect(screen.getByRole("region", { name: "Doanh thu" })).toBeDefined();
+    expect(await readingOrder()).toEqual(["Doanh thu", notGranted]);
+    expect(screen.queryByText(t("dashboard.questionGone"))).toBeNull();
   });
 });
 

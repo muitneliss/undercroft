@@ -22,7 +22,7 @@
 import type { RawSearchResponse, SearchKind } from "@undercroft/contracts";
 import { tenantRolesFor } from "@undercroft/db/repos";
 
-import { searchLake } from "../repos/rawSearch.ts";
+import { type SearchStream, searchLake } from "../repos/rawSearch.ts";
 import type { QueryDeps } from "./queryRunner.ts";
 import { QUERY_TIMEOUT_MS } from "./queryRunner.ts";
 import { isStatementTimeout, QueryTimedOut } from "./queryTimeout.ts";
@@ -58,6 +58,11 @@ export interface SearchInput {
   readonly kinds: readonly SearchKind[];
   readonly limit: number;
   readonly offset: number;
+  /**
+   * The streams the reader reaches, a whole source where `entity` is `null` (ADR 0142); absent
+   * for a reader who reaches the whole lake. Narrowed before anything is ranked.
+   */
+  readonly streams?: readonly SearchStream[];
 }
 
 /**
@@ -82,6 +87,7 @@ export async function searchRaw(deps: QueryDeps, input: SearchInput): Promise<Ra
         kinds: input.kinds,
         limit: input.limit,
         offset: input.offset,
+        streams: input.streams ?? null,
         timeoutMs: QUERY_TIMEOUT_MS,
         caps: RANKED_PER_KIND,
       });

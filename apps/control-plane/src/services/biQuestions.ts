@@ -14,8 +14,16 @@ import {
   type ChartType,
   QuestionDefinition,
 } from "@undercroft/contracts";
+import {
+  type Reach,
+  READ_ACTION,
+  reachesReport,
+  type ReportKind,
+  reportObject,
+} from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 
+import { saveGrant } from "../repos/accessGrants.ts";
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import {
   deleteQuestion,
@@ -113,9 +121,12 @@ function questionItem(view: QuestionView, include: readonly QuestionInclude[]): 
 export async function listQuestionViews(
   exec: SqlExecutor,
   tenantId: string,
+  reach: Reach,
   request: PagedListRequest<QuestionInclude> = {},
 ): Promise<Listing<QuestionItem>> {
-  const views = (await listQuestions(exec, tenantId)).map(questionView);
+  const views = (await listQuestions(exec, tenantId))
+    .filter((row) => reachesReport(reach, "question", row.id))
+    .map(questionView);
   const include = request.include ?? [];
   return listed(
     mapNarrowed(
@@ -128,13 +139,40 @@ export async function listQuestionViews(
   );
 }
 
+/** One question in full, or `null` -- for one the reader does not reach as for one that is not there. */
 export async function getQuestionView(
   exec: SqlExecutor,
   tenantId: string,
   id: string,
+  reach: Reach,
 ): Promise<QuestionView | null> {
+  if (!reachesReport(reach, "question", id)) {
+    return null;
+  }
   const row = await getQuestion(exec, tenantId, id);
   return row === null ? null : questionView(row);
+}
+
+/**
+ * Give the person who just made a report reach over it, when they do not reach every report
+ * already -- or what they saved would vanish from their own list the moment they saved it. A grant
+ * like any other, to them, from them: listed, and removable by whoever manages grants.
+ */
+export async function reachWhatWasMade(
+  exec: SqlExecutor,
+  input: { tenantId: string; reach: Reach; actorId: string; kind: ReportKind; id: string },
+): Promise<void> {
+  if (input.reach.reports === "all") {
+    return;
+  }
+  await saveGrant(exec, {
+    tenantId: input.tenantId,
+    subject: { kind: "user", userId: input.actorId },
+    object: reportObject(input.kind, input.id),
+    action: READ_ACTION,
+    expiresAt: null,
+    grantedBy: input.actorId,
+  });
 }
 
 /** Store a question: a new one without an id, an existing one with. Executes nothing. */
@@ -148,6 +186,7 @@ export async function saveQuestion(
     chart: ChartConfig;
     actor: Actor;
     actorId: string;
+    reach: Reach;
   },
 ): Promise<SaveOutcome> {
   const fields = {
@@ -159,7 +198,13 @@ export async function saveQuestion(
   let { id } = input;
   if (id === undefined) {
     id = await insertQuestion(exec, input.tenantId, fields);
-  } else if (!(await updateQuestion(exec, input.tenantId, { id, ...fields }))) {
+    await reachWhatWasMade(exec, { ...input, kind: "question", id });
+  } else if (
+    !(
+      reachesReport(input.reach, "question", id) &&
+      (await updateQuestion(exec, input.tenantId, { id, ...fields }))
+    )
+  ) {
     return { ok: false, reason: "not-found" };
   }
   await recordAudit(exec, {
@@ -173,9 +218,11 @@ export async function saveQuestion(
 
 export async function removeQuestion(
   exec: SqlExecutor,
-  input: { tenantId: string; id: string; actor: Actor },
+  input: { tenantId: string; id: string; actor: Actor; reach: Reach },
 ): Promise<boolean> {
-  const removed = await deleteQuestion(exec, input.tenantId, input.id);
+  const removed =
+    reachesReport(input.reach, "question", input.id) &&
+    (await deleteQuestion(exec, input.tenantId, input.id));
   if (removed) {
     await recordAudit(exec, {
       tenantId: input.tenantId,

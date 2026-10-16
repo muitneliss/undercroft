@@ -5,6 +5,10 @@
  * table of contents, not the procedures -- and because the three tiers of authority here are
  * worth reading in one place: a summary every member may see, and rows and a console only a
  * holder of `lake:read` may page or write (builder and admin, ADR 0139).
+ *
+ * Since ADR 0142 each is narrowed to the raw streams the reader REACHES -- `raw:*` for every
+ * built-in role, only what is granted for a customer's own -- and the console needs the whole of
+ * it: raw is one generic table read by the customer's build login, which no grant can narrow.
  */
 
 import { TRPCError } from "@trpc/server";
@@ -23,7 +27,7 @@ import { messages } from "../i18n/index.ts";
 import * as lake from "../services/lake.ts";
 import { notRun } from "./answers.ts";
 import { SchemaFilterInput, schemaOrRefusal } from "./schemaFilter.ts";
-import { requirePermission } from "./permissionGate.ts";
+import { requirePermission, requireWholeReach } from "./permissionGate.ts";
 import { router, tenantProcedure } from "./trpc.ts";
 
 export const lakeRouter = router({
@@ -31,7 +35,9 @@ export const lakeRouter = router({
    * What has landed, per stream: counts and freshness, nothing a person wrote. Every
    * member may read it; it is the Lake division's first screen.
    */
-  summary: tenantProcedure.query(({ ctx, input }) => lake.summary(ctx.exec, input.tenantId)),
+  summary: tenantProcedure.query(({ ctx, input }) =>
+    lake.summary(ctx.exec, input.tenantId, ctx.reach),
+  ),
 
   /**
    * The rows themselves, for `lake:read` only: a payload is the source's data verbatim, and for
@@ -41,6 +47,9 @@ export const lakeRouter = router({
    * `runId` narrows the page to the rows that run wrote and still names, and answers beside it
    * how many it wrote that a later run has since rewritten (`ofRun`, ADR 0091): what a run's
    * counts open onto from its leaf. The gate is unchanged -- the same rows, fewer of them.
+   *
+   * A stream the reader does not reach (ADR 0142) answers as a stream with nothing in it: an
+   * empty page, which confirms nothing about it.
    */
   records: requirePermission("lake:read")
     .input(
@@ -59,6 +68,7 @@ export const lakeRouter = router({
         limit: input.limit,
         cursor: input.cursor ?? null,
         runId: input.runId ?? null,
+        reach: ctx.reach,
       }),
     ),
 
@@ -77,6 +87,7 @@ export const lakeRouter = router({
         limit: input.limit,
         cursor: input.cursor ?? null,
         runId: input.runId ?? null,
+        reach: ctx.reach,
       }),
     ),
 
@@ -91,8 +102,14 @@ export const lakeRouter = router({
    * and that stays true. A write is refused by the read-only transaction the worker frames
    * every query in, before any grant is consulted -- which matters because the dbt login
    * CAN create in its own two schemas. `queryRunner.runRawQuery`.
+   *
+   * And the whole of the lake and of the models (`raw:*`, `model:*`, ADR 0142): raw is ONE
+   * generic table and the build login reads all of it, so SQL over it cannot be narrowed to some
+   * streams, and a reader of three streams who could write it would read the rest. Every built-in
+   * role reaches the whole; a customer's own role holding `lake:read` with a few streams is
+   * refused here with what it would need, and pages its streams through `records`.
    */
-  query: requirePermission("lake:read")
+  query: requireWholeReach("lake:read")
     .input(
       z.object({
         sql: z.string().trim().min(1).max(MAX_QUERY_SQL_BYTES),
@@ -147,6 +164,9 @@ export const lakeRouter = router({
    * reader admitted here could have written the same SELECT in the console beside it.
    * ADR 0026, which made it admin-only; ADR 0139 opened it to `lake:read`, which is exactly the
    * set of people the console beside it already admits.
+   *
+   * Narrowed to the streams the reader reaches (ADR 0142) inside the worker's lookups, before a
+   * match is ranked or counted, so its pages and its `capped` note describe their lake alone.
    */
   search: requirePermission("lake:read")
     .input(
@@ -169,6 +189,7 @@ export const lakeRouter = router({
         ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
         limit: input.limit,
         offset: input.offset,
+        reach: ctx.reach,
       });
       if (!outcome.ok) {
         // A search that ran into its time limit is the reader's to fix -- by narrowing it --
@@ -189,10 +210,11 @@ export const lakeRouter = router({
     }),
 
   /**
-   * The `raw` schema's tables and columns: the console's sidebar. `lake:read`, as above.
+   * The `raw` schema's tables and columns: the console's sidebar. `lake:read` and the whole
+   * reach, as the console it serves needs.
    * Narrowed to the named or matching tables when asked, by the rule `bi.schema` uses.
    */
-  querySchema: requirePermission("lake:read")
+  querySchema: requireWholeReach("lake:read")
     .input(SchemaFilterInput)
     .query(async ({ ctx, input }) => {
       if (ctx.worker === null) {

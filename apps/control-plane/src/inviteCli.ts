@@ -19,7 +19,7 @@
  */
 
 import process from "node:process";
-import { BUILT_IN_ROLES, isRoleKey, PERMISSIONS } from "@undercroft/contracts/access";
+import { BUILT_IN_ROLES, isRoleKey, PERMISSIONS, WHOLE_REACH } from "@undercroft/contracts/access";
 import {
   createHttpEmailSender,
   DEFAULT_LOCALE,
@@ -193,9 +193,9 @@ async function main(): Promise<void> {
         // name every row this script has written carries, and no user or channel (ADR 0113).
         actor: { userId: null, email: "cli", channel: null, credential: null },
         // The subset rule weighs what the inviter holds (ADR 0141). Whoever holds the DSN holds
-        // the database itself, every permission included; this script is how the first admin of
-        // a customer comes to exist, so there is nobody whose permissions it could be bounded by.
-        held: PERMISSIONS,
+        // the database itself, every permission and every object included; this script is how the
+        // first admin of a customer comes to exist, so there is nobody it could be bounded by.
+        held: { permissions: PERMISSIONS, reach: WHOLE_REACH },
         notify: buildNotifier(args.locale),
       }),
     );

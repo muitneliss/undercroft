@@ -31,7 +31,7 @@ export const en = {
     roles:
       "The roles a customer has, built-in and its own, and the permissions each holds; changing one needs roles:manage.",
     grants:
-      "One permission given to a role or a person, standing or until a moment; reading them needs people:manage.",
+      "A permission, or reading one model, raw stream or report, given to a role or a person, standing or until a moment; reading them needs people:manage, and reach says what someone may do and read.",
     audit:
       "Who did what: your own actions, a customer's for whoever holds audit:read there, everything for a superadmin.",
     runs: "Runs.",

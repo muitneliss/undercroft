@@ -175,6 +175,25 @@ function useLeafTurns(
   };
 }
 
+/** The leaf's two writes: saving the draft, which marks it saved, and deleting the dashboard. */
+function useLeafWrites(
+  onSaved: (id: string) => Promise<void>,
+  onDeleted: () => Promise<void>,
+): {
+  save: ReturnType<typeof trpc.bi.dashboards.save.useMutation>;
+  remove: ReturnType<typeof trpc.bi.dashboards.delete.useMutation>;
+} {
+  const markDashboardSaved = useUiStore((state) => state.markDashboardSaved);
+  const save = trpc.bi.dashboards.save.useMutation({
+    onSuccess: async (saved) => {
+      markDashboardSaved(saved.id);
+      await onSaved(saved.id);
+    },
+  });
+  const remove = trpc.bi.dashboards.delete.useMutation({ onSuccess: onDeleted });
+  return { save, remove };
+}
+
 function DashboardLeaf({
   tenantId,
   draft,
@@ -197,16 +216,8 @@ function DashboardLeaf({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const [search, setSearch] = useSearchParams();
-  const markDashboardSaved = useUiStore((state) => state.markDashboardSaved);
   const turns = useLeafTurns(tenantId, stored);
-
-  const save = trpc.bi.dashboards.save.useMutation({
-    onSuccess: async (saved) => {
-      markDashboardSaved(saved.id);
-      await onSaved(saved.id);
-    },
-  });
-  const remove = trpc.bi.dashboards.delete.useMutation({ onSuccess: onDeleted });
+  const { save, remove } = useLeafWrites(onSaved, onDeleted);
 
   const edit = canAuthor && search.get(EDIT) === "1";
   const valid = filtersValid(draft.filters);
@@ -233,7 +244,12 @@ function DashboardLeaf({
       {edit ? (
         <>
           <FilterEditor filters={draft.filters} valid={valid} />
-          <ReadingOrder layout={draft.layout} questions={questions} locale={locale} />
+          <ReadingOrder
+            layout={draft.layout}
+            questions={questions}
+            stored={stored}
+            locale={locale}
+          />
         </>
       ) : null}
 
@@ -251,6 +267,7 @@ function DashboardLeaf({
         tenantId={tenantId}
         draft={draft}
         questions={questions}
+        ungranted={stored?.ungranted ?? []}
         canAuthor={canAuthor}
         locale={locale}
         edit={edit}

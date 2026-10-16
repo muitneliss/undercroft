@@ -8,8 +8,7 @@
  * to the person as it arrives.
  */
 
-import type { ExportQueryRequest } from "@undercroft/contracts";
-import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
+import type { ExportInput, WorkerClient, WorkerOutcome } from "./workerClient.ts";
 import { BAD_REQUEST, REFUSAL_BY_STATUS } from "./workerRefusals.ts";
 import { envelopeOf, exchange, type WorkerTransport } from "./workerTransport.ts";
 
@@ -22,10 +21,17 @@ import { envelopeOf, exchange, type WorkerTransport } from "./workerTransport.ts
 const FIRST_BYTE_MS = 150_000;
 
 export function exportOn(t: WorkerTransport): WorkerClient["exportQuery"] {
-  return (input: ExportQueryRequest) =>
+  // A scoped export to the scoped route only, for the reason `runQuery`'s is (ADR 0142).
+  return ({ scope, ...input }: ExportInput) =>
     exchange(
       t,
-      { path: "/v1/queries/export", body: input, deadlineMs: FIRST_BYTE_MS },
+      scope === null
+        ? { path: "/v1/queries/export", body: input, deadlineMs: FIRST_BYTE_MS }
+        : {
+            path: "/v1/queries/scoped/export",
+            body: { ...input, scope },
+            deadlineMs: FIRST_BYTE_MS,
+          },
       async (response): Promise<WorkerOutcome<ReadableStream<Uint8Array>>> => {
         if (response.status === BAD_REQUEST) {
           const refusal = await envelopeOf(response);

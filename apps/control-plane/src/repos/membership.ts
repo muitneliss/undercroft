@@ -79,6 +79,34 @@ export interface MemberAccess extends MemberPolicy {
 }
 
 /**
+ * A condition on a grant `g`: it names something the customer still has, or nothing that can be
+ * deleted. An object grant on ONE model, reference table, question or dashboard (ADR 0142) is read
+ * only while the customer has it. Deleting the thing deletes its grants (`610_object_grants.sql`),
+ * so this is for the grant saved in the instant its object went: a name is reused, and a grant
+ * that outlived `fct_sales` must not hand the next `fct_sales` to whoever held the first. A
+ * permission, a wildcard and a raw stream name nothing that is deleted, and pass. The CASE keeps
+ * a branch from casting a uuid it was never given; inside its branch the cast cannot fail, because
+ * `access_grant_object_shape` admits only a uuid there, and it lets the primary key answer.
+ *
+ * Exported for the one other statement that folds grants, `rolePolicy` in `accessRoles.ts`, so a
+ * role's reach and a member's are read by one rule.
+ */
+export const GRANT_NAMES_SOMETHING = `CASE
+         WHEN g.object LIKE 'model:%' AND g.object <> 'model:*' THEN
+           EXISTS (SELECT 1 FROM app.model x
+                   WHERE x.tenant_id = g.tenant_id AND x.name = substr(g.object, 7))
+           OR EXISTS (SELECT 1 FROM app.seed x
+                      WHERE x.tenant_id = g.tenant_id AND x.name = substr(g.object, 7))
+         WHEN g.object LIKE 'report:question:%' THEN
+           EXISTS (SELECT 1 FROM app.bi_question q
+                   WHERE q.tenant_id = g.tenant_id AND q.id = substr(g.object, 17)::uuid)
+         WHEN g.object LIKE 'report:dashboard:%' THEN
+           EXISTS (SELECT 1 FROM app.bi_dashboard d
+                   WHERE d.tenant_id = g.tenant_id AND d.id = substr(g.object, 18)::uuid)
+         ELSE true
+       END`;
+
+/**
  * The policy columns of a membership `m`, joined onto its role as `r` by `POLICY_JOIN`. Shared by
  * `accessFor` and `listForUser`, so the tenant a person opens and the row it has in their list are
  * read the one way and project the same permissions.
@@ -87,6 +115,8 @@ export interface MemberAccess extends MemberPolicy {
  * with five grants is still one row -- and still one statement per request (ADR 0139). A role
  * grant matches on the role key, a person's on their user id; exactly one of the two is set on
  * any grant (`access_grant_one_subject`).
+ *
+ * An object grant is read only while what it names exists: `GRANT_NAMES_SOMETHING`.
  */
 const POLICY_COLUMNS = `
   r.label AS role_label,
@@ -98,7 +128,8 @@ const POLICY_COLUMNS = `
      FROM app.access_grant g
      WHERE g.tenant_id = m.tenant_id
        AND (g.expires_at IS NULL OR g.expires_at > now())
-       AND (g.role_key = m.role OR g.user_id = m.user_id)),
+       AND (g.role_key = m.role OR g.user_id = m.user_id)
+       AND ${GRANT_NAMES_SOMETHING}),
     '[]'::json) AS grants`;
 
 const POLICY_JOIN = "LEFT JOIN app.access_role r ON r.tenant_id = m.tenant_id AND r.key = m.role";

@@ -23,6 +23,7 @@ import {
   ModelTests,
   type TableResult,
 } from "@undercroft/contracts";
+import { type Reach, reachesModel } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   deleteModelUnlessBuilding,
@@ -175,17 +176,21 @@ function summaryOf(
 export async function list(
   exec: SqlExecutor,
   tenantId: string,
+  reach: Reach,
   request: PagedListRequest<ModelInclude> = {},
 ): Promise<Listing<ModelItem>> {
-  const [models, builds, tests] = await Promise.all([
+  const [every, builds, tests] = await Promise.all([
     listModels(exec, tenantId),
     lastBuildPerModel(exec, tenantId),
     readTestStates(exec, tenantId),
   ]);
+  // Only the models the reader reaches (ADR 0142), narrowed before the name filter, so a name
+  // they do not reach is as unknown to `names` as one nobody has.
+  const models = every.filter((model) => reachesModel(reach, model.name));
   const columns = request.include?.includes("columns") ?? false;
   const reads =
     request.include?.includes("dependsOn") === true
-      ? await dependsOnOf(exec, tenantId, models)
+      ? await dependsOnOf(exec, tenantId, every)
       : null;
   // `listModels` reads them `ORDER BY name`, and a model's name is unique: the page's key.
   return listed(
@@ -202,12 +207,14 @@ export async function list(
   );
 }
 
+/** One model in full, or `null` -- for one the reader does not reach as for one nobody saved. */
 export async function get(
   exec: SqlExecutor,
   tenantId: string,
   name: string,
+  reach: Reach,
 ): Promise<ModelDetail | null> {
-  const model = await getModel(exec, tenantId, name);
+  const model = reachesModel(reach, name) ? await getModel(exec, tenantId, name) : null;
   if (model === null) {
     return null;
   }

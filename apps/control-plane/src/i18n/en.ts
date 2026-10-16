@@ -90,6 +90,7 @@ export const en = {
 
   procedure: {
     needs: "Needs {{permission}}.",
+    needsWholeReach: "Needs reading every model and the whole raw lake (model:*, raw:*).",
   },
 
   error: {
@@ -105,6 +106,16 @@ export const en = {
       "This action needs permission to {{label}} ({{permission}}). Ask someone who holds people:manage in this customer for a role that has it.",
     permissionsNotHeld:
       "You can only give or take away permissions you hold yourself, and you do not hold {{permissions}}. Ask someone in this customer who holds them to make this change.",
+    reachNotHeld:
+      "You can only give or take away reading what you can read yourself, and you cannot read {{objects}}. Ask someone in this customer who can read them to make this change.",
+    wholeReachRequired:
+      "This runs SQL as the customer's build login, which reads every model and the whole raw lake, so it needs reading all of them ({{objects}}). Ask someone who holds roles:manage in this customer to grant it to you.",
+    grantOneObject:
+      "Name exactly one of permission, to grant something a person may do, or object, to grant reading one thing (model:…, raw:…, report:…).",
+    grantObjectShape:
+      "{{object}} is not an object a grant can name. Use model:<name> or model:*, raw:<source>/<entity>, raw:<source>/* or raw:*, report:question:<id>, report:dashboard:<id> or report:*.",
+    noSuchObject:
+      "This customer has no {{object}}. models.list, seeds.list, bi.questions.list and bi.dashboards.list show what it has.",
     noSuchRole: "This customer has no role {{role}}. roles.list shows the roles it has.",
     builtInRole:
       "{{role}} is a built-in role: its permissions are the platform's and cannot be changed or deleted. Define a role of your own with the permissions you need.",

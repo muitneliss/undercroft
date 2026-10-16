@@ -62,6 +62,7 @@ export const biRouter = router({
         definition: input.definition,
         params: input.params,
         ...(input.limit === undefined ? {} : { limit: input.limit }),
+        reach: ctx.reach,
       });
       if (!outcome.ok) {
         throw answerRefusal(ctx.locale, outcome);
@@ -106,14 +107,19 @@ export const biRouter = router({
         listingOrRefusal(
           ctx.locale,
           "bi.questions.list",
-          await questions.listQuestionViews(ctx.exec, input.tenantId, input),
+          await questions.listQuestionViews(ctx.exec, input.tenantId, ctx.reach, input),
         ),
       ),
 
     get: tenantProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ ctx, input }) => {
-        const question = await questions.getQuestionView(ctx.exec, input.tenantId, input.id);
+        const question = await questions.getQuestionView(
+          ctx.exec,
+          input.tenantId,
+          input.id,
+          ctx.reach,
+        );
         if (question === null) {
           throw new TRPCError({ code: "NOT_FOUND" });
         }
@@ -155,6 +161,7 @@ export const biRouter = router({
           chart: input.chart,
           actor: actorOf(ctx),
           actorId: ctx.user.userId,
+          reach: ctx.reach,
         });
         if (!outcome.ok) {
           throw new TRPCError({ code: "NOT_FOUND" });
@@ -169,6 +176,7 @@ export const biRouter = router({
           tenantId: ctx.tenantId,
           id: input.id,
           actor: actorOf(ctx),
+          reach: ctx.reach,
         });
         if (!removed) {
           throw new TRPCError({ code: "NOT_FOUND" });
@@ -179,13 +187,13 @@ export const biRouter = router({
 
   dashboards: router({
     list: tenantProcedure.query(({ ctx, input }) =>
-      bi.listDashboardViews(ctx.exec, input.tenantId),
+      bi.listDashboardViews(ctx.exec, input.tenantId, ctx.reach),
     ),
 
     get: tenantProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ ctx, input }) => {
-        const dashboard = await bi.getDashboardView(ctx.exec, input.tenantId, input.id);
+        const dashboard = await bi.getDashboardView(ctx.exec, input.tenantId, input.id, ctx.reach);
         if (dashboard === null) {
           throw new TRPCError({ code: "NOT_FOUND" });
         }
@@ -210,6 +218,7 @@ export const biRouter = router({
           filters: input.filters,
           actor: actorOf(ctx),
           actorId: ctx.user.userId,
+          reach: ctx.reach,
         });
         if (!outcome.ok) {
           throw new TRPCError({ code: "NOT_FOUND" });
@@ -224,6 +233,7 @@ export const biRouter = router({
           tenantId: ctx.tenantId,
           id: input.id,
           actor: actorOf(ctx),
+          reach: ctx.reach,
         });
         if (!removed) {
           throw new TRPCError({ code: "NOT_FOUND" });
@@ -256,6 +266,7 @@ export const biRouter = router({
           source: input.source,
           params: input.params,
           unnamed: t("export.unnamed"),
+          reach: ctx.reach,
         });
         if (!outcome.ok) {
           if (outcome.reason === "param-missing") {
@@ -284,6 +295,7 @@ export const biRouter = router({
           tenantId: ctx.tenantId,
           id: input.id,
           userId: ctx.user.userId,
+          reach: ctx.reach,
         });
         if (found === null) {
           throw new TRPCError({ code: "NOT_FOUND" });
@@ -308,6 +320,9 @@ export const biRouter = router({
       });
     }
     const { tenantId, ...filter } = input;
-    return schemaOrRefusal(ctx.locale, await bi.schema(ctx.worker, { tenantId }, filter));
+    return schemaOrRefusal(
+      ctx.locale,
+      await bi.schema(ctx.worker, { tenantId, reach: ctx.reach }, filter),
+    );
   }),
 });

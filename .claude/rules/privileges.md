@@ -48,11 +48,24 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
   failed the whole build. Overlapping holders share one password, and one that needs it longer
   calls `ops.extend_tenant_password` (`420_extend_tenant_password.sql`), which moves only
   `VALID UNTIL`. The lease lives in `apps/worker/src/services/tenantSession.ts`. ADR 0087.
+- **NEVER grant a scope login a view, a default privilege, or a grant outside the repeatable
+  file.** A scope login (`undercroft_bi_<slug>__<hash7>`, ADR 0142) reads exactly the TABLES of the
+  models its reader reaches -- SELECT on a relation that holds its rows (`r`, `p`, `m`), by name.
+  A view runs as its owner, so granting one would let it read whatever the build login reads;
+  `ALTER DEFAULT PRIVILEGES` would hand every scope the next table dbt makes. Its grants are
+  written by `ops.apply_scope` and, at a promotion, `raw.grant_staged_to_scopes`, both in
+  `repeatable/010_provision_tenant.sql`; it gets nothing in `raw`, `app`, `ops`, `dq_<slug>` or
+  `staging_<slug>`, refused explicitly.
+- **NEVER revoke a scope login's grant to narrow a reader.** A scope's model set is fixed by its
+  hash, so its grants are only ever added; a reader whose reach changes reads as another login.
+  A promotion grants the STAGED relation before it moves it, inside its transaction, so a
+  republished table is never ungranted to a scope that should read it nor granted to one that
+  should not. `ops.lock_scopes` serialises the writers; take it before locking any relation.
 - **NEVER let the pooler learn more than a live tenant login's secret.** Tenant logins reach
-  Postgres through PgBouncer, which asks `ops.pgbouncer_auth` (`430_pgbouncer_auth.sql`) as
-  `undercroft_worker` at each client login: it answers only for a login in `ops.tenant_role`
-  whose password has not expired, never for a platform role. And **NEVER force a `user=` on the
-  pooler's database entry**: row-level security keys on the login that reaches Postgres, so the
+  Postgres through PgBouncer, which asks `ops.pgbouncer_auth` (`430_pgbouncer_auth.sql`, restated in
+  `620_scope_logins.sql`) as `undercroft_worker` at each client login: it answers only for a login
+  in `ops.tenant_role` or `ops.tenant_scope` whose password has not expired, never for a platform
+  role. And **NEVER force a `user=` on the pooler's database entry**: row-level security keys on the login that reaches Postgres, so the
   pool must be per login. ADR 0088.
 
 ## Follow
@@ -61,7 +74,14 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
   `_dbt` (legacy, matches no tenant and reads zero rows of `raw`), `_bi` (for an external SQL
   client). Plus **two LOGIN roles per tenant**, `undercroft_dbt_<slug>` and
   `undercroft_bi_<slug>`, recorded in `ops.tenant_role` — the only authority for which login
-  belongs to which customer.
+  belongs to which customer. Plus **a scope login per distinct reach in use** (ADR 0142),
+  `undercroft_bi_<slug>__<hash7>`, recorded in `ops.tenant_scope`: the BI login of a reader who
+  reaches fewer than every model, made by `ops.provision_scope` at the first session that needs
+  it (the worker calls it; the control plane sends the model set), leased like a tenant login
+  (`ops.rotate_tenant_password` with kind `scope`), and swept by `ops.drop_stale_scopes` once
+  unused for a week with no live password and no backend. Two underscores, because no slug holds
+  two, so it can never be a customer's own login name. `raw.tenant_of` does not know it, so it
+  matches no tenant's rows.
 - **Migrations run as the bootstrap superuser** (`db-migrate` uses `POSTGRES_USER`), which
   therefore owns every table; `undercroft_owner` owns the schemas. `ops.provision_tenant`
   (`repeatable/010_provision_tenant.sql`) and `ops.rotate_tenant_password`

@@ -209,6 +209,24 @@ export async function moveRelation(
 }
 
 /**
+ * Grant each of the customer's scope logins SELECT on the staged relations among `names` that its
+ * scope reaches, inside the caller's transaction (ADR 0142). The grant travels with a relation
+ * through `moveRelation`, so a promotion that calls this before it moves anything publishes each
+ * table already readable by exactly the scopes that should read it.
+ *
+ * The decision -- which scopes, which relations, never a view -- is `raw.grant_staged_to_scopes`'s
+ * (`repeatable/010_provision_tenant.sql`), the one place a customer's reach is stated; this only
+ * asks it, as the login that is running the promotion. It takes the customer's scope lock, so it
+ * is called before the promotion locks any relation, and a scope being made waits for it.
+ */
+export async function grantStagedToScopes(
+  exec: SqlExecutor,
+  names: readonly string[],
+): Promise<void> {
+  await exec.query("SELECT raw.grant_staged_to_scopes(current_user, $1::text[])", [[...names]]);
+}
+
+/**
  * `fn` inside one transaction on this executor: committed when it returns, rolled back when
  * it throws. The executor must be a single connection, as a tenant session's is, or the
  * statements between BEGIN and COMMIT could each take a different one.

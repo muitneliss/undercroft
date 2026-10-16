@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import type { QuestionView } from "@/api/types.ts";
+import { AddTileForm } from "@/components/AddTileForm.tsx";
 import { CopyLink } from "@/components/CopyLink.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
@@ -232,6 +233,7 @@ export function TilesBand({
   tenantId,
   draft,
   questions,
+  ungranted,
   canAuthor,
   locale,
   edit,
@@ -240,6 +242,11 @@ export function TilesBand({
   tenantId: string;
   draft: DashboardDraft;
   questions: readonly QuestionView[];
+  /**
+   * The tiles' questions the reader may not open, as the server named them (ADR 0142): drawn as
+   * "not granted", never left out and never mistaken for a question that was deleted.
+   */
+  ungranted: readonly string[];
   canAuthor: boolean;
   locale: "vi" | "en";
   edit: boolean;
@@ -270,6 +277,7 @@ export function TilesBand({
                 tenantId={tenantId}
                 tile={tile}
                 question={byId.get(tile.questionId) ?? null}
+                granted={!ungranted.includes(tile.questionId)}
                 search={search}
                 locale={locale}
                 edit={edit}
@@ -344,67 +352,5 @@ export function DeleteBand({
         </details>
       </div>
     </>
-  );
-}
-
-/**
- * The one question a tile can be added from, while editing.
- *
- * Only questions not already on the grid are offered: a dashboard cannot hold the same
- * question twice, and offering one that would be refused is a press that goes nowhere. The
- * select is keyed by its options, so adding one re-renders rather than leaving the entry
- * that was just removed still selected.
- */
-function AddTileForm({
-  questions,
-  addable,
-  onAdd,
-}: {
-  questions: readonly QuestionView[];
-  addable: readonly QuestionView[];
-  onAdd: (questionId: string) => void;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const dAddId = useId();
-
-  if (questions.length === 0) {
-    return <p className="note">{t("dashboard.noQuestionsYet")}</p>;
-  }
-  if (addable.length === 0) {
-    return <p className="note">{t("dashboard.noneToAdd")}</p>;
-  }
-
-  return (
-    <form
-      className="row row--field"
-      onSubmit={(event): void => {
-        event.preventDefault();
-        const chosen = String(new FormData(event.currentTarget).get("question") ?? "");
-        if (addable.some((question) => question.id === chosen)) {
-          onAdd(chosen);
-        }
-      }}
-    >
-      <div className="field">
-        <label className="label" htmlFor={dAddId}>
-          {t("dashboard.addQuestion")}
-        </label>
-        <select
-          className="input input--select"
-          id={dAddId}
-          key={addable.map((question) => question.id).join(",")}
-          name="question"
-        >
-          {addable.map((question) => (
-            <option key={question.id} value={question.id}>
-              {question.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <button className="plate" type="submit">
-        {t("dashboard.add")}
-      </button>
-    </form>
   );
 }

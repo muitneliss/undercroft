@@ -3,33 +3,33 @@
  * person, standing or until a day, and -- for a holder of `roles:manage` -- the form that gives
  * one and the fold that takes one away.
  *
+ * Since ADR 0142 a grant may also give READING one thing -- a model, a raw stream or a whole
+ * source, a question, a dashboard, or the whole of one -- which a customer's own role needs, since
+ * it reads only what it is granted. The form (`GrantForm.tsx`) offers those beside the
+ * permissions, from the server's own lists (`useGrantObjects.ts`).
+ *
  * Reading the list needs `people:manage`, which the whole division already needs: a grant to a
  * person says who holds what, as the roster does. What a grant means is the server's: whether it
  * has expired is `expired` in the answer, decided by the database's clock, never by this tab's.
  *
- * The form offers only the permissions the reader holds, because the subset rule refuses the
- * rest; that is read off the reader's own `permissions` through `can`. An expiry is a calendar
- * day, sent as the last second of that day in the schedule zone (`endOfScheduleDay`), so the
- * day picked is the day printed.
- *
- * No `useState`, per `state.md`: the form is uncontrolled and read as `FormData` on submit, and a
- * removal is two presses inside a `<details>`.
+ * No `useState`, per `state.md`: a removal is two presses inside a `<details>`.
  */
 
-import { isPermission, PERMISSIONS, type Permission } from "@undercroft/contracts/access";
+import type { Permission } from "@undercroft/contracts/access";
 import type { Locale } from "@undercroft/core/locale";
-import { useId, useRef } from "react";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Address } from "@/components/Address.tsx";
 import { Errata } from "@/components/Errata.tsx";
-import { PermissionWords } from "@/components/RoleForms.tsx";
+import { GrantForm } from "@/components/GrantForm.tsx";
+import { GrantGives } from "@/components/GrantObjects.tsx";
+import { useGrantObjects } from "@/components/useGrantObjects.ts";
 import { Skeleton } from "@/components/Skeleton.tsx";
-import { StatusLine } from "@/components/StatusLine.tsx";
 import { MISSING } from "@/lib/money.ts";
-import { can, PERMISSION_LABELS } from "@/lib/permissions.ts";
-import { type RoleOption, roleName, roleNamed, roleOptions } from "@/lib/roles.ts";
-import { endOfScheduleDay, formatDate } from "@/lib/when.ts";
+import { can } from "@/lib/permissions.ts";
+import { type RoleOption, roleNamed, roleOptions } from "@/lib/roles.ts";
+import { formatDate } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -47,23 +47,6 @@ interface Grant {
   readonly expiresAt: string | null;
   readonly expired: boolean;
   readonly grantedBy: string | null;
-}
-
-/**
- * How the form's one subject select spells its two kinds of option. A role key never holds a
- * colon (`ROLE_KEY`), and neither prefix is an address, so the first colon always splits it.
- */
-const ROLE_OPTION = "role:";
-const PERSON_OPTION = "email:";
-
-function subjectOf(value: string): { role: string } | { email: string } | null {
-  if (value.startsWith(ROLE_OPTION)) {
-    return { role: value.slice(ROLE_OPTION.length) };
-  }
-  if (value.startsWith(PERSON_OPTION)) {
-    return { email: value.slice(PERSON_OPTION.length) };
-  }
-  return null;
 }
 
 /** Who a grant is to, as a reader names them: a role by its name, a person by address. */
@@ -146,12 +129,15 @@ function RevokeFold({
 function GrantTable({
   grants,
   roles,
+  names,
   canChange,
   remove,
   tenantId,
 }: {
   grants: readonly Grant[];
   roles: readonly RoleOption[] | undefined;
+  /** A report's name by its object, for a grant on one. */
+  names: ReadonlyMap<string, string>;
   canChange: boolean;
   remove: Remove;
   tenantId: string;
@@ -184,11 +170,7 @@ function GrantTable({
                   )}
                 </td>
                 <td>
-                  {grant.permission === null ? (
-                    t("accessGrants.unknownPermission", { object: grant.object })
-                  ) : (
-                    <PermissionWords permission={grant.permission} />
-                  )}
+                  <GrantGives grant={grant} names={names} />
                 </td>
                 <UntilCell grant={grant} locale={locale} />
                 <td className="datum datum--quiet">
@@ -203,138 +185,6 @@ function GrantTable({
         </tbody>
       </table>
     </div>
-  );
-}
-
-/** Whom a grant is to and which permission: the form's two selects. */
-function GrantChoices({
-  held,
-  roles,
-  roster,
-  disabled,
-}: {
-  held: readonly Permission[] | undefined;
-  roles: readonly RoleOption[];
-  roster: readonly { email: string }[];
-  disabled: boolean;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const subjectId = useId();
-  const permissionId = useId();
-  const offered = PERMISSIONS.filter((permission) => can(held, permission));
-  return (
-    <>
-      <div className="field">
-        <label className="label" htmlFor={subjectId}>
-          {t("accessGrants.subjectLabel")}
-        </label>
-        <select className="input" disabled={disabled} id={subjectId} name="subject" required={true}>
-          <optgroup label={t("accessGrants.rolesGroup")}>
-            {roles.map((role) => (
-              <option key={role.key} value={`${ROLE_OPTION}${role.key}`}>
-                {roleName(role)}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label={t("accessGrants.peopleGroup")}>
-            {roster.map((member) => (
-              <option key={member.email} value={`${PERSON_OPTION}${member.email}`}>
-                {member.email}
-              </option>
-            ))}
-          </optgroup>
-        </select>
-      </div>
-      <div className="field">
-        <label className="label" htmlFor={permissionId}>
-          {t("accessGrants.permissionLabel")}
-        </label>
-        <select
-          className="input"
-          disabled={disabled}
-          id={permissionId}
-          name="permission"
-          required={true}
-        >
-          {offered.map((permission) => (
-            <option key={permission} value={permission}>
-              {t("accessGrants.permissionOption", {
-                label: t(PERMISSION_LABELS[permission]),
-                permission,
-              })}
-            </option>
-          ))}
-        </select>
-        <p className="field__hint">{t("roleEditor.heldOnly")}</p>
-      </div>
-    </>
-  );
-}
-
-/** The form that gives a permission to a role or a member, standing or until a day. */
-function GrantForm({
-  tenantId,
-  held,
-  roles,
-  roster,
-  save,
-  formRef,
-}: {
-  tenantId: string;
-  held: readonly Permission[] | undefined;
-  roles: readonly RoleOption[];
-  roster: readonly { email: string }[];
-  save: Save;
-  formRef: React.RefObject<HTMLFormElement | null>;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const untilId = useId();
-  const untilHintId = useId();
-  return (
-    <form
-      className="stack stack--tight"
-      ref={formRef}
-      onSubmit={(event): void => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        const subject = subjectOf(String(data.get("subject") ?? ""));
-        const permission = String(data.get("permission") ?? "");
-        const day = String(data.get("until") ?? "");
-        const expiresAt = day === "" ? null : endOfScheduleDay(day);
-        if (subject === null || !isPermission(permission) || (day !== "" && expiresAt === null)) {
-          return;
-        }
-        save.mutate({ tenantId, ...subject, permission, expiresAt });
-      }}
-    >
-      <span className="label">{t("accessGrants.addHead")}</span>
-      <GrantChoices held={held} roles={roles} roster={roster} disabled={save.isPending} />
-      <div className="field">
-        <label className="label" htmlFor={untilId}>
-          {t("accessGrants.untilLabel")}
-        </label>
-        <input
-          aria-describedby={untilHintId}
-          className="input"
-          disabled={save.isPending}
-          id={untilId}
-          name="until"
-          type="date"
-        />
-        <p className="field__hint" id={untilHintId}>
-          {t("accessGrants.untilHint")}
-        </p>
-      </div>
-      {save.isError ? (
-        <Errata heading={t("accessGrants.notAdded")} live={true} error={save.error} />
-      ) : null}
-      <StatusLine className="note" text={save.isSuccess ? t("accessGrants.added") : null} />
-      <div className="row">
-        <button className="plate plate--primary" type="submit" disabled={save.isPending}>
-          {save.isPending ? t("accessGrants.adding") : t("accessGrants.add")}
-        </button>
-      </div>
-    </form>
   );
 }
 
@@ -357,6 +207,7 @@ export function GrantsView({
   const { t } = useTranslation();
   const formRef = useRef<HTMLFormElement>(null);
   const grants = trpc.grants.list.useQuery({ tenantId });
+  const objects = useGrantObjects(tenantId);
   const writes = useGrantWrites(tenantId, formRef);
   const canChange = can(held, "roles:manage");
 
@@ -379,6 +230,7 @@ export function GrantsView({
         <GrantTable
           grants={grants.data}
           roles={roles}
+          names={objects.names}
           canChange={canChange}
           remove={writes.remove}
           tenantId={tenantId}
@@ -391,6 +243,7 @@ export function GrantsView({
         <GrantForm
           tenantId={tenantId}
           held={held}
+          objects={objects}
           roles={roleOptions(roles)}
           roster={roster}
           save={writes.save}

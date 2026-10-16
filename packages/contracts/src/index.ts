@@ -159,9 +159,11 @@ export {
   DEFAULT_SEARCH_HITS,
   MAX_SEARCH_HITS,
   MAX_SEARCH_QUERY_CHARS,
+  MAX_SEARCH_STREAMS,
   RawSearchHit,
   RawSearchRequest,
   RawSearchResponse,
+  RawSearchWithinRequest,
   SearchKind,
 } from "./rawSearch.ts";
 export {
@@ -181,13 +183,18 @@ export {
   MAX_PREVIEW_ROWS,
   MAX_QUERY_ROWS,
   MAX_QUERY_SQL_BYTES,
+  MAX_SCOPE_MODELS,
   ModelPreview,
   ModelRowCount,
   PreviewModelRequest,
   QueryAnswer,
+  QueryScope,
   RunQueryRequest,
   RunStepShape,
   SchemaResponse,
+  ScopedExportQueryRequest,
+  ScopedRunQueryRequest,
+  ScopedSchemaRequest,
   TableResult,
 } from "./transformApi.ts";
 export {

@@ -9,6 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { WHOLE_REACH } from "@undercroft/contracts/access";
 import { closeRun, openRun, recordSteps } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
@@ -47,7 +48,7 @@ describe("save", () => {
     });
     expect(outcome).toEqual({ ok: true, unchanged: false });
 
-    const model = await get(db, TENANT, "stg_deals");
+    const model = await get(db, TENANT, "stg_deals", WHOLE_REACH);
     expect(model?.sql).toBe(SQL);
     expect(model?.tests).toEqual({ columns: { deal_id: ["not_null", "unique"] } });
     expect(model?.updatedBy).toBe("u-ada");
@@ -80,7 +81,7 @@ describe("save", () => {
     });
 
     expect(outcome).toEqual({ ok: false, reason: "name-taken" });
-    expect((await get(db, TENANT, "stg_deals"))?.sql).toBe(SQL);
+    expect((await get(db, TENANT, "stg_deals", WHOLE_REACH))?.sql).toBe(SQL);
   });
 
   it("saving without create overwrites, which is what Save on an open editor means", async () => {
@@ -100,7 +101,7 @@ describe("save", () => {
       tests: { columns: {} },
       create: false,
     });
-    expect((await get(db, TENANT, "stg_deals"))?.sql).toBe("select 2");
+    expect((await get(db, TENANT, "stg_deals", WHOLE_REACH))?.sql).toBe("select 2");
   });
 
   it("the trail names the model and who saved it, never the SQL", async () => {
@@ -197,7 +198,7 @@ describe("list", () => {
       await closeRun(tx, "t-2", { status: "failed", error: "dbt build exited 1" });
     });
 
-    const listed = await list(db, TENANT);
+    const listed = await list(db, TENANT, WHOLE_REACH);
     const items = listed.ok && Array.isArray(listed.value) ? listed.value : [];
     expect(items.map((m) => m.name)).toEqual(["stg_contacts", "stg_deals"]);
     expect(items[0]?.lastBuild).toBeNull();
@@ -226,7 +227,7 @@ describe("remove", () => {
 
     expect(await remove(db, worker, input)).toEqual({ ok: true });
     expect(worker.dropped).toEqual([{ tenantId: TENANT, model: "stg_deals" }]);
-    expect(await get(db, TENANT, "stg_deals")).toBeNull();
+    expect(await get(db, TENANT, "stg_deals", WHOLE_REACH)).toBeNull();
 
     expect(await remove(db, worker, input)).toEqual({ ok: false, reason: "not-found" });
     expect(worker.dropped).toHaveLength(1);
@@ -238,7 +239,7 @@ describe("remove", () => {
     const outcome = await remove(db, new InMemoryWorkerClient().failing("unreachable"), input);
 
     expect(outcome).toEqual({ ok: false, reason: "not-dropped" });
-    expect((await get(db, TENANT, "stg_deals"))?.sql).toBe(SQL);
+    expect((await get(db, TENANT, "stg_deals", WHOLE_REACH))?.sql).toBe(SQL);
   });
 
   it("a build that opened after the drop keeps the row, since it would build the model again", async () => {
@@ -257,6 +258,6 @@ describe("remove", () => {
       ok: false,
       reason: "in-progress",
     });
-    expect(await get(db, TENANT, "stg_deals")).not.toBeNull();
+    expect(await get(db, TENANT, "stg_deals", WHOLE_REACH)).not.toBeNull();
   });
 });

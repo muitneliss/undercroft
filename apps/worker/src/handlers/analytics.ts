@@ -1,7 +1,7 @@
 /**
  * The verbs behind a dashboard: build a model, preview one before it is saved, drop what it built
- * (`drops.ts`), read its test failures, run a question, read a schema, and the run ledger the
- * Journal pages.
+ * (`drops.ts`), read its test failures, run a question and read a schema (`queries.ts`), and the
+ * run ledger the Journal pages.
  *
  * Split from `lake.ts` because they are the READ side of the platform -- everything here
  * answers a question about what is already landed, and nothing here lands anything.
@@ -12,22 +12,19 @@ import {
   buildSelection,
   DqFailuresRequest,
   PreviewModelRequest,
-  RawSearchRequest,
-  RunQueryRequest,
 } from "@undercroft/contracts";
 import { liftIdleTimeout } from "@undercroft/core";
 import type { Hono } from "hono";
 import { buildModels, dqFailures, startBuildJob } from "../services/jobs.ts";
 import { findRun } from "../services/ledger.ts";
 import { PREVIEW_DEADLINE_MS, previewModel } from "../services/modelPreview.ts";
-import { readRawSchema, readSchema, runQuery, runRawQuery } from "../services/queryRunner.ts";
-import { searchRaw } from "../services/rawSearch.ts";
 import { listDue, listExtractDue } from "../services/schedule.ts";
 import { UNAUTHENTICATED, jobDepsFor, serviceTokenOk } from "./bearer.ts";
 import { registerDropRoutes } from "./drops.ts";
 import { answerDue } from "./due.ts";
 import { registerExportRoute } from "./exports.ts";
 import type { LakeApiDeps } from "./lake.ts";
+import { registerQueryRoutes } from "./queries.ts";
 import { registerSemanticRoutes } from "./semantic.ts";
 
 const MS_PER_SECOND = 1000;
@@ -44,13 +41,7 @@ export function registerAnalyticsRoutes(app: Hono, deps: LakeApiDeps): void {
 
   /** The rows a failed test stored, for the admin who is looking at the step. */
 
-  /**
-   * Run SQL an author wrote, as the tenant's read-only login. The frame around it is in
-   * `repos/queries.ts`; a query that did not run is 400 `query_failed` with Postgres's own
-   * sentence, through the boundary.
-   */
-
-  /** The tenant's analytics schema as its read-only login sees it. */
+  /** SQL an author wrote, the schema it names and the raw console, by login: `queries.ts`. */
 
   /**
    * What the scheduler should start now. Registered before `/v1/runs/:id` so that `due` is
@@ -62,10 +53,8 @@ export function registerAnalyticsRoutes(app: Hono, deps: LakeApiDeps): void {
   registerModelsPreviewRoute(app, deps);
   registerDropRoutes(app, deps);
   registerDqFailuresRoute(app, deps);
-  registerQueriesRunRoute(app, deps);
+  registerQueryRoutes(app, deps);
   registerExportRoute(app, deps);
-  registerQueriesSchemaRoute(app, deps);
-  registerRawQueryRoutes(app, deps);
   registerRunsDueGetRoute(app, deps);
   registerRunsExtractDueGetRoute(app, deps);
   registerSemanticRoutes(app, deps);
@@ -172,132 +161,6 @@ function registerDqFailuresRoute(app: Hono, deps: LakeApiDeps): void {
       return c.json({ code: "not_found", message: "no such step", details: [] }, 404);
     }
     return c.json(outcome.value, 200);
-  });
-}
-
-function registerQueriesRunRoute(app: Hono, deps: LakeApiDeps): void {
-  app.post("/v1/queries/run", async (c) => {
-    if (deps.dbt === undefined) {
-      return c.json(
-        { code: "invalid_request", message: "queries are not configured", details: [] },
-        400,
-      );
-    }
-    if (!serviceTokenOk(deps, c)) {
-      return c.json(UNAUTHENTICATED, 401);
-    }
-    const parsed = RunQueryRequest.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) {
-      return c.json(
-        { code: "invalid_request", message: "tenantId and sql are required", details: [] },
-        400,
-      );
-    }
-    const result = await runQuery({ exec: deps.exec, sessions: deps.dbt.sessions }, parsed.data);
-    return c.json(result, 200);
-  });
-}
-
-function registerQueriesSchemaRoute(app: Hono, deps: LakeApiDeps): void {
-  app.post("/v1/queries/schema", async (c) => {
-    if (deps.dbt === undefined) {
-      return c.json(
-        { code: "invalid_request", message: "queries are not configured", details: [] },
-        400,
-      );
-    }
-    if (!serviceTokenOk(deps, c)) {
-      return c.json(UNAUTHENTICATED, 401);
-    }
-    const body = (await c.req.json().catch(() => ({}))) as { tenantId?: unknown };
-    if (typeof body.tenantId !== "string" || body.tenantId === "") {
-      return c.json({ code: "invalid_request", message: "tenantId is required", details: [] }, 400);
-    }
-    const schema = await readSchema(
-      { exec: deps.exec, sessions: deps.dbt.sessions },
-      { tenantId: body.tenantId },
-    );
-    return c.json(schema, 200);
-  });
-}
-
-/**
- * The raw lake's own console: the same frame, answered as the tenant's dbt login.
- *
- * Separate from `/v1/queries/run` because the login differs, and the login is the boundary:
- * that route answers a dashboard as BI, which cannot see `raw` at all. Both are behind the
- * service token, and the control plane admits only an admin to this one.
- */
-function registerRawQueryRoutes(app: Hono, deps: LakeApiDeps): void {
-  app.post("/v1/queries/raw/run", async (c) => {
-    if (deps.dbt === undefined) {
-      return c.json(
-        { code: "invalid_request", message: "queries are not configured", details: [] },
-        400,
-      );
-    }
-    if (!serviceTokenOk(deps, c)) {
-      return c.json(UNAUTHENTICATED, 401);
-    }
-    const parsed = RunQueryRequest.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) {
-      return c.json(
-        { code: "invalid_request", message: "tenantId and sql are required", details: [] },
-        400,
-      );
-    }
-    const result = await runRawQuery({ exec: deps.exec, sessions: deps.dbt.sessions }, parsed.data);
-    return c.json(result, 200);
-  });
-
-  app.post("/v1/queries/raw/schema", async (c) => {
-    if (deps.dbt === undefined) {
-      return c.json(
-        { code: "invalid_request", message: "queries are not configured", details: [] },
-        400,
-      );
-    }
-    if (!serviceTokenOk(deps, c)) {
-      return c.json(UNAUTHENTICATED, 401);
-    }
-    const body = (await c.req.json().catch(() => ({}))) as { tenantId?: unknown };
-    if (typeof body.tenantId !== "string" || body.tenantId === "") {
-      return c.json({ code: "invalid_request", message: "tenantId is required", details: [] }, 400);
-    }
-    const schema = await readRawSchema(
-      { exec: deps.exec, sessions: deps.dbt.sessions },
-      { tenantId: body.tenantId },
-    );
-    return c.json(schema, 200);
-  });
-
-  /**
-   * One question over the whole of a tenant's raw lake, as that tenant's dbt login.
-   *
-   * Beside `raw/run` rather than under `/v1/search`, because the login is what these two
-   * routes have in common and the login is the boundary. A reader who reached this could have
-   * written the equivalent SELECT in the console next to it; what is different is only that
-   * they do not have to.
-   */
-  app.post("/v1/queries/raw/search", async (c) => {
-    if (deps.dbt === undefined) {
-      return c.json(
-        { code: "invalid_request", message: "queries are not configured", details: [] },
-        400,
-      );
-    }
-    if (!serviceTokenOk(deps, c)) {
-      return c.json(UNAUTHENTICATED, 401);
-    }
-    const parsed = RawSearchRequest.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) {
-      return c.json(
-        { code: "invalid_request", message: "tenantId and q are required", details: [] },
-        400,
-      );
-    }
-    const found = await searchRaw({ exec: deps.exec, sessions: deps.dbt.sessions }, parsed.data);
-    return c.json(found, 200);
   });
 }
 

@@ -20,6 +20,13 @@
  *    creates it), and a promoted view over a promoted table follows the table, because a view
  *    refers to what it reads by identity.
  *
+ * Before either, each of the customer's SCOPE LOGINS (ADR 0142) is granted SELECT on the staged
+ * tables it reaches, and that grant travels too: a republished table is never, at any instant a
+ * reader can see, ungranted to a scope that should read it or granted to one that should not.
+ * It is the first thing the transaction does after reading the catalogue, because it takes the
+ * customer's scope lock, and taking it after a DROP's lock could make a new scope's first grants
+ * and this promotion wait for each other.
+ *
  * A failure part-way rolls the whole promotion back: analytics stays exactly as it was, every
  * node is held, and the caller says so. Nothing in analytics is ever dropped except in the
  * transaction that moves its replacement in.
@@ -32,6 +39,7 @@ import { buildGraph, promotable } from "@undercroft/db/services";
 import {
   dependentsOf,
   dropRelation,
+  grantStagedToScopes,
   inTransaction,
   moveRelation,
   type Relation,
@@ -76,6 +84,7 @@ export function promote(
       const staged = byName(present, target.stagingSchema);
       const published = byName(present, target.analyticsSchema);
       const { chosen, heldByViews } = await settle({ exec, target, staged, published }, decide);
+      await grantStagedToScopes(exec, [...chosen].sort());
       await dropReplaced(
         exec,
         target,

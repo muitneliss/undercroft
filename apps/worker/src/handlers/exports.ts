@@ -10,15 +10,35 @@
  * plane's client sees a download that failed rather than one that ended early.
  */
 
-import { CSV_MEDIA_TYPE, ExportQueryRequest } from "@undercroft/contracts";
+import {
+  CSV_MEDIA_TYPE,
+  ExportQueryRequest,
+  ScopedExportQueryRequest,
+} from "@undercroft/contracts";
 import { liftIdleTimeout } from "@undercroft/core";
 import type { Hono } from "hono";
 import { exportQuery } from "../services/queryExport.ts";
 import { UNAUTHENTICATED, serviceTokenOk } from "./bearer.ts";
 import type { LakeApiDeps } from "./lake.ts";
 
+/**
+ * Both export routes: `/v1/queries/export` as the BI login, and `/v1/queries/scoped/export` as
+ * the scope login of the models the request names (ADR 0142). Two paths and one handler: which
+ * login reads is the route's, so a control plane newer than this worker can never have a scope
+ * stripped and answered as the login that reads everything -- the older worker has no such route.
+ */
 export function registerExportRoute(app: Hono, deps: LakeApiDeps): void {
-  app.post("/v1/queries/export", async (c) => {
+  registerExportAt(app, deps, "/v1/queries/export", ExportQueryRequest);
+  registerExportAt(app, deps, "/v1/queries/scoped/export", ScopedExportQueryRequest);
+}
+
+function registerExportAt(
+  app: Hono,
+  deps: LakeApiDeps,
+  path: string,
+  schema: typeof ExportQueryRequest | typeof ScopedExportQueryRequest,
+): void {
+  app.post(path, async (c) => {
     if (deps.dbt === undefined) {
       return c.json(
         { code: "invalid_request", message: "queries are not configured", details: [] },
@@ -28,7 +48,7 @@ export function registerExportRoute(app: Hono, deps: LakeApiDeps): void {
     if (!serviceTokenOk(deps, c)) {
       return c.json(UNAUTHENTICATED, 401);
     }
-    const parsed = ExportQueryRequest.safeParse(await c.req.json().catch(() => null));
+    const parsed = schema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json(
         { code: "invalid_request", message: "tenantId and sql are required", details: [] },

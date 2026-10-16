@@ -350,9 +350,15 @@ describe("the router's permissions", () => {
     const list = specs.find((spec) => spec.path === "models.list");
 
     expect(save?.permission).toBe("models:write");
-    expect(save?.description.en.endsWith(" Needs models:write.")).toBe(true);
-    expect(save?.description.vi.endsWith(" Cần quyền models:write.")).toBe(true);
-    // The quiet side: a read any member may make names no permission.
+    // Writing a model changes what the build login runs, which reads every model and the whole
+    // raw lake: that it needs both is said too, read off the same chain (ADR 0142).
+    expect(
+      save?.description.en.endsWith(
+        " Needs models:write. Needs reading every model and the whole raw lake (model:*, raw:*).",
+      ),
+    ).toBe(true);
+    expect(save?.description.vi).toContain(" Cần quyền models:write.");
+    // The quiet side: a read any member may make names no permission and no reach.
     expect(list?.permission).toBeNull();
     expect(list?.description.en).not.toContain("Needs");
   });

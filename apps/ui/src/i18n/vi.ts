@@ -586,6 +586,7 @@ export const vi = {
       grants_list: "Xem các quyền đã trao",
       grants_save: "Trao một quyền",
       grants_delete: "Thu lại một quyền đã trao",
+      grants_reach: "Xem những gì một người làm được và xem được",
       audit_mine: "Xem nhật ký hoạt động của mình",
       audit_tenant: "Xem nhật ký hoạt động của khách hàng",
       audit_all: "Xem nhật ký hoạt động của nền tảng",
@@ -1120,7 +1121,7 @@ export const vi = {
    * standing or until a day, and taking one away.
    */
   accessGrants: {
-    lead: "Một quyền trao thẳng cho một vai trò hoặc một người, không thời hạn hoặc đến hết một ngày, thêm vào những gì vai trò của họ đã có.",
+    lead: "Một quyền thao tác, hay quyền xem một thứ, trao thẳng cho một vai trò hoặc một người, không thời hạn hoặc đến hết một ngày, thêm vào những gì vai trò của họ đã có. Vai trò riêng chỉ xem được những gì được trao.",
     readOnly: "Trao hay thu lại quyền cần quyền quản lý vai trò (roles:manage).",
     notLoaded: "Không tải được các quyền đã trao của {{tenantId}}. Không có gì bị thay đổi.",
     none: "Chưa trao quyền nào ngoài các vai trò.",
@@ -1144,7 +1145,11 @@ export const vi = {
     subjectLabel: "Trao cho",
     rolesGroup: "Vai trò",
     peopleGroup: "Người",
-    permissionLabel: "Quyền",
+    permissionLabel: "Quyền hoặc thứ được xem",
+    permissionsGroup: "Quyền thao tác",
+    /** The one select holds both kinds; only what the reader holds or can read is offered. */
+    grantHint:
+      "Chỉ có những quyền bạn đang giữ và những thứ chính bạn xem được. Vai trò có sẵn đã xem được mọi thứ; vai trò riêng chỉ xem được những gì được trao ở đây.",
     /** A permission in the picker: its words, then the key a person quotes. */
     permissionOption: "{{label}} · {{permission}}",
     untilLabel: "Đến hết ngày (không bắt buộc)",
@@ -1153,6 +1158,25 @@ export const vi = {
     adding: "Đang trao…",
     added: "Đã trao quyền.",
     notAdded: "Chưa trao được quyền",
+  },
+
+  /** What an object grant gives, in words (ADR 0142), and the grant form's options. */
+  grantObjects: {
+    wholeGroup: "Xem toàn bộ",
+    modelsGroup: "Model và bảng tham chiếu",
+    streamsGroup: "Hồ dữ liệu thô",
+    reportsGroup: "Báo cáo",
+    everyModel: "Xem mọi model và bảng tham chiếu",
+    wholeLake: "Xem toàn bộ hồ dữ liệu thô",
+    everyReport: "Xem mọi báo cáo",
+    model: "Xem {{name}}",
+    wholeSource: "Xem mọi luồng của {{source}}",
+    stream: "Xem luồng {{source}} / {{entity}}",
+    documents: "Xem tài liệu của {{source}}",
+    questionOption: "Câu hỏi: {{name}}",
+    dashboardOption: "Bảng điều khiển: {{name}}",
+    questionGone: "Một câu hỏi bạn không xem được, hoặc đã bị xoá",
+    dashboardGone: "Một bảng điều khiển bạn không xem được, hoặc đã bị xoá",
   },
 
   grant: {
@@ -2359,6 +2383,7 @@ export const vi = {
     noneToAdd: "Mọi câu hỏi đã có trên bảng.",
     noQuestionsYet: "Chưa có câu hỏi nào để thêm. Hãy đặt câu hỏi ở mục Câu hỏi trước.",
     questionGone: "Câu hỏi này đã bị xoá.",
+    questionNotGranted: "Bạn chưa được trao quyền xem câu hỏi này.",
     waiting_other: "Ô này chờ giá trị cho {{names}}.",
     removeTile: "Bỏ ô",
     moveLeft: "Sang trái",

@@ -15,6 +15,11 @@
  * learns each login's secret from `ops.pgbouncer_auth` at every client login, and only a real
  * SCRAM exchange shows that the current password gets in and nothing else does.
  *
+ * The scope logins' half (ADR 0142) is here for the same reason: what a scope login reads is a
+ * grant, which PGlite proves; that a connection AS it cannot `RESET ROLE` or `set_config` its way to
+ * more, that a republish inside a promotion leaves no instant a reader is refused or over-served,
+ * and that the pooler admits it and stops admitting it once it is dropped, need the real thing.
+ *
  * The tenant it creates, `CASE-ITEST`, is left in place: the test is idempotent, and a
  * developer's database is theirs to reset.
  */
@@ -30,6 +35,7 @@ import { migrate, setRolePassword } from "./migrate.ts";
 import { asExecutor } from "./pool.ts";
 import {
   extendTenantPassword,
+  provisionScope,
   provisionTenantRoles,
   rotateTenantPassword,
 } from "./repos/tenantRoles.ts";
@@ -263,6 +269,183 @@ describe.skipIf(!ENABLED)("a tenant's login through the pooler (ADR 0088)", () =
 
       const app = composeEnv().UNDERCROFT_APP_PG_PASSWORD ?? "";
       expect(await throughPooler("undercroft_app", app)).toMatch(REFUSED);
+    } finally {
+      await end();
+    }
+  });
+});
+
+/** Wait until a backend of `user` is waiting on a lock: at most ten seconds, asked every 50 ms. */
+async function blockedOnLock(exec: ReturnType<typeof asExecutor>, user: string): Promise<void> {
+  for (let tries = 0; tries < 200; tries += 1) {
+    const { rows } = await exec.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM pg_stat_activity
+       WHERE usename = $1 AND wait_event_type = 'Lock'`,
+      [user],
+    );
+    if ((rows[0]?.n ?? 0) > 0) {
+      return;
+    }
+    await exec.query("SELECT pg_sleep(0.05)");
+  }
+  throw new Error(`${user} never waited on the promotion's lock`);
+}
+
+/** A connection straight to Postgres as `user`, not through the pooler. */
+function direct(user: string, password: string): pg.Client {
+  const conn = connection();
+  return new pg.Client({
+    host: conn.host,
+    port: conn.port,
+    database: conn.database,
+    user,
+    password,
+  });
+}
+
+describe.skipIf(!ENABLED)("a scope login, against real Postgres (ADR 0142)", () => {
+  /** The schema, the pooler's login, the tenant and its tables, as a deploy and a build leave them. */
+  async function prepared(): Promise<{
+    exec: ReturnType<typeof asExecutor>;
+    end: () => Promise<void>;
+  }> {
+    const env = composeEnv();
+    const admin = new pg.Pool({ ...connection().admin, max: 2 });
+    const exec = asExecutor(admin);
+    await migrate(exec);
+    await setRolePassword(exec, "undercroft_worker", env.UNDERCROFT_WORKER_PG_PASSWORD ?? "");
+    await exec.query("INSERT INTO ops.tenant (id) VALUES ($1) ON CONFLICT (id) DO NOTHING", [
+      TENANT,
+    ]);
+    await provisionTenantRoles(exec, TENANT);
+    // What a build would have left: tables owned by the tenant's dbt login, and a view.
+    await exec.exec(`
+      BEGIN;
+      SET LOCAL ROLE undercroft_dbt_case_itest;
+      DROP VIEW IF EXISTS analytics_case_itest.itest_view;
+      DROP TABLE IF EXISTS analytics_case_itest.itest_granted, analytics_case_itest.itest_other,
+        analytics_case_itest.itest_pub, staging_case_itest.itest_pub, dq_case_itest.itest_failures;
+      CREATE TABLE analytics_case_itest.itest_granted AS SELECT 1 AS n;
+      CREATE TABLE analytics_case_itest.itest_other AS SELECT 2 AS n;
+      CREATE TABLE analytics_case_itest.itest_pub AS SELECT 1 AS n;
+      CREATE VIEW analytics_case_itest.itest_view AS SELECT n FROM analytics_case_itest.itest_other;
+      CREATE TABLE dq_case_itest.itest_failures AS SELECT 3 AS n;
+      COMMIT;`);
+    return { exec, end: () => admin.end() };
+  }
+
+  it("reads its tables, and neither RESET ROLE nor set_config nor a view reaches more", async () => {
+    const { exec, end } = await prepared();
+    try {
+      const login = await provisionScope(exec, TENANT, ["itest_granted", "itest_view"]);
+      const password = await rotateTenantPassword(exec, TENANT, { kind: "scope", login }, HOUR_MS);
+      const scoped = direct(login, password);
+      await scoped.connect();
+      try {
+        const own = await scoped.query<{ n: number }>(
+          "SELECT n FROM analytics_case_itest.itest_granted",
+        );
+        expect(own.rows).toEqual([{ n: 1 }]);
+
+        await scoped.query("RESET ROLE");
+        await scoped.query("SELECT set_config('search_path', 'analytics_case_itest, raw', false)");
+        for (const sql of [
+          "SELECT * FROM itest_other",
+          "SELECT * FROM analytics_case_itest.itest_view",
+          "SELECT * FROM dq_case_itest.itest_failures",
+          "SELECT * FROM staging_case_itest.itest_pub",
+          "SELECT * FROM raw.records",
+          "SELECT * FROM ops.tenant_scope",
+        ]) {
+          expect(await refusalOf(() => scoped.query(sql))).toMatch(DENIED);
+        }
+        expect(await refusalOf(() => scoped.query("SET ROLE undercroft_bi_case_itest"))).toMatch(
+          DENIED,
+        );
+      } finally {
+        await scoped.end();
+      }
+    } finally {
+      await end();
+    }
+  });
+
+  it("is never refused, nor over-served, while a promotion republishes its table", async () => {
+    const { exec, end } = await prepared();
+    try {
+      const reader = await provisionScope(exec, TENANT, ["itest_pub"]);
+      const outsider = await provisionScope(exec, TENANT, ["itest_granted"]);
+      const builder = direct(
+        "undercroft_dbt_case_itest",
+        await rotateTenantPassword(exec, TENANT, "dbt", HOUR_MS),
+      );
+      const scoped = direct(
+        reader,
+        await rotateTenantPassword(exec, TENANT, { kind: "scope", login: reader }, HOUR_MS),
+      );
+      const outside = direct(
+        outsider,
+        await rotateTenantPassword(exec, TENANT, { kind: "scope", login: outsider }, HOUR_MS),
+      );
+      await Promise.all([builder.connect(), scoped.connect(), outside.connect()]);
+      try {
+        // The promotion as `promote.ts` runs it: grant the staged table, drop the published one,
+        // move the staged one in -- one transaction, committed only once the reader is waiting.
+        await builder.query("BEGIN");
+        await builder.query("CREATE TABLE staging_case_itest.itest_pub AS SELECT 2 AS n");
+        await builder.query("SELECT raw.grant_staged_to_scopes(current_user, $1::text[])", [
+          ["itest_pub"],
+        ]);
+        await builder.query("DROP TABLE analytics_case_itest.itest_pub RESTRICT");
+        await builder.query(
+          "ALTER TABLE staging_case_itest.itest_pub SET SCHEMA analytics_case_itest",
+        );
+        const waiting = scoped.query<{ n: number }>("SELECT n FROM analytics_case_itest.itest_pub");
+        // Committed only once the reader is blocked on the promotion's lock, so what it reads is
+        // decided at the instant the promotion becomes visible, not before or after it.
+        await blockedOnLock(exec, reader);
+        await builder.query("COMMIT");
+
+        expect((await waiting).rows).toEqual([{ n: 2 }]);
+        expect(
+          await refusalOf(() => outside.query("SELECT n FROM analytics_case_itest.itest_pub")),
+        ).toMatch(DENIED);
+      } finally {
+        await Promise.all([builder.end(), scoped.end(), outside.end()]);
+      }
+    } finally {
+      await end();
+    }
+  });
+
+  it("is admitted by the pooler while its password lives, and by nothing once it is swept", async () => {
+    const { exec, end } = await prepared();
+    try {
+      const login = await provisionScope(exec, TENANT, ["itest_granted"]);
+      const password = await rotateTenantPassword(exec, TENANT, { kind: "scope", login }, HOUR_MS);
+      expect(await throughPooler(login, password)).toBe(login);
+
+      // Nobody has used it for a week, its lease is over, and the pooler has closed its idle
+      // server connection (fifteen seconds in production; at once here).
+      await exec.query(
+        `UPDATE ops.tenant_scope SET last_used_at = now() - interval '8 days' WHERE role_name = $1`,
+        [login],
+      );
+      await exec.exec(`ALTER ROLE "${login}" VALID UNTIL '2000-01-01'`);
+      await exec.query(
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = $1",
+        [login],
+      );
+      const { rows } = await exec.query<{ dropped: number }>(
+        "SELECT ops.drop_stale_scopes($1) AS dropped",
+        [TENANT],
+      );
+
+      expect(rows[0]?.dropped).toBeGreaterThanOrEqual(1);
+      expect(await throughPooler(login, password)).toMatch(REFUSED);
+      expect(await refusalOf(() => direct(login, password).connect())).toMatch(
+        /password authentication failed|does not exist/iu,
+      );
     } finally {
       await end();
     }

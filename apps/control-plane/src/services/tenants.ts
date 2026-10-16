@@ -30,7 +30,7 @@ import {
   type Tenant,
   undoCreateTenant,
 } from "../repos/tenant.ts";
-import { permissionsOf } from "./rbac.ts";
+import { holdingOf } from "./rbac.ts";
 
 /** A tenant in the caller's list, with the role they hold there and what it lets them do. */
 export interface ListedTenant extends MemberTenant {
@@ -64,13 +64,15 @@ export async function listForCaller(
   return await Promise.all(
     rows.map(async ({ rolePermissions, grants, ...row }) => ({
       ...row,
-      permissions: await permissionsOf({
-        userId: caller.userId,
-        tenantId: row.id,
-        role: row.role,
-        rolePermissions,
-        grants,
-      }),
+      permissions: (
+        await holdingOf({
+          userId: caller.userId,
+          tenantId: row.id,
+          role: row.role,
+          rolePermissions,
+          grants,
+        })
+      ).permissions,
     })),
   );
 }

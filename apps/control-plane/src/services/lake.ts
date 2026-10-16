@@ -12,6 +12,15 @@
  * Nothing here decides a status code. `records` for a stream that has nothing returns an
  * empty page, which is what it is: absence, not an error.
  *
+ * ## What a reader reaches (ADR 0142)
+ *
+ * Every read here is narrowed to the raw streams the reader reaches: `raw:<source>/<entity>`, a
+ * whole source, or the lake. A stream outside it answers exactly as a stream with nothing in it
+ * does -- an empty page, absent from the summary -- so the answer confirms nothing about it. The
+ * search is narrowed INSIDE the worker's candidate lookups, before anything is ranked or
+ * counted; narrowing its page afterwards would rank, count and cut matches the reader cannot see.
+ * A source's document catalogue is its `documents` stream.
+ *
  * ## The rows one run wrote, and the ones it no longer names
  *
  * `records` and `documents` also page one run's rows (ADR 0091): what a run's created and
@@ -24,6 +33,7 @@
  */
 
 import type { RawSearchResponse, SearchKind } from "@undercroft/contracts";
+import { DOCUMENTS_ENTITY, type Reach, reachesStream } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import { entitiesForRuns, getRun, type Run } from "@undercroft/db/repos";
 
@@ -56,12 +66,27 @@ export interface LakeSummary {
   readonly documents: DocumentSummary[];
 }
 
-export async function summary(exec: SqlExecutor, tenantId: string): Promise<LakeSummary> {
+/** The streams the reader reaches, with their counts; one they do not reach is not there. */
+export async function summary(
+  exec: SqlExecutor,
+  tenantId: string,
+  reach: Reach,
+): Promise<LakeSummary> {
   const [recordStreams, documentStreams] = await Promise.all([
     summariseRecords(exec, tenantId),
     summariseDocuments(exec, tenantId),
   ]);
-  return { records: recordStreams, documents: documentStreams };
+  return {
+    records: recordStreams.filter((stream) => reachesStream(reach, stream.source, stream.entity)),
+    documents: documentStreams.filter((stream) =>
+      reachesStream(reach, stream.source, DOCUMENTS_ENTITY),
+    ),
+  };
+}
+
+/** The page a stream the reader does not reach answers with: the one an empty stream gets. */
+function nothing<T>(): StreamPage<T> {
+  return { items: [], nextCursor: null, ofRun: null };
 }
 
 /**
@@ -83,12 +108,6 @@ export interface StreamPage<T> extends Page<T> {
   /** `null` when no run was asked for, or when its figures cannot answer; see {@link writesOf}. */
   readonly ofRun: RunWrites | null;
 }
-
-/**
- * The entity a run's ledger counts a source's documents under. Gmail and Drive both count their
- * catalogue rows as `documents` beside their records (`docs/reference/run-counts.md`).
- */
-const DOCUMENTS_ENTITY = "documents";
 
 /**
  * What `run` wrote into one stream, or `null` when that cannot be said without guessing.
@@ -138,8 +157,12 @@ export async function records(
     limit: number;
     cursor?: string | null;
     runId?: string | null;
+    reach: Reach;
   },
 ): Promise<StreamPage<RawRecord>> {
+  if (!reachesStream(input.reach, input.source, input.entity)) {
+    return nothing();
+  }
   const runId = input.runId ?? null;
   const run = runId === null ? null : await getRun(exec, tenantId, runId);
   const page = await listRecords(
@@ -165,8 +188,18 @@ export async function records(
 export async function documents(
   exec: SqlExecutor,
   tenantId: string,
-  input: { source: string; limit: number; cursor?: string | null; runId?: string | null },
+  input: {
+    source: string;
+    limit: number;
+    cursor?: string | null;
+    runId?: string | null;
+    reach: Reach;
+  },
 ): Promise<StreamPage<RawDocument>> {
+  // The ledger counts a source's catalogue as its `documents` stream, and so does reach.
+  if (!reachesStream(input.reach, input.source, DOCUMENTS_ENTITY)) {
+    return nothing();
+  }
   const runId = input.runId ?? null;
   const run = runId === null ? null : await getRun(exec, tenantId, runId);
   const page = await listDocuments(
@@ -197,14 +230,28 @@ export async function documents(
 export function search(
   worker: WorkerClient,
   tenantId: string,
-  input: { q: string; kinds?: readonly SearchKind[]; limit: number; offset: number },
+  input: {
+    q: string;
+    kinds?: readonly SearchKind[] | undefined;
+    limit: number;
+    offset: number;
+    reach: Reach;
+  },
 ): Promise<WorkerOutcome<RawSearchResponse>> {
+  const { raw } = input.reach;
   return worker.searchRaw({
     tenantId,
     q: input.q,
     ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
     limit: input.limit,
     offset: input.offset,
+    streams:
+      raw === "all"
+        ? null
+        : [
+            ...raw.sources.map((source) => ({ source, entity: null })),
+            ...raw.streams.map((stream) => ({ source: stream.source, entity: stream.entity })),
+          ],
   });
 }
 

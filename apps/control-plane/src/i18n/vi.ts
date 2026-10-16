@@ -159,6 +159,8 @@ export const vi = {
    */
   procedure: {
     needs: "Cần quyền {{permission}}.",
+    /** Said of a procedure that runs SQL as the customer's build login (ADR 0142). */
+    needsWholeReach: "Cần xem được mọi model và toàn bộ hồ dữ liệu thô (model:*, raw:*).",
   },
 
   error: {
@@ -184,6 +186,28 @@ export const vi = {
      */
     permissionsNotHeld:
       "Bạn chỉ trao hoặc thu lại được những quyền chính bạn đang giữ, mà bạn không giữ {{permissions}}. Hãy nhờ một người đang giữ các quyền đó trong khách hàng này làm việc này.",
+    /**
+     * The subset rule over reach (ADR 0142): every permission involved is held, but the change
+     * would give or take away reading something the caller cannot read. Names the objects as a
+     * grant spells them, which is what they quote and an agent matches.
+     */
+    reachNotHeld:
+      "Bạn chỉ trao hoặc thu lại được quyền xem những gì chính bạn xem được, mà bạn không xem được {{objects}}. Hãy nhờ một người xem được những thứ đó trong khách hàng này làm việc này.",
+    /**
+     * A procedure that runs SQL as the customer's build login, which reads every model and the
+     * whole raw lake, asked by someone who reaches less (ADR 0142). Names what they would need.
+     */
+    wholeReachRequired:
+      "Thao tác này chạy SQL bằng tài khoản dựng của khách hàng, vốn đọc được mọi model và toàn bộ hồ dữ liệu thô, nên cần quyền xem tất cả ({{objects}}). Hãy nhờ người có quyền roles:manage trong khách hàng này cấp cho bạn.",
+    /** A grant names one permission or one object, never both or neither. */
+    grantOneObject:
+      "Hãy nêu đúng một trong hai: permission để trao một quyền thao tác, hoặc object để trao quyền xem một thứ (model:…, raw:…, report:…).",
+    /** An object outside the grammar (`parseReachObject`), named so the caller can see the slip. */
+    grantObjectShape:
+      "{{object}} không phải một đối tượng trao được. Hãy dùng model:<tên> hoặc model:*, raw:<nguồn>/<thực thể>, raw:<nguồn>/* hoặc raw:*, report:question:<id>, report:dashboard:<id> hoặc report:*.",
+    /** An object grant on a model or report this customer does not have. */
+    noSuchObject:
+      "Khách hàng này không có {{object}}. models.list, seeds.list, bi.questions.list và bi.dashboards.list cho thấy những gì đang có.",
     noSuchRole:
       "Khách hàng này không có vai trò {{role}}. roles.list cho thấy các vai trò khách hàng đang có.",
     /** Built-ins are code (ADR 0141); the remedy is a role of the customer's own. */

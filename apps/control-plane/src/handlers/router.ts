@@ -10,7 +10,7 @@ import * as models from "../services/models.ts";
 import * as preferences from "../services/preferences.ts";
 import * as runs from "../services/runs.ts";
 import { MAX_WAIT_SECONDS } from "../services/runWait.ts";
-import { requirePermission } from "./permissionGate.ts";
+import { requirePermission, requireWholeReach } from "./permissionGate.ts";
 import { actorOf, authedProcedure, publicProcedure, router, tenantProcedure } from "./trpc.ts";
 
 import { accountRouter } from "./accountRouter.ts";
@@ -163,7 +163,7 @@ export const appRouter = router({
      * dq schema exists to keep off dashboards. NOT_FOUND for a step that is not this
      * tenant's, BAD_REQUEST for one that stored nothing.
      */
-    failures: requirePermission("lake:read")
+    failures: requireWholeReach("lake:read")
       .input(
         z.object({
           runId: z.string().min(1),

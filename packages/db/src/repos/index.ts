@@ -150,8 +150,10 @@ export { type RecordedScope, recordedScope, scopeForRun } from "./runScope.ts";
 export {
   extendTenantPassword,
   isRoleCollision,
+  provisionScope,
   provisionTenantRoles,
   rotateTenantPassword,
+  type TenantLogin,
   type TenantRoleKind,
   type TenantRoles,
   tenantRolesFor,

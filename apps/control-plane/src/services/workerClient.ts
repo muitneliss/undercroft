@@ -23,6 +23,7 @@ import {
   type ModelPreview,
   type PreviewModelRequest,
   type QueryAnswer,
+  type QueryScope,
   type RawSearchRequest,
   type RawSearchResponse,
   type RevokeConnectionResponse,
@@ -35,18 +36,17 @@ import {
 import { traced } from "@undercroft/telemetry";
 
 import {
-  BAD_REQUEST,
   BROWSE_REFUSALS,
   CONFLICT,
   type InitialiseOutcome,
   initialiseRefusalOf,
-  REFUSAL_BY_STATUS,
-  SEARCH_REFUSALS,
   type WorkerFailure,
 } from "./workerRefusals.ts";
 import { type BuildInput, type BuildOutcome, buildOn } from "./workerBuild.ts";
 import { exportOn } from "./workerExport.ts";
+import { postTo } from "./workerPost.ts";
 import { previewOn } from "./workerPreview.ts";
+import { queriesOn } from "./workerQueries.ts";
 import {
   type Envelope,
   envelopeOf,
@@ -66,6 +66,17 @@ export type { InitialiseOutcome } from "./workerRefusals.ts";
  * say `offset: 0` to mean "from the beginning".
  */
 export type QueryInput = Omit<RunQueryRequest, "offset"> & { readonly offset?: number };
+
+/**
+ * A report's query: a `QueryInput` and the scope it reads under (ADR 0142) -- `null` for the
+ * customer's BI login, which reads every model; otherwise the models the reader reaches, which
+ * the worker reads as the scope login for exactly those. Required, so every caller decides; it is
+ * sent to a route of its own (`ScopedRunQueryRequest` says why).
+ */
+export type ReportQueryInput = QueryInput & { readonly scope: QueryScope | null };
+
+/** An export, under the scope of the reader who downloads it, for the reason a query has one. */
+export type ExportInput = ExportQueryRequest & { readonly scope: QueryScope | null };
 
 export type WorkerOutcome<T> =
   | { ok: true; value: T }
@@ -135,12 +146,18 @@ export interface WorkerClient {
   dropSeed: (input: { tenantId: string; seed: string }) => Promise<DropOutcome>;
   /** The rows a failed test stored, as the worker reads them for an admin. */
   dqFailures: (input: DqFailuresRequest) => Promise<WorkerOutcome<TableResult>>;
-  /** SQL an author wrote, run as the tenant's read-only login, with the tables its plan read. */
-  runQuery: (input: QueryInput) => Promise<WorkerOutcome<QueryAnswer>>;
+  /**
+   * SQL an author wrote, run as the tenant's read-only login -- or its scope login for the
+   * reader's models -- with the tables its plan read.
+   */
+  runQuery: (input: ReportQueryInput) => Promise<WorkerOutcome<QueryAnswer>>;
   /** Every row of that SQL as a CSV stream, as the same login (`workerExport.ts`, ADR 0111). */
-  exportQuery: (input: ExportQueryRequest) => Promise<WorkerOutcome<ReadableStream<Uint8Array>>>;
-  /** The tenant's analytics schema, as that login sees it. */
-  readSchema: (input: { tenantId: string }) => Promise<WorkerOutcome<SchemaResponse>>;
+  exportQuery: (input: ExportInput) => Promise<WorkerOutcome<ReadableStream<Uint8Array>>>;
+  /** The tenant's analytics schema, as that login -- or the reader's scope login -- sees it. */
+  readSchema: (input: {
+    tenantId: string;
+    scope: QueryScope | null;
+  }) => Promise<WorkerOutcome<SchemaResponse>>;
   /** One SELECT over the RAW lake, as the tenant's dbt login. Admin-only at the caller. */
   runRawQuery: (input: QueryInput) => Promise<WorkerOutcome<TableResult>>;
   /** The `raw` schema's tables and columns, for the console's sidebar. */
@@ -171,6 +188,11 @@ export type SearchInput = Omit<RawSearchRequest, "kinds" | "limit" | "offset"> &
   readonly kinds?: readonly SearchKind[];
   readonly limit?: number;
   readonly offset?: number;
+  /**
+   * The raw streams the reader reaches, a whole source where `entity` is `null` (ADR 0142), or
+   * `null` for a reader who reaches the whole lake. Required, so every caller decides.
+   */
+  readonly streams: readonly { readonly source: string; readonly entity: string | null }[] | null;
 };
 
 export interface HttpWorkerConfig {
@@ -182,43 +204,6 @@ export interface HttpWorkerConfig {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-
-/** How one call is posted; `refusals` is which refusal each status names on that endpoint. */
-interface PostOptions<T> {
-  readonly deadlineMs?: number;
-  readonly schema?: {
-    safeParse: (raw: unknown) => { success: true; data: T } | { success: false };
-  };
-  readonly refusals?: ReadonlyMap<number, WorkerFailure>;
-}
-
-/**
- * One POST to the worker, with its refusals mapped onto `WorkerOutcome`. With a `schema` the
- * answer is parsed, not cast, so its defaults apply: `BrowseScopeResponse.partial` makes an
- * older worker's answer read as "whole" rather than as no answer. Unparseable is a refusal.
- */
-function postTo(t: WorkerTransport): typeof post {
-  function post<T>(
-    path: string,
-    body: unknown,
-    options: PostOptions<T> = {},
-  ): Promise<WorkerOutcome<T>> {
-    const { schema, refusals = REFUSAL_BY_STATUS, deadlineMs = t.timeoutMs } = options;
-    return exchange(t, { path, body, deadlineMs }, async (response): Promise<WorkerOutcome<T>> => {
-      if (!response.ok) {
-        // The body is deliberately not read into the failure. A refusal from this endpoint
-        // can echo a request that carried a live refresh token, and a control-plane log is
-        // not where that belongs. The STATUS carries no such payload, which is what makes
-        // it the right place to tell a withheld permission from every other refusal.
-        return { ok: false, reason: refusals.get(response.status) ?? "refused" };
-      }
-      const raw: unknown = await response.json();
-      const parsed = schema?.safeParse(raw) ?? { success: true as const, data: raw as T };
-      return parsed.success ? { ok: true, value: parsed.data } : { ok: false, reason: "refused" };
-    });
-  }
-  return post;
-}
 
 /**
  * Starting a run: the one call whose 409 body IS read, because `run_in_progress` carries the
@@ -254,34 +239,6 @@ function initialiseOn(t: WorkerTransport): WorkerClient["initialiseDocumentKinds
       }
       return initialiseRefusalOf(response.status, await envelopeOf(response));
     });
-}
-
-/**
- * The other call whose refusal body IS read: a 400 `query_failed` carries Postgres's sentence
- * about the author's SQL, which quotes the author's own text and nothing else, and is the one
- * thing that lets them fix it. Every other status is handled as `post` handles it.
- *
- * At module scope beside `postTo` and `triggerOn`, for the reason `WorkerTransport`'s own
- * docstring gives about those two: a request helper that can be read on its own is one a
- * reviewer can check against the endpoint it calls.
- */
-function queryOn(t: WorkerTransport): typeof query {
-  function query(path: string, input: QueryInput): Promise<WorkerOutcome<QueryAnswer>> {
-    return exchange(t, { path, body: input }, async (response) => {
-      if (response.status === BAD_REQUEST) {
-        const refusal = await envelopeOf(response);
-        if (refusal?.code === "query_failed" && typeof refusal.message === "string") {
-          return { ok: false, reason: "query-failed", message: refusal.message };
-        }
-        return { ok: false, reason: "refused" };
-      }
-      if (!response.ok) {
-        return { ok: false, reason: "refused" };
-      }
-      return { ok: true, value: (await response.json()) as QueryAnswer };
-    });
-  }
-  return query;
 }
 
 /**
@@ -324,7 +281,6 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
   };
   const post = postTo(t);
   const trigger = triggerOn(t);
-  const query = queryOn(t);
 
   return {
     storeCredential: (input) => post("/v1/connections/credential", input),
@@ -341,19 +297,10 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     dropModel: dropOn(t, "/v1/models/drop"),
     dropSeed: dropOn(t, "/v1/seeds/drop"),
     dqFailures: (input) => post("/v1/dq/failures", input),
-    runQuery: (input) => query("/v1/queries/run", input),
     exportQuery: exportOn(t),
-    readSchema: (input) => post("/v1/queries/schema", input),
-    // The raw lake's console. Same refusal handling, different login at the far end: the
-    // worker answers this one as the tenant's dbt role, which is the only one that may read
-    // `raw` at all. See `queryRunner.runRawQuery`.
-    runRawQuery: (input) => query("/v1/queries/raw/run", input),
-    readRawSchema: (input) => post("/v1/queries/raw/schema", input),
     // Its own module: the preview's deadline, and two refusals whose body is read.
     previewModel: previewOn(t),
-    // Plain `post`, not `query`: there is no author's SQL here to quote back, so there is no
-    // refusal body worth reading. Its one refusal of its own -- the statement timeout, a 504 --
-    // is named by the status alone (ADR 0123).
-    searchRaw: (input) => post("/v1/queries/raw/search", input, { refusals: SEARCH_REFUSALS }),
+    // Its own module: the routes a read takes by what its reader may read (ADR 0142).
+    ...queriesOn(t),
   };
 }

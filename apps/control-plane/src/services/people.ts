@@ -41,7 +41,7 @@ import {
   type Role,
   roleForEmail,
 } from "../repos/membership.ts";
-import { conferredBy, heldByMember, lacking } from "./authz.ts";
+import { beyond, conferredBy, type Holding, heldByMember, within } from "./authz.ts";
 
 export type { Member } from "../repos/membership.ts";
 export type Invitation = invitations.InvitationRow;
@@ -53,8 +53,23 @@ const INVITATION_DAYS = 7;
 export type RoleRefusal =
   /** The customer has no role with that key. */
   | { readonly ok: false; readonly reason: "no-such-role" }
-  /** The caller lacks these, which the change would give or take away. */
-  | { readonly ok: false; readonly reason: "not-held"; readonly lacking: readonly Permission[] };
+  /**
+   * The caller lacks these permissions, or does not reach these objects (ADR 0142), which the
+   * change would give or take away.
+   */
+  | {
+      readonly ok: false;
+      readonly reason: "not-held";
+      readonly lacking: readonly Permission[];
+      readonly objects: readonly string[];
+    };
+
+function notHeld(found: {
+  readonly permissions: readonly Permission[];
+  readonly objects: readonly string[];
+}): RoleRefusal {
+  return { ok: false, reason: "not-held", lacking: found.permissions, objects: found.objects };
+}
 
 export type InviteResult =
   | { readonly ok: true; readonly id: string; readonly notified: boolean }
@@ -145,7 +160,7 @@ export async function invite(
     tenantId: string;
     email: string;
     role: string;
-    held: readonly Permission[];
+    held: Holding;
     actor: Actor;
     notify: (email: string, tenantId: string) => Promise<boolean>;
   },
@@ -154,9 +169,9 @@ export async function invite(
   if (conferred === null) {
     return { ok: false, reason: "no-such-role" };
   }
-  const beyond = lacking(input.held, conferred);
-  if (beyond.length > 0) {
-    return { ok: false, reason: "not-held", lacking: beyond };
+  const found = beyond(input.held, [conferred]);
+  if (!within(found)) {
+    return notHeld(found);
   }
   const current = await roleForEmail(exec, input.tenantId, input.email);
   if (current !== null) {
@@ -233,7 +248,7 @@ async function settle(
  */
 export async function setRole(
   exec: SqlExecutor,
-  input: { tenantId: string; email: string; role: Role; held: readonly Permission[]; actor: Actor },
+  input: { tenantId: string; email: string; role: Role; held: Holding; actor: Actor },
 ): Promise<MembershipResult> {
   const conferred = await conferredBy(exec, input.tenantId, input.role);
   if (conferred === null) {
@@ -243,10 +258,10 @@ export async function setRole(
   if (current === null) {
     return { ok: false, reason: "not-member" };
   }
-  const before = (await conferredBy(exec, input.tenantId, current)) ?? [];
-  const beyond = lacking(input.held, [...before, ...conferred]);
-  if (beyond.length > 0) {
-    return { ok: false, reason: "not-held", lacking: beyond };
+  const before = await conferredBy(exec, input.tenantId, current);
+  const found = beyond(input.held, before === null ? [conferred] : [before, conferred]);
+  if (!within(found)) {
+    return notHeld(found);
   }
   const change = await changeRole(exec, input.tenantId, input.email, input.role);
   return await settle(exec, change, {
@@ -271,15 +286,15 @@ export async function setRole(
  */
 export async function removeMember(
   exec: SqlExecutor,
-  input: { tenantId: string; email: string; held: readonly Permission[]; actor: Actor },
+  input: { tenantId: string; email: string; held: Holding; actor: Actor },
 ): Promise<MembershipResult> {
   const holds = await heldByMember(exec, input.tenantId, input.email);
   if (holds === null) {
     return { ok: false, reason: "not-member" };
   }
-  const beyond = lacking(input.held, holds);
-  if (beyond.length > 0) {
-    return { ok: false, reason: "not-held", lacking: beyond };
+  const found = beyond(input.held, [holds]);
+  if (!within(found)) {
+    return notHeld(found);
   }
   const change = await deleteMembership(exec, input.tenantId, input.email);
   return await settle(exec, change, {

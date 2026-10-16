@@ -8,13 +8,22 @@
  * mapping; the reasoning is in `080_tenant_isolation.sql`, ADR 0018 and ADR 0087.
  *
  * Both apps import this from `@undercroft/db/repos`: the control plane provisions when a
- * tenant is created, the worker rotates or extends before a build or a query session.
- * Neither holds a private copy of the SQL.
+ * tenant is created, the worker rotates or extends before a build or a query session, and
+ * provisions a scope login before the first session of a reader who reaches only some models
+ * (ADR 0142). Neither holds a private copy of the SQL.
  */
 
 import type { SqlExecutor } from "../executor.ts";
 
 export type TenantRoleKind = "dbt" | "bi";
+
+/**
+ * Which of a customer's logins a password is for: its dbt or BI login, or one of its scope
+ * logins by name (ADR 0142, `620_scope_logins.sql`), which `provisionScope` answers with.
+ */
+export type TenantLogin =
+  | { readonly kind: TenantRoleKind }
+  | { readonly kind: "scope"; readonly login: string };
 
 export interface TenantRoles {
   readonly slug: string;
@@ -53,18 +62,51 @@ export function isRoleCollision(error: unknown): boolean {
 export async function rotateTenantPassword(
   exec: SqlExecutor,
   tenantId: string,
-  kind: TenantRoleKind,
+  login: TenantRoleKind | TenantLogin,
   validForMs: number,
 ): Promise<string> {
+  const { kind, name } = loginOf(login);
   const { rows } = await exec.query<{ password: string }>(
-    "SELECT ops.rotate_tenant_password($1, $2, $3::interval) AS password",
-    [tenantId, kind, `${String(validForMs)} milliseconds`],
+    "SELECT ops.rotate_tenant_password($1, $2, $3::interval, $4::name) AS password",
+    [tenantId, kind, `${String(validForMs)} milliseconds`, name],
   );
   const password = rows[0]?.password;
   if (password === undefined || password === "") {
     throw new Error(`undercroft: no password was minted for ${tenantId}/${kind}`);
   }
   return password;
+}
+
+/** A login as the two password functions take it: its kind, and a scope login's name. */
+function loginOf(login: TenantRoleKind | TenantLogin): { kind: string; name: string | null } {
+  if (typeof login === "string") {
+    return { kind: login, name: null };
+  }
+  return login.kind === "scope"
+    ? { kind: "scope", name: login.login }
+    : { kind: login.kind, name: null };
+}
+
+/**
+ * The scope login that reads exactly `models` of the customer's analytics, made and granted the
+ * first time anyone needs it, and marked as in use every time (ADR 0142). The models are names;
+ * their order and repeats do not matter, because `ops.provision_scope` hashes the set. Raises for
+ * a tenant never provisioned, and for a name that is not a model's.
+ */
+export async function provisionScope(
+  exec: SqlExecutor,
+  tenantId: string,
+  models: readonly string[],
+): Promise<string> {
+  const { rows } = await exec.query<{ login: string }>(
+    "SELECT ops.provision_scope($1, $2::text[]) AS login",
+    [tenantId, [...models]],
+  );
+  const login = rows[0]?.login;
+  if (login === undefined) {
+    throw new Error(`undercroft: no scope login was provisioned for ${tenantId}`);
+  }
+  return login;
 }
 
 /**
@@ -74,13 +116,15 @@ export async function rotateTenantPassword(
 export async function extendTenantPassword(
   exec: SqlExecutor,
   tenantId: string,
-  kind: TenantRoleKind,
+  login: TenantRoleKind | TenantLogin,
   validForMs: number,
 ): Promise<void> {
-  await exec.query("SELECT ops.extend_tenant_password($1, $2, $3::interval)", [
+  const { kind, name } = loginOf(login);
+  await exec.query("SELECT ops.extend_tenant_password($1, $2, $3::interval, $4::name)", [
     tenantId,
     kind,
     `${String(validForMs)} milliseconds`,
+    name,
   ]);
 }
 

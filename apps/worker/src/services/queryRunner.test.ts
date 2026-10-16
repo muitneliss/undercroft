@@ -239,3 +239,49 @@ describe("readSchema", () => {
     ]);
   });
 });
+
+describe("a read under a scope (ADR 0142)", () => {
+  beforeEach(async () => {
+    await db.asSuperuser((tx) =>
+      tx.exec(
+        "SET ROLE undercroft_dbt_case_1; CREATE TABLE analytics_case_1.stg_other AS SELECT 9 AS n; RESET ROLE",
+      ),
+    );
+  });
+
+  it("answers from the scope's tables, and is refused another in Postgres's words", async () => {
+    const scope = { models: ["stg_deals"] };
+
+    const own = await runQuery(deps, {
+      tenantId: TENANT,
+      sql: "select count(*)::int as n from stg_deals",
+      limit: 10,
+      scope,
+    });
+    const other = await refusal(() =>
+      runQuery(deps, { tenantId: TENANT, sql: "select * from stg_other", limit: 10, scope }),
+    );
+    // Moving the search path from inside the author's SQL changes which name resolves, never
+    // which table the login may read.
+    const moved = await refusal(() =>
+      runQuery(deps, {
+        tenantId: TENANT,
+        sql: "select * from (select set_config('search_path', 'analytics_case_1,public', true)) s, stg_other",
+        limit: 10,
+        scope,
+      }),
+    );
+
+    expect(own.rows).toEqual([[3]]);
+    expect(other).toMatch(/permission denied/u);
+    expect(moved).toMatch(/permission denied/u);
+  });
+
+  it("lists only the scope's tables in its schema, and the BI login lists every one", async () => {
+    const scoped = await readSchema(deps, { tenantId: TENANT, scope: { models: ["stg_deals"] } });
+    const whole = await readSchema(deps, { tenantId: TENANT, scope: null });
+
+    expect(scoped.tables.map((table) => table.name)).toEqual(["stg_deals"]);
+    expect(whole.tables.map((table) => table.name)).toEqual(["stg_deals", "stg_other"]);
+  });
+});

@@ -50,7 +50,7 @@ async function planOfSearch(): Promise<PlanNode> {
   return db.asRole(role, async (tx) => {
     const { rows } = await tx.query<Record<string, unknown>>(
       `EXPLAIN (VERBOSE, FORMAT JSON) ${SEARCH_STATEMENT}`,
-      ["hop dong", TENANT, 21, 0, 2000, 200, ["record", "document"]],
+      ["hop dong", TENANT, 21, 0, 2000, 200, ["record", "document"], null, null],
     );
     const [raw] = Object.values(rows[0] ?? {});
     const parsed = (typeof raw === "string" ? JSON.parse(raw) : raw) as { Plan: PlanNode }[];

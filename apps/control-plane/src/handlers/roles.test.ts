@@ -98,6 +98,17 @@ async function defineRole(key: string, permissions: Permission[]): Promise<void>
   await admin.roles.save({ tenantId: TENANT, key, label: key, permissions, create: true });
 }
 
+/**
+ * Give a role the whole customer to read -- every model, the raw lake, every report -- which a
+ * built-in reaches in code and a customer's own role only through grants (ADR 0142).
+ */
+async function reachEverything(key: string): Promise<void> {
+  const admin = await as(`reach-${key}@example.test`, "admin");
+  for (const object of ["model:*", "raw:*", "report:*"]) {
+    await admin.grants.save({ tenantId: TENANT, role: key, object });
+  }
+}
+
 /** A person holding exactly `permissions`, through a role `key` defined for them. */
 async function holding(key: string, permissions: Permission[]) {
   await defineRole(key, permissions);
@@ -107,6 +118,8 @@ async function holding(key: string, permissions: Permission[]) {
 describe("a customer's own role is what it holds", () => {
   it("a role holding lake:read reads the raw lake and is refused a model by name", async () => {
     await defineRole("raw_reader", ["lake:read"]);
+    // The console reads as the build login, so it needs the whole lake and every model too.
+    await reachEverything("raw_reader");
     const worker = new InMemoryWorkerClient().answering({
       columns: [{ name: "n", type: "int8" }],
       rows: [["1"]],
@@ -316,6 +329,9 @@ describe("the subset rule", () => {
   it("nor invite anyone at such a role, nor give it, though people:manage is held", async () => {
     await defineRole("key_holder", ["keys:manage"]);
     const hr = await holding("hr", ["people:manage", "roles:manage"]);
+    // What a viewer reads, so that inviting one is within the rule and the permission is what
+    // refuses the other two.
+    await reachEverything("hr");
     await seedMember("someone@example.test", "viewer");
 
     const invite = await refused(() =>
