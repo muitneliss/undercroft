@@ -587,6 +587,7 @@ export const vi = {
       grants_save: "Trao một quyền",
       grants_delete: "Thu lại một quyền đã trao",
       grants_reach: "Xem những gì một người làm được và xem được",
+      scopes_preview: "Xem những gì một người xem được, kèm dòng và cột",
       audit_mine: "Xem nhật ký hoạt động của mình",
       audit_tenant: "Xem nhật ký hoạt động của khách hàng",
       audit_all: "Xem nhật ký hoạt động của nền tảng",
@@ -1158,6 +1159,62 @@ export const vi = {
     adding: "Đang trao…",
     added: "Đã trao quyền.",
     notAdded: "Chưa trao được quyền",
+    /** The selects' empty first option: nothing is chosen until the reader chooses. */
+    choose: "Chọn…",
+  },
+
+  /**
+   * A model grant's row rule and hidden columns (ADR 0143): the grant form's fields and how a
+   * rule reads in the grants table. A column and a value are the customer's own words, untranslated.
+   */
+  grantRules: {
+    rowsHead: "Chỉ những dòng có",
+    rowsNone: "Chưa có điều kiện nào: người được trao sẽ thấy mọi dòng.",
+    rowsHint:
+      "Một dòng phải thoả mọi điều kiện ở đây. Giá trị được so theo đúng kiểu của cột; một ô trống (NULL) không bao giờ khớp.",
+    columnLabel: "Cột",
+    opLabel: "So sánh",
+    opEq: "bằng",
+    opIn: "là một trong",
+    valueLabel: "Giá trị",
+    valuesLabel: "Các giá trị, mỗi dòng một giá trị",
+    addCondition: "Thêm điều kiện",
+    removeCondition: "Bỏ điều kiện",
+    hiddenHead: "Ẩn các cột",
+    hiddenHint:
+      "Một cột bị ẩn sẽ bị từ chối khi truy vấn, kể cả qua SELECT *, chứ không để trống. Ẩn cột là danh sách những gì cần ẩn: một cột do lần dựng sau thêm vào sẽ hiện cho đến khi được ẩn.",
+    noColumns:
+      "{{name}} chưa có cột nào được ghi nhận vì chưa được dựng thành công, nên chưa đặt được quy tắc theo dòng hay ẩn cột. Hãy dựng nó trước.",
+    incomplete:
+      "Mỗi điều kiện cần ít nhất một giá trị, và điều kiện “bằng” cần đúng một. Một điều kiện bỏ dở không được bỏ qua, vì như thế sẽ trao nhiều dòng hơn bạn định.",
+    eqWords: "{{column}} = {{value}}",
+    inWords: "{{column}} là một trong {{values}}",
+    /** One rule among several ORed, kept whole so its own conditions do not run into the next. */
+    grouped: "({{rule}})",
+    everyRow: "mọi dòng",
+    onlyRows: "Chỉ những dòng có {{rule}}",
+    hides: "Ẩn cột: {{columns}}",
+  },
+
+  /**
+   * What the person or role a grant is for can see now (ADR 0143), from `scopes.preview`, under
+   * the grant form.
+   */
+  scopePreview: {
+    label: "Những gì họ xem được",
+    head: "Hiện họ xem được",
+    everyModel_other: "Mọi model và bảng tham chiếu ({{count, number}}), trọn vẹn.",
+    someModels_other: "{{count, number}} trên {{total, number}} model và bảng tham chiếu.",
+    limited: "{{model}}: {{rows}}; ẩn cột: {{hidden}}.",
+    noneHidden: "không có",
+    brokenColumn:
+      "{{model}}: quy tắc theo dòng nhắc đến {{columns}}, mà bảng không còn cột đó, nên họ không thấy dòng nào của bảng. Hãy sửa hoặc thu lại quy tắc.",
+    brokenValue:
+      "{{model}}: một giá trị của quy tắc theo dòng không đúng kiểu của cột, nên họ không thấy dòng nào của bảng. Hãy sửa quy tắc.",
+    brokenNotTable:
+      "{{model}} là một materialised view, vốn không giới hạn theo dòng được, nên họ không đọc được gì của nó.",
+    newColumns:
+      "Ẩn cột là danh sách những gì cần ẩn: một cột do lần dựng sau thêm vào sẽ hiện cho đến khi được ẩn.",
   },
 
   /** What an object grant gives, in words (ADR 0142), and the grant form's options. */
@@ -2250,6 +2307,9 @@ export const vi = {
       "Bảng {{table}} là phiên bản đạt kiểm thử gần nhất, từ lần chạy {{runId}}; lần dựng mới ở lần chạy {{heldRunId}} không đạt nên chưa được công bố.",
     qualifierHeldNoVersion:
       "Lần dựng mới của bảng {{table}} ở lần chạy {{heldRunId}} không đạt nên chưa được công bố.",
+    /** The tables an answer read of which the reader sees only some rows (ADR 0143). */
+    rowsLimited:
+      "Quyền xem của bạn chỉ gồm một số dòng của {{tables}}, nên các con số ở đây là của những dòng bạn được xem, không phải của cả bảng.",
     qualifiersNotKnown: "Không rõ kết quả kiểm thử của các bảng mà câu trả lời này đọc.",
     viewerNote: "Bạn có thể xem và chạy câu hỏi này. Sửa và lưu cần vai trò member.",
     viewerNew: "Đặt câu hỏi mới cần vai trò member.",

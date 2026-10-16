@@ -164,7 +164,7 @@ function TileBody({
   return (
     <>
       {/* A tile reads the same answer as its question, so it is qualified the same way. */}
-      <AnswerQualifiers qualifiers={answer.data.qualifiers} />
+      <AnswerQualifiers qualifiers={answer.data.qualifiers} rowsLimited={answer.data.rowsLimited} />
       <Suspense fallback={<Skeleton rows={3} />}>
         <ChartFrame result={answer.data} chart={question.chart} locale={locale} />
       </Suspense>

@@ -23,6 +23,7 @@
  * the membership is the filter, so the query belongs on this side of the join.
  */
 
+import type { RowRule } from "@undercroft/contracts/rowRules";
 import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 
@@ -55,7 +56,21 @@ export interface PolicyGrant {
   /** Casbin's object, as stored: `perm:models:write`. */
   readonly object: string;
   readonly action: string;
+  /** A model grant's row rule as stored (ADR 0143), `null` for none. */
+  readonly rows: RowRule | null;
+  /** A model grant's hidden columns as stored, `null` for none. */
+  readonly hidden: readonly string[] | null;
 }
+
+/**
+ * One grant `g` as the projection reads it, folded to JSON: its subject, object and action, and a
+ * model grant's rules (ADR 0143). Shared by the two statements that fold grants -- this file's
+ * `POLICY_COLUMNS` and `rolePolicy` in `accessRoles.ts` -- so a member's grants and a role's are
+ * one shape.
+ */
+export const GRANT_LINE_JSON = `json_build_object(
+              'toRole', g.subject_kind = 'role', 'object', g.object, 'action', g.action,
+              'rows', g.row_rule, 'hidden', g.hidden_columns)`;
 
 /**
  * What Casbin's projection needs about one membership, read in the statement that finds it: the
@@ -122,9 +137,7 @@ const POLICY_COLUMNS = `
   r.label AS role_label,
   coalesce(r.permissions, '{}') AS role_permissions,
   coalesce(
-    (SELECT json_agg(json_build_object(
-              'toRole', g.subject_kind = 'role', 'object', g.object, 'action', g.action)
-            ORDER BY g.subject_kind, g.object)
+    (SELECT json_agg(${GRANT_LINE_JSON} ORDER BY g.subject_kind, g.object)
      FROM app.access_grant g
      WHERE g.tenant_id = m.tenant_id
        AND (g.expires_at IS NULL OR g.expires_at > now())

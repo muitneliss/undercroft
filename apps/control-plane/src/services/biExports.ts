@@ -31,6 +31,7 @@ import {
   quoteIdent,
 } from "@undercroft/contracts";
 import { type Reach, reachesModel } from "@undercroft/contracts/access";
+import { intersectionOf, type ModelLimit, type Narrowing } from "@undercroft/contracts/rowRules";
 import type { SqlExecutor } from "@undercroft/db";
 import { getModel } from "@undercroft/db/repos";
 
@@ -41,7 +42,7 @@ import {
   findLiveExport,
   insertExport,
 } from "../repos/biExports.ts";
-import { scopeOf } from "./bi.ts";
+import { scopeLimits, scopeOf } from "./bi.ts";
 import { getQuestionView } from "./biQuestions.ts";
 
 export type { ExportKind, ExportRow } from "../repos/biExports.ts";
@@ -150,6 +151,7 @@ export async function createExport(
     userId: input.userId,
     kind: input.source.kind,
     scopeModels: scopeOf(input.reach)?.models ?? null,
+    scopeLimits: scopeOf(input.reach)?.limits ?? null,
     sql: sql.sql,
     fileName: csvFileName(sql.name ?? input.unnamed, input.unnamed),
     minutes: EXPORT_MINUTES,
@@ -164,7 +166,7 @@ export async function createExport(
 }
 
 /** An export as its download runs it: the row, and the scope its rows are read under. */
-export interface OpenedExport extends Omit<ExportRow, "scopeModels"> {
+export interface OpenedExport extends Omit<ExportRow, "scopeModels" | "scopeLimits"> {
   /** `null` for the BI login; else the models both asked under and still reached (ADR 0142). */
   readonly scope: QueryScope | null;
 }
@@ -172,15 +174,33 @@ export interface OpenedExport extends Omit<ExportRow, "scopeModels"> {
 /**
  * The scope a download runs under: the models the asker reached when they asked, and still reach
  * now -- the narrower of the two, so neither a grant since nor one taken away since makes the
- * file read more than its asker may read at the moment the rows are taken.
+ * file read more than its asker may read at the moment the rows are taken. Each model's rows and
+ * columns are the narrower of the two as well (ADR 0143): a row both let them see, a column
+ * neither hides. An export asked before rules existed was asked under none.
  */
-function narrowerOf(asked: readonly string[] | null, now: QueryScope | null): QueryScope | null {
-  if (asked === null) {
+function narrowerOf(
+  asked: { readonly models: readonly string[] | null; readonly limits: readonly ModelLimit[] },
+  now: QueryScope | null,
+): QueryScope | null {
+  if (asked.models === null) {
     return now;
   }
-  return now === null
-    ? { models: [...asked] }
-    : { models: asked.filter((m) => now.models.includes(m)) };
+  const askedScope = { models: [...asked.models], limits: scopeLimits(asked.limits) };
+  if (now === null) {
+    return askedScope;
+  }
+  const models = askedScope.models.filter((model) => now.models.includes(model));
+  const limits = models.flatMap((model): ModelLimit[] => {
+    const both = intersectionOf(limitIn(askedScope.limits, model), limitIn(now.limits, model));
+    return both === null ? [] : [{ model, ...both }];
+  });
+  return { models, limits: scopeLimits(limits) };
+}
+
+/** One model's limit among a scope's, or `null` for a model it reads whole. */
+function limitIn(limits: readonly ModelLimit[], model: string): Narrowing | null {
+  const found = limits.find((limit) => limit.model === model);
+  return found === undefined ? null : { rows: found.rows, hidden: found.hidden };
 }
 
 /** The export `userId` asked for in `tenantId`, while it lives; `null` for anyone else's. */
@@ -192,8 +212,11 @@ export async function openExport(
   if (row === null) {
     return null;
   }
-  const { scopeModels, ...rest } = row;
-  return { ...rest, scope: narrowerOf(scopeModels, scopeOf(input.reach)) };
+  const { scopeModels, scopeLimits: askedLimits, ...rest } = row;
+  return {
+    ...rest,
+    scope: narrowerOf({ models: scopeModels, limits: askedLimits ?? [] }, scopeOf(input.reach)),
+  };
 }
 
 /** Whether exporting `kind` needs `reports:author`, rather than only membership. */

@@ -146,6 +146,7 @@
 - [ADR 0140 An Absent Framework's Rules Are Switched Off by Name](sources/adr-0140-an-absent-framework-s-rules-are-switched-off-by-name.md)
 - [ADR 0141 Custom Roles and Grants Under the Subset Rule](sources/adr-0141-custom-roles-and-grants-under-the-subset-rule.md)
 - [ADR 0142 Object Reach and Scope Logins](sources/adr-0142-object-reach-and-scope-logins.md)
+- [ADR 0143 Row and Column Rules on Model Grants](sources/adr-0143-row-and-column-rules-on-model-grants.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

@@ -61,6 +61,7 @@ const PLACE = {
   people: "contents",
   roles: "contents",
   grants: "contents",
+  scopes: "contents",
   audit: "contents",
   keys: "contents",
   auth: "appendix",

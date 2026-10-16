@@ -6,6 +6,7 @@
  * by the next insert rather than by a job: the table only ever holds a few minutes of asking.
  */
 
+import type { ModelLimit } from "@undercroft/contracts/rowRules";
 import type { SqlExecutor } from "@undercroft/db";
 
 export type ExportKind = "question" | "definition" | "model";
@@ -18,6 +19,8 @@ export interface ExportRow {
   readonly expiresAt: string;
   /** The models its asker reached when they asked; `null` for every model (ADR 0142). */
   readonly scopeModels: readonly string[] | null;
+  /** How much of each of those they read (ADR 0143); `null` for an export asked before rules. */
+  readonly scopeLimits: readonly ModelLimit[] | null;
 }
 
 interface Row {
@@ -27,6 +30,7 @@ interface Row {
   file_name: string;
   expires_at: Date | string;
   scope_models: string[] | null;
+  scope_limits: ModelLimit[] | null;
 }
 
 function toRow(r: Row): ExportRow {
@@ -37,6 +41,7 @@ function toRow(r: Row): ExportRow {
     fileName: r.file_name,
     expiresAt: new Date(r.expires_at).toISOString(),
     scopeModels: r.scope_models,
+    scopeLimits: r.scope_limits,
   };
 }
 
@@ -48,6 +53,7 @@ export async function insertExport(
     userId: string;
     kind: ExportKind;
     scopeModels: readonly string[] | null;
+    scopeLimits: readonly ModelLimit[] | null;
     sql: string;
     fileName: string;
     minutes: number;
@@ -55,9 +61,10 @@ export async function insertExport(
 ): Promise<ExportRow> {
   await exec.query("DELETE FROM app.bi_export WHERE expires_at <= now()");
   const { rows } = await exec.query<Row>(
-    `INSERT INTO app.bi_export (tenant_id, user_id, kind, sql, file_name, expires_at, scope_models)
-     VALUES ($1, $2, $3, $4, $5, now() + make_interval(mins => $6::int), $7::text[])
-     RETURNING id, kind, sql, file_name, expires_at, scope_models`,
+    `INSERT INTO app.bi_export
+       (tenant_id, user_id, kind, sql, file_name, expires_at, scope_models, scope_limits)
+     VALUES ($1, $2, $3, $4, $5, now() + make_interval(mins => $6::int), $7::text[], $8::jsonb)
+     RETURNING id, kind, sql, file_name, expires_at, scope_models, scope_limits`,
     [
       input.tenantId,
       input.userId,
@@ -66,6 +73,7 @@ export async function insertExport(
       input.fileName,
       input.minutes,
       input.scopeModels === null ? null : [...input.scopeModels],
+      input.scopeLimits === null ? null : JSON.stringify(input.scopeLimits),
     ],
   );
   const [row] = rows;
@@ -81,7 +89,7 @@ export async function findLiveExport(
   input: { tenantId: string; id: string; userId: string },
 ): Promise<ExportRow | null> {
   const { rows } = await exec.query<Row>(
-    `SELECT id, kind, sql, file_name, expires_at, scope_models FROM app.bi_export
+    `SELECT id, kind, sql, file_name, expires_at, scope_models, scope_limits FROM app.bi_export
      WHERE tenant_id = $1 AND id = $2 AND user_id = $3 AND expires_at > now()`,
     [input.tenantId, input.id, input.userId],
   );

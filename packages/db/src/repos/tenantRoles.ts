@@ -88,19 +88,39 @@ function loginOf(login: TenantRoleKind | TenantLogin): { kind: string; name: str
 }
 
 /**
- * The scope login that reads exactly `models` of the customer's analytics, made and granted the
- * first time anyone needs it, and marked as in use every time (ADR 0142). The models are names;
- * their order and repeats do not matter, because `ops.provision_scope` hashes the set. Raises for
- * a tenant never provisioned, and for a name that is not a model's.
+ * How much of one model a scope reads (ADR 0143), as `ops.provision_scope` takes it: the rows
+ * meeting any one rule (`null`, every row), and every column but the hidden ones. The shape is
+ * `ModelLimit` in `@undercroft/contracts/access`, restated here because this package sits below it.
+ */
+export interface ScopeLimitInput {
+  readonly model: string;
+  readonly rows:
+    | readonly (readonly {
+        readonly column: string;
+        readonly op: string;
+        readonly values: readonly string[];
+      }[])[]
+    | null;
+  readonly hidden: readonly string[];
+}
+
+/**
+ * The scope login that reads exactly `models` of the customer's analytics, as much of each as
+ * `limits` says, made and granted the first time anyone needs it, and marked as in use every time
+ * (ADR 0142, ADR 0143). The models are names; their order and repeats do not matter, and nor does
+ * the order of the rules, because `ops.provision_scope` hashes the set in one canonical form.
+ * Raises for a tenant never provisioned, for a name that is not a model's, and for a rule that is
+ * not one.
  */
 export async function provisionScope(
   exec: SqlExecutor,
   tenantId: string,
   models: readonly string[],
+  limits: readonly ScopeLimitInput[] = [],
 ): Promise<string> {
   const { rows } = await exec.query<{ login: string }>(
-    "SELECT ops.provision_scope($1, $2::text[]) AS login",
-    [tenantId, [...models]],
+    "SELECT ops.provision_scope($1, $2::text[], $3::jsonb) AS login",
+    [tenantId, [...models], JSON.stringify(limits)],
   );
   const login = rows[0]?.login;
   if (login === undefined) {

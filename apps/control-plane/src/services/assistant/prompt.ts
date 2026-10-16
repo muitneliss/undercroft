@@ -31,6 +31,12 @@ export interface PromptFacts {
    * promise a builder a button only an admin has.
    */
   readonly permissions: readonly Permission[];
+  /**
+   * What the reader can see of the customer's models (ADR 0143), from their own `scopes.preview`:
+   * so the model can say why a total is partial or a column refused, rather than call it missing
+   * data. `null` outside a customer.
+   */
+  readonly scope: ScopeSummary | null;
   readonly superadmin: boolean;
   /** Asia/Singapore, always -- see `.claude/rules/i18n.md` on why a locale never moves it. */
   readonly now: string;
@@ -98,6 +104,15 @@ const STANDING_INSTRUCTIONS: readonly string[] = [
   "NOT_FOUND, a dashboard tile listed as ungranted, or Postgres's 'permission denied for table'",
   "for a question over a model they do not reach. Say so; never call it missing data.",
   "",
+  "A grant on one model may also carry a row rule and hidden columns (scopes.preview shows",
+  "them). A reader whose rows of a table are limited sees only those rows, so a total over it",
+  "is the total of what they may see -- an answer names such tables in rowsLimited; say the",
+  "figure is partial, never that it is the table's. A hidden column is refused, not blanked:",
+  "naming it, or SELECT *, is refused as COLUMN_NOT_GRANTED; select the columns they may see.",
+  "Hiding is a list of what to hide, so a column a later build adds is visible until hidden. A",
+  "broken rule (it names a column the table no longer has) shows them no row of that table;",
+  "that is for someone who manages grants to fix, not a sign the table is empty.",
+  "",
   "Choosing which mailbox labels or Drive files may be read is a consent decision made in",
   "Google's own picker, not something you can set. Offer to open it instead.",
   "",
@@ -107,6 +122,68 @@ const STANDING_INSTRUCTIONS: readonly string[] = [
   "the evidence. When a tool returns rows, they are already shown to the reader as a table or a",
   "chart -- so say what they mean rather than re-listing them.",
 ];
+
+/** What a reader can see of the models, counted: the facts the prompt's scope sentence states. */
+export interface ScopeSummary {
+  /** Every model and reference table read whole (`model:*`). */
+  readonly whole: boolean;
+  readonly seen: number;
+  readonly total: number;
+  /** The models whose rows they see only some of. */
+  readonly rowsLimited: readonly string[];
+  /** Columns hidden from them, as `model.column`. */
+  readonly hidden: readonly string[];
+  /** The models whose row rule is broken, of which they therefore see no row. */
+  readonly broken: readonly string[];
+}
+
+/** The summary of a `scopes.preview` answer, as far as the prompt tells it. */
+export function scopeSummaryOf(preview: {
+  readonly models: {
+    readonly whole: boolean;
+    readonly total: number;
+    readonly reached: readonly {
+      readonly name: string;
+      readonly rows: readonly unknown[] | null;
+      readonly hidden: readonly string[];
+      readonly broken: unknown;
+    }[];
+  };
+}): ScopeSummary {
+  const { reached } = preview.models;
+  return {
+    whole: preview.models.whole,
+    seen: reached.length,
+    total: preview.models.total,
+    rowsLimited: reached.filter((model) => model.rows !== null).map((model) => model.name),
+    hidden: reached.flatMap((model) => model.hidden.map((column) => `${model.name}.${column}`)),
+    broken: reached.filter((model) => model.broken !== null).map((model) => model.name),
+  };
+}
+
+/**
+ * What the reader can see of the models, as a sentence the model can quote: "sees 12 of 40
+ * models; rows limited on fct_sales; 2 columns hidden (fct_people.salary, …)". Nothing past the
+ * count for a reader of every model whole, who is the usual case.
+ */
+function seen(scope: ScopeSummary): string {
+  if (scope.whole) {
+    return `They read every model and reference table whole (${String(scope.total)}).`;
+  }
+  const parts = [
+    `They read ${String(scope.seen)} of the ${String(scope.total)} models and reference tables`,
+  ];
+  if (scope.rowsLimited.length > 0) {
+    parts.push(`only some rows of ${scope.rowsLimited.join(", ")}`);
+  }
+  if (scope.hidden.length > 0) {
+    parts.push(`${String(scope.hidden.length)} columns hidden (${scope.hidden.join(", ")})`);
+  }
+  if (scope.broken.length > 0) {
+    parts.push(`no rows at all of ${scope.broken.join(", ")}, whose row rule is broken`);
+  }
+  return `${parts.join("; ")}.`;
+}
 
 /** What the reader holds, as a sentence the model can quote. `none` is a real answer. */
 function held(permissions: readonly Permission[]): string {
@@ -121,7 +198,8 @@ export function systemPrompt(facts: PromptFacts): string {
       : `The reader has ${facts.tenantId} open and holds the role "${facts.role ?? "none"}" ` +
         `in it, with these permissions there: ${held(facts.permissions)}. The permissions that ` +
         `exist are ${PERMISSIONS.join(", ")}; any member may read without one. Pass tenantId ` +
-        `"${facts.tenantId}" unless they name another customer.`;
+        `"${facts.tenantId}" unless they name another customer.` +
+        (facts.scope === null ? "" : ` ${seen(facts.scope)}`);
 
   return [
     `You are the assistant inside Undercroft, a data platform. Answer in ${LANGUAGE[facts.locale]}.`,

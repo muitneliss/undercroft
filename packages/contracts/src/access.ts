@@ -17,8 +17,10 @@
  *
  * Its own entry point rather than a line in `index.ts`, for the reason CLAUDE.md gives about
  * `@undercroft/core/locale`: the root barrel reaches `node:fs`, which a browser bundle refuses.
- * This file imports nothing.
+ * This file imports nothing but `rowRules.ts`, which imports nothing.
  */
+
+import { isWithin, type ModelLimit, type Narrowing } from "./rowRules.ts";
 
 /**
  * The roles every customer has, in order of how much each holds. A customer may define more of its
@@ -247,6 +249,13 @@ export interface Reach {
   readonly reports:
     | "all"
     | { readonly questions: readonly string[]; readonly dashboards: readonly string[] };
+  /**
+   * How much of a reached model the reader may read, for each model they read only part of (ADR
+   * 0143): some of its rows, some of its columns, or both. A reached model absent here is read
+   * whole, and so is every model when `models` is `"all"`: `model:*` carries no rule. Absent
+   * altogether is no limit on any model.
+   */
+  readonly limits?: readonly ModelLimit[];
 }
 
 /** Everything: what every built-in role reaches. */
@@ -288,11 +297,22 @@ export function reachesWhole(reach: Reach, domain: ReachDomain): boolean {
  * Whether `reach` covers everything `object` names: the subset rule's question for an object
  * grant (ADR 0141, ADR 0142). A wildcard is covered only by the same wildcard or a wider one, so
  * a person who reaches three models cannot grant `model:*`.
+ *
+ * For one model, `narrowing` is how much of it the grant gives -- its own rules, or what a role
+ * or a member reaches of it -- and it is covered only by a reach of that model at least as wide
+ * (`isWithin`, ADR 0143): a reader of Sales's rows cannot give anybody every row, nor a column
+ * they cannot see themselves. Without one, the grant gives the whole model.
  */
-export function covers(reach: Reach, object: ReachObject): boolean {
+export function covers(
+  reach: Reach,
+  object: ReachObject,
+  narrowing: Narrowing | null = null,
+): boolean {
   switch (object.domain) {
     case "model":
-      return object.name === null ? reach.models === "all" : reachesModel(reach, object.name);
+      return object.name === null
+        ? reach.models === "all"
+        : reachesModel(reach, object.name) && isWithin(narrowing, limitOf(reach, object.name));
     case "raw":
       if (object.source === null || reach.raw === "all") {
         return reach.raw === "all";
@@ -332,11 +352,39 @@ export function reachObjects(reach: Reach): string[] {
 
 /**
  * The objects of `involved` that `held` does not cover, in `reachObjects` order: empty when a
- * holder of `held` may give or take away everything `involved` reaches (ADR 0142).
+ * holder of `held` may give or take away everything `involved` reaches (ADR 0142). A model is
+ * weighed with as much of it as `involved` reaches (ADR 0143), so a reader of Sales's rows of
+ * `fct_sales` cannot make somebody a holder of a role that reads all of them.
  */
 export function unreached(held: Reach, involved: Reach): string[] {
   return reachObjects(involved).filter((object) => {
     const parsed = parseReachObject(object);
-    return parsed === null || !covers(held, parsed);
+    if (parsed === null) {
+      return true;
+    }
+    const narrowing =
+      parsed.domain === "model" && parsed.name !== null ? limitOf(involved, parsed.name) : null;
+    return !covers(held, parsed, narrowing);
   });
+}
+
+// -- how much of a model a reach reads (ADR 0143); the rule algebra is `rowRules.ts` --------
+
+/** How much of `model` a reach reads: `null` for the whole model (or one it does not reach). */
+export function limitOf(reach: Reach, model: string): Narrowing | null {
+  if (reach.models === "all") {
+    return null;
+  }
+  const found = reach.limits?.find((limit) => limit.model === model);
+  return found === undefined ? null : { rows: found.rows, hidden: found.hidden };
+}
+
+/** Whether a reader of `reach` sees only some of `model`'s rows: a total over it is partial. */
+export function rowsLimited(reach: Reach, model: string): boolean {
+  return (limitOf(reach, model)?.rows ?? null) !== null;
+}
+
+/** The columns of `model` a reader of `reach` may not read. */
+export function hiddenColumns(reach: Reach, model: string): readonly string[] {
+  return limitOf(reach, model)?.hidden ?? [];
 }

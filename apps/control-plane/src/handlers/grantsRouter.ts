@@ -17,6 +17,7 @@
  */
 
 import type { TRPCError } from "@trpc/server";
+import { HiddenColumnsShape, RowRuleShape } from "@undercroft/contracts";
 import { PERMISSIONS } from "@undercroft/contracts/access";
 import type { Locale } from "@undercroft/core";
 import { z } from "zod";
@@ -24,6 +25,7 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import { holds } from "../services/authz.ts";
 import * as grants from "../services/grants.ts";
+import { holdingFor } from "../services/grantSubjects.ts";
 import { noSuchRoleRefusal, notHeldRefusal, notMemberRefusal } from "./accessRefusals.ts";
 import { Email, Role } from "./inputs.ts";
 import { permissionRefusal, requirePermission } from "./permissionGate.ts";
@@ -53,6 +55,36 @@ function subjectRefusal(
   }
 }
 
+/** A refusal about a grant's rules (ADR 0143), or about the grant changing while it was saved. */
+type RuleOutcome = Extract<
+  grants.SaveOutcome,
+  { readonly reason: "rules-need-one-model" | "eq-one-value" | "unknown-column" | "changed" }
+>;
+
+function ruleRefusal(locale: Locale, outcome: RuleOutcome): TRPCError {
+  const t = messages(locale);
+  switch (outcome.reason) {
+    case "rules-need-one-model":
+      return refusal("BAD_REQUEST", t("error.grantRulesOneModel"), {
+        reason: "RULES_NEED_ONE_MODEL",
+      });
+    case "eq-one-value":
+      return refusal("BAD_REQUEST", t("error.ruleEqualsOne"), { reason: "RULE_SHAPE" });
+    case "unknown-column":
+      return refusal(
+        "BAD_REQUEST",
+        t(outcome.known.length === 0 ? "error.grantNoColumnsYet" : "error.grantUnknownColumn", {
+          model: outcome.model,
+          columns: outcome.unknown.join(", "),
+          known: outcome.known.join(", "),
+        }),
+        { reason: "COLUMN_NOT_FOUND", model: outcome.model, columns: outcome.unknown.join(",") },
+      );
+    default:
+      return refusal("CONFLICT", t("error.grantChanged"), { reason: "GRANT_CHANGED" });
+  }
+}
+
 export const grantsRouter = router({
   /**
    * Every grant in the customer, expired ones included and marked, or the grants to one role or
@@ -70,8 +102,12 @@ export const grantsRouter = router({
 
   /**
    * Give a permission to a role or a member, standing or until `expiresAt` (an ISO 8601 moment
-   * with its offset). The same grant stored already has its expiry moved; an identical one is
-   * `unchanged: true`. Refused for a permission the caller does not hold.
+   * with its offset). The same grant stored already has its expiry and rules replaced; an
+   * identical one is `unchanged: true`. Refused for a permission the caller does not hold.
+   *
+   * A grant on one model may carry `rowRule` -- conditions a row must all meet -- and
+   * `hiddenColumns` (ADR 0143), each naming the model's columns as its last build found them; the
+   * caller must reach at least as much of the model as the rule gives.
    */
   save: requirePermission("roles:manage")
     .input(
@@ -80,6 +116,8 @@ export const grantsRouter = router({
         permission: z.enum(PERMISSIONS).optional(),
         object: z.string().trim().min(1).max(MAX_OBJECT_CHARS).optional(),
         expiresAt: z.string().datetime({ offset: true }).nullable().default(null),
+        rowRule: RowRuleShape.optional(),
+        hiddenColumns: HiddenColumnsShape.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -89,6 +127,8 @@ export const grantsRouter = router({
         email: input.email,
         permission: input.permission,
         object: input.object,
+        rowRule: input.rowRule,
+        hiddenColumns: input.hiddenColumns,
         expiresAt: input.expiresAt,
         held: { permissions: ctx.permissions, reach: ctx.reach },
         now: new Date(),
@@ -124,6 +164,11 @@ export const grantsRouter = router({
             t("error.grantExpiryPassed", { expiresAt: input.expiresAt ?? "" }),
             { reason: "EXPIRY_PASSED", expiresAt: input.expiresAt },
           );
+        case "rules-need-one-model":
+        case "eq-one-value":
+        case "unknown-column":
+        case "changed":
+          throw ruleRefusal(ctx.locale, outcome);
         default:
           throw subjectRefusal(ctx, outcome.reason, input);
       }
@@ -162,7 +207,7 @@ export const grantsRouter = router({
     if ((input.role !== undefined || input.email !== undefined) && !holds(ctx, "people:manage")) {
       throw permissionRefusal(ctx, "people:manage");
     }
-    const outcome = await grants.holdingFor(ctx.exec, {
+    const outcome = await holdingFor(ctx.exec, {
       tenantId: ctx.tenantId,
       role: input.role,
       email: input.email,

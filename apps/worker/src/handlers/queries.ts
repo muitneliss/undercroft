@@ -9,7 +9,10 @@
  *
  * WHICH LOGIN IS THE ROUTE'S, never a field's. `/v1/queries/run` and `/schema` answer as the
  * customer's BI login; `/v1/queries/scoped/…` as the scope login of the models the request names,
- * for a reader who reaches only those; `/v1/queries/raw/…` as the build login, which reads `raw`;
+ * for a reader who reaches only those; `/v1/queries/limited/…` the same, for a scope that also
+ * limits rows or columns (ADR 0143) -- a route of its own because a worker older than rules would
+ * strip them and answer as a login that reads every row; `/v1/queries/raw/…` as the build login,
+ * which reads `raw`;
  * `raw/search/within` searches only the streams it is given. A control plane newer than this
  * worker sends a narrowed read only to the narrowed route, which an older worker does not have
  * and answers 404 -- where a field it did not know would have been stripped, and the read
@@ -90,8 +93,8 @@ const SQL = "tenantId and sql are required";
 const TENANT = "tenantId is required";
 
 /**
- * Every query route, by the login it answers as. The scoped two answer as the scope login of the
- * models the request names; the raw four as the build login, which the control plane admits only
+ * Every query route, by the login it answers as. The scoped and limited four answer as the scope
+ * login of the models and rules the request names; the raw four as the build login, which the control plane admits only
  * a reader of the whole lake to -- or, for `within`, searches only the streams it is given.
  */
 const QUERY_ROUTES: readonly Registration[] = [
@@ -99,6 +102,8 @@ const QUERY_ROUTES: readonly Registration[] = [
   route("/v1/queries/scoped/run", ScopedRunQueryRequest, `${SQL}, with a scope`, runQuery),
   route("/v1/queries/schema", TenantOnly, TENANT, readSchema),
   route("/v1/queries/scoped/schema", ScopedSchemaRequest, `${TENANT}, with a scope`, readSchema),
+  route("/v1/queries/limited/run", ScopedRunQueryRequest, `${SQL}, with a scope`, runQuery),
+  route("/v1/queries/limited/schema", ScopedSchemaRequest, `${TENANT}, with a scope`, readSchema),
   route("/v1/queries/raw/run", RunQueryRequest, SQL, runRawQuery),
   route("/v1/queries/raw/schema", TenantOnly, TENANT, readRawSchema),
   route("/v1/queries/raw/search", RawSearchRequest, "tenantId and q are required", searchRaw),

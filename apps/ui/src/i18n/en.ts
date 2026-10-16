@@ -466,6 +466,7 @@ export const en = {
       grants_save: "Granted a permission",
       grants_delete: "Took a grant away",
       grants_reach: "Read what someone may do and see",
+      scopes_preview: "Previewed what someone can see, rows and columns included",
       audit_mine: "Read their own activity",
       audit_tenant: "Read a customer's activity",
       audit_all: "Read the platform's activity",
@@ -953,6 +954,54 @@ export const en = {
     adding: "Granting…",
     added: "Granted.",
     notAdded: "The permission was not granted",
+    choose: "Choose…",
+  },
+
+  grantRules: {
+    rowsHead: "Only rows where",
+    rowsNone: "No condition yet: whoever is granted this sees every row.",
+    rowsHint:
+      "A row must meet every condition here. A value is compared as the column's own type; an empty cell (NULL) never matches.",
+    columnLabel: "Column",
+    opLabel: "Compare",
+    opEq: "equals",
+    opIn: "is one of",
+    valueLabel: "Value",
+    valuesLabel: "Values, one to a line",
+    addCondition: "Add a condition",
+    removeCondition: "Remove condition",
+    hiddenHead: "Hide columns",
+    hiddenHint:
+      "A hidden column is refused when queried, SELECT * included, never left blank. Hiding is a list of what to hide: a column a later build adds is visible until it is hidden.",
+    noColumns:
+      "{{name}} has no columns on record because it has not built successfully yet, so no row rule or hidden column can be set. Build it first.",
+    incomplete:
+      "Every condition needs at least one value, and an equals condition exactly one. A half-written condition is not skipped, because that would grant more rows than you meant.",
+    eqWords: "{{column}} = {{value}}",
+    inWords: "{{column}} is one of {{values}}",
+    grouped: "({{rule}})",
+    everyRow: "every row",
+    onlyRows: "Only rows where {{rule}}",
+    hides: "Hides: {{columns}}",
+  },
+
+  scopePreview: {
+    label: "What they can see",
+    head: "They can see now",
+    everyModel_one: "Every model and reference table ({{count, number}}), whole.",
+    everyModel_other: "Every model and reference table ({{count, number}}), whole.",
+    someModels_one: "{{count, number}} of {{total, number}} models and reference tables.",
+    someModels_other: "{{count, number}} of {{total, number}} models and reference tables.",
+    limited: "{{model}}: {{rows}}; hidden columns: {{hidden}}.",
+    noneHidden: "none",
+    brokenColumn:
+      "{{model}}: the row rule names {{columns}}, which the table no longer has, so they see no row of it. Fix or take away the rule.",
+    brokenValue:
+      "{{model}}: a value of the row rule is not of its column's type, so they see no row of it. Fix the rule.",
+    brokenNotTable:
+      "{{model}} is a materialised view, which cannot limit rows, so they read none of it.",
+    newColumns:
+      "Hiding is a list of what to hide: a column a later build adds is visible until it is hidden.",
   },
 
   grantObjects: {
@@ -1940,6 +1989,8 @@ export const en = {
       "{{table}} is the last passing version, from run {{runId}}; the current build, run {{heldRunId}}, is failing and was not published.",
     qualifierHeldNoVersion:
       "The current build of {{table}}, run {{heldRunId}}, is failing and was not published.",
+    rowsLimited:
+      "Your access includes only some rows of {{tables}}, so the figures here are of the rows you may see, not of the whole table.",
     qualifiersNotKnown: "The test state of the tables this answer read is not known.",
     viewerNote: "You can read and run this question. Editing and saving need the member role.",
     viewerNew: "Asking a new question needs the member role.",

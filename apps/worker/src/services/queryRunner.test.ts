@@ -250,7 +250,7 @@ describe("a read under a scope (ADR 0142)", () => {
   });
 
   it("answers from the scope's tables, and is refused another in Postgres's words", async () => {
-    const scope = { models: ["stg_deals"] };
+    const scope = { models: ["stg_deals"], limits: [] };
 
     const own = await runQuery(deps, {
       tenantId: TENANT,
@@ -278,10 +278,64 @@ describe("a read under a scope (ADR 0142)", () => {
   });
 
   it("lists only the scope's tables in its schema, and the BI login lists every one", async () => {
-    const scoped = await readSchema(deps, { tenantId: TENANT, scope: { models: ["stg_deals"] } });
+    const scoped = await readSchema(deps, {
+      tenantId: TENANT,
+      scope: { models: ["stg_deals"], limits: [] },
+    });
     const whole = await readSchema(deps, { tenantId: TENANT, scope: null });
 
     expect(scoped.tables.map((table) => table.name)).toEqual(["stg_deals"]);
     expect(whole.tables.map((table) => table.name)).toEqual(["stg_deals", "stg_other"]);
+  });
+});
+
+describe("a read under a scope with rules (ADR 0143)", () => {
+  const limited = {
+    models: ["stg_deals"],
+    limits: [
+      {
+        model: "stg_deals",
+        rows: [[{ column: "deal_name", op: "in" as const, values: ["Acme", "Globex"] }]],
+        hidden: ["amount"],
+      },
+    ],
+  };
+
+  it("answers only the rule's rows, and refuses the hidden column rather than blanking it", async () => {
+    const rows = await runQuery(deps, {
+      tenantId: TENANT,
+      sql: "select deal_id from stg_deals order by deal_id",
+      limit: 10,
+      scope: limited,
+    });
+    const hidden = await refusal(() =>
+      runQuery(deps, {
+        tenantId: TENANT,
+        sql: "select * from stg_deals",
+        limit: 10,
+        scope: limited,
+      }),
+    );
+
+    // Deal 3 has no name: NULL meets no condition, so it is not among the rule's rows.
+    expect(rows.rows).toEqual([[1], [2]]);
+    // The plan under the row policy still names the table read, which the answer's
+    // "rows limited" qualifier is decided from (ADR 0129, ADR 0143).
+    expect(rows.relations).toEqual(["stg_deals"]);
+    expect(hidden).toMatch(/permission denied for table stg_deals/u);
+  });
+
+  it("lists the table without its hidden column in the schema bi.schema reads", async () => {
+    const scoped = await readSchema(deps, { tenantId: TENANT, scope: limited });
+
+    expect(scoped.tables).toEqual([
+      {
+        name: "stg_deals",
+        columns: [
+          { name: "deal_id", type: "integer" },
+          { name: "deal_name", type: "text" },
+        ],
+      },
+    ]);
   });
 });

@@ -79,6 +79,8 @@ export const procedureSentences: SentenceTable = {
     "Thu lại một quyền đã trao, theo id. Chỉ với quyền chính bạn đang giữ, hoặc thứ chính bạn xem được.",
   "grants.reach":
     'Những gì một vai trò (role), một thành viên (email) hay -- không nêu ai -- chính bạn làm được và xem được: permissions, và reach gồm models, raw, reports, mỗi phần là "all" hoặc các thứ được nêu tên. Hỏi trước và sau khi trao. Hỏi về người khác hay một vai trò cần people:manage.',
+  "scopes.preview":
+    "Những gì một vai trò (role), một thành viên (email) hay -- không nêu ai -- chính bạn xem được, đã quy ra cụ thể: permissions; mọi model và bảng tham chiếu xem được, mỗi cái kèm rows (null là mọi dòng, ngược lại là các dòng thoả ít nhất một quy tắc), hidden (các cột bị từ chối, không bao giờ để trống), và broken khi một quy tắc theo dòng nhắc đến cột mà bảng không còn -- khi đó người ấy không thấy dòng nào của bảng; cùng các luồng dữ liệu thô và báo cáo xem được. Ẩn cột là danh sách những gì cần ẩn: một cột do lần dựng sau thêm vào sẽ hiện cho đến khi được ẩn. Hỏi trước và sau khi trao. Hỏi về người khác hay một vai trò cần people:manage.",
   "audit.mine":
     "Các thao tác của chính bạn, mới nhất trước: đã làm gì, qua đâu, và kết quả ra sao.",
   "audit.tenant": "Mọi thao tác trong khách hàng, của bất kỳ ai, mới nhất trước.",

@@ -188,6 +188,7 @@ const ANSWERS: Readonly<Record<string, QualifiedAnswer>> = {
     rows: MONTHS.map((month, index) => [month, MONTHLY[index] ?? null]),
     truncated: false,
     qualifiers: [],
+    rowsLimited: [],
   },
   [QUESTION_ID.segment]: {
     columns: [
@@ -200,6 +201,7 @@ const ANSWERS: Readonly<Record<string, QualifiedAnswer>> = {
     ],
     truncated: false,
     qualifiers: [],
+    rowsLimited: [],
   },
 };
 

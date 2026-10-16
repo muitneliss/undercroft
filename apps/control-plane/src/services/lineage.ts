@@ -8,7 +8,7 @@
  * the reader reaches.
  */
 
-import { type Reach, reachesModel } from "@undercroft/contracts/access";
+import { type Reach, reachesModel, rowsLimited } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import { listMacros, listModels, listSeedSummaries } from "@undercroft/db/repos";
 import {
@@ -22,14 +22,38 @@ import {
 
 import { type PageRequest, pageAsked, pageBoth } from "./listPage.ts";
 
+/**
+ * A lineage as a reader reads it: the graph, and which of its models they see only some rows of
+ * (ADR 0143) -- so a reader following a figure upstream knows where it became partial. Present
+ * only when there is one: the answer of a reader whose rows nothing limits is the graph alone, as
+ * it was before rules existed.
+ */
+export interface ReaderLineage extends Lineage {
+  readonly rowsLimited?: readonly string[];
+}
+
+/** The models and reference tables among `nodes` of which `reach` sees only some rows. */
+function limitedIn(nodes: Lineage["nodes"], reach: Reach): string[] {
+  return nodes
+    .filter(
+      (node) => (node.kind === "model" || node.kind === "seed") && rowsLimited(reach, node.name),
+    )
+    .map((node) => node.name);
+}
+
+/** The graph, with `rowsLimited` when any of its models is row-limited for the reader. */
+function withLimits<T extends Lineage>(graph: T, limited: readonly string[]): T & ReaderLineage {
+  return limited.length === 0 ? graph : { ...graph, rowsLimited: limited };
+}
+
 /** One page of a lineage: at most `limit` nodes and `limit` edges, and where the next starts. */
-export interface LineagePage extends Lineage {
+export interface LineagePage extends ReaderLineage {
   /** `null` once every node and every edge has been on a page. */
   readonly nextCursor: string | null;
 }
 
 export type LineageAnswer =
-  | { readonly ok: true; readonly value: Lineage | LineagePage }
+  | { readonly ok: true; readonly value: ReaderLineage | LineagePage }
   /** `unknown-name`: the target names no node of the graph. `unknown-cursor`: `listPage.ts`. */
   | { readonly ok: false; readonly reason: "unknown-name" | "unknown-cursor" };
 
@@ -70,7 +94,7 @@ export async function lineage(
   }
   const asked = pageAsked(page);
   if (asked === null) {
-    return { ok: true, value: part };
+    return { ok: true, value: withLimits(part, limitedIn(part.nodes, reach)) };
   }
   const paged = pageBoth(
     { items: part.nodes, keyOf: (node) => node.id },
@@ -81,7 +105,13 @@ export async function lineage(
     return paged;
   }
   const [nodes, edges] = paged.value.items;
-  return { ok: true, value: { nodes, edges, nextCursor: paged.value.nextCursor } };
+  return {
+    ok: true,
+    value: withLimits(
+      { nodes, edges, nextCursor: paged.value.nextCursor },
+      limitedIn(nodes, reach),
+    ),
+  };
 }
 
 /**

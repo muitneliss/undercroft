@@ -23,6 +23,7 @@ import { macrosRouter } from "./macrosRouter.ts";
 import { seedsRouter } from "./seedsRouter.ts";
 import { modelsRouter } from "./modelsRouter.ts";
 import { grantsRouter } from "./grantsRouter.ts";
+import { scopesRouter } from "./scopesRouter.ts";
 import { peopleRouter } from "./peopleRouter.ts";
 import { rolesRouter } from "./rolesRouter.ts";
 import { tenantsRouter } from "./tenantsRouter.ts";
@@ -145,6 +146,8 @@ export const appRouter = router({
    */
   roles: rolesRouter,
   grants: grantsRouter,
+  /** What a person can see, resolved: every model they read, its rules, and the broken ones (ADR 0143). */
+  scopes: scopesRouter,
 
   /** Who did what: a person's own actions, a tenant's for its admin, all for a superadmin. */
   audit: auditRouter,

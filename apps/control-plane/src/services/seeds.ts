@@ -27,7 +27,7 @@
  */
 
 import { type SeedColumn, type SeedRefusal, seedRefusal } from "@undercroft/contracts";
-import { type Reach, reachesModel } from "@undercroft/contracts/access";
+import { hiddenColumns, type Reach, reachesModel, rowsLimited } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   deleteSeedUnlessBuilding,
@@ -44,6 +44,7 @@ import {
 } from "@undercroft/db/repos";
 import { checkTests, modelLineage } from "@undercroft/db/services";
 
+import { shownColumns } from "./columnsShown.ts";
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { mapNarrowed, type NameFilter, type Narrowed, narrowByName } from "./listFilter.ts";
 import type { WorkerClient } from "./workerClient.ts";
@@ -67,6 +68,13 @@ export type SeedDetail = SeedItem & {
   /** As stored, which is as `seeds.save` admitted them: each type one of `SEED_COLUMN_TYPES`. */
   readonly columns: readonly SeedColumnJson[];
   readonly rows: readonly (readonly (string | null)[])[];
+  /**
+   * Whether the reader may see only some of the table's rows (ADR 0143), in which case `rows` is
+   * empty: which rows they may see is the database's to decide, by the column's own type, and a
+   * filter written here would be a second reading of the rule that could disagree with it. They
+   * read them through Reports, as their scope login.
+   */
+  readonly rowsWithheld: boolean;
 };
 
 function item(seed: SeedSummary): SeedItem {
@@ -107,7 +115,24 @@ export async function get(
   reach: Reach,
 ): Promise<SeedDetail | null> {
   const seed = reachesModel(reach, name) ? await getSeed(exec, tenantId, name) : null;
-  return seed === null ? null : { ...item(seed), columns: seed.columns, rows: seed.rows };
+  if (seed === null) {
+    return null;
+  }
+  // Hidden columns are left out, cells and all (ADR 0143); with a row rule no row is shown here.
+  const shown = shownColumns(
+    seed.columns.map((column) => column.name),
+    hiddenColumns(reach, name),
+  );
+  const kept = seed.columns.flatMap((column, index) =>
+    shown.includes(column.name) ? [index] : [],
+  );
+  const withheld = rowsLimited(reach, name);
+  return {
+    ...item(seed),
+    columns: kept.map((index) => seed.columns[index]).filter((column) => column !== undefined),
+    rows: withheld ? [] : seed.rows.map((row) => kept.map((index) => row[index] ?? null)),
+    rowsWithheld: withheld,
+  };
 }
 
 export type SaveOutcome =

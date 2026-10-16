@@ -35,6 +35,7 @@ import {
   type QuestionDefinition,
 } from "@undercroft/contracts";
 import { type Reach, reachesReport } from "@undercroft/contracts/access";
+import type { ModelLimit } from "@undercroft/contracts/rowRules";
 import type { SqlExecutor } from "@undercroft/db";
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
@@ -46,6 +47,8 @@ import {
   updateDashboard,
 } from "../repos/biDashboards.ts";
 import {
+  type ColumnNotGranted,
+  columnNotGranted,
   type NoPassingVersion,
   noPassingVersion,
   type QualifiedAnswer,
@@ -71,12 +74,29 @@ export interface DashboardView {
 }
 
 /**
- * The scope a reader's SQL runs under: `null` when they reach every model, and the BI login reads
- * for them; otherwise the models they reach, which the worker reads as the scope login for
- * exactly those (ADR 0142). An empty list is a real scope -- a login that reads no table.
+ * The scope a reader's SQL runs under: `null` when they reach every model whole, and the BI login
+ * reads for them; otherwise the models they reach and how much of each (ADR 0142, ADR 0143),
+ * which the worker reads as the scope login for exactly those -- its tables, its columns, its
+ * rows. An empty list is a real scope -- a login that reads no table.
  */
 export function scopeOf(reach: Reach): QueryScope | null {
-  return reach.models === "all" ? null : { models: [...reach.models] };
+  return reach.models === "all"
+    ? null
+    : { models: [...reach.models], limits: scopeLimits(reach.limits ?? []) };
+}
+
+/** Limits as the wire carries them: the same values, in arrays of their own. */
+export function scopeLimits(limits: readonly ModelLimit[]): QueryScope["limits"] {
+  return limits.map((limit) => ({
+    model: limit.model,
+    rows:
+      limit.rows === null
+        ? null
+        : limit.rows.map((rule) =>
+            rule.map((condition) => ({ ...condition, values: [...condition.values] })),
+          ),
+    hidden: [...limit.hidden],
+  }));
 }
 
 /** The analytics schema, narrowed to what `filter` names (`tableSchema.ts`); whole without one. */
@@ -102,7 +122,9 @@ export type AnswerOutcome =
   | { readonly ok: false; readonly reason: "param-missing"; readonly param: string }
   | { readonly ok: false; readonly reason: "question-not-found" }
   /** The query read a model whose first build was held back: nothing of it is published. */
-  | ({ readonly ok: false; readonly reason: "no-passing-version" } & NoPassingVersion);
+  | ({ readonly ok: false; readonly reason: "no-passing-version" } & NoPassingVersion)
+  /** The query named a column the reader's grants hide, or read one with `*` (ADR 0143). */
+  | ({ readonly ok: false; readonly reason: "column-not-granted" } & ColumnNotGranted);
 
 /**
  * Answer a definition with the dashboard's (or the URL's) values bound in.
@@ -142,15 +164,19 @@ export async function answer(
     scope: scopeOf(input.reach),
   });
   if (!outcome.ok) {
-    const unpublished =
-      outcome.reason === "query-failed"
-        ? await noPassingVersion(exec, input.tenantId, outcome.message)
-        : null;
+    if (outcome.reason !== "query-failed") {
+      return outcome;
+    }
+    const hidden = columnNotGranted(outcome.message, input.reach);
+    if (hidden !== null) {
+      return { ok: false, reason: "column-not-granted", ...hidden };
+    }
+    const unpublished = await noPassingVersion(exec, input.tenantId, outcome.message);
     return unpublished === null
       ? outcome
       : { ok: false, reason: "no-passing-version", ...unpublished };
   }
-  return { ok: true, value: await qualify(exec, input.tenantId, outcome.value) };
+  return { ok: true, value: await qualify(exec, input.tenantId, outcome.value, input.reach) };
 }
 
 /**

@@ -14,8 +14,9 @@ Every permission check and every refusal the web UI has applies to you unchanged
 person may do in a customer is a set of permissions -- those their role holds, built-in or one
 the customer defined, and any granted to them -- and what they may read is their reach: every
 model, raw stream and report for a built-in role, only what is granted for one the customer
-defined. Read `references/access-control.md` for the catalogue, the roles, grants, objects and
-how to check the person's own with `grants.reach` before you plan a write. A request to change who may do what is the `undercroft-access-control` workflow.
+defined -- and, on a model, only some rows or not some columns when a grant says so. Read
+`references/access-control.md` for the catalogue, the roles, grants, objects and rules, and how to
+check the person's own with `grants.reach` and `scopes.preview` before you plan a write. A request to change who may do what is the `undercroft-access-control` workflow.
 
 ## Words the platform uses
 

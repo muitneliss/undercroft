@@ -23,7 +23,7 @@ import {
   ModelTests,
   type TableResult,
 } from "@undercroft/contracts";
-import { type Reach, reachesModel } from "@undercroft/contracts/access";
+import { hiddenColumns, type Reach, reachesModel } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   deleteModelUnlessBuilding,
@@ -39,6 +39,7 @@ import {
 } from "@undercroft/db/repos";
 import type { DependsOn, Finding } from "@undercroft/db/services";
 
+import { shownColumns, shownTests } from "./columnsShown.ts";
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { dependsOnOf } from "./lineage.ts";
 import {
@@ -137,11 +138,13 @@ function facts(model: Model): ModelFacts {
   };
 }
 
-function buildOf(model: Model, built: LastBuild): BuildWithColumns {
+/** A build with the columns the reader is shown (`columnsShown.ts`), and their count. */
+function buildOf(model: Model, built: LastBuild, hidden: readonly string[]): BuildWithColumns {
+  const columns = shownColumns(model.columns, hidden);
   return {
     ...built,
-    columnCount: model.columns.length === 0 ? null : model.columns.length,
-    columns: model.columns,
+    columnCount: model.columns.length === 0 ? null : columns.length,
+    columns,
   };
 }
 
@@ -149,16 +152,16 @@ function summaryOf(
   model: Model,
   built: LastBuild | undefined,
   tests: TestDetail,
-  columns: boolean,
+  shown: { readonly columns: boolean; readonly hidden: readonly string[] },
 ): ModelItem {
   const lastTests = testSummaryOf(tests);
   if (built === undefined) {
     return { ...facts(model), lastBuild: null, lastTests };
   }
-  const { columns: found, ...summary } = buildOf(model, built);
+  const { columns: found, ...summary } = buildOf(model, built, shown.hidden);
   return {
     ...facts(model),
-    lastBuild: columns ? { ...summary, columns: found } : summary,
+    lastBuild: shown.columns ? { ...summary, columns: found } : summary,
     lastTests,
   };
 }
@@ -197,7 +200,10 @@ export async function list(
     mapNarrowed(
       narrowByName(models, (m) => m.name, request),
       (m) => {
-        const item = summaryOf(m, builds.get(m.name), tests(m.name), columns);
+        const item = summaryOf(m, builds.get(m.name), tests(m.name), {
+          columns,
+          hidden: hiddenColumns(reach, m.name),
+        });
         const dependsOn = reads?.get(m.name);
         return dependsOn === undefined ? item : { ...item, dependsOn };
       },
@@ -223,14 +229,15 @@ export async function get(
     readTestStates(exec, tenantId, [name]),
   ]);
   const built = builds.get(name);
+  const hidden = hiddenColumns(reach, name);
   return {
     ...facts(model),
-    lastBuild: built === undefined ? null : buildOf(model, built),
+    lastBuild: built === undefined ? null : buildOf(model, built, hidden),
     lastTests: tests(name),
     sql: model.sql,
     // Re-validated on the way out rather than asserted: the row's shape is the contract's
     // by construction, and a parse says so where an assertion would only claim it.
-    tests: ModelTests.parse(model.tests),
+    tests: shownTests(ModelTests.parse(model.tests), hidden),
   };
 }
 

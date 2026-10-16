@@ -451,3 +451,200 @@ describe.skipIf(!ENABLED)("a scope login, against real Postgres (ADR 0142)", () 
     }
   });
 });
+
+describe.skipIf(!ENABLED)(
+  "a scope login's row and column rules, against real Postgres (ADR 0143)",
+  () => {
+    const PEOPLE = "analytics_case_itest.itest_people";
+    const SALES = {
+      model: "itest_people",
+      rows: [[{ column: "dept", op: "eq", values: ["Sales"] }]],
+      hidden: ["salary"],
+    };
+    const SUPPORT = {
+      model: "itest_people",
+      rows: [[{ column: "dept", op: "eq", values: ["Support"] }]],
+      hidden: [],
+    };
+    const BROKEN = {
+      model: "itest_people",
+      rows: [[{ column: "region", op: "eq", values: ["north"] }]],
+      hidden: [],
+    };
+
+    /** The tenant as a deploy and a build leave it, with a table some readers see only part of. */
+    async function prepared(): Promise<{
+      exec: ReturnType<typeof asExecutor>;
+      end: () => Promise<void>;
+    }> {
+      const env = composeEnv();
+      const admin = new pg.Pool({ ...connection().admin, max: 2 });
+      const exec = asExecutor(admin);
+      await migrate(exec);
+      await setRolePassword(exec, "undercroft_worker", env.UNDERCROFT_WORKER_PG_PASSWORD ?? "");
+      await exec.query("INSERT INTO ops.tenant (id) VALUES ($1) ON CONFLICT (id) DO NOTHING", [
+        TENANT,
+      ]);
+      await provisionTenantRoles(exec, TENANT);
+      await exec.exec(`
+      BEGIN;
+      SET LOCAL ROLE undercroft_dbt_case_itest;
+      DROP TABLE IF EXISTS ${PEOPLE}, staging_case_itest.itest_people;
+      CREATE TABLE ${PEOPLE} AS
+        SELECT * FROM (VALUES ('Sales', 1, 1000), ('Support', 2, 2000), (NULL, 3, 3000))
+          AS v(dept, region_id, salary);
+      COMMIT;`);
+      return { exec, end: () => admin.end() };
+    }
+
+    /** A direct connection as the scope login for `limits`, its password leased. */
+    async function scopedAs(
+      exec: ReturnType<typeof asExecutor>,
+      limits: Parameters<typeof provisionScope>[3],
+    ): Promise<{ login: string; client: pg.Client }> {
+      const login = await provisionScope(exec, TENANT, ["itest_people"], limits);
+      const password = await rotateTenantPassword(exec, TENANT, { kind: "scope", login }, HOUR_MS);
+      const client = direct(login, password);
+      await client.connect();
+      return { login, client };
+    }
+
+    async function depts(client: pg.Client): Promise<(string | null)[]> {
+      const { rows } = await client.query<{ dept: string | null }>(
+        `SELECT dept FROM ${PEOPLE} ORDER BY region_id`,
+      );
+      return rows.map((row) => row.dept);
+    }
+
+    it("shows a ruled login its rows only, refuses its hidden column, and RESET ROLE nor set_config widen it", async () => {
+      const { exec, end } = await prepared();
+      try {
+        const { client } = await scopedAs(exec, [SALES]);
+        const bi = direct(
+          "undercroft_bi_case_itest",
+          await rotateTenantPassword(exec, TENANT, "bi", HOUR_MS),
+        );
+        await bi.connect();
+        try {
+          expect(await depts(client)).toEqual(["Sales"]);
+
+          await client.query("RESET ROLE");
+          await client.query("SELECT set_config('undercroft.scope', 'all', false)");
+          expect(await depts(client)).toEqual(["Sales"]);
+          // Turning row security off does not lift a policy for a login it applies to: Postgres
+          // refuses the query instead of answering it whole.
+          await client.query("SET row_security = off");
+          expect(await refusalOf(() => depts(client))).toMatch(/row-level security/iu);
+          await client.query("RESET row_security");
+          expect(await refusalOf(() => client.query(`SELECT salary FROM ${PEOPLE}`))).toMatch(
+            DENIED,
+          );
+          expect(await refusalOf(() => client.query(`SELECT * FROM ${PEOPLE}`))).toMatch(DENIED);
+          const columns = await client.query<{ column_name: string }>(
+            `SELECT column_name FROM information_schema.columns
+           WHERE table_schema = 'analytics_case_itest' AND table_name = 'itest_people' ORDER BY 1`,
+          );
+          expect(columns.rows.map((row) => row.column_name)).toEqual(["dept", "region_id"]);
+
+          // The customer's own BI login reads every row and every column, as before.
+          expect(await depts(bi)).toEqual(["Sales", "Support", null]);
+          const salaries = await bi.query<{ n: string }>(
+            `SELECT sum(salary)::text AS n FROM ${PEOPLE}`,
+          );
+          expect(salaries.rows).toEqual([{ n: "6000" }]);
+        } finally {
+          await Promise.all([client.end(), bi.end()]);
+        }
+      } finally {
+        await end();
+      }
+    });
+
+    it("gives two scopes their own rows of one table, and a rule naming a dropped column no row", async () => {
+      const { exec, end } = await prepared();
+      try {
+        const sales = await scopedAs(exec, [SALES]);
+        const support = await scopedAs(exec, [SUPPORT]);
+        const broken = await scopedAs(exec, [BROKEN]);
+        try {
+          expect(sales.login).not.toBe(support.login);
+          expect(await depts(sales.client)).toEqual(["Sales"]);
+          expect(await depts(support.client)).toEqual(["Support"]);
+          expect(await depts(broken.client)).toEqual([]);
+        } finally {
+          await Promise.all([sales.client.end(), support.client.end(), broken.client.end()]);
+        }
+      } finally {
+        await end();
+      }
+    });
+
+    it("is admitted by the pooler and reads only its rows there too", async () => {
+      const { exec, end } = await prepared();
+      try {
+        const login = await provisionScope(exec, TENANT, ["itest_people"], [SUPPORT]);
+        const password = await rotateTenantPassword(
+          exec,
+          TENANT,
+          { kind: "scope", login },
+          HOUR_MS,
+        );
+        const env = composeEnv();
+        const pooled = new pg.Client({
+          host: "127.0.0.1",
+          port: Number.parseInt(env.UNDERCROFT_PORT_PGBOUNCER ?? "16432", 10),
+          database: env.UNDERCROFT_PG_DB ?? "undercroft",
+          user: login,
+          password,
+          connectionTimeoutMillis: 10_000,
+        });
+        await pooled.connect();
+        try {
+          expect(await depts(pooled)).toEqual(["Support"]);
+        } finally {
+          await pooled.end();
+        }
+      } finally {
+        await end();
+      }
+    });
+
+    it("keeps a republished table's rows and columns limited, with no instant it is not", async () => {
+      const { exec, end } = await prepared();
+      try {
+        const reader = await scopedAs(exec, [SALES]);
+        const builder = direct(
+          "undercroft_dbt_case_itest",
+          await rotateTenantPassword(exec, TENANT, "dbt", HOUR_MS),
+        );
+        await builder.connect();
+        try {
+          // The promotion as `promote.ts` runs it, committed only once the reader is waiting on it.
+          await builder.query("BEGIN");
+          await builder.query(`CREATE TABLE staging_case_itest.itest_people AS
+          SELECT * FROM (VALUES ('Sales', 1, 9), ('Support', 2, 9), ('Sales', 3, 9))
+            AS v(dept, region_id, salary)`);
+          await builder.query("SELECT raw.grant_staged_to_scopes(current_user, $1::text[])", [
+            ["itest_people"],
+          ]);
+          await builder.query(`DROP TABLE ${PEOPLE} RESTRICT`);
+          await builder.query(
+            "ALTER TABLE staging_case_itest.itest_people SET SCHEMA analytics_case_itest",
+          );
+          const waiting = depts(reader.client);
+          await blockedOnLock(exec, reader.login);
+          await builder.query("COMMIT");
+
+          expect(await waiting).toEqual(["Sales", "Sales"]);
+          expect(
+            await refusalOf(() => reader.client.query(`SELECT salary FROM ${PEOPLE}`)),
+          ).toMatch(DENIED);
+        } finally {
+          await Promise.all([builder.end(), reader.client.end()]);
+        }
+      } finally {
+        await end();
+      }
+    });
+  },
+);

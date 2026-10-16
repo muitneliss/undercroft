@@ -46,6 +46,11 @@
  * that is refused, every object of the domain a projected line names, each asked in turn. So a
  * reach, like a permission, is what the enforcer decided, never the grants read back.
  *
+ * **Rules** (ADR 0143). A grant on one model may say how much of it it gives -- a row rule, hidden
+ * columns. Casbin decides WHETHER a model is reached; how much of it is the union of the rules on
+ * the holder's grants of it (`limitsOf`), carried on the reach as `limits`. A wildcard is the whole
+ * model, so a holder of `model:*` -- every built-in role -- is never narrowed.
+ *
  * Subjects are prefixed (`user:`) and role keys never contain a colon, so a role key can never be
  * mistaken for a person or a person for a role.
  */
@@ -63,6 +68,13 @@ import {
   USE_ACTION,
   wholeObject,
 } from "@undercroft/contracts/access";
+import {
+  type ModelLimit,
+  type Narrowing,
+  narrowingOf,
+  type RowRule,
+  unionOf,
+} from "@undercroft/contracts/rowRules";
 import { type Adapter, type Enforcer, type Model, newEnforcer, newModelFromString } from "casbin";
 
 /**
@@ -92,6 +104,10 @@ export interface GrantLine {
   readonly toRole: boolean;
   readonly object: string;
   readonly action: string;
+  /** A model grant's row rule (ADR 0143); absent or `null` for every row. */
+  readonly rows?: RowRule | null;
+  /** A model grant's hidden columns; absent or `null` for none. */
+  readonly hidden?: readonly string[] | null;
 }
 
 /**
@@ -302,20 +318,57 @@ function reachOf(
   };
 }
 
+/**
+ * How much of each reached model `subject` reads (ADR 0143): for a model Casbin says they reach,
+ * and no wildcard covers, the union of the rules on every grant of it that is theirs -- to their
+ * role, or, when `person` is not `null`, to them. Whether a model is reached is Casbin's to say;
+ * how much of it, the rules', because a policy line has no place for a rule and the matcher none
+ * for a union. Only a tenant's own grants can name one model, so only they are read here: a
+ * built-in's lines are wildcards, and a wildcard is the whole model.
+ */
+function limitsOf(
+  policy: RolePolicy,
+  person: string | null,
+  models: Reach["models"],
+): ModelLimit[] {
+  if (models === "all") {
+    return [];
+  }
+  const byModel = new Map<string, (Narrowing | null)[]>();
+  for (const grant of policy.grants) {
+    const parsed = grant.action === READ ? parseReachObject(grant.object) : null;
+    const name = parsed?.domain === "model" ? parsed.name : null;
+    if ((grant.toRole || person !== null) && name !== null && models.includes(name)) {
+      byModel.set(name, [
+        ...(byModel.get(name) ?? []),
+        narrowingOf({ rows: grant.rows ?? null, hidden: grant.hidden ?? [] }),
+      ]);
+    }
+  }
+  return [...byModel.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .flatMap(([model, narrowings]) => {
+      const union = unionOf(narrowings);
+      return union === null ? [] : [{ model, ...union }];
+    });
+}
+
 /** Ask the projected policy every catalogue permission, and every object, for `subject`. */
 async function decided(
   subject: string,
   tenantId: string,
-  policy: readonly (readonly string[])[],
+  owned: { readonly policy: RolePolicy; readonly person: string | null },
   grouping: readonly (readonly string[])[],
 ): Promise<Holding> {
-  const lines = [...BUILT_IN_POLICY, ...policy];
+  const lines = [...BUILT_IN_POLICY, ...tenantPolicy(owned.policy, owned.person)];
   const enforcer = await newEnforcer(newModelFromString(ACCESS_MODEL), projected(lines, grouping));
+  const reach = reachOf(enforcer, subject, tenantId, lines);
+  const limits = limitsOf(owned.policy, owned.person, reach.models);
   return {
     permissions: PERMISSIONS.filter((permission) =>
       enforcer.enforceSync(subject, tenantId, objectOf(permission), USE),
     ).toSorted((a, b) => a.localeCompare(b)),
-    reach: reachOf(enforcer, subject, tenantId, lines),
+    reach: limits.length === 0 ? reach : { ...reach, limits },
   };
 }
 
@@ -329,7 +382,7 @@ async function decided(
  */
 export function holdingOf(holder: Holder): Promise<Holding> {
   const person = subjectOf(holder.userId);
-  return decided(person, holder.tenantId, tenantPolicy(holder, person), [
+  return decided(person, holder.tenantId, { policy: holder, person }, [
     [person, holder.role, holder.tenantId],
   ]);
 }
@@ -341,5 +394,5 @@ export function holdingOf(holder: Holder): Promise<Holding> {
  * without a person between.
  */
 export function holdingOfRole(role: RolePolicy): Promise<Holding> {
-  return decided(role.role, role.tenantId, tenantPolicy(role, null), []);
+  return decided(role.role, role.tenantId, { policy: role, person: null }, []);
 }

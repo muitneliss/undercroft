@@ -16,6 +16,7 @@
  */
 
 import type { Permission } from "@undercroft/contracts/access";
+import type { RowRule } from "@undercroft/contracts/rowRules";
 import type { Locale } from "@undercroft/core/locale";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -26,6 +27,8 @@ import { GrantForm } from "@/components/GrantForm.tsx";
 import { GrantGives } from "@/components/GrantObjects.tsx";
 import { useGrantObjects } from "@/components/useGrantObjects.ts";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { PERSON_OPTION, ROLE_OPTION } from "@/lib/grantChoices.ts";
+import { ruleWords } from "@/lib/grantRules.ts";
 import { MISSING } from "@/lib/money.ts";
 import { can } from "@/lib/permissions.ts";
 import { type RoleOption, roleNamed, roleOptions } from "@/lib/roles.ts";
@@ -44,6 +47,8 @@ interface Grant {
   readonly email: string | null;
   readonly permission: Permission | null;
   readonly object: string;
+  readonly rowRule: RowRule | null;
+  readonly hiddenColumns: readonly string[] | null;
   readonly expiresAt: string | null;
   readonly expired: boolean;
   readonly grantedBy: string | null;
@@ -60,14 +65,26 @@ function useGrantWrites(
   formRef: React.RefObject<HTMLFormElement | null>,
 ): { save: Save; remove: Remove } {
   const utils = trpc.useUtils();
+  const dropDraft = useUiStore((state) => state.dropGrantDraft);
+  const patchDraft = useUiStore((state) => state.patchGrantDraft);
   async function refresh(): Promise<void> {
     await utils.grants.list.invalidate({ tenantId });
+    await utils.scopes.preview.invalidate({ tenantId });
     await utils.tenants.invalidate();
   }
   return {
     save: trpc.grants.save.useMutation({
-      onSuccess: async () => {
+      onSuccess: async (_saved, sent) => {
         formRef.current?.reset();
+        // The draft goes, but whom it was for stays chosen: the summary under the form then
+        // shows what they see now, which is what the reader wants to check next.
+        dropDraft();
+        patchDraft(tenantId, {
+          subject:
+            sent.role === undefined
+              ? `${PERSON_OPTION}${sent.email ?? ""}`
+              : `${ROLE_OPTION}${sent.role}`,
+        });
         await refresh();
       },
     }),
@@ -125,6 +142,29 @@ function RevokeFold({
   );
 }
 
+/** A model grant's rules, in words, under what it gives (ADR 0143); nothing for a grant of all of it. */
+function GrantRuleWords({ grant }: { grant: Grant }): React.JSX.Element | null {
+  const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
+  if (grant.rowRule === null && grant.hiddenColumns === null) {
+    return null;
+  }
+  return (
+    <span className="stack stack--tight">
+      {grant.rowRule === null ? null : (
+        <span className="datum--quiet">
+          {t("grantRules.onlyRows", { rule: ruleWords(t, locale, grant.rowRule) })}
+        </span>
+      )}
+      {grant.hiddenColumns === null ? null : (
+        <span className="datum--quiet">
+          {t("grantRules.hides", { columns: grant.hiddenColumns.join(", ") })}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** The grants as a table. */
 function GrantTable({
   grants,
@@ -171,6 +211,7 @@ function GrantTable({
                 </td>
                 <td>
                   <GrantGives grant={grant} names={names} />
+                  <GrantRuleWords grant={grant} />
                 </td>
                 <UntilCell grant={grant} locale={locale} />
                 <td className="datum datum--quiet">

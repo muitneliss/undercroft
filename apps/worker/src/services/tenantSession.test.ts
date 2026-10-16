@@ -89,9 +89,9 @@ describe("holding a scope login (ADR 0142)", () => {
     const reader: SessionTarget = {
       tenantId: DBT.tenantId,
       kind: "bi",
-      scope: { models: ["b", "a"] },
+      scope: { models: ["b", "a"], limits: [] },
     };
-    const same: SessionTarget = { ...reader, scope: { models: ["a", "b", "a"] } };
+    const same: SessionTarget = { ...reader, scope: { models: ["a", "b", "a"], limits: [] } };
 
     await sessions.withPassword(reader, MINUTE_MS, async (held) => {
       const before = await scopeVerifier(["a", "b"]);
@@ -106,8 +106,12 @@ describe("holding a scope login (ADR 0142)", () => {
   });
 
   it("another set is another login, leased beside it without touching it", async () => {
-    const reader: SessionTarget = { tenantId: DBT.tenantId, kind: "bi", scope: { models: ["a"] } };
-    const other: SessionTarget = { ...reader, scope: { models: ["b"] } };
+    const reader: SessionTarget = {
+      tenantId: DBT.tenantId,
+      kind: "bi",
+      scope: { models: ["a"], limits: [] },
+    };
+    const other: SessionTarget = { ...reader, scope: { models: ["b"], limits: [] } };
 
     await sessions.withPassword(reader, MINUTE_MS, async (held) => {
       const before = await scopeVerifier(["a"]);
@@ -120,8 +124,55 @@ describe("holding a scope login (ADR 0142)", () => {
     });
   });
 
+  it("one set of rules is one lease whatever its order, and other rules another login (ADR 0143)", async () => {
+    const dept = { column: "dept", op: "in" as const, values: ["Sales", "Support"] };
+    const region = { column: "region", op: "eq" as const, values: ["north"] };
+    interface Condition {
+      column: string;
+      op: "eq" | "in";
+      values: string[];
+    }
+    function ruled(rules: Condition[][], hidden: string[]): SessionTarget {
+      return {
+        tenantId: DBT.tenantId,
+        kind: "bi",
+        scope: { models: ["a"], limits: [{ model: "a", rows: rules, hidden }] },
+      };
+    }
+    const reader = ruled([[dept, region]], ["salary", "bonus"]);
+    const reordered = ruled(
+      [[region, { ...dept, values: ["Support", "Sales", "Sales"] }]],
+      ["bonus", "salary"],
+    );
+    const other = ruled([[region]], ["salary", "bonus"]);
+
+    await sessions.withPassword(reader, MINUTE_MS, async (held) => {
+      const joined = await sessions.withPassword(reordered, MINUTE_MS, (password) =>
+        Promise.resolve(password),
+      );
+      const theirs = await sessions.withPassword(other, MINUTE_MS, (password) =>
+        Promise.resolve(password),
+      );
+
+      expect(joined).toBe(held);
+      expect(theirs).not.toBe(held);
+    });
+    // And the database agrees: two rule sets, two scopes -- not three, and not one.
+    const { rows } = await db.asSuperuser((tx) =>
+      tx.query<{ n: number }>(
+        "SELECT count(*)::int AS n FROM ops.tenant_scope WHERE tenant_id = $1 AND limits <> '[]'",
+        [DBT.tenantId],
+      ),
+    );
+    expect(rows).toEqual([{ n: 2 }]);
+  });
+
   it("a scope on a build session is refused rather than read as the build login", async () => {
-    const scoped: SessionTarget = { tenantId: DBT.tenantId, kind: "dbt", scope: { models: ["a"] } };
+    const scoped: SessionTarget = {
+      tenantId: DBT.tenantId,
+      kind: "dbt",
+      scope: { models: ["a"], limits: [] },
+    };
 
     await expect(sessions.withPassword(scoped, MINUTE_MS, () => Promise.resolve())).rejects.toThrow(
       "only a BI session reads under a scope",

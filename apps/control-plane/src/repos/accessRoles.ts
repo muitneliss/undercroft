@@ -26,7 +26,7 @@
 
 import { BUILT_IN_ROLES } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
-import { GRANT_NAMES_SOMETHING } from "./membership.ts";
+import { GRANT_LINE_JSON, GRANT_NAMES_SOMETHING, type PolicyGrant } from "./membership.ts";
 
 /** One role as a customer has it, with how many hold it and how many are invited at it. */
 export interface RoleRow {
@@ -112,8 +112,8 @@ export async function findRole(
 export interface RolePolicyRow {
   /** A custom role's stored permissions; empty for a built-in. */
   readonly rolePermissions: readonly string[];
-  /** The grants in force to the role, every one `toRole`. */
-  readonly grants: readonly { toRole: true; object: string; action: string }[];
+  /** The grants in force to the role, every one `toRole`, with a model grant's rules. */
+  readonly grants: readonly PolicyGrant[];
 }
 
 /**
@@ -127,12 +127,11 @@ export async function rolePolicy(
 ): Promise<RolePolicyRow | null> {
   const { rows } = await exec.query<{
     role_permissions: string[];
-    grants: { toRole: true; object: string; action: string }[];
+    grants: PolicyGrant[];
   }>(
     `SELECT coalesce(r.permissions, '{}') AS role_permissions,
             coalesce(
-              (SELECT json_agg(json_build_object(
-                        'toRole', true, 'object', g.object, 'action', g.action) ORDER BY g.object)
+              (SELECT json_agg(${GRANT_LINE_JSON} ORDER BY g.object)
                FROM app.access_grant g
                WHERE g.tenant_id = r.tenant_id AND g.role_key = r.key
                  AND (g.expires_at IS NULL OR g.expires_at > now())
