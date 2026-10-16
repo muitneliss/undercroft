@@ -5,7 +5,7 @@ date: 2026-10-16
 tags: []
 source: docs/runbook/mcp-setup.md
 source_path: docs/runbook/mcp-setup.md
-source_hash: 04a4534dedb77e49b314048120020a8f2275199c98fb016f8e079f01cd3aca12
+source_hash: 65c9c8bb0fee378be8cef68f5f10450e7fc7732fa4cd62ad89355dcbe9fb5a31
 ingested: 2026-10-16
 ---
 

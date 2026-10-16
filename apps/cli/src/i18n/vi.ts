@@ -49,6 +49,10 @@ export const vi = {
     seeds: "Các bảng tham chiếu nhỏ của khách hàng (seed dbt), mà mô hình đọc bằng ref().",
     documentKinds: "Catalogue loại tài liệu của khách hàng.",
     people: "Người có quyền truy cập và lời mời.",
+    roles:
+      "Các vai trò của khách hàng, có sẵn và riêng, cùng các quyền của từng vai trò; sửa cần quyền roles:manage.",
+    grants:
+      "Một quyền trao cho một vai trò hoặc một người, không thời hạn hoặc đến một thời điểm; xem cần quyền people:manage.",
     audit:
       "Ai đã làm gì: thao tác của chính bạn, của một khách hàng cho người có quyền audit:read ở đó, tất cả cho quản trị nền tảng.",
     runs: "Các lần chạy.",

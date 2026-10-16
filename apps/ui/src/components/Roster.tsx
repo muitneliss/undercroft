@@ -13,11 +13,22 @@ import { Address } from "@/components/Address.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { StatusLine } from "@/components/StatusLine.tsx";
-import { byAddress, isRole, ROLES, soleAdmin } from "@/lib/roles.ts";
+import {
+  byAddress,
+  type RoleOption,
+  roleName,
+  roleNamed,
+  roleOptions,
+  soleAdmin,
+} from "@/lib/roles.ts";
 import type { trpc } from "@/trpc.ts";
 
 /**
- * A member's role: a word for everyone, a `<select>` for an admin.
+ * A member's role: its name for everyone, a `<select>` for whoever manages people.
+ *
+ * The select offers every role the customer has (`roles.list`): the built-ins by key and its own
+ * by label, with the key beside it (ADR 0141). Offering a role is not the subset rule's decision:
+ * the server refuses one holding a permission the reader lacks, in words the slip below shows.
  *
  * The customer's last admin is the exception: the row says so, to every reader, and offers no
  * select, because every other value in it is a change the server refuses. Saying it in advance
@@ -30,12 +41,14 @@ import type { trpc } from "@/trpc.ts";
  */
 function RoleCell({
   member,
+  roles,
   last,
   canManage,
   setRole,
   tenantId,
 }: {
   member: { email: string; role: string };
+  roles: readonly RoleOption[] | undefined;
   last: boolean;
   canManage: boolean;
   setRole: ReturnType<typeof trpc.people.setRole.useMutation>;
@@ -51,8 +64,9 @@ function RoleCell({
     );
   }
   if (!canManage) {
-    return <td>{member.role}</td>;
+    return <td>{roleNamed(member.role, roles)}</td>;
   }
+  const offered = roleOptions(roles);
   // While this member's change is in flight the select shows the role asked for, not the one
   // it is leaving: snapping back to the old role would read as the choice having been ignored.
   // Once the server answers, the value is its role again, refusal or not.
@@ -67,14 +81,14 @@ function RoleCell({
         disabled={setRole.isPending}
         onChange={(event): void => {
           const chosen = event.target.value;
-          if (isRole(chosen) && chosen !== member.role) {
+          if (chosen !== member.role && offered.some((role) => role.key === chosen)) {
             setRole.mutate({ tenantId, email: member.email, role: chosen });
           }
         }}
       >
-        {ROLES.map((role) => (
-          <option key={role} value={role}>
-            {role}
+        {offered.map((role) => (
+          <option key={role.key} value={role.key}>
+            {roleName(role)}
           </option>
         ))}
       </select>
@@ -165,6 +179,7 @@ function MembershipOutcome({
 /** The roster as a table: every row it is handed, and the caption saying how many of how many. */
 function RosterTable({
   rows,
+  roles,
   caption,
   last,
   canManage,
@@ -174,6 +189,7 @@ function RosterTable({
   signedInAs,
 }: {
   rows: readonly { userId: string; email: string; role: string }[];
+  roles: readonly RoleOption[] | undefined;
   caption: string;
   last: { userId: string } | null;
   canManage: boolean;
@@ -210,6 +226,7 @@ function RosterTable({
               </td>
               <RoleCell
                 member={member}
+                roles={roles}
                 last={member === last}
                 canManage={canManage}
                 setRole={setRole}
@@ -240,6 +257,7 @@ function RosterTable({
  */
 export function Roster({
   roster,
+  roles,
   canManage,
   setRole,
   remove,
@@ -248,6 +266,8 @@ export function Roster({
   signedInAs,
 }: {
   roster: readonly { userId: string; email: string; role: string }[];
+  /** The customer's roles, or `undefined` while `roles.list` has not answered. */
+  roles: readonly RoleOption[] | undefined;
   canManage: boolean;
   setRole: ReturnType<typeof trpc.people.setRole.useMutation>;
   remove: ReturnType<typeof trpc.people.removeMember.useMutation>;
@@ -273,6 +293,7 @@ export function Roster({
       {rows.length > 0 ? (
         <RosterTable
           rows={rows}
+          roles={roles}
           caption={caption}
           last={last}
           canManage={canManage}

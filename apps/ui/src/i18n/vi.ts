@@ -321,7 +321,7 @@ export const vi = {
      */
     renameLead:
       "Chỉ tên hiển thị thay đổi. Mã khách hàng và toàn bộ dữ liệu đã đồng bộ giữ nguyên.",
-    renameNote: "Chỉ quản trị viên của khách hàng này mới đổi được tên hiển thị.",
+    renameNote: "Đổi tên hiển thị cần quyền quản lý khách hàng (tenant:manage).",
     rename: "Lưu tên",
     renaming: "Đang lưu…",
     renamed: "Đã đổi tên hiển thị.",
@@ -351,7 +351,7 @@ export const vi = {
     deactivateHead: "Ngừng kích hoạt khách hàng",
     deactivateLead:
       "Ngừng kích hoạt thì mọi thành viên, kể cả bạn, mất quyền truy cập hồ sơ này, và mọi lần đồng bộ, đọc tài liệu và dựng mô hình dừng lại. Không có dữ liệu nào bị xoá; kích hoạt lại thì mọi thứ trở lại như trước.",
-    deactivateNote: "Chỉ quản trị viên của khách hàng này mới ngừng kích hoạt được.",
+    deactivateNote: "Ngừng kích hoạt khách hàng cần quyền quản lý khách hàng (tenant:manage).",
     deactivate: "Ngừng kích hoạt…",
     deactivateConfirm: "Ngừng kích hoạt {{name}}",
     deactivating: "Đang ngừng kích hoạt…",
@@ -579,6 +579,13 @@ export const vi = {
       people_revokeInvitation: "Thu hồi lời mời",
       people_setRole: "Đổi vai trò",
       people_removeMember: "Gỡ quyền truy cập",
+      roles_list: "Xem các vai trò",
+      roles_get: "Xem một vai trò",
+      roles_save: "Lưu một vai trò",
+      roles_delete: "Xoá một vai trò",
+      grants_list: "Xem các quyền đã trao",
+      grants_save: "Trao một quyền",
+      grants_delete: "Thu lại một quyền đã trao",
       audit_mine: "Xem nhật ký hoạt động của mình",
       audit_tenant: "Xem nhật ký hoạt động của khách hàng",
       audit_all: "Xem nhật ký hoạt động của nền tảng",
@@ -925,7 +932,8 @@ export const vi = {
     emptyTitle: "Chưa có danh mục",
     emptyBody:
       "Khởi tạo sẽ lấy mẫu khoảng 450 tài liệu, phân loại chúng vào danh mục chung và giữ lại mọi loại chiếm từ 1% mẫu trở lên, cùng với other. Chưa áp dụng gì: bạn xem lại, sửa rồi mới áp dụng.",
-    emptyMember: "Chỉ quản trị viên của {{tenantId}} mới khởi tạo được danh mục.",
+    initialiseNeeds:
+      "Khởi tạo danh mục của {{tenantId}} cần quyền quản lý catalogue loại tài liệu (catalogue:manage).",
     initialise: "Khởi tạo từ mẫu",
     initialising: "Đang khởi tạo…",
     initialiseStarted:
@@ -956,7 +964,8 @@ export const vi = {
     publishedNow:
       "Đã áp dụng phiên bản {{version}}. Việc phân loại chạy nền, mỗi nửa giờ một lượt.",
     notPublished: "Chưa áp dụng được",
-    adminOnly: "Chỉ quản trị viên của {{tenantId}} mới sửa và áp dụng được danh mục.",
+    editNeeds:
+      "Sửa và áp dụng danh mục của {{tenantId}} cần quyền quản lý catalogue loại tài liệu (catalogue:manage).",
   },
 
   people: {
@@ -1018,6 +1027,9 @@ export const vi = {
       "Mọi điều member làm được, và thêm: lưu, xoá, dựng và xem trước mô hình, lưu và xoá macro và bảng tham chiếu; đọc, tìm và truy vấn bản ghi và tài liệu trong hồ dữ liệu thô, và các dòng mà kiểm thử chất lượng dữ liệu lưu lại khi thất bại. Không kết nối tài khoản, không tạo khoá nạp dữ liệu, không sửa danh mục loại tài liệu, không xem ai có quyền truy cập, không mời hay gỡ người khác, không đổi tên hay ngừng kích hoạt khách hàng.",
     rightsAdmin:
       "Mọi điều builder làm được, và thêm: kết nối và ngắt tài khoản, chọn phạm vi và tần suất đọc, chạy đồng bộ ngay; sửa và publish danh mục loại tài liệu; tạo và thu hồi khoá nạp dữ liệu; xem ai có quyền truy cập và ai đang được mời, mời, đổi vai trò, gỡ người dùng và thu hồi lời mời; đọc mọi thao tác trong khách hàng, của bất kỳ ai; đổi tên, ngừng kích hoạt và kích hoạt lại khách hàng. Thêm khách hàng mới thì chỉ quản trị viên toàn hệ thống làm được.",
+    /** A customer's own role beside the invitation form: what it holds, by permission. */
+    rightsCustom: "Các quyền: {{permissions}}.",
+    rightsNone: "Không có quyền nào ngoài việc xem.",
     notInvited: "Chưa mời được",
     invitedAndEmailed: "Đã mời {{email}}. Email đã được gửi cho họ.",
     invitedNotEmailedHeading: "Đã mời, nhưng chưa gửi được email",
@@ -1025,13 +1037,14 @@ export const vi = {
       "{{email}} có thể đăng nhập ngay, nhưng chưa có email nào được gửi — hệ thống mail chưa được cấu hình. Hãy báo họ đăng nhập bằng đúng địa chỉ đó.",
     inviting: "Đang mời…",
     sendInvitation: "Gửi lời mời",
-    adminOnly: "Chỉ quản trị viên của {{tenantId}} mới có thể mời người khác.",
+    inviteNeeds: "Mời người khác vào {{tenantId}} cần quyền quản lý người dùng (people:manage).",
 
     /** Three views of the division, each its own address (`?view=`). */
     viewsLabel: "Cách xem người dùng",
     viewMembers_other: "Thành viên · {{count, number}}",
     viewInvites_other: "Lời mời đang chờ · {{count, number}}",
-    viewRoles: "So sánh vai trò",
+    viewRoles: "Vai trò",
+    viewAccess: "Quyền đã trao",
     viewActivity: "Hoạt động",
     searchLabel: "Tìm địa chỉ email",
     clearSearch: "Xoá tìm kiếm",
@@ -1050,6 +1063,96 @@ export const vi = {
      * and `<id>` as a datum (`Invitations.tsx`, through `Trans`), so keep both tags.
      */
     grantedWithin: "Khách hàng nhận quyền: <name>{{name}}</name> · <id>{{tenantId}}</id>",
+  },
+
+  /**
+   * The People division's Roles view (ADR 0141): the four built-in roles beside the customer's
+   * own, and -- for a holder of `roles:manage` -- the form that defines one, an edit of its
+   * permissions and its delete. A role's label is the customer's own words and is never
+   * translated; its key and the permission keys stay as they are typed.
+   */
+  roleEditor: {
+    lead: "Mỗi vai trò là một tập quyền. Bốn vai trò có sẵn do nền tảng quy định và không sửa được; {{tenantId}} có thể tạo thêm vai trò riêng.",
+    readOnly: "Tạo, sửa hay xoá vai trò cần quyền quản lý vai trò (roles:manage).",
+    notLoaded: "Không tải được các vai trò của {{tenantId}}. Không có gì bị thay đổi.",
+    caption_other: "{{count, number}} vai trò",
+    colRole: "Vai trò",
+    colPermissions: "Các quyền",
+    colHolders: "Đang dùng",
+    colChange: "Thay đổi",
+    builtIn: "Có sẵn",
+    /** A role holding no permission still reads everything any member may read. */
+    noPermissions: "Không có quyền nào ngoài việc xem.",
+    /** Two counts, each after a colon, so neither needs a plural form. */
+    holders: "Người giữ: {{members, number}} · Lời mời đang mở: {{invitations, number}}",
+    edit: "Sửa quyền…",
+    permissionsFor: "Các quyền của {{role}}",
+    save: "Lưu quyền",
+    saving: "Đang lưu…",
+    cancel: "Huỷ",
+    saved: "Đã lưu vai trò {{role}}.",
+    unchanged: "Vai trò {{role}} không có gì thay đổi.",
+    notSaved: "Chưa lưu được vai trò",
+    delete: "Xoá…",
+    deleteLead:
+      "Mọi quyền đã trao cho vai trò này cũng bị thu lại. Không xoá được khi còn người giữ hoặc còn lời mời đang mở.",
+    deleteConfirm: "Xoá vai trò {{role}}",
+    deleting: "Đang xoá…",
+    deleted: "Đã xoá vai trò {{role}}.",
+    notDeleted: "Chưa xoá được vai trò",
+    createHead: "Tạo một vai trò",
+    keyLabel: "Mã vai trò",
+    keyHint:
+      "Chữ thường, số và dấu gạch dưới, bắt đầu bằng chữ cái, ví dụ ke_toan. Không đổi được sau khi tạo, và không được trùng viewer, member, builder hay admin.",
+    labelLabel: "Tên hiển thị",
+    descriptionLabel: "Mô tả (không bắt buộc)",
+    permissionsLabel: "Các quyền của vai trò",
+    /** Beside the permission boxes: the subset rule, said before the server has to refuse. */
+    heldOnly: "Bạn chỉ trao được những quyền chính bạn đang giữ; các ô còn lại bị khoá.",
+    create: "Tạo vai trò",
+    creating: "Đang tạo…",
+    created: "Đã tạo vai trò {{role}}.",
+    notCreated: "Chưa tạo được vai trò",
+  },
+
+  /**
+   * The People division's Grants view (ADR 0141): one permission given to a role or a person,
+   * standing or until a day, and taking one away.
+   */
+  accessGrants: {
+    lead: "Một quyền trao thẳng cho một vai trò hoặc một người, không thời hạn hoặc đến hết một ngày, thêm vào những gì vai trò của họ đã có.",
+    readOnly: "Trao hay thu lại quyền cần quyền quản lý vai trò (roles:manage).",
+    notLoaded: "Không tải được các quyền đã trao của {{tenantId}}. Không có gì bị thay đổi.",
+    none: "Chưa trao quyền nào ngoài các vai trò.",
+    caption_other: "{{count, number}} quyền đã trao",
+    colSubject: "Trao cho",
+    colPermission: "Quyền",
+    colUntil: "Thời hạn",
+    colGrantedBy: "Người trao",
+    colRevoke: "Thu lại",
+    toRole: "Vai trò {{role}}",
+    standing: "Không thời hạn",
+    until: "Đến {{date}}",
+    expired: "Đã hết hạn {{date}}",
+    /** A stored grant naming a permission the catalogue has since retired: it holds nothing. */
+    unknownPermission: "{{object}} — không còn trong catalogue, không có hiệu lực",
+    revoke: "Thu lại…",
+    revokeConfirm: "Thu lại quyền này của {{subject}}",
+    revoking: "Đang thu lại…",
+    notRevoked: "Chưa thu lại được",
+    addHead: "Trao một quyền",
+    subjectLabel: "Trao cho",
+    rolesGroup: "Vai trò",
+    peopleGroup: "Người",
+    permissionLabel: "Quyền",
+    /** A permission in the picker: its words, then the key a person quotes. */
+    permissionOption: "{{label}} · {{permission}}",
+    untilLabel: "Đến hết ngày (không bắt buộc)",
+    untilHint: "Tính theo giờ Singapore (SGT). Bỏ trống để trao không thời hạn.",
+    add: "Trao quyền",
+    adding: "Đang trao…",
+    added: "Đã trao quyền.",
+    notAdded: "Chưa trao được quyền",
   },
 
   grant: {

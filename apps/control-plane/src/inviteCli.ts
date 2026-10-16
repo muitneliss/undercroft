@@ -19,7 +19,7 @@
  */
 
 import process from "node:process";
-import { BUILT_IN_ROLES, isBuiltInRole } from "@undercroft/contracts/access";
+import { BUILT_IN_ROLES, isRoleKey, PERMISSIONS } from "@undercroft/contracts/access";
 import {
   createHttpEmailSender,
   DEFAULT_LOCALE,
@@ -118,8 +118,10 @@ function require(email: string, tenantId: string, role: string): void {
   if (tenantId === "") {
     usage("--tenant is required");
   }
-  if (!isBuiltInRole(role)) {
-    usage(`--role must be one of ${BUILT_IN_ROLES.join(", ")}`);
+  // The shape of a key, not the list: a customer's own roles are keys too (ADR 0141), and whether
+  // this customer HAS the role is the invitation's to refuse, against the database.
+  if (!isRoleKey(role)) {
+    usage(`--role must be a role key: ${BUILT_IN_ROLES.join(", ")}, or one the customer defined`);
   }
 }
 
@@ -190,6 +192,10 @@ async function main(): Promise<void> {
         // An operator holding the database's DSN, not a person signed in through any door: the
         // name every row this script has written carries, and no user or channel (ADR 0113).
         actor: { userId: null, email: "cli", channel: null, credential: null },
+        // The subset rule weighs what the inviter holds (ADR 0141). Whoever holds the DSN holds
+        // the database itself, every permission included; this script is how the first admin of
+        // a customer comes to exist, so there is nobody whose permissions it could be bounded by.
+        held: PERMISSIONS,
         notify: buildNotifier(args.locale),
       }),
     );
@@ -198,6 +204,9 @@ async function main(): Promise<void> {
       if (result.reason === "already-member") {
         process.stdout.write(`${args.email} already has access as ${result.role}\n`);
         return;
+      }
+      if (result.reason === "no-such-role") {
+        throw new Error(`${args.tenantId} has no role ${args.role}`);
       }
       throw new Error(`could not create the invitation for ${args.email}`);
     }

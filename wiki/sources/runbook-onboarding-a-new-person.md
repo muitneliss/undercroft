@@ -5,7 +5,7 @@ date: 2026-10-16
 tags: []
 source: docs/runbook/onboarding.md
 source_path: docs/runbook/onboarding.md
-source_hash: ecb2439f9216aded354e539efdbb80fb5a9e066974591edca3a8f5ebf325bec3
+source_hash: f8dcf5077835df5e6d6ebaf9944facb368dc1d3c87f2312ef25a75edae865661
 ingested: 2026-10-16
 ---
 
@@ -15,7 +15,7 @@ ingested: 2026-10-16
 
 The order of steps that takes a new person from no access to an AI agent working in Undercroft, in Vietnamese first and English second; commands stay in the runbooks it links, so each how-to keeps one owner.
 
-**1. Invite.** Sign-in is invite-only: an admin invites the exact email address from the customer's People page and picks a role -- `viewer` (sees sources, runs, models, reports), `member` (also saves report questions and dashboards), `builder` (also reads the raw lake, saves and builds models), `admin` (also connects sources, invites; every permission, [[Permissions]]). Building models needs `admin`. With nobody yet able to invite, see "Bootstrap the first admin" in the sign-in runbook.
+**1. Invite.** Sign-in is invite-only: an admin invites the exact email address from the customer's People page and picks a role -- `viewer` (sees sources, runs, models, reports), `member` (also saves report questions and dashboards), `builder` (also reads the raw lake, saves and builds models), `admin` (also connects sources, invites; every permission, [[Permissions]]). Building models needs `builder` or `admin`, never `admin` alone for it; a customer may also define roles of its own or grant one more permission to a person, with or without an expiry ([[Runbook: Access control]]). With nobody yet able to invite, see "Bootstrap the first admin" in the sign-in runbook.
 
 **Three words on the Reports page.** A *model* is a dbt `SELECT` over the raw data built into a table; the logic (joins, deduplication, time zones, what a metric means) lives there, and it changes only when built -- after each successful sync or when a builder or an admin builds it. A *question* (câu hỏi) is a saved query over the built models, from the form or as SQL, plus how to draw it as a table or chart -- what other BI tools call a saved query, a chart or a Look; the name is kept from Metabase, the BI Undercroft used before its own. It runs each time it is opened, so it is as fresh as the model's last build and no fresher; keep it thin (pick, filter, group, sort one model) and move logic a second question would copy into a model. A *dashboard* is saved questions on a grid under shared filters.
 

@@ -9,27 +9,31 @@
  *   confirms the tenant exists and turns any tenant endpoint into an enumeration oracle.
  *   The reasoning lives with the decision, one layer up;
  * - it does not say what a role may do. A role here is a stored key; which permissions it
- *   holds is `BUILT_IN_GRANTS` (`@undercroft/contracts/access`), and Casbin evaluates them (`services/rbac.ts`, ADR 0139).
+ *   holds is `BUILT_IN_GRANTS` (`@undercroft/contracts/access`) for a built-in, the customer's own
+ *   `app.access_role` row for one it defined, and Casbin evaluates them (`services/rbac.ts`, ADR
+ *   0139, ADR 0141). What this module reads is the INPUT to that projection -- the custom role's
+ *   stored permissions and the grants in force -- never a decision.
  *
  * The one place a role key IS a fact about storage is the last-admin guard below, written on the
- * literal `'admin'` because the check and the write must be one statement.
+ * literal `'admin'` because the check and the write must be one statement. A customer cannot
+ * define a role with that key (`access_role_builtin_keys` in `600_custom_roles.sql`), so the
+ * literal counts exactly the holders of the role that manages everything.
  *
  * `listForUser` joins `ops.tenant` because the caller wants tenants they are a member of --
  * the membership is the filter, so the query belongs on this side of the join.
  */
 
-import type { BuiltInRole } from "@undercroft/contracts/access";
 import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 
 import { deactivatedAtOf, type Tenant, type TenantRow, toTenant } from "./tenant.ts";
 
 /**
- * A role a person can be given. The four built-ins in PR 1 (ADR 0139), and the CHECK on the
- * column agrees (`590_tenant_roles.sql`). What is READ back is typed `string` instead, because a
- * row is whatever the database holds and a cast to this union would be a promise nothing checked.
+ * A role key a person can be given: one of the built-ins, or one the customer defined (ADR 0141).
+ * A string, because a customer's own keys are known to no code; the foreign key onto
+ * `app.access_role` (`600_custom_roles.sql`) is what refuses one the customer does not have.
  */
-export type Role = BuiltInRole;
+export type Role = string;
 
 /**
  * A tenant as one member sees it in their list: the tenant, deactivated or not, and their role.
@@ -38,12 +42,76 @@ export type Role = BuiltInRole;
  */
 export interface MemberTenant extends Tenant {
   readonly role: string;
+  /** The customer's name for its own role, for a person to read; `null` for a built-in. */
+  readonly roleLabel: string | null;
 }
 
-/** A member's standing in one tenant: their role key, and whether the tenant is deactivated. */
-export interface MemberAccess {
+/** A tenant in a member's list with the policy their membership projects. */
+export type MemberTenantPolicy = MemberTenant & MemberPolicy;
+
+/** One grant in force, as the projection reads it: to the member's role, or to the member. */
+export interface PolicyGrant {
+  readonly toRole: boolean;
+  /** Casbin's object, as stored: `perm:models:write`. */
+  readonly object: string;
+  readonly action: string;
+}
+
+/**
+ * What Casbin's projection needs about one membership, read in the statement that finds it: the
+ * role key, the permissions a CUSTOM role holds as stored (empty for a built-in, whose grants are
+ * code), and the grants in force to that role and to the person. Unexpired is decided here, by
+ * the database's `now()`, so an expired grant never reaches the projection at all.
+ */
+export interface MemberPolicy {
   readonly role: string;
+  readonly rolePermissions: readonly string[];
+  readonly grants: readonly PolicyGrant[];
+}
+
+/**
+ * A member's standing in one tenant: their policy, whether the tenant is deactivated, and the
+ * customer's name for their role when it is one of its own -- read, like the key, by a person.
+ */
+export interface MemberAccess extends MemberPolicy {
   readonly deactivatedAt: string | null;
+  readonly roleLabel: string | null;
+}
+
+/**
+ * The policy columns of a membership `m`, joined onto its role as `r` by `POLICY_JOIN`. Shared by
+ * `accessFor` and `listForUser`, so the tenant a person opens and the row it has in their list are
+ * read the one way and project the same permissions.
+ *
+ * The grants are a correlated subquery folded into a JSON array rather than a join, so a person
+ * with five grants is still one row -- and still one statement per request (ADR 0139). A role
+ * grant matches on the role key, a person's on their user id; exactly one of the two is set on
+ * any grant (`access_grant_one_subject`).
+ */
+const POLICY_COLUMNS = `
+  r.label AS role_label,
+  coalesce(r.permissions, '{}') AS role_permissions,
+  coalesce(
+    (SELECT json_agg(json_build_object(
+              'toRole', g.subject_kind = 'role', 'object', g.object, 'action', g.action)
+            ORDER BY g.subject_kind, g.object)
+     FROM app.access_grant g
+     WHERE g.tenant_id = m.tenant_id
+       AND (g.expires_at IS NULL OR g.expires_at > now())
+       AND (g.role_key = m.role OR g.user_id = m.user_id)),
+    '[]'::json) AS grants`;
+
+const POLICY_JOIN = "LEFT JOIN app.access_role r ON r.tenant_id = m.tenant_id AND r.key = m.role";
+
+interface PolicyRow {
+  readonly role: string;
+  readonly role_label: string | null;
+  readonly role_permissions: string[];
+  readonly grants: PolicyGrant[];
+}
+
+function toPolicy(row: PolicyRow): MemberPolicy {
+  return { role: row.role, rolePermissions: row.role_permissions, grants: row.grants };
 }
 
 export interface Member {
@@ -59,18 +127,20 @@ export interface Member {
  * tenant-scoped request and the membership is the filter either way: a non-member learns
  * nothing about the tenant's state, because there is no row to carry it.
  *
- * It stays one statement as access grows (ADR 0139): a customer's own roles (PR 2) are a LEFT
- * JOIN from `m.role` onto the permissions that role holds, here, rather than a second query per
- * request. What it answers is the input Casbin's projection needs, and nothing it decides.
+ * It stays one statement as access grows (ADR 0139, ADR 0141): a customer's own role is a LEFT
+ * JOIN from `m.role` onto the permissions that role holds, and the grants in force are a
+ * subquery in the select list, rather than a second query per request. What it answers is the
+ * input Casbin's projection needs, and nothing it decides.
  */
 export async function accessFor(
   exec: SqlExecutor,
   tenantId: string,
   userId: string,
 ): Promise<MemberAccess | null> {
-  const { rows } = await exec.query<{ role: string } & Pick<TenantRow, "deactivated_at">>(
-    `SELECT m.role, t.deactivated_at
+  const { rows } = await exec.query<PolicyRow & Pick<TenantRow, "deactivated_at">>(
+    `SELECT m.role, t.deactivated_at, ${POLICY_COLUMNS}
      FROM app.tenant_member m JOIN ops.tenant t ON t.id = m.tenant_id
+     ${POLICY_JOIN}
      WHERE m.tenant_id = $1 AND m.user_id = $2`,
     [tenantId, userId],
   );
@@ -78,7 +148,7 @@ export async function accessFor(
   if (row === undefined) {
     return null;
   }
-  return { role: row.role, deactivatedAt: deactivatedAtOf(row) };
+  return { ...toPolicy(row), roleLabel: row.role_label, deactivatedAt: deactivatedAtOf(row) };
 }
 
 /**
@@ -87,14 +157,18 @@ export async function accessFor(
  * This query IS the visibility boundary for the list view: a tenant absent from the result
  * is a tenant the caller is never told about.
  */
-export async function listForUser(exec: SqlExecutor, userId: string): Promise<MemberTenant[]> {
-  const { rows } = await exec.query<TenantRow & { role: string }>(
-    `SELECT t.id, t.display_name, t.deactivated_at, m.role
+export async function listForUser(
+  exec: SqlExecutor,
+  userId: string,
+): Promise<MemberTenantPolicy[]> {
+  const { rows } = await exec.query<TenantRow & PolicyRow>(
+    `SELECT t.id, t.display_name, t.deactivated_at, m.role, ${POLICY_COLUMNS}
      FROM app.tenant_member m JOIN ops.tenant t ON t.id = m.tenant_id
+     ${POLICY_JOIN}
      WHERE m.user_id = $1 ORDER BY t.id`,
     [userId],
   );
-  return rows.map((r) => ({ ...toTenant(r), role: r.role }));
+  return rows.map((r) => ({ ...toTenant(r), ...toPolicy(r), roleLabel: r.role_label }));
 }
 
 /** Someone an alert about a tenant goes to, in the language they read. */
@@ -148,6 +222,26 @@ export async function roleForEmail(
     [tenantId, email],
   );
   return rows[0]?.role ?? null;
+}
+
+/**
+ * The user an address belongs to, if it holds a role in this tenant; `null` otherwise.
+ *
+ * For the two questions asked about a member by address -- what they hold now, before they are
+ * removed, and who a grant names (`services/grants.ts`) -- where the uuid is what the next
+ * statement keys on.
+ */
+export async function memberIdForEmail(
+  exec: SqlExecutor,
+  tenantId: string,
+  email: string,
+): Promise<string | null> {
+  const { rows } = await exec.query<{ user_id: string }>(
+    `SELECT m.user_id FROM app.tenant_member m JOIN app.app_user u ON u.id = m.user_id
+     WHERE m.tenant_id = $1 AND u.email = $2`,
+    [tenantId, email],
+  );
+  return rows[0]?.user_id ?? null;
 }
 
 /**

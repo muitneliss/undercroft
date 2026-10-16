@@ -11,7 +11,14 @@
 import { describe, expect, test as it } from "bun:test";
 
 import { translatorFor } from "@/i18n/index.ts";
-import { expiryNote, formatDate, formatDuration, lastUsedNote, relativeTime } from "./when.ts";
+import {
+  endOfScheduleDay,
+  expiryNote,
+  formatDate,
+  formatDuration,
+  lastUsedNote,
+  relativeTime,
+} from "./when.ts";
 
 const en = translatorFor("en");
 const vi = translatorFor("vi");
@@ -109,5 +116,21 @@ describe("formatDuration", () => {
   it("a run still in progress has no duration", () => {
     // MISSING, not a count that is still growing.
     expect(formatDuration("2026-09-17T11:00:00Z", null, "vi")).toBe("—");
+  });
+});
+
+describe("endOfScheduleDay", () => {
+  it("is the last second of that day in Singapore, which the list then prints as that day", () => {
+    // A grant "until the 31st" must not lapse at 07:00 on the 31st, which a day read as UTC would.
+    const until = endOfScheduleDay("2026-10-31");
+
+    expect(until).toBe("2026-10-31T15:59:59.000Z");
+    expect(formatDate(until, "vi")).toBe(formatDate("2026-10-31T04:00:00Z", "vi"));
+  });
+
+  it("is nothing for a value that is not a calendar day, never a guessed instant", () => {
+    expect(endOfScheduleDay("")).toBeNull();
+    expect(endOfScheduleDay("31/10/2026")).toBeNull();
+    expect(endOfScheduleDay("2026-13-40")).toBeNull();
   });
 });

@@ -6,17 +6,18 @@
  * others import a sibling for a rule that belongs to none of them in particular.
  */
 
-import { BUILT_IN_ROLES } from "@undercroft/contracts/access";
+import { MAX_ROLE_KEY_CHARS, ROLE_KEY } from "@undercroft/contracts/access";
 import { MAX_STEP_PAGE } from "@undercroft/contracts/runs";
 import { z } from "zod";
 import { STEP_VIEWS } from "../services/stepReport.ts";
 
 /**
- * A role a person can be invited at or given: one of the built-ins (ADR 0139). The database's
- * CHECK on both role columns names the same four (`590_tenant_roles.sql`), so a key this accepts
- * is one the row will take, and one it refuses never reaches the statement.
+ * A role key: one of the built-ins or one the customer defined (ADR 0141), in the shape
+ * `app.access_role.key` takes -- a lowercase identifier, never a colon, at most 63 characters.
+ * Whether the customer HAS the role is the service's to say, in words; the foreign key onto
+ * `app.access_role` is what refuses one in the database whoever writes the row.
  */
-export const Role = z.enum(BUILT_IN_ROLES);
+export const Role = z.string().trim().min(1).max(MAX_ROLE_KEY_CHARS).regex(ROLE_KEY);
 
 /**
  * A tenant reference, as typed into the create form.

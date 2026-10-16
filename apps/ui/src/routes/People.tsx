@@ -5,14 +5,14 @@
  * invitation; this page is how one comes to exist. Without it a correct sign-in admits
  * nobody without a SQL client, which is not a product.
  *
- * The whole division needs `people:manage` (ADR 0119, ADR 0139): reading the roster and the
- * invitations is `requirePermission("people:manage")` on the server, as every write here is, and
- * `Book` never mounts this page for anybody else -- it prints `NotPermittedNotice` in its place,
- * so a member's browser does not even ask. The `canManage` checks below predate that and no
- * longer decide what an ordinary reader sees; the activity view asks `audit:read`, its own
- * permission, since that is what `audit.tenant` needs; like the hiding they do, they are courtesy, not the control. The procedures
- * refuse regardless of what the browser renders, and the server alone refuses to leave a
- * customer without an admin.
+ * The whole division needs `people:manage` (ADR 0119, ADR 0139): reading the roster, the
+ * invitations and the grants is `requirePermission("people:manage")` on the server, and `Book`
+ * never mounts this page for anybody else -- it prints `NotPermittedNotice` in its place, so a
+ * member's browser does not even ask. Within it, each view asks its own permission: the activity
+ * view `audit:read`, since that is what `audit.tenant` needs, and the role editor and the grants
+ * form `roles:manage` (ADR 0141). Like the `canManage` checks, those are courtesy, not the
+ * control. The procedures refuse regardless of what the browser renders -- the subset rule
+ * included -- and the server alone refuses to leave a customer without an admin.
  *
  * No `useState`, per `state.md`, and nothing here needs it. The two invitation inputs are
  * uncontrolled and read through refs on submit; the open view and the address search are the
@@ -25,11 +25,14 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import { GrantsView } from "@/components/AccessGrants.tsx";
 import { ActivityLog } from "@/components/ActivityLog.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { InvitePanel, OpenInvitations } from "@/components/Invitations.tsx";
 import { ViewHead } from "@/components/PeopleViews.tsx";
-import { can } from "@/lib/permissions.ts";
+import { can, type Permission } from "@/lib/permissions.ts";
+import type { ListedRole } from "@/lib/roles.ts";
+import { RolesView } from "@/components/RoleEditor.tsx";
 import { Roster } from "@/components/Roster.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { type PeopleAddress, usePeopleAddress } from "@/components/usePeopleAddress.ts";
@@ -92,14 +95,14 @@ function usePeopleMutations(
 
 /**
  * The open view's list: who has access, or the invitations still waiting, narrowed by the
- * address search, or the customer's activity. Compare roles lists nothing; its statements are
- * printed by `ViewLead`.
+ * address search; every role and its editor; the grants; or the customer's activity.
  */
 function ViewList({
   address,
   roster,
   open,
-  canManage,
+  roles,
+  held,
   writes,
   tenantId,
   signedInAs,
@@ -107,16 +110,27 @@ function ViewList({
   address: PeopleAddress;
   roster: readonly { userId: string; email: string; role: string }[];
   open: readonly { id: string; email: string; role: string; expiresAt: string }[];
-  canManage: boolean;
+  /** The customer's roles from `roles.list`, or `undefined` while they are not here. */
+  roles: readonly ListedRole[] | undefined;
+  /** The reader's own permissions: managing people, and each view's own, are read off them. */
+  held: readonly Permission[] | undefined;
   writes: PeopleMutations;
   tenantId: string;
   signedInAs: string;
 }): React.JSX.Element | null {
   const locale = useUiStore((state) => state.locale);
+  const canManage = can(held, "people:manage");
+  if (address.view === "roles") {
+    return <RolesView tenantId={tenantId} held={held} />;
+  }
+  if (address.view === "access") {
+    return <GrantsView tenantId={tenantId} held={held} roles={roles} roster={roster} />;
+  }
   if (address.view === "members") {
     return (
       <Roster
         roster={roster}
+        roles={roles}
         canManage={canManage}
         setRole={writes.setRole}
         remove={writes.remove}
@@ -133,6 +147,7 @@ function ViewList({
     return (
       <OpenInvitations
         open={open}
+        roles={roles}
         search={address.search}
         canManage={canManage}
         revoke={writes.revoke}
@@ -147,12 +162,14 @@ function ViewList({
 /** The invitation form and the role statements beside it, on the Invitations view. */
 function InviteBand({
   canManage,
+  roles,
   invite,
   tenantId,
   displayName,
   emailFieldRef,
 }: {
   canManage: boolean;
+  roles: readonly ListedRole[] | undefined;
   invite: ReturnType<typeof trpc.people.invite.useMutation>;
   tenantId: string;
   displayName: string;
@@ -166,6 +183,7 @@ function InviteBand({
       <div className="body stack">
         <InvitePanel
           canManage={canManage}
+          roles={roles}
           invite={invite}
           tenantId={tenantId}
           displayName={displayName}
@@ -177,13 +195,15 @@ function InviteBand({
 }
 
 /**
- * The people division, in four views bound to `?view=`: who has access (the default), the
- * invitations still open with the form that sends one, what each role may do, and -- for an
- * admin -- everything done in the customer (ADR 0113).
+ * The people division, in five views bound to `?view=`: who has access (the default), the
+ * invitations still open with the form that sends one, every role and -- for a holder of
+ * `roles:manage` -- its editor, the grants of one permission to a role or a person (ADR 0141),
+ * and -- for a holder of `audit:read` -- everything done in the customer (ADR 0113).
  *
  * The form and the role statements stay together on Invitations, as the design contract asks:
- * an admin choosing a role reads what it grants beside the choice. Compare roles repeats the
- * statements alone, for a reader who came to ask only that.
+ * whoever chooses a role reads what it grants beside the choice. The customer's roles are read
+ * once here (`roles.list`) and handed to every picker, so the roster, the invitation form and the
+ * grants name a role the same way.
  */
 export function People({
   tenantId,
@@ -199,6 +219,7 @@ export function People({
   const tenant = trpc.tenants.get.useQuery({ tenantId });
   const members = trpc.people.members.useQuery({ tenantId });
   const invitations = trpc.people.invitations.useQuery({ tenantId });
+  const roles = trpc.roles.list.useQuery({ tenantId });
   const writes = usePeopleMutations(tenantId, emailFieldRef);
 
   if (members.isPending || invitations.isPending) {
@@ -213,7 +234,6 @@ export function People({
     );
   }
 
-  const canManage = can(tenant.data?.permissions, "people:manage");
   const readsAudit = can(tenant.data?.permissions, "audit:read");
   const open = invitations.data.filter((i) => i.status === "pending");
   const shown: PeopleAddress =
@@ -238,7 +258,8 @@ export function People({
           address={shown}
           roster={members.data}
           open={open}
-          canManage={canManage}
+          roles={roles.data?.roles}
+          held={tenant.data?.permissions}
           writes={writes}
           tenantId={tenantId}
           signedInAs={signedInAs}
@@ -247,7 +268,8 @@ export function People({
 
       {shown.view === "invites" ? (
         <InviteBand
-          canManage={canManage}
+          canManage={can(tenant.data?.permissions, "people:manage")}
+          roles={roles.data?.roles}
           invite={writes.invite}
           tenantId={tenantId}
           displayName={tenant.data?.displayName || tenantId}

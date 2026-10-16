@@ -65,6 +65,12 @@ export const AUDITED: AuditTable = {
   "people.setRole": "service",
   "people.removeMember": "service",
 
+  // The service writes each, with the role or the grant as it was and as it became (ADR 0141).
+  "roles.save": "service",
+  "roles.delete": "service",
+  "grants.save": "service",
+  "grants.delete": "service",
+
   // A read of the raw lake, however it is sent. The SQL is an admin's and may quote customer data,
   // which is why a read copies none of its input.
   "lake.query": "read",

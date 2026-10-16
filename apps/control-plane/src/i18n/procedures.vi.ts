@@ -64,6 +64,18 @@ export const procedureSentences: SentenceTable = {
   "people.revokeInvitation": "Thu hồi một lời mời đang mở.",
   "people.setRole": "Đổi vai trò của một thành viên; không áp dụng cho admin cuối cùng.",
   "people.removeMember": "Gỡ quyền truy cập của một thành viên; không áp dụng cho admin cuối cùng.",
+  "roles.list":
+    "Mọi vai trò của khách hàng -- bốn vai trò có sẵn, rồi các vai trò riêng -- kèm các quyền của từng vai trò, số người đang giữ và số lời mời đang mở, cùng catalogue quyền. names hoặc match để lọc theo mã.",
+  "roles.get": "Một vai trò theo mã: tên, mô tả, các quyền và số người đang giữ.",
+  "roles.save":
+    "Tạo một vai trò, hoặc sửa một vai trò riêng của khách hàng: mã, tên, mô tả và các quyền trong catalogue. create từ chối mã đã dùng; nội dung giống hệt bản đã lưu trả về unchanged: true. Không lưu được vai trò có sẵn, và bạn chỉ trao hay thu lại được những quyền chính bạn đang giữ.",
+  "roles.delete":
+    "Xoá một vai trò riêng của khách hàng, cùng mọi quyền đã trao cho nó. Bị từ chối khi còn người giữ hoặc còn lời mời đang mở, với vai trò có sẵn, và với vai trò có quyền bạn không giữ.",
+  "grants.list":
+    "Các quyền đã trao trong khách hàng -- một quyền trao cho một vai trò hoặc một người, kèm thời hạn -- kể cả những quyền đã hết hạn, có đánh dấu. role hoặc email để lọc theo một đối tượng.",
+  "grants.save":
+    "Trao một quyền cho một vai trò (role) hoặc một thành viên (email), không thời hạn hoặc đến expiresAt. Lưu lại cùng quyền đó sẽ dời thời hạn. Bạn chỉ trao được quyền chính bạn đang giữ.",
+  "grants.delete": "Thu lại một quyền đã trao, theo id. Chỉ với quyền chính bạn đang giữ.",
   "audit.mine":
     "Các thao tác của chính bạn, mới nhất trước: đã làm gì, qua đâu, và kết quả ra sao.",
   "audit.tenant": "Mọi thao tác trong khách hàng, của bất kỳ ai, mới nhất trước.",

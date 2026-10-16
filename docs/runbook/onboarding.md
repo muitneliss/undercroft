@@ -20,7 +20,8 @@ khách hàng, bằng đúng địa chỉ email họ sẽ dùng, và chọn vai t
 
 Người muốn dựng model cần vai trò `builder` (quyền `models:write` và `lake:read`) hoặc `admin`;
 không cần là `admin` chỉ để sửa model. Mỗi vai trò là một tập quyền, liệt kê ở
-[Permissions](../reference/permissions.md). Nếu hệ thống chưa có ai để mời người đầu tiên, xem
+[Permissions](../reference/permissions.md). Khách hàng cũng có thể tạo vai trò riêng, hoặc trao
+thêm một quyền cho một người, có thời hạn hay không: xem [Access control](access-control.md). Nếu hệ thống chưa có ai để mời người đầu tiên, xem
 [Bootstrap the first admin](sign-in-setup.md#7-bootstrap-the-first-admin).
 
 Ba từ gặp ngay trong trang Báo cáo:
@@ -90,7 +91,9 @@ the exact email address they will use, and picks a role:
 
 Building models needs `builder` (the `models:write` and `lake:read` permissions) or `admin`;
 nobody has to be made `admin` only to fix models. Each role is a set of permissions, listed in
-[Permissions](../reference/permissions.md). If nobody can invite the first person yet, see
+[Permissions](../reference/permissions.md). A customer can also define roles of its own, or grant
+one more permission to one person, with or without an expiry: see
+[Access control](access-control.md). If nobody can invite the first person yet, see
 [Bootstrap the first admin](sign-in-setup.md#7-bootstrap-the-first-admin).
 
 Three words they meet on the Reports page:

@@ -150,6 +150,15 @@ export const EFFECTS: EffectTable = {
   "people.setRole": "write",
   "people.removeMember": "destructive",
 
+  // Saving a role changes what its holders may do, and is undone by saving it back. Deleting one
+  // takes every grant to it with it, which nothing restores but granting each again (ADR 0141).
+  "roles.save": "write",
+  "roles.delete": "destructive",
+  // A grant is undone by deleting it; deleting one is undone only by granting it again, with
+  // whatever expiry it had looked up first.
+  "grants.save": "write",
+  "grants.delete": "destructive",
+
   // Reads nothing it could not read anyway, but it runs SQL an admin wrote against the raw
   // lake, which ADR 0029 kept away from the assistant for the same reason. It takes the same
   // opt-in a write does.

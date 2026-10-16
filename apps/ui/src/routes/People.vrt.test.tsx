@@ -5,8 +5,10 @@
  * customer's activity, one row for each door and outcome (ADR 0113). ADR 0099.
  */
 
+import { PERMISSIONS } from "@undercroft/contracts/access";
 import { describe, test as it } from "vitest";
 
+import { builtInRoles } from "@/test/access.ts";
 import { ACTIVITY } from "@/test/activityBook.ts";
 import { INVITATIONS, MEMBERS, TENANT, tenant } from "@/test/demoBook.ts";
 import { type Answers, open } from "@/test/visual.tsx";
@@ -17,6 +19,7 @@ const ANSWERS: Answers = {
   "tenants.get": tenant("admin"),
   "people.members": MEMBERS,
   "people.invitations": INVITATIONS,
+  "roles.list": { roles: builtInRoles(), permissions: [...PERMISSIONS] },
   "audit.tenant": ACTIVITY,
 };
 

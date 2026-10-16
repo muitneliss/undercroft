@@ -19,7 +19,7 @@ import { ADMIN_ROLE, type Permission } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import { isRoleCollision, provisionTenantRoles } from "@undercroft/db/repos";
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
-import { listForUser, type MemberTenant } from "../repos/membership.ts";
+import { listForUser, type MemberTenant, type MemberTenantPolicy } from "../repos/membership.ts";
 import {
   createTenant,
   deactivateTenant,
@@ -44,20 +44,33 @@ export type { Tenant } from "../repos/tenant.ts";
  * A superadmin sees every tenant, each reported as `admin` -- which is exactly the authority
  * `authz.accessIn` grants them when they open one, so the list and the page cannot
  * disagree about what may be done there. Each row's `permissions` is asked of the same
- * evaluator for the same reason (ADR 0139): the list is how a page knows which divisions to
- * offer before it has opened any one customer.
+ * evaluator over the same policy `accessFor` reads -- a customer's own role and the grants in
+ * force included (ADR 0141) -- for the same reason (ADR 0139): the list is how a page knows which
+ * divisions to offer before it has opened any one customer.
  */
 export async function listForCaller(
   exec: SqlExecutor,
   caller: { userId: string; superadmin: boolean },
 ): Promise<ListedTenant[]> {
-  const rows: readonly MemberTenant[] = caller.superadmin
-    ? (await listAllTenants(exec)).map((tenant) => ({ ...tenant, role: ADMIN_ROLE }))
+  const rows: readonly MemberTenantPolicy[] = caller.superadmin
+    ? (await listAllTenants(exec)).map((tenant) => ({
+        ...tenant,
+        role: ADMIN_ROLE,
+        roleLabel: null,
+        rolePermissions: [],
+        grants: [],
+      }))
     : await listForUser(exec, caller.userId);
   return await Promise.all(
-    rows.map(async (row) => ({
+    rows.map(async ({ rolePermissions, grants, ...row }) => ({
       ...row,
-      permissions: await permissionsOf({ userId: caller.userId, tenantId: row.id, role: row.role }),
+      permissions: await permissionsOf({
+        userId: caller.userId,
+        tenantId: row.id,
+        role: row.role,
+        rolePermissions,
+        grants,
+      }),
     })),
   );
 }

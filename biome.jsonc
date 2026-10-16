@@ -1161,7 +1161,7 @@
     // router readable: `connections.list`, `people.invite`, `tenants.rename` line up with the
     // procedure names they are bound to, and the alternative is importing forty functions by
     // name into one file. The rule's concern is bundle size in code that ships to a browser;
-    // these three files are server-side and never bundled. `apps/ui` keeps the rule.
+    // these files are server-side and never bundled. `apps/ui` keeps the rule.
     {
       "includes": [
         "apps/control-plane/src/handlers/router.ts",
@@ -1174,6 +1174,8 @@
         "apps/control-plane/src/handlers/macrosRouter.ts",
         "apps/control-plane/src/handlers/modelsRouter.ts",
         "apps/control-plane/src/handlers/peopleRouter.ts",
+        "apps/control-plane/src/handlers/rolesRouter.ts",
+        "apps/control-plane/src/handlers/grantsRouter.ts",
         "apps/control-plane/src/handlers/seedsRouter.ts",
         "apps/control-plane/src/handlers/tenantsRouter.ts",
         "apps/control-plane/src/inviteCli.ts",

@@ -138,7 +138,9 @@ in that customer; the `undercroft` skill's `access-control.md` reference has the
 catalogue, the built-in roles and what to tell a person a permission is missing for. If the
 person lacks one of these, say so at the start, before the interview. Do not find out
 halfway through. A person who can read but not write can still be helped to the end of
-discovery, and leave with a plan someone else can carry out.
+discovery, and leave with a plan someone else can carry out. When they lack `models:write` or
+`lake:read` and want it, the `undercroft-access-control` skill turns that into the smallest
+change -- the `builder` role, or a grant of the one permission -- for someone who may make it.
 
 ## The workflow
 

@@ -11,9 +11,10 @@ dashboards read the tables the models build.
 
 Everything the web UI does, you can do too, as the person who signed in and never as more.
 Every permission check and every refusal the web UI has applies to you unchanged. What the
-person may do in a customer is a set of permissions their role holds; read
-`references/access-control.md` for the catalogue, the built-in roles and how to check the
-person's own with `tenants.get` before you plan a write.
+person may do in a customer is a set of permissions -- those their role holds, built-in or one
+the customer defined, and any granted to them; read `references/access-control.md` for the
+catalogue, the roles, grants and how to check the person's own with `tenants.get` before you
+plan a write. A request to change who may do what is the `undercroft-access-control` workflow.
 
 ## Words the platform uses
 
@@ -161,6 +162,12 @@ Each workflow is its own skill. Follow it when the person's request matches.
   and what the person needs, and whether the right outcome is a look at the data, a report
   over existing models, a change to an existing model or macro, or a new model -- then gets
   a plan approved before any write, and checks a model before it is saved.
+- `undercroft-access-control`: for a person who wants someone to be able to do something --
+  edit models, read the raw lake, manage people -- or to stop being able to, or asks why they
+  cannot. It reads the caller's own permissions first and turns the request into the smallest
+  change: a role the customer already has, a role of its own (`roles.save`), or one permission
+  granted to a role or a person, standing or until a date (`grants.save`). It explains the
+  subset rule when the caller cannot grant what is asked, and asks before every write.
 
 ## Things only the person can do
 
@@ -184,7 +191,9 @@ Both doors refuse with the same codes. Branch on the code, and give the person t
   `HUMAN_REQUIRED` and `NOT_FOUND`. They do not change on a retry. `NOT_FOUND` may mean the
   thing is not yours to see, and the platform deliberately does not say which. A
   `PERMISSION_DENIED` whose details say `reason: "PERMISSION_REQUIRED"` names the
-  `permission` the person lacks: `references/access-control.md` says what to tell them.
+  `permission` the person lacks, and one saying `reason: "PERMISSION_NOT_HELD"` names the
+  permissions they tried to give or take away without holding them:
+  `references/access-control.md` says what to tell them.
 - **Ask first:** `CONFLICT` means the platform's state refused it, and the message says which
   state -- a name already taken, a build already running. Tell the person; do not loop. A
   customer an admin has deactivated refuses every operation this way, with

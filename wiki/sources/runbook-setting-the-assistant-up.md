@@ -5,7 +5,7 @@ date: 2026-10-16
 tags: []
 source: docs/runbook/assistant-setup.md
 source_path: docs/runbook/assistant-setup.md
-source_hash: 4f3fea1b357d43b8ac0ce5fc353c1a51bec8221c79a249710c0fbc5004f55422
+source_hash: 78878f797f5b973bf2a2d787c2a8570fe3b2570c3a55d5203305cb687658305e
 ingested: 2026-10-16
 ---
 

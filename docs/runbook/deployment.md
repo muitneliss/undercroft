@@ -438,8 +438,8 @@ not silently accepted — the invitation is keyed by the address.
 
 From then on, use **People** inside the tenant: invite an address, pick a role, withdraw an
 invitation that has not been accepted. Inviting needs `people:manage`, which only an admin
-holds among the built-in roles; a builder, a member and a viewer cannot, and the server refuses
-regardless of what the browser shows. The page reports whether the
+holds among the built-in roles (a role the customer defines may hold it too); a builder, a
+member and a viewer cannot, and the server refuses regardless of what the browser shows. The page reports whether the
 invitation was actually emailed — with no mail configured it still works, and you have to
 tell the person yourself.
 

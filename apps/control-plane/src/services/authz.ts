@@ -20,6 +20,13 @@
  * second branch in the middleware, is how an authorization check drifts away from the query it
  * was meant to guard.
  *
+ * Since ADR 0141 a customer may define its own roles and grant a permission to a role or to one
+ * person, optionally until a moment. Nothing here changes shape for it: the membership statement
+ * reads the custom role's permissions and the grants in force, and Casbin decides over them.
+ * What is new is the SUBSET RULE (`lacking`, `conferredBy`): nobody may give, take away or define
+ * a permission they do not hold themselves, so `roles:manage` and `people:manage` cannot be
+ * turned into every other permission by granting it to oneself or to a friend.
+ *
  * Since ADR 0110 the answer also carries whether the tenant is deactivated. Authority and state
  * are two facts and stay two fields: a deactivated tenant's admin is still its admin -- that is
  * who may reactivate it -- and the refusal a deactivated tenant earns is argued in
@@ -28,9 +35,10 @@
 
 import { ADMIN_ROLE, type Permission } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
-import { accessFor } from "../repos/membership.ts";
+import { rolePolicy } from "../repos/accessRoles.ts";
+import { accessFor, type MemberAccess, memberIdForEmail } from "../repos/membership.ts";
 import { findTenant } from "../repos/tenant.ts";
-import { permissionsOf } from "./rbac.ts";
+import { permissionsOf, permissionsOfRole } from "./rbac.ts";
 import { isSuperadmin, type Superadmins } from "./superadmin.ts";
 
 export type { Role } from "../repos/membership.ts";
@@ -39,6 +47,8 @@ export type { Role } from "../repos/membership.ts";
 export interface Access {
   /** The role key the caller holds, for a person to read. Decide on `permissions`, never this. */
   readonly role: string;
+  /** The customer's name for that role when it is one of its own (ADR 0141); `null` otherwise. */
+  readonly roleLabel: string | null;
   /** What the caller may do here, sorted -- what Casbin decided, not a copy of the grants. */
   readonly permissions: readonly Permission[];
   /** When the tenant was deactivated; `null` while it is in use. ADR 0110. */
@@ -75,22 +85,74 @@ export async function accessIn(
   }
   return {
     role: standing.role,
+    roleLabel: standing.roleLabel,
     permissions: await permissionsOf({
+      ...standing,
       userId: input.userId,
       tenantId: input.tenantId,
-      role: standing.role,
     }),
     deactivatedAt: standing.deactivatedAt,
   };
 }
 
-/** A superadmin's standing in a tenant that exists: `admin`, and the tenant's state. */
-async function platformStanding(
+/**
+ * A superadmin's standing in a tenant that exists: `admin`, and the tenant's state. No grants and
+ * no custom permissions: `admin` already holds the whole catalogue.
+ */
+async function platformStanding(exec: SqlExecutor, tenantId: string): Promise<MemberAccess | null> {
+  const tenant = await findTenant(exec, tenantId);
+  return tenant === null
+    ? null
+    : {
+        role: ADMIN_ROLE,
+        roleLabel: null,
+        rolePermissions: [],
+        grants: [],
+        deactivatedAt: tenant.deactivatedAt,
+      };
+}
+
+/**
+ * The permissions in `involved` that `held` does not include, in catalogue order, deduplicated --
+ * empty when the caller may make the change. The subset rule (ADR 0141), asked one way by every
+ * procedure that defines, grants or assigns a permission: you may change only what you could
+ * have created, so taking a permission away needs it held as much as giving it does.
+ */
+export function lacking(
+  held: readonly Permission[],
+  involved: readonly Permission[],
+): readonly Permission[] {
+  return [...new Set(involved)].filter((permission) => !held.includes(permission));
+}
+
+/**
+ * What holding `role` confers in this tenant, as Casbin decides it -- a built-in's grants, a
+ * customer's own role's permissions, and the grants in force to the role -- or `null` when the
+ * customer has no role with that key. The question the subset rule asks before anyone is
+ * invited at a role or given one.
+ */
+export async function conferredBy(
   exec: SqlExecutor,
   tenantId: string,
-): Promise<{ role: string; deactivatedAt: string | null } | null> {
-  const tenant = await findTenant(exec, tenantId);
-  return tenant === null ? null : { role: ADMIN_ROLE, deactivatedAt: tenant.deactivatedAt };
+  role: string,
+): Promise<readonly Permission[] | null> {
+  const policy = await rolePolicy(exec, tenantId, role);
+  return policy === null ? null : await permissionsOfRole({ ...policy, tenantId, role });
+}
+
+/**
+ * What a member holds in this tenant, by address -- their role's and their own grants -- or `null`
+ * for an address that is no member. What removing them takes away, for the subset rule.
+ */
+export async function heldByMember(
+  exec: SqlExecutor,
+  tenantId: string,
+  email: string,
+): Promise<readonly Permission[] | null> {
+  const userId = await memberIdForEmail(exec, tenantId, email);
+  const access =
+    userId === null ? null : await accessIn(exec, { tenantId, userId, superadmin: false });
+  return access === null ? null : access.permissions;
 }
 
 /** Whether an access holds one permission: the question every gate asks, asked one way. */

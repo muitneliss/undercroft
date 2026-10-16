@@ -416,3 +416,13 @@
 ## [2026-10-16] ingest | Runbook: Agent skills
 ## [2026-10-16] ingest | Runbook: Connecting an agent over MCP
 ## [2026-10-16] ingest | What an ingest run counts
+## [2026-10-16] ingest | ADR 0141 Custom Roles and Grants Under the Subset Rule
+## [2026-10-16] ingest | Runbook: Access control
+## [2026-10-16] ingest | Permissions
+## [2026-10-16] ingest | Runbook: Agent skills
+## [2026-10-16] ingest | Runbook: Setting the assistant up
+## [2026-10-16] ingest | Runbook Deployment
+## [2026-10-16] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-16] ingest | Runbook: Onboarding a new person
+## [2026-10-16] ingest | Runbook Sign-In Setup
+## [2026-10-16] ingest | Architecture

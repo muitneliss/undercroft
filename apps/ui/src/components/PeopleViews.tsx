@@ -8,13 +8,13 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
-import { RoleRights } from "@/components/Invitations.tsx";
 import { type PeopleAddress, type PeopleView, VIEWS } from "@/components/usePeopleAddress.ts";
 
 /**
  * The views as one control, the Models division's plate pair with more plates, and under it
  * what the open view needs first (`ViewLead`). Each count is the whole list's, not the search's:
- * it says what a view holds before it is opened. Activity is printed for an admin only.
+ * it says what a view holds before it is opened. Activity is printed only for a holder of
+ * `audit:read`.
  */
 export function ViewHead({
   address,
@@ -34,6 +34,7 @@ export function ViewHead({
     members: t("people.viewMembers", { count: members }),
     invites: t("people.viewInvites", { count: invitations }),
     roles: t("people.viewRoles"),
+    access: t("people.viewAccess"),
     activity: t("people.viewActivity"),
   };
   return (
@@ -55,7 +56,7 @@ export function ViewHead({
   );
 }
 
-/** What the open view needs first: the role statements, the log's scope, or the address search. */
+/** What the open view needs first: what roles and grants are, the log's scope, or the search. */
 function ViewLead({
   address,
   tenantId,
@@ -65,7 +66,10 @@ function ViewLead({
 }): React.JSX.Element {
   const { t } = useTranslation();
   if (address.view === "roles") {
-    return <RoleRights tenantId={tenantId} />;
+    return <p className="prose">{t("roleEditor.lead", { tenantId })}</p>;
+  }
+  if (address.view === "access") {
+    return <p className="prose">{t("accessGrants.lead")}</p>;
   }
   if (address.view === "activity") {
     return <p className="prose">{t("activity.leadTenant", { tenantId })}</p>;

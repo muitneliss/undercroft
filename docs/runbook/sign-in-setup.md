@@ -303,10 +303,13 @@ Open the tenant → **People**. Enter an address, pick a role, send.
 
 Each role is a set of permissions, and the server checks the permission, not the role's name;
 [the permissions reference](../reference/permissions.md) lists every permission, what it covers
-and which role holds it (ADR 0139). Roles a customer defines for itself, and grants on a single
-model or raw stream, come in later changes.
+and which role holds it (ADR 0139). A customer may also define roles of its own and grant one
+permission to a role or a person, with or without an expiry (ADR 0141):
+[access control](access-control.md) says how. Grants on a single model or raw stream come in a
+later change.
 
-The People page opens only for someone who holds `people:manage` in the customer (an admin), and
+The People page opens only for someone who holds `people:manage` in the customer (an admin, or a
+role of the customer's own that holds it), and
 the roster and the open invitations are refused to anyone else through every door, the CLI and
 MCP included (ADR 0119). A `viewer`, `member` or `builder` who opens it finds a note in its place
 that points them at their own activity on the account page.
