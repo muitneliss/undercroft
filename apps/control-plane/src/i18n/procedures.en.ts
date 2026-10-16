@@ -57,20 +57,26 @@ export const procedureSentences: SentenceTable = {
   "roles.delete":
     "Delete a role the customer defined, with every grant to it. Refused while anyone holds it or an open invitation names it, for a built-in, and for a role holding a permission you do not hold.",
   "grants.list":
-    "The grants in the customer -- one permission given to a role or a person, with its expiry -- expired ones included and marked. role or email to narrow to one subject.",
+    "The grants in the customer -- a permission, or reading one thing, given to a role or a person, with its expiry -- expired ones included and marked. role or email to narrow to one subject.",
   "grants.save":
-    "Give one permission to a role (role) or a member (email), standing or until expiresAt. Saving the same grant again moves its expiry. You may grant only a permission you hold yourself.",
-  "grants.delete": "Take one grant away, by id. Only a grant of a permission you hold yourself.",
+    "Give a role (role) or a member (email), standing or until expiresAt, exactly one of: permission, one from the catalogue; or object, reading one thing -- model:<name>, raw:<source>/<entity>, raw:<source>/*, report:question:<id>, report:dashboard:<id>, or the whole with model:*, raw:*, report:*. A customer's own role reads only what it is granted. Saving the same grant again moves its expiry. You may grant only a permission you hold and what you can read yourself.",
+  "grants.delete":
+    "Take one grant away, by id. Only a grant of a permission you hold, or of something you can read yourself.",
+  "grants.reach":
+    'What a role (role), a member (email) or -- naming nobody -- you may do and read: permissions, and reach with models, raw and reports, each "all" or the named things. Ask it before a grant and after. Asking about a role or another person needs people:manage.',
   "audit.mine":
     "Your own actions, newest first: what you did, through which door, and how it ended.",
   "audit.tenant": "Every action taken in the customer, by anyone, newest first.",
   "audit.all": "Every action on the platform, newest first. Platform superadmins only.",
-  "lake.summary": "What has landed, per stream: counts and freshness.",
-  "lake.records": "An entity's raw records, or the ones a run wrote.",
-  "lake.documents": "A source's raw documents, or the ones a run wrote.",
+  "lake.summary":
+    "What has landed, per stream: counts and freshness. Only the streams you can read.",
+  "lake.records":
+    "An entity's raw records, or the ones a run wrote. Only a stream you can read; any other is an empty page.",
+  "lake.documents":
+    "A source's raw documents, or the ones a run wrote. Only a source whose documents you can read; any other is an empty page.",
   "lake.query": "Run one SELECT over the raw lake.",
   "lake.search":
-    "Full-text search over the raw lake. Each kind ranks only its newest matches, and the answer says when that cut any.",
+    "Full-text search over the raw lake. Each kind ranks only its newest matches, and the answer says when that cut any. Only in the streams you can read, narrowed before anything is ranked.",
   "lake.querySchema":
     "The tables and columns lake query can read; tables for exactly those, match for names containing a fragment (case-insensitive), columns: false for table names alone.",
   "documentKinds.list":
@@ -84,11 +90,11 @@ export const procedureSentences: SentenceTable = {
   "documentKinds.publish":
     "Publish the catalogue's draft, so every document is classified against it again.",
   "models.list":
-    "The customer's dbt models with their last build: description (the author's, null when there is none), sqlSha256 and testsSha256 to compare a copy, and the column count, no SQL. names or match to narrow; include: [\"columns\"] for each build's columns, include: [\"dependsOn\"] for what each model declares it reads: reads (model, seed, raw or missing, with the macro via) and undeclared (why its upstream cannot be read; empty reads with undeclared reasons is not reading nothing); limit and cursor to page, which answers { items, nextCursor }. lastTests is what the tests of the published build serving each model's rows found: passing, failing (failing counts them) or unknown (no test record, never a pass); unpublished names a newer build held back because it or its tests failed, and runId null with unpublished set is a model with no passing version yet.",
+    "The customer's dbt models with their last build: description (the author's, null when there is none), sqlSha256 and testsSha256 to compare a copy, and the column count, no SQL. names or match to narrow; include: [\"columns\"] for each build's columns, include: [\"dependsOn\"] for what each model declares it reads: reads (model, seed, raw or missing, with the macro via) and undeclared (why its upstream cannot be read; empty reads with undeclared reasons is not reading nothing); limit and cursor to page, which answers { items, nextCursor }. lastTests is what the tests of the published build serving each model's rows found: passing, failing (failing counts them) or unknown (no test record, never a pass); unpublished names a newer build held back because it or its tests failed, and runId null with unpublished set is a model with no passing version yet. Only the models and reference tables you can read.",
   "models.revision":
     "One hash for each of the customer's models, macros, reference tables and questions and one over all of them, from what each save wrote: equal means nothing changed.",
   "models.get":
-    "One dbt model, its SQL, tests and description, with the hashes of its SQL and tests, and lastTests: passing, failing or unknown, with failingTests and warningTests by name, and unpublished: a newer build held back, whose rows Reports do not read.",
+    "One dbt model, its SQL, tests and description, with the hashes of its SQL and tests, and lastTests: passing, failing or unknown, with failingTests and warningTests by name, and unpublished: a newer build held back, whose rows Reports do not read. One you cannot read is NOT_FOUND.",
   "models.save":
     "Store a dbt model; runs nothing. tests: columns maps a column to not_null, unique, {kind: accepted_values, values, quote?} or {kind: relationships, to, field}; sql lists SQL tests {name, sql}, each a select of the rows that break a rule; any test takes severity error or warn. A SQL test or relationships that models.check finds an error in is refused and nothing is written. description is optional, at most 1000 characters and without { or }: left out it keeps the stored one, null clears it. The SQL, tests and description already stored answer unchanged: true and change nothing.",
   "models.delete":
@@ -96,7 +102,7 @@ export const procedureSentences: SentenceTable = {
   "models.build":
     "Build models in one dbt build: name for one model, or names for up to 20, each name, +name (with the models upstream) or name+ (with those downstream); every name must be one of the customer's models. Before it runs, the parents it reads without rebuilding are checked: one whose latest tests failed is PRECONDITION_FAILED naming the parent, its tests and the run (rebuild it, or build +name); one with no test record is named in parentTestsUnknown. By default it waits and answers waited true with ok, verdict (clean, tests-failing or failed: success is clean; ok with failing tests is tests-failing), testsFailed, stepSummary (counts by kind and status), the steps asked for (steps: none, problems by default, or all; narrow with stepStatus, stepKind, stepName; read the next page with runs.get on runId with stepCursor), rowCounts (each named model's rows; null means not counted, never 0) and preview when one model is named. A build is written to staging and only what built, passed its error-severity tests and whose parents in the build were published is published for Reports; each model step's promoted says whether it was, and a held model keeps its last passing version, so rowCounts and preview are null for it. wait false answers at once with waited false and runId; wait on that run with runs.get and waitSeconds. While another build runs it is a CONFLICT naming that run's runId and startedAt.",
   "models.lineage":
-    "Which models read which models, reference tables and raw lake tables, from the models' and macros' own ref() and source() declarations. name for the part around one model, reference table or raw table (raw.records), direction up, down or both, and depth to bound the steps; limit and cursor to page, at most limit nodes and limit edges a page, with nextCursor.",
+    "Which models read which models, reference tables and raw lake tables, from the models' and macros' own ref() and source() declarations. name for the part around one model, reference table or raw table (raw.records), direction up, down or both, and depth to bound the steps; limit and cursor to page, at most limit nodes and limit edges a page, with nextCursor. Only the models you can read, with their edges.",
   "models.reference":
     "Reference material for a model's author: the sources, the platform's macros and the customer's own. parts for only some of sources, platformMacros and tenantMacros; the first two are the same text on every call.",
   "models.check":
@@ -112,29 +118,30 @@ export const procedureSentences: SentenceTable = {
     "Store a dbt macro, one whole {% macro %} definition that every model can call; runs nothing. The definition and description already stored answer unchanged: true and change nothing.",
   "macros.delete": "Delete a dbt macro; refused while a model or another macro calls it.",
   "seeds.list":
-    "The customer's reference tables (dbt seeds), which models read with ref(): names, column and row counts and a hash of the content, no cells. names or match to narrow.",
+    "The customer's reference tables (dbt seeds), which models read with ref(): names, column and row counts and a hash of the content, no cells. names or match to narrow. Only the ones you can read.",
   "seeds.get":
-    "One reference table whole: its columns with their declared types, every row with each cell a string or null, and its hash.",
+    "One reference table whole: its columns with their declared types, every row with each cell a string or null, and its hash. One you cannot read is NOT_FOUND.",
   "seeds.save":
     "Store a small reference table: columns is [{name, type}] with type one of text, integer, bigint, numeric(18,4), boolean, date, timestamptz; rows are arrays of strings or null, one cell per column. No type is inferred: a cell its column cannot hold is refused, naming the row and column. At most 10,000 rows, 100 columns and 1 MB. A table identical to the stored one answers unchanged: true.",
   "seeds.delete":
     "Delete a reference table and the table loaded from it; refused while a model reads it by ref().",
   "bi.answer":
-    "Answer a question definition: columns, rows and truncated, and qualifiers naming each table it read whose latest tests fail or are unknown, or whose current build was held back (unpublished: the rows are the last passing version) (null when the tables read are not known); rows are never withheld. A model with no passing version yet is PRECONDITION_FAILED naming it.",
+    "Answer a question definition: columns, rows and truncated, and qualifiers naming each table it read whose latest tests fail or are unknown, or whose current build was held back (unpublished: the rows are the last passing version) (null when the tables read are not known); rows are never withheld. A model with no passing version yet is PRECONDITION_FAILED naming it. As you: its SQL reads only the models you can read, and any other table is refused.",
   "bi.runQuestion":
     "Run a saved question with parameters; answers as bi.answer, qualifiers included.",
   "bi.compile": "Compile a question definition to SQL.",
   "bi.schema":
-    "The tables and columns reports can read; tables for exactly those, match for names containing a fragment (case-insensitive), columns: false for table names alone.",
+    "The tables and columns reports can read; tables for exactly those, match for names containing a fragment (case-insensitive), columns: false for table names alone. Only the tables of the models you can read.",
   "bi.questions.list":
-    'The saved questions: kind, chart type and definitionSha256, no SQL. names or match to narrow; include: ["definition", "chart"] for either in full; limit and cursor to page, which answers { items, nextCursor }.',
-  "bi.questions.get": "One saved question.",
+    'The saved questions: kind, chart type and definitionSha256, no SQL. names or match to narrow; include: ["definition", "chart"] for either in full; limit and cursor to page, which answers { items, nextCursor }. Only the questions you can read.',
+  "bi.questions.get": "One saved question. One you cannot read is NOT_FOUND.",
   "bi.questions.answer":
     "A saved question's answer under parameters, with qualifiers as bi.answer gives them.",
   "bi.questions.save": "Save a question.",
   "bi.questions.delete": "Delete a question.",
-  "bi.dashboards.list": "The dashboards.",
-  "bi.dashboards.get": "One dashboard.",
+  "bi.dashboards.list": "The dashboards. Only the dashboards you can read.",
+  "bi.dashboards.get":
+    "One dashboard. One you cannot read is NOT_FOUND; ungranted names its tiles whose questions you may not open.",
   "bi.dashboards.save": "Save a dashboard.",
   "bi.dashboards.delete": "Delete a dashboard.",
   "bi.exports.create":

@@ -9,6 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { WHOLE_REACH } from "@undercroft/contracts/access";
 import { closeRun, openRun, recordSteps } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
@@ -51,6 +52,7 @@ const DEALS_BY_STAGE = {
 describe("questions", () => {
   it("are saved, read back parsed, updated in place, and kept to their tenant", async () => {
     const saved = await saveQuestion(db, {
+      reach: WHOLE_REACH,
       ...ACTOR,
       tenantId: TENANT,
       name: "Deals by stage",
@@ -61,13 +63,14 @@ describe("questions", () => {
       throw new Error("expected the question to be saved");
     }
 
-    const read = await getQuestionView(db, TENANT, saved.id);
+    const read = await getQuestionView(db, TENANT, saved.id, WHOLE_REACH);
     expect(read?.name).toBe("Deals by stage");
     expect(read?.definition).toEqual(DEALS_BY_STAGE);
     expect(read?.chart.type).toBe("bar");
     expect(read?.updatedBy).toBe("u-ada");
 
     const updated = await saveQuestion(db, {
+      reach: WHOLE_REACH,
       ...ACTOR,
       tenantId: TENANT,
       id: saved.id,
@@ -76,15 +79,16 @@ describe("questions", () => {
       chart: { type: "table", y: [], options: {} },
     });
     expect(updated).toEqual({ ok: true, id: saved.id });
-    expect((await getQuestionView(db, TENANT, saved.id))?.definition).toEqual({
+    expect((await getQuestionView(db, TENANT, saved.id, WHOLE_REACH))?.definition).toEqual({
       kind: "sql",
       sql: "select 1",
     });
 
     // Another tenant cannot see it, update it, or delete it.
-    expect(await getQuestionView(db, OTHER, saved.id)).toBeNull();
+    expect(await getQuestionView(db, OTHER, saved.id, WHOLE_REACH)).toBeNull();
     expect(
       await saveQuestion(db, {
+        reach: WHOLE_REACH,
         ...ACTOR,
         tenantId: OTHER,
         id: saved.id,
@@ -94,16 +98,27 @@ describe("questions", () => {
       }),
     ).toEqual({ ok: false, reason: "not-found" });
     expect(
-      await removeQuestion(db, { tenantId: OTHER, id: saved.id, actor: asActor("x@example.test") }),
+      await removeQuestion(db, {
+        reach: WHOLE_REACH,
+        tenantId: OTHER,
+        id: saved.id,
+        actor: asActor("x@example.test"),
+      }),
     ).toBe(false);
-    expect(await listQuestionViews(db, OTHER)).toEqual({ ok: true, value: [] });
-    expect(await removeQuestion(db, { tenantId: TENANT, id: saved.id, actor: ACTOR.actor })).toBe(
-      true,
-    );
+    expect(await listQuestionViews(db, OTHER, WHOLE_REACH)).toEqual({ ok: true, value: [] });
+    expect(
+      await removeQuestion(db, {
+        reach: WHOLE_REACH,
+        tenantId: TENANT,
+        id: saved.id,
+        actor: ACTOR.actor,
+      }),
+    ).toBe(true);
   });
 
   it("a saved question is answered as the compiled SQL with the dashboard's values bound", async () => {
     const saved = await saveQuestion(db, {
+      reach: WHOLE_REACH,
       ...ACTOR,
       tenantId: TENANT,
       name: "Deals by stage",
@@ -116,6 +131,7 @@ describe("questions", () => {
     const worker = new InMemoryWorkerClient();
 
     const outcome = await answerQuestion(db, worker, {
+      reach: WHOLE_REACH,
       tenantId: TENANT,
       questionId: saved.id,
       params: { period_from: "2026-01-01" },
@@ -132,11 +148,13 @@ describe("questions", () => {
           "LIMIT 100",
         ].join("\n"),
         limit: 100,
+        scope: null,
       },
     ]);
 
     // With the parameter unbound, nothing is sent.
     const refused = await answerQuestion(db, worker, {
+      reach: WHOLE_REACH,
       tenantId: TENANT,
       questionId: saved.id,
       params: {},
@@ -202,7 +220,12 @@ describe("an answer's qualifiers (issue 456)", () => {
       relations: ["fct_ok", "never_built", "t_demo"],
     });
 
-    const outcome = await answer(db, worker, { tenantId: TENANT, definition: SQL, params: {} });
+    const outcome = await answer(db, worker, {
+      reach: WHOLE_REACH,
+      tenantId: TENANT,
+      definition: SQL,
+      params: {},
+    });
     if (!outcome.ok) {
       throw new Error("expected an answer");
     }
@@ -236,12 +259,13 @@ describe("an answer's qualifiers (issue 456)", () => {
     const passing = await answer(
       db,
       new InMemoryWorkerClient().answering({ ...ROWS, relations: ["fct_ok"] }),
-      { tenantId: TENANT, definition: SQL, params: {} },
+      { tenantId: TENANT, definition: SQL, params: {}, reach: WHOLE_REACH },
     );
     expect(passing.ok && passing.value.qualifiers).toEqual([]);
 
     // A worker older than the plan read sends no relations: not "none read", which `[]` would say.
     const older = await answer(db, new InMemoryWorkerClient().answering(ROWS), {
+      reach: WHOLE_REACH,
       tenantId: TENANT,
       definition: SQL,
       params: {},
@@ -253,6 +277,7 @@ describe("an answer's qualifiers (issue 456)", () => {
 describe("dashboards", () => {
   it("are saved with their grid and filters and read back parsed", async () => {
     const question = await saveQuestion(db, {
+      reach: WHOLE_REACH,
       ...ACTOR,
       tenantId: TENANT,
       name: "q",
@@ -263,6 +288,7 @@ describe("dashboards", () => {
       throw new Error("expected the question to be saved");
     }
     const saved = await saveDashboard(db, {
+      reach: WHOLE_REACH,
       ...ACTOR,
       tenantId: TENANT,
       name: "Sales",
@@ -273,10 +299,10 @@ describe("dashboards", () => {
       throw new Error("expected the dashboard to be saved");
     }
 
-    const read = await getDashboardView(db, TENANT, saved.id);
+    const read = await getDashboardView(db, TENANT, saved.id, WHOLE_REACH);
     expect(read?.layout.tiles).toEqual([{ questionId: question.id, x: 0, y: 0, w: 6, h: 4 }]);
     expect(read?.filters).toEqual([{ name: "period", kind: "date_range", label: "Kỳ" }]);
-    expect(await getDashboardView(db, OTHER, saved.id)).toBeNull();
+    expect(await getDashboardView(db, OTHER, saved.id, WHOLE_REACH)).toBeNull();
   });
 });
 
@@ -333,7 +359,12 @@ describe("an answer over a model whose current build was held back (issue 459)",
       relations: ["fct_revenue"],
     });
 
-    const outcome = await answer(db, worker, { tenantId: TENANT, definition: SQL, params: {} });
+    const outcome = await answer(db, worker, {
+      reach: WHOLE_REACH,
+      tenantId: TENANT,
+      definition: SQL,
+      params: {},
+    });
 
     expect(outcome.ok && outcome.value.qualifiers).toEqual([
       {
@@ -358,7 +389,12 @@ describe("an answer over a model whose current build was held back (issue 459)",
       relations: ["fct_revenue"],
     });
 
-    const outcome = await answer(db, worker, { tenantId: TENANT, definition: SQL, params: {} });
+    const outcome = await answer(db, worker, {
+      reach: WHOLE_REACH,
+      tenantId: TENANT,
+      definition: SQL,
+      params: {},
+    });
 
     expect(outcome.ok && outcome.value.qualifiers).toEqual([]);
   });
@@ -369,7 +405,12 @@ describe("an answer over a model whose current build was held back (issue 459)",
       'relation "fct_revenue" does not exist',
     );
 
-    const outcome = await answer(db, worker, { tenantId: TENANT, definition: SQL, params: {} });
+    const outcome = await answer(db, worker, {
+      reach: WHOLE_REACH,
+      tenantId: TENANT,
+      definition: SQL,
+      params: {},
+    });
 
     expect(outcome).toEqual({
       ok: false,
@@ -382,7 +423,12 @@ describe("an answer over a model whose current build was held back (issue 459)",
   it("a relation no model ever built is Postgres's own refusal, relayed as it was", async () => {
     const worker = new InMemoryWorkerClient().refusingQueries('relation "fct_typo" does not exist');
 
-    const outcome = await answer(db, worker, { tenantId: TENANT, definition: SQL, params: {} });
+    const outcome = await answer(db, worker, {
+      reach: WHOLE_REACH,
+      tenantId: TENANT,
+      definition: SQL,
+      params: {},
+    });
 
     expect(outcome).toEqual({
       ok: false,

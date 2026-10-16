@@ -4,9 +4,11 @@
  * same graph per model, as `models.list` answers it when asked `dependsOn` (ADR 0137).
  *
  * Split from `models.ts`, which keeps what a model IS -- listed, read, saved, deleted. This is
- * what the models say about one another, read from their text and from nothing else.
+ * what the models say about one another, read from their text and from nothing else, as far as
+ * the reader reaches.
  */
 
+import { type Reach, reachesModel } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import { listMacros, listModels, listSeedSummaries } from "@undercroft/db/repos";
 import {
@@ -48,16 +50,20 @@ export type LineageAnswer =
  */
 export async function lineage(
   exec: SqlExecutor,
-  tenantId: string,
+  reader: { readonly tenantId: string; readonly reach: Reach },
   target: LineageTarget | null = null,
   page: PageRequest = {},
 ): Promise<LineageAnswer> {
+  const { tenantId, reach } = reader;
   const [models, macros, seeds] = await Promise.all([
     listModels(exec, tenantId),
     listMacros(exec, tenantId),
     listSeedSummaries(exec, tenantId),
   ]);
-  const graph = modelLineage({ models, macros, seeds: seeds.map((seed) => seed.name) });
+  const graph = within(
+    modelLineage({ models, macros, seeds: seeds.map((seed) => seed.name) }),
+    reach,
+  );
   const part = target === null ? graph : lineageAround(graph, target);
   if (part === null) {
     return { ok: false, reason: "unknown-name" };
@@ -76,6 +82,30 @@ export async function lineage(
   }
   const [nodes, edges] = paged.value.items;
   return { ok: true, value: { nodes, edges, nextCursor: paged.value.nextCursor } };
+}
+
+/**
+ * The graph as far as the reader reaches (ADR 0142): every model and seed node they do not reach
+ * left out, with every edge that touches one. Read from the whole graph first, because which
+ * node a `ref()` resolves to is known only once every model is; a raw table and a missing
+ * dependency are names in the text of a model the reader does reach, and stay.
+ */
+function within(graph: Lineage, reach: Reach): Lineage {
+  const hidden = new Set(
+    graph.nodes
+      .filter(
+        (node) =>
+          (node.kind === "model" || node.kind === "seed") && !reachesModel(reach, node.name),
+      )
+      .map((node) => node.id),
+  );
+  if (hidden.size === 0) {
+    return graph;
+  }
+  return {
+    nodes: graph.nodes.filter((node) => !hidden.has(node.id)),
+    edges: graph.edges.filter((edge) => !(hidden.has(edge.from) || hidden.has(edge.to))),
+  };
 }
 
 /**

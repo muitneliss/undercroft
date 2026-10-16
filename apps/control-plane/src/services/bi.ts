@@ -11,6 +11,14 @@
  * A definition is validated on the way OUT of the database as well as in. A row written
  * by an older contract is refused with a value the handler can word, rather than drawn
  * half-right. The questions themselves are kept by `biQuestions.ts`.
+ *
+ * WHAT A READER REACHES (ADR 0142). Two separate things, checked in two places. Which REPORTS a
+ * person may open is the control plane's to filter -- a question or dashboard outside their reach
+ * answers as if it did not exist -- and which MODELS their SQL may read is Postgres's: a reader
+ * who reaches fewer than every model is answered by the customer's scope login for exactly those
+ * (`scopeOf`), which refuses any other table in its own words. Opening a report does not widen
+ * what it reads: a question over `fct_sales`, opened by someone who does not reach `fct_sales`,
+ * is refused by the database rather than answered past their reach.
  */
 
 import {
@@ -23,10 +31,10 @@ import {
   DEFAULT_QUERY_ROWS,
   ParamMissing,
   type QueryParams,
+  type QueryScope,
   type QuestionDefinition,
-  type RunQueryRequest,
-  type TableResult,
 } from "@undercroft/contracts";
+import { type Reach, reachesReport } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
@@ -43,7 +51,7 @@ import {
   type QualifiedAnswer,
   qualify,
 } from "./answerQualifiers.ts";
-import { getQuestionView } from "./biQuestions.ts";
+import { getQuestionView, reachWhatWasMade } from "./biQuestions.ts";
 import { readSchema, type SchemaFilter, type SchemaOutcome } from "./tableSchema.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 
@@ -54,22 +62,34 @@ export interface DashboardView {
   readonly filters: DashboardFilter[];
   readonly updatedAt: string;
   readonly updatedBy: string;
+  /**
+   * The tiles' questions the reader may not open (ADR 0142), by id: their tiles are drawn as
+   * "not granted" rather than left out, so a dashboard never looks complete with a figure
+   * missing. Empty for a reader who reaches every question on it.
+   */
+  readonly ungranted: string[];
 }
 
-export function run(
-  worker: WorkerClient,
-  input: RunQueryRequest,
-): Promise<WorkerOutcome<TableResult>> {
-  return worker.runQuery(input);
+/**
+ * The scope a reader's SQL runs under: `null` when they reach every model, and the BI login reads
+ * for them; otherwise the models they reach, which the worker reads as the scope login for
+ * exactly those (ADR 0142). An empty list is a real scope -- a login that reads no table.
+ */
+export function scopeOf(reach: Reach): QueryScope | null {
+  return reach.models === "all" ? null : { models: [...reach.models] };
 }
 
 /** The analytics schema, narrowed to what `filter` names (`tableSchema.ts`); whole without one. */
 export function schema(
   worker: WorkerClient,
-  input: { tenantId: string },
+  input: { tenantId: string; reach: Reach },
   filter: SchemaFilter = {},
 ): Promise<SchemaOutcome> {
-  return readSchema(() => worker.readSchema(input), filter);
+  // As the reader's login sees it: a scope login's `information_schema` holds its tables alone.
+  return readSchema(
+    () => worker.readSchema({ tenantId: input.tenantId, scope: scopeOf(input.reach) }),
+    filter,
+  );
 }
 
 /** The SQL a definition compiles to, parameters unbound. What the builder shows beside itself. */
@@ -95,7 +115,13 @@ export type AnswerOutcome =
 export async function answer(
   exec: SqlExecutor,
   worker: WorkerClient,
-  input: { tenantId: string; definition: QuestionDefinition; params: QueryParams; limit?: number },
+  input: {
+    tenantId: string;
+    definition: QuestionDefinition;
+    params: QueryParams;
+    limit?: number;
+    reach: Reach;
+  },
 ): Promise<AnswerOutcome> {
   let sql: string;
   try {
@@ -109,7 +135,12 @@ export async function answer(
   const limit =
     input.limit ??
     (input.definition.kind === "visual" ? input.definition.limit : DEFAULT_QUERY_ROWS);
-  const outcome = await worker.runQuery({ tenantId: input.tenantId, sql, limit });
+  const outcome = await worker.runQuery({
+    tenantId: input.tenantId,
+    sql,
+    limit,
+    scope: scopeOf(input.reach),
+  });
   if (!outcome.ok) {
     const unpublished =
       outcome.reason === "query-failed"
@@ -122,13 +153,16 @@ export async function answer(
   return { ok: true, value: await qualify(exec, input.tenantId, outcome.value) };
 }
 
-/** Answer a saved question. Any member of the tenant may: the question was saved for them. */
+/**
+ * Answer a saved question. Any member who reaches it may: the question was saved for them. One
+ * they do not reach is not found, as if it did not exist.
+ */
 export async function answerQuestion(
   exec: SqlExecutor,
   worker: WorkerClient,
-  input: { tenantId: string; questionId: string; params: QueryParams },
+  input: { tenantId: string; questionId: string; params: QueryParams; reach: Reach },
 ): Promise<AnswerOutcome> {
-  const question = await getQuestionView(exec, input.tenantId, input.questionId);
+  const question = await getQuestionView(exec, input.tenantId, input.questionId, input.reach);
   if (question === null) {
     return { ok: false, reason: "question-not-found" };
   }
@@ -136,6 +170,7 @@ export async function answerQuestion(
     tenantId: input.tenantId,
     definition: question.definition,
     params: input.params,
+    reach: input.reach,
   });
 }
 
@@ -143,38 +178,53 @@ export type SaveOutcome = { ok: true; id: string } | { ok: false; reason: "not-f
 
 // -- dashboards ---------------------------------------------------------------------
 
-function dashboardView(row: {
-  id: string;
-  name: string;
-  layout: unknown;
-  filters: unknown;
-  updatedAt: string;
-  updatedBy: string;
-}): DashboardView {
+function dashboardView(
+  row: {
+    id: string;
+    name: string;
+    layout: unknown;
+    filters: unknown;
+    updatedAt: string;
+    updatedBy: string;
+  },
+  reach: Reach,
+): DashboardView {
+  const layout = DashboardLayoutShape.parse(row.layout);
+  const questions = [...new Set(layout.tiles.map((tile) => tile.questionId))];
   return {
     id: row.id,
     name: row.name,
-    layout: DashboardLayoutShape.parse(row.layout),
+    layout,
     filters: DashboardFilters.parse(row.filters),
     updatedAt: row.updatedAt,
     updatedBy: row.updatedBy,
+    ungranted: questions.filter((questionId) => !reachesReport(reach, "question", questionId)),
   };
 }
 
+/** The dashboards the reader reaches, each with the tiles they may not open named. */
 export async function listDashboardViews(
   exec: SqlExecutor,
   tenantId: string,
+  reach: Reach,
 ): Promise<DashboardView[]> {
-  return (await listDashboards(exec, tenantId)).map(dashboardView);
+  return (await listDashboards(exec, tenantId))
+    .filter((row) => reachesReport(reach, "dashboard", row.id))
+    .map((row) => dashboardView(row, reach));
 }
 
+/** One dashboard, or `null` -- for one the reader does not reach as for one that does not exist. */
 export async function getDashboardView(
   exec: SqlExecutor,
   tenantId: string,
   id: string,
+  reach: Reach,
 ): Promise<DashboardView | null> {
+  if (!reachesReport(reach, "dashboard", id)) {
+    return null;
+  }
   const row = await getDashboard(exec, tenantId, id);
-  return row === null ? null : dashboardView(row);
+  return row === null ? null : dashboardView(row, reach);
 }
 
 export async function saveDashboard(
@@ -187,6 +237,7 @@ export async function saveDashboard(
     filters: DashboardFilter[];
     actor: Actor;
     actorId: string;
+    reach: Reach;
   },
 ): Promise<SaveOutcome> {
   const fields = {
@@ -198,7 +249,13 @@ export async function saveDashboard(
   let { id } = input;
   if (id === undefined) {
     id = await insertDashboard(exec, input.tenantId, fields);
-  } else if (!(await updateDashboard(exec, input.tenantId, { id, ...fields }))) {
+    await reachWhatWasMade(exec, { ...input, kind: "dashboard", id });
+  } else if (
+    !(
+      reachesReport(input.reach, "dashboard", id) &&
+      (await updateDashboard(exec, input.tenantId, { id, ...fields }))
+    )
+  ) {
     return { ok: false, reason: "not-found" };
   }
   await recordAudit(exec, {
@@ -210,11 +267,14 @@ export async function saveDashboard(
   return { ok: true, id };
 }
 
+/** Delete a dashboard the reader reaches; one they do not reach is not found. */
 export async function removeDashboard(
   exec: SqlExecutor,
-  input: { tenantId: string; id: string; actor: Actor },
+  input: { tenantId: string; id: string; actor: Actor; reach: Reach },
 ): Promise<boolean> {
-  const removed = await deleteDashboard(exec, input.tenantId, input.id);
+  const removed =
+    reachesReport(input.reach, "dashboard", input.id) &&
+    (await deleteDashboard(exec, input.tenantId, input.id));
   if (removed) {
     await recordAudit(exec, {
       tenantId: input.tenantId,

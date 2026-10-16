@@ -7,6 +7,7 @@
 
 import { TRPCError } from "@trpc/server";
 import type { QueryParams } from "@undercroft/contracts";
+import type { Reach } from "@undercroft/contracts/access";
 import type { Locale } from "@undercroft/core/locale";
 import { type MessageKey, messages } from "../i18n/index.ts";
 import type { QualifiedAnswer } from "../services/answerQualifiers.ts";
@@ -81,7 +82,7 @@ export function answerRefusal(
 }
 /** A saved question answered through the worker, or the refusal it earns. */
 export async function answerSaved(
-  ctx: Pick<Context, "exec" | "worker" | "locale">,
+  ctx: Pick<Context, "exec" | "worker" | "locale"> & { readonly reach: Reach },
   input: { tenantId: string; questionId: string; params: QueryParams },
 ): Promise<QualifiedAnswer> {
   if (ctx.worker === null) {
@@ -90,7 +91,7 @@ export async function answerSaved(
       message: messages(ctx.locale)("error.workerUnavailable"),
     });
   }
-  const outcome = await bi.answerQuestion(ctx.exec, ctx.worker, input);
+  const outcome = await bi.answerQuestion(ctx.exec, ctx.worker, { ...input, reach: ctx.reach });
   if (!outcome.ok) {
     throw answerRefusal(ctx.locale, outcome);
   }

@@ -31,8 +31,9 @@ import {
   BUILT_IN_GRANTS,
   isBuiltInRole,
   isPermission,
-  PERMISSIONS,
   type Permission,
+  PERMISSIONS,
+  unreached,
 } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import {
@@ -45,7 +46,7 @@ import {
   updateRole,
 } from "../repos/accessRoles.ts";
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
-import { lacking } from "./authz.ts";
+import { conferredBy, type Holding, lacking } from "./authz.ts";
 import { mapNarrowed, type NameFilter, type Narrowed, narrowByName } from "./listFilter.ts";
 import { objectOf, permissionOfObject } from "./rbac.ts";
 
@@ -238,23 +239,40 @@ export type RemoveOutcome =
       readonly members: number;
       readonly invitations: number;
     }
-  | { readonly ok: false; readonly reason: "not-held"; readonly lacking: readonly Permission[] };
+  | {
+      readonly ok: false;
+      readonly reason: "not-held";
+      readonly lacking: readonly Permission[];
+      /** Objects granted to the role that the caller does not reach (ADR 0142). */
+      readonly objects: readonly string[];
+    };
 
 /**
  * Delete a role the customer defined, and every grant to it, unless somebody holds it, an open
- * invitation names it, or the caller lacks a permission it or a grant to it holds.
+ * invitation names it, or the caller lacks a permission it or a grant to it holds -- or does not
+ * reach an object granted to it (ADR 0142).
+ *
+ * The objects are weighed before the delete, from the role's grants as they stand, rather than in
+ * the deleting statement: a role is deleted only while nobody holds it and nobody is invited at
+ * it, so an object grant added to it in that instant reaches nobody, and going with the role takes
+ * it from nobody. The permissions stay guarded in the statement, as ADR 0141 has them.
  *
  * A closed invitation at the role goes with it (`600_custom_roles.sql` says why); its record
  * stays in the audit log.
  */
 export async function remove(
   exec: SqlExecutor,
-  input: { tenantId: string; key: string; held: readonly Permission[]; actor: Actor },
+  input: { tenantId: string; key: string; held: Holding; actor: Actor },
 ): Promise<RemoveOutcome> {
   if (isBuiltInRole(input.key)) {
     return { ok: false, reason: "built-in" };
   }
-  const lacks = PERMISSIONS.filter((permission) => !input.held.includes(permission));
+  const confers = await conferredBy(exec, input.tenantId, input.key);
+  const unreachedObjects = confers === null ? [] : unreached(input.held.reach, confers.reach);
+  if (unreachedObjects.length > 0) {
+    return { ok: false, reason: "not-held", lacking: [], objects: unreachedObjects };
+  }
+  const lacks = PERMISSIONS.filter((permission) => !input.held.permissions.includes(permission));
   const { found, done } = await deleteRole(exec, input.tenantId, input.key, {
     permissions: lacks,
     objects: lacks.map(objectOf),
@@ -282,9 +300,9 @@ export async function remove(
     ...(found.permissions ?? []).filter(isPermission),
     ...found.grantObjects.map(permissionOfObject).filter((permission) => permission !== null),
   ];
-  const beyond = lacking(input.held, involved);
+  const beyond = lacking(input.held.permissions, involved);
   if (beyond.length > 0) {
-    return { ok: false, reason: "not-held", lacking: inCatalogueOrder(beyond) };
+    return { ok: false, reason: "not-held", lacking: inCatalogueOrder(beyond), objects: [] };
   }
   return {
     ok: false,

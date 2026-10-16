@@ -916,6 +916,8 @@
       "includes": [
         "apps/control-plane/src/services/googleExchange.ts",
         "apps/control-plane/src/services/workerClient.ts",
+        "apps/control-plane/src/services/workerPost.ts",
+        "apps/control-plane/src/services/workerQueries.ts",
         "apps/control-plane/src/services/workerTransport.ts",
         "apps/ui/src/lib/drivePicker.ts",
         "apps/ui/src/test/setup.ts",

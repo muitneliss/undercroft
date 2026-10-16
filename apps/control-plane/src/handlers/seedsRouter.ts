@@ -29,7 +29,7 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as seeds from "../services/seeds.ts";
 import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
-import { requirePermission } from "./permissionGate.ts";
+import { requireWholeReach } from "./permissionGate.ts";
 import { actorOf, refusal, router, tenantProcedure } from "./trpc.ts";
 
 /** The bound a table-level problem names, so its sentence can say how far is too far. */
@@ -63,11 +63,11 @@ export const seedsRouter = router({
   list: tenantProcedure
     .input(z.object(NameFilterInput))
     .query(async ({ ctx, input }) =>
-      listedOrRefusal(ctx.locale, await seeds.list(ctx.exec, input.tenantId, input)),
+      listedOrRefusal(ctx.locale, await seeds.list(ctx.exec, input.tenantId, ctx.reach, input)),
     ),
 
   get: tenantProcedure.input(z.object({ name: SeedName })).query(async ({ ctx, input }) => {
-    const seed = await seeds.get(ctx.exec, input.tenantId, input.name);
+    const seed = await seeds.get(ctx.exec, input.tenantId, input.name, ctx.reach);
     if (seed === null) {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
@@ -80,7 +80,7 @@ export const seedsRouter = router({
    * is BAD_REQUEST naming where; a taken name under `create`, or a model's name, is a CONFLICT.
    * The bounds are the service's, so each refusal is worded rather than a schema's.
    */
-  save: requirePermission("models:write")
+  save: requireWholeReach("models:write")
     .input(
       z.object({
         name: SeedName,
@@ -124,7 +124,7 @@ export const seedsRouter = router({
    * seed a model still reads is a CONFLICT naming the models; without a worker nothing can drop
    * the table, so nothing is deleted.
    */
-  delete: requirePermission("models:write")
+  delete: requireWholeReach("models:write")
     .input(z.object({ name: SeedName }))
     .mutation(async ({ ctx, input }) => {
       const t = messages(ctx.locale);

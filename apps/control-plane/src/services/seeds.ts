@@ -27,6 +27,7 @@
  */
 
 import { type SeedColumn, type SeedRefusal, seedRefusal } from "@undercroft/contracts";
+import { type Reach, reachesModel } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   deleteSeedUnlessBuilding,
@@ -79,25 +80,33 @@ function item(seed: SeedSummary): SeedItem {
   };
 }
 
-/** The tenant's seeds, without their cells, narrowed by `filter` (`listFilter.ts`). */
+/**
+ * The tenant's seeds the reader reaches, without their cells, narrowed by `filter`
+ * (`listFilter.ts`). A reference table is a model to a reader (`model:<name>`, ADR 0142).
+ */
 export async function list(
   exec: SqlExecutor,
   tenantId: string,
+  reach: Reach,
   filter: NameFilter = {},
 ): Promise<Narrowed<SeedItem>> {
-  const seeds = await listSeedSummaries(exec, tenantId);
+  const seeds = (await listSeedSummaries(exec, tenantId)).filter((seed) =>
+    reachesModel(reach, seed.name),
+  );
   return mapNarrowed(
     narrowByName(seeds, (seed) => seed.name, filter),
     item,
   );
 }
 
+/** One seed with its cells, or `null` -- for one the reader does not reach as for one not saved. */
 export async function get(
   exec: SqlExecutor,
   tenantId: string,
   name: string,
+  reach: Reach,
 ): Promise<SeedDetail | null> {
-  const seed = await getSeed(exec, tenantId, name);
+  const seed = reachesModel(reach, name) ? await getSeed(exec, tenantId, name) : null;
   return seed === null ? null : { ...item(seed), columns: seed.columns, rows: seed.rows };
 }
 

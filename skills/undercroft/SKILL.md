@@ -12,9 +12,10 @@ dashboards read the tables the models build.
 Everything the web UI does, you can do too, as the person who signed in and never as more.
 Every permission check and every refusal the web UI has applies to you unchanged. What the
 person may do in a customer is a set of permissions -- those their role holds, built-in or one
-the customer defined, and any granted to them; read `references/access-control.md` for the
-catalogue, the roles, grants and how to check the person's own with `tenants.get` before you
-plan a write. A request to change who may do what is the `undercroft-access-control` workflow.
+the customer defined, and any granted to them -- and what they may read is their reach: every
+model, raw stream and report for a built-in role, only what is granted for one the customer
+defined. Read `references/access-control.md` for the catalogue, the roles, grants, objects and
+how to check the person's own with `grants.reach` before you plan a write. A request to change who may do what is the `undercroft-access-control` workflow.
 
 ## Words the platform uses
 
@@ -162,12 +163,13 @@ Each workflow is its own skill. Follow it when the person's request matches.
   and what the person needs, and whether the right outcome is a look at the data, a report
   over existing models, a change to an existing model or macro, or a new model -- then gets
   a plan approved before any write, and checks a model before it is saved.
-- `undercroft-access-control`: for a person who wants someone to be able to do something --
-  edit models, read the raw lake, manage people -- or to stop being able to, or asks why they
-  cannot. It reads the caller's own permissions first and turns the request into the smallest
-  change: a role the customer already has, a role of its own (`roles.save`), or one permission
-  granted to a role or a person, standing or until a date (`grants.save`). It explains the
-  subset rule when the caller cannot grant what is asked, and asks before every write.
+- `undercroft-access-control`: for a person who wants someone to be able to do or see something
+  -- edit models, read the raw lake, manage people, see only some models or one dashboard -- or
+  to stop being able to, or asks why they cannot. It reads what the caller holds and reaches
+  first and turns the request into the smallest change: a role the customer already has, a role
+  of its own (`roles.save`), or one permission or reading one thing granted to a role or a person,
+  standing or until a date (`grants.save`). It explains the subset rule when the caller cannot
+  grant what is asked, checks reach before and after, and asks before every write.
 
 ## Things only the person can do
 

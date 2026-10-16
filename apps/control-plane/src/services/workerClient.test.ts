@@ -44,7 +44,7 @@ describe("reading a worker refusal", () => {
       tenantId: "CASE-0042",
       kind: "labels",
     });
-    const read = await answering(409).readSchema({ tenantId: "CASE-0042" });
+    const read = await answering(409).readSchema({ tenantId: "CASE-0042", scope: null });
 
     expect(browsed).toEqual({ ok: false, reason: "credential-expired" });
     expect(read).toEqual({ ok: false, reason: "in-progress" });
@@ -53,8 +53,16 @@ describe("reading a worker refusal", () => {
   it("504 from the search is its time limit, and the search's 500 stays a plain refusal", async () => {
     // #447: a search Postgres cancelled at its timeout reached the screen as "the service did
     // not answer; try again", and callers did, with the same question. The status names it.
-    const timedOut = await answering(504).searchRaw({ tenantId: "CASE-0042", q: "invoice" });
-    const crashed = await answering(500).searchRaw({ tenantId: "CASE-0042", q: "invoice" });
+    const timedOut = await answering(504).searchRaw({
+      tenantId: "CASE-0042",
+      q: "invoice",
+      streams: null,
+    });
+    const crashed = await answering(500).searchRaw({
+      tenantId: "CASE-0042",
+      q: "invoice",
+      streams: null,
+    });
 
     expect(timedOut).toEqual({ ok: false, reason: "timed-out" });
     expect(crashed).toEqual({ ok: false, reason: "refused" });
@@ -267,5 +275,62 @@ describe("a build over the wire", () => {
       { ...build, select: ["stg_deals", "fct_pipeline"] },
       { ...build, select: ["+stg_deals"] },
     ]);
+  });
+});
+
+/**
+ * A worker that has only the routes it is given, as one older than a route answers: 404 for any
+ * other. It keeps the path and the body of everything it was sent.
+ */
+function routed(paths: readonly string[], sent: { path: string; body: unknown }[]): WorkerClient {
+  return createHttpWorkerClient({
+    baseUrl: "https://worker.test",
+    triggerToken: "t",
+    fetch: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      sent.push({ path, body: JSON.parse(String(init?.body ?? "null")) });
+      return paths.includes(path)
+        ? new Response(
+            '{"columns":[],"rows":[],"truncated":false,"tables":[],"hits":[],"capped":[]}',
+            {
+              status: 200,
+            },
+          )
+        : new Response("{}", { status: 404 });
+    },
+  });
+}
+
+describe("a scoped read goes where only a worker that knows scopes answers (ADR 0142)", () => {
+  it("a scope is sent to the scoped route and nowhere else; none goes to the route of old", async () => {
+    const sent: { path: string; body: unknown }[] = [];
+    const worker = routed(["/v1/queries/run", "/v1/queries/scoped/run"], sent);
+    const scope = { models: ["fct_sales"] };
+
+    await worker.runQuery({ tenantId: "CASE-0042", sql: "select 1", limit: 1, scope });
+    await worker.runQuery({ tenantId: "CASE-0042", sql: "select 1", limit: 1, scope: null });
+
+    expect(sent).toEqual([
+      {
+        path: "/v1/queries/scoped/run",
+        body: { tenantId: "CASE-0042", sql: "select 1", limit: 1, scope },
+      },
+      { path: "/v1/queries/run", body: { tenantId: "CASE-0042", sql: "select 1", limit: 1 } },
+    ]);
+  });
+
+  it("a worker that predates scopes refuses a scoped read, a schema and a narrowed search", async () => {
+    const old = routed(["/v1/queries/run", "/v1/queries/schema", "/v1/queries/raw/search"], []);
+    const scope = { models: ["fct_sales"] };
+
+    const query = await old.runQuery({ tenantId: "CASE-0042", sql: "select 1", limit: 1, scope });
+    const schema = await old.readSchema({ tenantId: "CASE-0042", scope });
+    const search = await old.searchRaw({
+      tenantId: "CASE-0042",
+      q: "x",
+      streams: [{ source: "hubspot", entity: null }],
+    });
+
+    expect([query.ok, schema.ok, search.ok]).toEqual([false, false, false]);
   });
 });

@@ -17,15 +17,25 @@
  * its expiry rather than replacing it. One worker process is the only caller of the rotation,
  * so this map is the whole of the truth about who holds a login.
  *
+ * A SCOPE LOGIN (ADR 0142) is one more login of the same customer: the one a reader who reaches
+ * only some models reads as, granted SELECT on exactly those tables. It is leased the same way,
+ * keyed by its model set, and made on first use: the first holder of a set asks
+ * `ops.provision_scope` for the login before it rotates the password, so a grant changed in the
+ * control plane a moment ago is in force at the reader's next session with nothing to push. The
+ * set is the control plane's to compute; which tables it reads is Postgres's to enforce.
+ *
  * `sessionsBySetRole` is the same seam over PGlite, where there is no authentication and
  * `SET ROLE` is how a test steps into a tenant. It proves the grants; the login is proven
  * against real Postgres in the Docker tier.
  */
 
+import type { QueryScope } from "@undercroft/contracts";
 import { asExecutor, createRolePool, type SqlExecutor } from "@undercroft/db";
 import {
   extendTenantPassword,
+  provisionScope,
   rotateTenantPassword,
+  type TenantLogin,
   type TenantRoleKind,
   tenantRolesFor,
 } from "@undercroft/db/repos";
@@ -35,6 +45,11 @@ import { isNoCapacity, TenantBusy } from "./tenantBusy.ts";
 export interface SessionTarget {
   readonly tenantId: string;
   readonly kind: TenantRoleKind;
+  /**
+   * For `bi` only: the models a narrowed reader reaches, read as the customer's scope login for
+   * exactly that set (ADR 0142). Absent or `null` is the BI login itself, which reads every model.
+   */
+  readonly scope?: QueryScope | null;
 }
 
 export interface TenantSessions {
@@ -72,18 +87,60 @@ const SESSION_LOGIN_MS = 2 * 60 * 1000;
 
 interface Lease {
   readonly password: string;
+  /** The scope login the password is for; `null` for the tenant's own `dbt` or `bi` login. */
+  readonly scopeLogin: string | null;
   /** When the password stops authenticating, by this process's clock, never later than true. */
   validUntil: number;
   holders: number;
+}
+
+/** A held lease, as a session needs it: the password, and the scope login it is for. */
+type Held = Pick<Lease, "password" | "scopeLogin">;
+
+type WithLease = <T>(
+  target: SessionTarget,
+  validForMs: number,
+  fn: (held: Held) => Promise<T>,
+) => Promise<T>;
+
+/** The scope a target names, or `null`; refused on a `dbt` target, which has no scopes. */
+function scopeOf(target: SessionTarget): QueryScope | null {
+  const scope = target.scope ?? null;
+  if (scope !== null && target.kind !== "bi") {
+    throw new Error("undercroft: only a BI session reads under a scope");
+  }
+  return scope;
+}
+
+/**
+ * Which lease a target takes: one per (tenant, login). A scope login is keyed by its model set,
+ * deduplicated and sorted, which names one login exactly as `ops.provision_scope`'s hash does --
+ * two keys for one login would be two holders rotating each other out (ADR 0087).
+ */
+function leaseKey(target: SessionTarget): string {
+  const scope = scopeOf(target);
+  const base = `${target.tenantId}\u0000${target.kind}`;
+  return scope === null ? base : `${base}\u0000${[...new Set(scope.models)].sort().join(",")}`;
 }
 
 /**
  * One lease per (tenant, login), for the process. Taking one is serialised per login, so two
  * holders arriving together cannot both decide to rotate; holding one is not.
  */
-function createLeases(exec: SqlExecutor): TenantSessions["withPassword"] {
+function createLeases(exec: SqlExecutor): WithLease {
   const leases = new Map<string, Lease>();
   const turns = new Map<string, Promise<unknown>>();
+
+  /**
+   * The login a first holder rotates. A scope login is provisioned first, every time: it is how
+   * the scope is marked as in use, and how a login swept away while nobody held it comes back.
+   */
+  async function loginFor(target: SessionTarget): Promise<TenantLogin> {
+    const scope = scopeOf(target);
+    return scope === null
+      ? { kind: target.kind }
+      : { kind: "scope", login: await provisionScope(exec, target.tenantId, scope.models) };
+  }
 
   async function take(key: string, target: SessionTarget, validForMs: number): Promise<Lease> {
     const need = validForMs + EXPIRY_MARGIN_MS;
@@ -92,13 +149,23 @@ function createLeases(exec: SqlExecutor): TenantSessions["withPassword"] {
     // Read before the database reads its own, so the expiry kept here is never the later one.
     const from = Date.now();
     if (current === undefined || current.holders === 0) {
-      const password = await rotateTenantPassword(exec, target.tenantId, target.kind, lifetime);
-      const fresh: Lease = { password, validUntil: from + lifetime, holders: 1 };
+      const login = await loginFor(target);
+      const password = await rotateTenantPassword(exec, target.tenantId, login, lifetime);
+      const fresh: Lease = {
+        password,
+        scopeLogin: login.kind === "scope" ? login.login : null,
+        validUntil: from + lifetime,
+        holders: 1,
+      };
       leases.set(key, fresh);
       return fresh;
     }
     if (current.validUntil - from < need) {
-      await extendTenantPassword(exec, target.tenantId, target.kind, lifetime);
+      const login: TenantLogin =
+        current.scopeLogin === null
+          ? { kind: target.kind }
+          : { kind: "scope", login: current.scopeLogin };
+      await extendTenantPassword(exec, target.tenantId, login, lifetime);
       current.validUntil = Math.max(current.validUntil, from + lifetime);
     }
     current.holders += 1;
@@ -106,7 +173,7 @@ function createLeases(exec: SqlExecutor): TenantSessions["withPassword"] {
   }
 
   return async (target, validForMs, fn) => {
-    const key = `${target.tenantId}\u0000${target.kind}`;
+    const key = leaseKey(target);
     const taken = (turns.get(key) ?? Promise.resolve()).then(() => take(key, target, validForMs));
     turns.set(
       key,
@@ -114,11 +181,16 @@ function createLeases(exec: SqlExecutor): TenantSessions["withPassword"] {
     );
     const lease = await taken;
     try {
-      return await fn(lease.password);
+      return await fn(lease);
     } finally {
       lease.holders -= 1;
     }
   };
+}
+
+/** `withPassword` over a lease: what a child process that logs in by itself is handed. */
+function passwordsOf(lease: WithLease): TenantSessions["withPassword"] {
+  return (target, validForMs, fn) => lease(target, validForMs, (held) => fn(held.password));
 }
 
 function roleFor(roles: { dbtRole: string; biRole: string }, kind: TenantRoleKind): string {
@@ -130,15 +202,16 @@ export function createTenantSessions(deps: {
   readonly exec: SqlExecutor;
   readonly dsn: string;
 }): TenantSessions {
-  const withPassword = createLeases(deps.exec);
+  const lease = createLeases(deps.exec);
   return {
     async as<T>(target: SessionTarget, fn: (exec: SqlExecutor) => Promise<T>): Promise<T> {
       const roles = await tenantRolesFor(deps.exec, target.tenantId);
       if (roles === null) {
         throw new TenantNotProvisioned(target.tenantId);
       }
-      return withPassword(target, SESSION_LOGIN_MS, async (password) => {
-        const pool = createRolePool(deps.dsn, { user: roleFor(roles, target.kind), password });
+      return lease(target, SESSION_LOGIN_MS, async ({ password, scopeLogin }) => {
+        const user = scopeLogin ?? roleFor(roles, target.kind);
+        const pool = createRolePool(deps.dsn, { user, password });
         try {
           // One checked-out client, so a BEGIN and the statements after it share a connection;
           // through the pool each statement could take a different one and a transaction
@@ -159,7 +232,7 @@ export function createTenantSessions(deps: {
         }
       });
     },
-    withPassword,
+    withPassword: passwordsOf(lease),
   };
 }
 
@@ -179,8 +252,13 @@ export function sessionsBySetRole(
       if (roles === null) {
         throw new TenantNotProvisioned(target.tenantId);
       }
-      return asRole(roleFor(roles, target.kind), fn);
+      const scope = scopeOf(target);
+      const role =
+        scope === null
+          ? roleFor(roles, target.kind)
+          : await provisionScope(exec, target.tenantId, scope.models);
+      return asRole(role, fn);
     },
-    withPassword: createLeases(exec),
+    withPassword: passwordsOf(createLeases(exec)),
   };
 }

@@ -16,6 +16,8 @@ export interface ExportRow {
   readonly sql: string;
   readonly fileName: string;
   readonly expiresAt: string;
+  /** The models its asker reached when they asked; `null` for every model (ADR 0142). */
+  readonly scopeModels: readonly string[] | null;
 }
 
 interface Row {
@@ -24,6 +26,7 @@ interface Row {
   sql: string;
   file_name: string;
   expires_at: Date | string;
+  scope_models: string[] | null;
 }
 
 function toRow(r: Row): ExportRow {
@@ -33,6 +36,7 @@ function toRow(r: Row): ExportRow {
     sql: r.sql,
     fileName: r.file_name,
     expiresAt: new Date(r.expires_at).toISOString(),
+    scopeModels: r.scope_models,
   };
 }
 
@@ -43,6 +47,7 @@ export async function insertExport(
     tenantId: string;
     userId: string;
     kind: ExportKind;
+    scopeModels: readonly string[] | null;
     sql: string;
     fileName: string;
     minutes: number;
@@ -50,10 +55,18 @@ export async function insertExport(
 ): Promise<ExportRow> {
   await exec.query("DELETE FROM app.bi_export WHERE expires_at <= now()");
   const { rows } = await exec.query<Row>(
-    `INSERT INTO app.bi_export (tenant_id, user_id, kind, sql, file_name, expires_at)
-     VALUES ($1, $2, $3, $4, $5, now() + make_interval(mins => $6::int))
-     RETURNING id, kind, sql, file_name, expires_at`,
-    [input.tenantId, input.userId, input.kind, input.sql, input.fileName, input.minutes],
+    `INSERT INTO app.bi_export (tenant_id, user_id, kind, sql, file_name, expires_at, scope_models)
+     VALUES ($1, $2, $3, $4, $5, now() + make_interval(mins => $6::int), $7::text[])
+     RETURNING id, kind, sql, file_name, expires_at, scope_models`,
+    [
+      input.tenantId,
+      input.userId,
+      input.kind,
+      input.sql,
+      input.fileName,
+      input.minutes,
+      input.scopeModels === null ? null : [...input.scopeModels],
+    ],
   );
   const [row] = rows;
   if (row === undefined) {
@@ -68,7 +81,7 @@ export async function findLiveExport(
   input: { tenantId: string; id: string; userId: string },
 ): Promise<ExportRow | null> {
   const { rows } = await exec.query<Row>(
-    `SELECT id, kind, sql, file_name, expires_at FROM app.bi_export
+    `SELECT id, kind, sql, file_name, expires_at, scope_models FROM app.bi_export
      WHERE tenant_id = $1 AND id = $2 AND user_id = $3 AND expires_at > now()`,
     [input.tenantId, input.id, input.userId],
   );

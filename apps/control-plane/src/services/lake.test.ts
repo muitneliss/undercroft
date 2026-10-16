@@ -8,6 +8,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { WHOLE_REACH } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
@@ -131,7 +132,7 @@ afterEach(async () => {
 
 describe("summary", () => {
   it("counts each stream, names its tombstones, and dates its newest observation", async () => {
-    const got = await summary(db, TENANT);
+    const got = await summary(db, TENANT, WHOLE_REACH);
 
     expect(got.records).toEqual([
       {
@@ -194,7 +195,7 @@ describe("summary", () => {
       );
     });
 
-    const [gmail] = (await summary(db, TENANT)).documents;
+    const [gmail] = (await summary(db, TENANT, WHOLE_REACH)).documents;
 
     expect(gmail).toMatchObject({
       documents: 3,
@@ -228,7 +229,7 @@ describe("summary", () => {
       await seedDocument(tx, { ...quoted, id: "q-3", observedAt: "2026-09-18T10:10:00Z" });
     });
 
-    const [gmail] = (await summary(db, TENANT)).documents;
+    const [gmail] = (await summary(db, TENANT, WHOLE_REACH)).documents;
 
     expect(gmail?.documents).toBe(5);
     expect(gmail?.distinctBlobs).toBe(3);
@@ -237,18 +238,24 @@ describe("summary", () => {
 
   it("a tenant with nothing landed has an empty summary, not a missing one", async () => {
     await db.asSuperuser((tx) => tx.query("INSERT INTO ops.tenant (id) VALUES ('CASE-0044')"));
-    expect(await summary(db, "CASE-0044")).toEqual({ records: [], documents: [] });
+    expect(await summary(db, "CASE-0044", WHOLE_REACH)).toEqual({ records: [], documents: [] });
   });
 });
 
 describe("records", () => {
   it("pages one stream newest first, and the cursor picks up exactly where the page ended", async () => {
-    const first = await records(db, TENANT, { source: "hubspot", entity: "deals", limit: 2 });
+    const first = await records(db, TENANT, {
+      reach: WHOLE_REACH,
+      source: "hubspot",
+      entity: "deals",
+      limit: 2,
+    });
     expect(first.items.map((r) => r.sourceRecordId)).toEqual(["d-3", "d-2"]);
     expect(first.items[0]?.deletedAt).toBe("2026-09-19T00:00:00.000Z");
     expect(first.nextCursor).not.toBeNull();
 
     const second = await records(db, TENANT, {
+      reach: WHOLE_REACH,
       source: "hubspot",
       entity: "deals",
       limit: 2,
@@ -259,7 +266,12 @@ describe("records", () => {
   });
 
   it("the payload is Postgres's rendering, with every digit the source sent", async () => {
-    const page = await records(db, TENANT, { source: "hubspot", entity: "deals", limit: 50 });
+    const page = await records(db, TENANT, {
+      reach: WHOLE_REACH,
+      source: "hubspot",
+      entity: "deals",
+      limit: 50,
+    });
     const exact = page.items.find((r) => r.sourceRecordId === "d-2");
 
     expect(exact?.payload).toContain(EXACT);
@@ -267,19 +279,29 @@ describe("records", () => {
   });
 
   it("another tenant's rows are not in the page, whatever the stream", async () => {
-    const page = await records(db, OTHER, { source: "hubspot", entity: "deals", limit: 50 });
+    const page = await records(db, OTHER, {
+      reach: WHOLE_REACH,
+      source: "hubspot",
+      entity: "deals",
+      limit: 50,
+    });
     expect(page.items.map((r) => r.payload.replaceAll(/\s/gu, ""))).toEqual(['{"n":"theirs"}']);
   });
 
   it("a stream that never landed is an empty page", async () => {
-    const page = await records(db, TENANT, { source: "xero", entity: "invoices", limit: 50 });
+    const page = await records(db, TENANT, {
+      reach: WHOLE_REACH,
+      source: "xero",
+      entity: "invoices",
+      limit: 50,
+    });
     expect(page).toEqual({ items: [], nextCursor: null, ofRun: null });
   });
 });
 
 describe("documents", () => {
   it("lists the catalogue row for one source, newest first, with its size in bytes", async () => {
-    const page = await documents(db, TENANT, { source: "gmail", limit: 50 });
+    const page = await documents(db, TENANT, { reach: WHOLE_REACH, source: "gmail", limit: 50 });
 
     expect(page.items.map((d) => [d.documentId, d.bytes, d.contentType])).toEqual([
       ["m-2", 2500, "application/pdf"],
@@ -290,10 +312,11 @@ describe("documents", () => {
   });
 
   it("pages, and never crosses into another tenant", async () => {
-    const first = await documents(db, TENANT, { source: "gmail", limit: 1 });
+    const first = await documents(db, TENANT, { reach: WHOLE_REACH, source: "gmail", limit: 1 });
     expect(first.items.map((d) => d.documentId)).toEqual(["m-2"]);
 
     const second = await documents(db, TENANT, {
+      reach: WHOLE_REACH,
       source: "gmail",
       limit: 1,
       cursor: first.nextCursor,

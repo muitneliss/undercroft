@@ -13,6 +13,11 @@
  *
  * The audit row names the export, its kind and what it was of, never the SQL: the trail is for
  * "who took what", and an export is a taking.
+ *
+ * An export reads under its asker's reach (ADR 0142): a question or a model they do not reach is
+ * not found, and the rows are read as the scope login for the models they reached when they
+ * asked -- stored with the SQL -- narrowed to what they still reach when they download it.
+ * Reach given in between does not widen a file asked for before it; reach taken away narrows it.
  */
 
 import {
@@ -21,9 +26,11 @@ import {
   csvFileName,
   ParamMissing,
   type QueryParams,
+  type QueryScope,
   type QuestionDefinition,
   quoteIdent,
 } from "@undercroft/contracts";
+import { type Reach, reachesModel } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import { getModel } from "@undercroft/db/repos";
 
@@ -34,6 +41,7 @@ import {
   findLiveExport,
   insertExport,
 } from "../repos/biExports.ts";
+import { scopeOf } from "./bi.ts";
 import { getQuestionView } from "./biQuestions.ts";
 
 export type { ExportKind, ExportRow } from "../repos/biExports.ts";
@@ -70,13 +78,17 @@ function bound(definition: QuestionDefinition, params: QueryParams, name: string
 /** The SQL an export runs, and the name its file takes; `null` names nothing (a definition). */
 async function compiled(
   exec: SqlExecutor,
-  tenantId: string,
-  source: ExportSource,
-  params: QueryParams,
+  asked: {
+    readonly tenantId: string;
+    readonly source: ExportSource;
+    readonly params: QueryParams;
+    readonly reach: Reach;
+  },
 ): Promise<Compiled> {
+  const { tenantId, source, params, reach } = asked;
   switch (source.kind) {
     case "question": {
-      const question = await getQuestionView(exec, tenantId, source.questionId);
+      const question = await getQuestionView(exec, tenantId, source.questionId, reach);
       return question === null
         ? { ok: false, reason: "question-not-found" }
         : bound(question.definition, params, question.name);
@@ -86,7 +98,9 @@ async function compiled(
     case "model": {
       // The model's table as its last build left it, under the tenant's own search path. A
       // model never built answers "relation does not exist" at the download, in Postgres's words.
-      const model = await getModel(exec, tenantId, source.model);
+      const model = reachesModel(reach, source.model)
+        ? await getModel(exec, tenantId, source.model)
+        : null;
       return model === null
         ? { ok: false, reason: "model-not-found" }
         : { ok: true, sql: `SELECT * FROM ${quoteIdent(model.name)}`, name: model.name };
@@ -124,9 +138,10 @@ export async function createExport(
     params: QueryParams;
     /** The file's name when what is exported has none of its own, in the caller's language. */
     unnamed: string;
+    reach: Reach;
   },
 ): Promise<CreateOutcome> {
-  const sql = await compiled(exec, input.tenantId, input.source, input.params);
+  const sql = await compiled(exec, input);
   if (!sql.ok) {
     return sql;
   }
@@ -134,6 +149,7 @@ export async function createExport(
     tenantId: input.tenantId,
     userId: input.userId,
     kind: input.source.kind,
+    scopeModels: scopeOf(input.reach)?.models ?? null,
     sql: sql.sql,
     fileName: csvFileName(sql.name ?? input.unnamed, input.unnamed),
     minutes: EXPORT_MINUTES,
@@ -147,12 +163,37 @@ export async function createExport(
   return { ok: true, export: row };
 }
 
+/** An export as its download runs it: the row, and the scope its rows are read under. */
+export interface OpenedExport extends Omit<ExportRow, "scopeModels"> {
+  /** `null` for the BI login; else the models both asked under and still reached (ADR 0142). */
+  readonly scope: QueryScope | null;
+}
+
+/**
+ * The scope a download runs under: the models the asker reached when they asked, and still reach
+ * now -- the narrower of the two, so neither a grant since nor one taken away since makes the
+ * file read more than its asker may read at the moment the rows are taken.
+ */
+function narrowerOf(asked: readonly string[] | null, now: QueryScope | null): QueryScope | null {
+  if (asked === null) {
+    return now;
+  }
+  return now === null
+    ? { models: [...asked] }
+    : { models: asked.filter((m) => now.models.includes(m)) };
+}
+
 /** The export `userId` asked for in `tenantId`, while it lives; `null` for anyone else's. */
-export function openExport(
+export async function openExport(
   exec: SqlExecutor,
-  input: { tenantId: string; id: string; userId: string },
-): Promise<ExportRow | null> {
-  return findLiveExport(exec, input);
+  input: { tenantId: string; id: string; userId: string; reach: Reach },
+): Promise<OpenedExport | null> {
+  const row = await findLiveExport(exec, input);
+  if (row === null) {
+    return null;
+  }
+  const { scopeModels, ...rest } = row;
+  return { ...rest, scope: narrowerOf(scopeModels, scopeOf(input.reach)) };
 }
 
 /** Whether exporting `kind` needs `reports:author`, rather than only membership. */

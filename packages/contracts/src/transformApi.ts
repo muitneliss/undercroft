@@ -206,6 +206,40 @@ export const RunQueryRequest = z.object({
 });
 export type RunQueryRequest = z.infer<typeof RunQueryRequest>;
 
+/** The most models one scope names: more than any customer has, and a bound on the request. */
+export const MAX_SCOPE_MODELS = 5000;
+
+/**
+ * The reach a reader's SQL runs under, for a reader who does not reach every model (ADR 0142):
+ * the models and reference tables they may read, by name. The worker reads as the customer's
+ * SCOPE LOGIN for exactly that set, which Postgres lets read those tables and nothing else; a
+ * reader who reaches every model sends no scope at all and reads as the customer's BI login.
+ *
+ * The set, not a hash of it: the worker provisions the login the first time a set is asked
+ * for, and the canonical form and its hash are computed in ONE place, `ops.provision_scope`.
+ * PR 4's row and column rules join this object as fields of their own.
+ */
+export const QueryScope = z.object({
+  models: z.array(ModelName).max(MAX_SCOPE_MODELS),
+});
+export type QueryScope = z.infer<typeof QueryScope>;
+
+/**
+ * A query under a scope. Its own request -- and its own route, `/v1/queries/scoped/run` -- rather
+ * than a field on `RunQueryRequest`, because the worker and the control plane deploy separately:
+ * a worker that predates scopes would strip an unknown `scope` and answer as the BI login, which
+ * reads every model. On a route it does not have it answers 404, and nothing is read.
+ */
+export const ScopedRunQueryRequest = RunQueryRequest.extend({ scope: QueryScope });
+export type ScopedRunQueryRequest = z.infer<typeof ScopedRunQueryRequest>;
+
+/** The analytics schema as a scope login sees it, at `/v1/queries/scoped/schema`. */
+export const ScopedSchemaRequest = z.object({
+  tenantId: z.string().min(1),
+  scope: QueryScope,
+});
+export type ScopedSchemaRequest = z.infer<typeof ScopedSchemaRequest>;
+
 /**
  * A query's answer from the worker: the rows, and which tables of the tenant's analytics
  * schema Postgres's plan of the statement read (ADR 0129). `relations` is `null` when the plan
@@ -251,6 +285,10 @@ export const ExportQueryRequest = z.object({
   sql: z.string().min(1).max(MAX_QUERY_SQL_BYTES),
 });
 export type ExportQueryRequest = z.infer<typeof ExportQueryRequest>;
+
+/** An export under a scope, at `/v1/queries/scoped/export`, for the reason `ScopedRunQueryRequest` gives. */
+export const ScopedExportQueryRequest = ExportQueryRequest.extend({ scope: QueryScope });
+export type ScopedExportQueryRequest = z.infer<typeof ScopedExportQueryRequest>;
 
 /** The tenant's analytics schema as its read-only login sees it: every table, every column. */
 export const SchemaResponse = z.object({

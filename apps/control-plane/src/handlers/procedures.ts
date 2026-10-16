@@ -28,7 +28,7 @@ import {
   type ProcedureSpec,
   SESSION_ONLY,
 } from "./surface.ts";
-import { permissionGuardedBy } from "./permissionGate.ts";
+import { isWholeReachGuard, permissionGuardedBy } from "./permissionGate.ts";
 import { sessionProcedure, tenantStatusProcedure } from "./trpc.ts";
 
 export type Caller = ReturnType<typeof appRouter.createCaller>;
@@ -167,21 +167,48 @@ function permissionOf(path: string, procedure: unknown): Permission | null {
 
 /**
  * The permission a router procedure declares, by dotted path; `null` for one that declares none
- * or a path the router lacks. For a door that describes a procedure without the whole manifest --
- * the assistant's tools (`assistantTools.ts`).
+ * or a path the router lacks.
  */
 export function permissionFor(path: string): Permission | null {
-  const procedure: unknown = PROCEDURE_PATHS.has(path)
-    ? Reflect.get(appRouter._def.procedures, path)
-    : undefined;
+  const procedure = procedureAt(path);
   return procedure === undefined ? null : permissionOf(path, procedure);
 }
 
-/** A procedure's sentence in one language, and the sentence naming its permission if it has one. */
-function described(sentence: string, permission: Permission | null, locale: Locale): string {
-  return permission === null
-    ? sentence
-    : `${sentence} ${messages(locale)("procedure.needs", { permission })}`;
+function procedureAt(path: string): unknown {
+  return PROCEDURE_PATHS.has(path) ? Reflect.get(appRouter._def.procedures, path) : undefined;
+}
+
+/**
+ * The sentences a procedure's gates add to its own: the permission it declares, and -- for one
+ * that runs SQL as the customer's build login -- that it needs the whole of every model and the
+ * raw lake (`requireWholeReach`, ADR 0142). Read off the middleware chain, so no description can
+ * claim a gate the procedure does not have. Empty for a procedure with neither.
+ */
+function needsOf(path: string, procedure: unknown, locale: Locale): string {
+  const t = messages(locale);
+  const permission = permissionOf(path, procedure);
+  const sentences = [
+    ...(permission === null ? [] : [t("procedure.needs", { permission })]),
+    ...(middlewaresOf(path, procedure).some(isWholeReachGuard)
+      ? [t("procedure.needsWholeReach")]
+      : []),
+  ];
+  return sentences.join(" ");
+}
+
+/**
+ * What a router procedure's gates add to its sentence, by dotted path, in `locale`; empty for one
+ * with none or a path the router lacks. For a door that describes a procedure without the whole
+ * manifest -- the assistant's tools (`assistantTools.ts`).
+ */
+export function needsFor(path: string, locale: Locale): string {
+  const procedure = procedureAt(path);
+  return procedure === undefined ? "" : needsOf(path, procedure, locale);
+}
+
+/** A procedure's sentence in one language, and the sentences naming what its gates need. */
+function described(sentence: string, needs: string): string {
+  return needs === "" ? sentence : `${sentence} ${needs}`;
 }
 
 /** A subscription is refused: no caller built from this manifest has a way to serve one. */
@@ -268,8 +295,8 @@ export async function procedureManifest(): Promise<ProcedureSpec[]> {
       permission,
       effect,
       description: {
-        vi: described(vi[path], permission, "vi"),
-        en: described(en[path], permission, "en"),
+        vi: described(vi[path], needsOf(path, procedure, "vi")),
+        en: described(en[path], needsOf(path, procedure, "en")),
       },
     });
   }

@@ -176,6 +176,7 @@ export function QuestionCard({
   tenantId,
   tile,
   question,
+  granted,
   search,
   locale,
   edit,
@@ -183,8 +184,10 @@ export function QuestionCard({
 }: {
   tenantId: string;
   tile: DashboardTile;
-  /** Null when the question the tile names no longer exists. */
+  /** Null when the question the tile names no longer exists, or the reader may not open it. */
   question: QuestionView | null;
+  /** False for a question the reader is not granted (ADR 0142): said so, rather than "deleted". */
+  granted: boolean;
   search: URLSearchParams;
   locale: Locale;
   edit: boolean;
@@ -203,9 +206,10 @@ export function QuestionCard({
     });
   }
 
+  const absent = granted ? t("dashboard.questionGone") : t("dashboard.questionNotGranted");
   return (
     <section
-      aria-label={question === null ? t("dashboard.questionGone") : question.name}
+      aria-label={question === null ? absent : question.name}
       className="grid__tile"
       style={{
         gridColumn: `${String(tile.x + 1)} / span ${String(tile.w)}`,
@@ -214,7 +218,7 @@ export function QuestionCard({
     >
       <CardHeader className="grid__head">
         {question === null ? (
-          <span className="label">{t("dashboard.questionGone")}</span>
+          <span className="label">{absent}</span>
         ) : (
           <Link className="label" to={questionHref(question.id)}>
             {question.name}

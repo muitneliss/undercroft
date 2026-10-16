@@ -40,7 +40,7 @@ import { ANSWER_SECONDS } from "./holdOpen.ts";
 import { StepQuery } from "./inputs.ts";
 import { cursorRefusal, listingOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
 import { buildHeld, parentTestsFailing, previewRefused } from "./modelRefusals.ts";
-import { requirePermission } from "./permissionGate.ts";
+import { requireWholeReach } from "./permissionGate.ts";
 import { actorOf, refusal, router, tenantProcedure } from "./trpc.ts";
 
 const MS_PER_SECOND = 1000;
@@ -73,7 +73,7 @@ export const modelsRouter = router({
       listingOrRefusal(
         ctx.locale,
         "models.list",
-        await models.list(ctx.exec, input.tenantId, input),
+        await models.list(ctx.exec, input.tenantId, ctx.reach, input),
       ),
     ),
 
@@ -84,7 +84,7 @@ export const modelsRouter = router({
   revision: tenantProcedure.query(({ ctx, input }) => revision(ctx.exec, input.tenantId)),
 
   get: tenantProcedure.input(z.object({ name: ModelName })).query(async ({ ctx, input }) => {
-    const model = await models.get(ctx.exec, input.tenantId, input.name);
+    const model = await models.get(ctx.exec, input.tenantId, input.name, ctx.reach);
     if (model === null) {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
@@ -98,7 +98,7 @@ export const modelsRouter = router({
    * or by one of the tenant's seeds at all (ADR 0128), is a CONFLICT. `description` left out
    * keeps the stored one and `null` clears it (ADR 0137).
    */
-  save: requirePermission("models:write")
+  save: requireWholeReach("models:write")
     .input(
       z.object({
         name: ModelName,
@@ -148,7 +148,7 @@ export const modelsRouter = router({
    * one answer this must never give. A build running and a model another one reads from are
    * CONFLICTs the person can act on; a worker that did not drop is a precondition they cannot.
    */
-  delete: requirePermission("models:write")
+  delete: requireWholeReach("models:write")
     .input(z.object({ name: ModelName }))
     .mutation(async ({ ctx, input }) => {
       const t = messages(ctx.locale);
@@ -204,7 +204,7 @@ export const modelsRouter = router({
    * already running is a CONFLICT naming that run and its start, so it can be waited on; a
    * worker that did not answer is a precondition nobody at the screen can fix.
    */
-  build: requirePermission("models:write")
+  build: requireWholeReach("models:write")
     .meta({ holdsOpenSeconds: BUILD_DEADLINE_MS / MS_PER_SECOND + ANSWER_SECONDS })
     .input(
       StepQuery.omit({ stepCursor: true }).extend({
@@ -290,7 +290,7 @@ export const modelsRouter = router({
    * Postgres: the request was the fault, and the sentence is how the author fixes it. A worker
    * that did not answer is a precondition. It holds its request open for the worker's deadline.
    */
-  preview: requirePermission("models:write")
+  preview: requireWholeReach("models:write")
     .meta({ holdsOpenSeconds: PREVIEW_DEADLINE_MS / MS_PER_SECOND + ANSWER_SECONDS })
     .input(
       z.object({
@@ -348,7 +348,8 @@ export const modelsRouter = router({
         input.name === undefined
           ? null
           : { name: input.name, direction: input.direction, depth: input.depth ?? null };
-      const answer = await lineage(ctx.exec, input.tenantId, target, input);
+      const reader = { tenantId: input.tenantId, reach: ctx.reach };
+      const answer = await lineage(ctx.exec, reader, target, input);
       if (answer.ok) {
         return answer.value;
       }

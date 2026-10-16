@@ -39,7 +39,7 @@ import type { Hono } from "hono";
 import { ZodError } from "zod";
 import { messages } from "../i18n/index.ts";
 import { recordAction } from "../services/audit.ts";
-import { EXPORT_MINUTES, type ExportRow } from "../services/biExports.ts";
+import { EXPORT_MINUTES, type OpenedExport } from "../services/biExports.ts";
 import type { BearerRefusal } from "./identity.ts";
 import { EXPORT_ROUTE } from "./exportLink.ts";
 import { appRouter } from "./router.ts";
@@ -110,7 +110,7 @@ async function opened(
   deps: ExportRouteDeps,
   ctx: Context,
   asked: Asked,
-): Promise<ExportRow | Response> {
+): Promise<OpenedExport | Response> {
   try {
     return await appRouter.createCaller(ctx).bi.exports.get({
       tenantId: asked.tenantId,
@@ -134,13 +134,19 @@ async function opened(
 async function streamed(
   ctx: Context,
   asked: Asked,
-  row: ExportRow,
+  row: OpenedExport,
 ): Promise<ReadableStream<Uint8Array> | Response> {
   const t = messages(ctx.locale);
   if (ctx.worker === null) {
     return refusal(asked.accept, 503, "CONFLICT", t("error.workerUnavailable"));
   }
-  const outcome = await ctx.worker.exportQuery({ tenantId: asked.tenantId, sql: row.sql });
+  // Under the scope `bi.exports.get` answered with: what the asker reached when they asked,
+  // narrowed by what they reach now (ADR 0142).
+  const outcome = await ctx.worker.exportQuery({
+    tenantId: asked.tenantId,
+    sql: row.sql,
+    scope: row.scope,
+  });
   if (outcome.ok) {
     return outcome.value;
   }

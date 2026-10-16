@@ -365,3 +365,56 @@ describe("a search Postgres stopped at its time limit", () => {
     expect(refusal).toBe(cancelled);
   });
 });
+
+describe("searchRaw narrowed to the streams a reader reaches (ADR 0142)", () => {
+  beforeEach(async () => {
+    await landRecord(TENANT, "1", '{"deal_name":"Hợp đồng thuê nhà"}');
+    await landDocument(TENANT, "d1", "Hợp đồng thuê nhà số 42.");
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `INSERT INTO raw.records (source, tenant_id, entity, source_record_id, payload,
+           content_sha256, observed_at, lake_key, lake_stamp, run_id)
+         VALUES ('demo', $1, 'companies', 'c1', '{"name":"Hợp đồng thuê nhà"}'::jsonb,
+                 repeat('0', 64), now(), 'k', 's', 'r')`,
+        [TENANT],
+      ),
+    );
+  });
+
+  const ask = {
+    tenantId: TENANT,
+    q: "hop dong",
+    kinds: ["record", "document"] as const,
+    limit: 10,
+    offset: 0,
+  };
+
+  function found(hits: Awaited<ReturnType<typeof searchRaw>>["hits"]): string[] {
+    return hits
+      .map((hit) =>
+        hit.kind === "record" ? `${hit.entity}/${hit.sourceRecordId}` : `doc/${hit.documentId}`,
+      )
+      .sort();
+  }
+
+  it("finds in the streams it is given, a whole source in all of that source's, and nowhere else", async () => {
+    const deals = await searchRaw(deps, { ...ask, streams: [{ source: "demo", entity: "deals" }] });
+    const documents = await searchRaw(deps, {
+      ...ask,
+      streams: [{ source: "demo", entity: "documents" }],
+    });
+    const source = await searchRaw(deps, { ...ask, streams: [{ source: "demo", entity: null }] });
+    const none = await searchRaw(deps, { ...ask, streams: [] });
+
+    expect(found(deals.hits)).toEqual(["deals/1"]);
+    expect(found(documents.hits)).toEqual(["doc/d1"]);
+    expect(found(source.hits)).toEqual(["companies/c1", "deals/1", "doc/d1"]);
+    expect(none.hits).toEqual([]);
+  });
+
+  it("with no narrowing, finds in the whole lake as before", async () => {
+    const whole = await searchRaw(deps, ask);
+
+    expect(found(whole.hits)).toEqual(["companies/c1", "deals/1", "doc/d1"]);
+  });
+});

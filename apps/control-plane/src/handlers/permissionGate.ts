@@ -11,7 +11,13 @@
  */
 
 import type { TRPCError } from "@trpc/server";
-import type { Permission } from "@undercroft/contracts/access";
+import {
+  type Permission,
+  type Reach,
+  type ReachDomain,
+  reachesWhole,
+  wholeObject,
+} from "@undercroft/contracts/access";
 import type { Locale } from "@undercroft/core";
 import { messages, permissionLabel } from "../i18n/index.ts";
 import { holds } from "../services/authz.ts";
@@ -82,6 +88,67 @@ export function requirePermission(
   const guard: unknown = guarded._def.middlewares.at(-1);
   if (typeof guard === "function") {
     GUARDED.set(guard, permission);
+  }
+  return guarded;
+}
+
+/**
+ * The domains a procedure that runs SQL as the customer's BUILD login needs the whole of (ADR
+ * 0142): every model and the whole raw lake. That login is one per customer and reads both
+ * entire -- a model's SQL can select from any model and from `raw.records` -- so a preview, a
+ * build or a console query answers, or publishes, whatever the SQL names. A narrower reach could
+ * not be enforced below it, and a gate that cannot be enforced is not one.
+ */
+const BUILD_LOGIN_READS: readonly ReachDomain[] = ["model", "raw"];
+
+/** The guards `requireWholeReach` built, for `procedureManifest` to say what each needs. */
+const WHOLE_REACH = new WeakSet<object>();
+
+/** Whether one middleware link is a guard `requireWholeReach` built. */
+export function isWholeReachGuard(middleware: unknown): boolean {
+  return typeof middleware === "function" && WHOLE_REACH.has(middleware);
+}
+
+/** The refusal for a caller who holds the permission and reaches less than the whole. */
+export function wholeReachRefusal(
+  ctx: { readonly locale: Locale; readonly tenantId: string },
+  missing: readonly ReachDomain[],
+): TRPCError {
+  const objects = missing.map(wholeObject);
+  return refusal(
+    "FORBIDDEN",
+    messages(ctx.locale)("error.wholeReachRequired", { objects: objects.join(", ") }),
+    {
+      reason: "WHOLE_REACH_REQUIRED",
+      object: objects[0] ?? null,
+      objects: objects.join(","),
+      tenantId: ctx.tenantId,
+    },
+  );
+}
+
+/** The build login's domains `reach` does not hold whole; empty when it may use that login. */
+export function missingWhole(reach: Reach): readonly ReachDomain[] {
+  return BUILD_LOGIN_READS.filter((domain) => !reachesWhole(reach, domain));
+}
+
+/**
+ * `requirePermission(permission)`, and the whole of every model and the raw lake: for a procedure
+ * that runs SQL as the customer's build login, or changes what that login runs (ADR 0142). Every
+ * built-in role reaches the whole customer, so for them this adds nothing; it refuses a customer's
+ * own role that holds the permission and was granted only some models or streams.
+ */
+export function requireWholeReach(permission: Permission): ReturnType<typeof tenantProcedure.use> {
+  const guarded = requirePermission(permission).use(({ ctx, next }) => {
+    const missing = missingWhole(ctx.reach);
+    if (missing.length > 0) {
+      throw wholeReachRefusal(ctx, missing);
+    }
+    return next();
+  });
+  const guard: unknown = guarded._def.middlewares.at(-1);
+  if (typeof guard === "function") {
+    WHOLE_REACH.add(guard);
   }
   return guarded;
 }

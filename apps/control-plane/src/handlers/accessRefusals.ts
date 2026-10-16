@@ -20,8 +20,28 @@ interface Asked {
   readonly tenantId: string;
 }
 
-/** The caller would give or take away permissions they do not hold themselves. */
-export function notHeldRefusal(ctx: Asked, missing: readonly Permission[]): TRPCError {
+/**
+ * The caller would give or take away permissions they do not hold themselves -- or, when they hold
+ * every permission involved, objects they do not reach (ADR 0142): `REACH_NOT_HELD`, naming the
+ * objects as grants spell them (`model:fct_sales`, `raw:*`), so an agent can say what to ask for.
+ */
+export function notHeldRefusal(
+  ctx: Asked,
+  missing: readonly Permission[],
+  objects: readonly string[] = [],
+): TRPCError {
+  if (missing.length === 0 && objects.length > 0) {
+    return refusal(
+      "FORBIDDEN",
+      messages(ctx.locale)("error.reachNotHeld", { objects: objects.join(", ") }),
+      {
+        reason: "REACH_NOT_HELD",
+        object: objects[0] ?? null,
+        objects: objects.join(","),
+        tenantId: ctx.tenantId,
+      },
+    );
+  }
   return refusal(
     "FORBIDDEN",
     messages(ctx.locale)("error.permissionsNotHeld", { permissions: missing.join(", ") }),

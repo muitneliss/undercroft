@@ -27,19 +27,25 @@
  * a permission they do not hold themselves, so `roles:manage` and `people:manage` cannot be
  * turned into every other permission by granting it to oneself or to a friend.
  *
+ * Since ADR 0142 an `Access` carries the caller's REACH too -- which models, raw streams and
+ * reports they may read -- and the subset rule weighs it beside the permissions (`beyond`,
+ * `within`): nobody gives or takes away reading what they cannot read themselves.
+ *
  * Since ADR 0110 the answer also carries whether the tenant is deactivated. Authority and state
  * are two facts and stay two fields: a deactivated tenant's admin is still its admin -- that is
  * who may reactivate it -- and the refusal a deactivated tenant earns is argued in
  * `handlers/trpc.ts`, beside the 404, from the one answer this module gives.
  */
 
-import { ADMIN_ROLE, type Permission } from "@undercroft/contracts/access";
+import { ADMIN_ROLE, type Permission, type Reach, unreached } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import { rolePolicy } from "../repos/accessRoles.ts";
 import { accessFor, type MemberAccess, memberIdForEmail } from "../repos/membership.ts";
 import { findTenant } from "../repos/tenant.ts";
-import { permissionsOf, permissionsOfRole } from "./rbac.ts";
+import { type Holding, holdingOf, holdingOfRole } from "./rbac.ts";
 import { isSuperadmin, type Superadmins } from "./superadmin.ts";
+
+export type { Holding } from "./rbac.ts";
 
 export type { Role } from "../repos/membership.ts";
 
@@ -51,6 +57,12 @@ export interface Access {
   readonly roleLabel: string | null;
   /** What the caller may do here, sorted -- what Casbin decided, not a copy of the grants. */
   readonly permissions: readonly Permission[];
+  /**
+   * Which models, raw streams and reports the caller may read (ADR 0142), decided by Casbin
+   * beside the permissions. A read is filtered or refused by it, and a reader of fewer than all
+   * the models reads through a scope login (`scopeOf` in `services/bi.ts`).
+   */
+  readonly reach: Reach;
   /** When the tenant was deactivated; `null` while it is in use. ADR 0110. */
   readonly deactivatedAt: string | null;
 }
@@ -83,14 +95,12 @@ export async function accessIn(
   if (standing === null) {
     return null;
   }
+  const holding = await holdingOf({ ...standing, userId: input.userId, tenantId: input.tenantId });
   return {
     role: standing.role,
     roleLabel: standing.roleLabel,
-    permissions: await permissionsOf({
-      ...standing,
-      userId: input.userId,
-      tenantId: input.tenantId,
-    }),
+    permissions: holding.permissions,
+    reach: holding.reach,
     deactivatedAt: standing.deactivatedAt,
   };
 }
@@ -125,34 +135,62 @@ export function lacking(
   return [...new Set(involved)].filter((permission) => !held.includes(permission));
 }
 
+/** What the subset rule found beyond the caller: permissions they lack, objects they do not reach. */
+export interface Beyond {
+  readonly permissions: readonly Permission[];
+  readonly objects: readonly string[];
+}
+
+/**
+ * Everything in `involved` -- what a role confers, what a member holds -- that `held` does not:
+ * the permissions it lacks and the objects it does not reach (ADR 0141, ADR 0142). Empty in both
+ * when the caller may make the change. Reach counts as much as permissions: a holder of
+ * `people:manage` who reads three models cannot make somebody a viewer, who reads every one.
+ */
+export function beyond(held: Holding, involved: readonly Holding[]): Beyond {
+  return {
+    permissions: lacking(
+      held.permissions,
+      involved.flatMap((holding) => holding.permissions),
+    ),
+    objects: [...new Set(involved.flatMap((holding) => unreached(held.reach, holding.reach)))],
+  };
+}
+
+/** Whether `beyond` found nothing: the change is the caller's to make. */
+export function within(found: Beyond): boolean {
+  return found.permissions.length === 0 && found.objects.length === 0;
+}
+
 /**
  * What holding `role` confers in this tenant, as Casbin decides it -- a built-in's grants, a
- * customer's own role's permissions, and the grants in force to the role -- or `null` when the
- * customer has no role with that key. The question the subset rule asks before anyone is
- * invited at a role or given one.
+ * customer's own role's permissions, the grants in force to the role, and what it reaches -- or
+ * `null` when the customer has no role with that key. The question the subset rule asks before
+ * anyone is invited at a role or given one.
  */
 export async function conferredBy(
   exec: SqlExecutor,
   tenantId: string,
   role: string,
-): Promise<readonly Permission[] | null> {
+): Promise<Holding | null> {
   const policy = await rolePolicy(exec, tenantId, role);
-  return policy === null ? null : await permissionsOfRole({ ...policy, tenantId, role });
+  return policy === null ? null : await holdingOfRole({ ...policy, tenantId, role });
 }
 
 /**
- * What a member holds in this tenant, by address -- their role's and their own grants -- or `null`
- * for an address that is no member. What removing them takes away, for the subset rule.
+ * What a member holds in this tenant, by address -- their role's and their own grants, and what
+ * they reach -- or `null` for an address that is no member. What removing them takes away, for
+ * the subset rule.
  */
 export async function heldByMember(
   exec: SqlExecutor,
   tenantId: string,
   email: string,
-): Promise<readonly Permission[] | null> {
+): Promise<Holding | null> {
   const userId = await memberIdForEmail(exec, tenantId, email);
   const access =
     userId === null ? null : await accessIn(exec, { tenantId, userId, superadmin: false });
-  return access === null ? null : access.permissions;
+  return access === null ? null : { permissions: access.permissions, reach: access.reach };
 }
 
 /** Whether an access holds one permission: the question every gate asks, asked one way. */

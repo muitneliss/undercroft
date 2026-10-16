@@ -45,7 +45,7 @@ function membershipRefusal(
     case "no-such-role":
       return noSuchRoleRefusal(ctx, input.role ?? "");
     default:
-      return notHeldRefusal(ctx, outcome.lacking);
+      return notHeldRefusal(ctx, outcome.lacking, outcome.objects);
   }
 }
 
@@ -82,7 +82,7 @@ export const peopleRouter = router({
         tenantId: ctx.tenantId,
         email: input.email,
         role: input.role,
-        held: ctx.permissions,
+        held: { permissions: ctx.permissions, reach: ctx.reach },
         actor: actorOf(ctx),
         notify: ctx.notifyInvitation,
       });
@@ -92,7 +92,7 @@ export const peopleRouter = router({
           throw noSuchRoleRefusal(ctx, input.role);
         }
         if (result.reason === "not-held") {
-          throw notHeldRefusal(ctx, result.lacking);
+          throw notHeldRefusal(ctx, result.lacking, result.objects);
         }
         if (result.reason === "already-member") {
           throw new TRPCError({
@@ -133,7 +133,7 @@ export const peopleRouter = router({
         tenantId: ctx.tenantId,
         email: input.email,
         role: input.role,
-        held: ctx.permissions,
+        held: { permissions: ctx.permissions, reach: ctx.reach },
         actor: actorOf(ctx),
       });
       if (!result.ok) {
@@ -152,7 +152,7 @@ export const peopleRouter = router({
       const result = await people.removeMember(ctx.exec, {
         tenantId: ctx.tenantId,
         email: input.email,
-        held: ctx.permissions,
+        held: { permissions: ctx.permissions, reach: ctx.reach },
         actor: actorOf(ctx),
       });
       if (!result.ok) {

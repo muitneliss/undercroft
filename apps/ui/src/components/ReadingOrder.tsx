@@ -31,10 +31,16 @@ function place(index: number, locale: Locale): string {
 export function ReadingOrder({
   layout,
   questions,
+  stored,
   locale,
 }: {
   layout: DashboardLayout;
   questions: readonly QuestionView[];
+  /**
+   * The dashboard as saved, whose `ungranted` tiles the reader may not open (ADR 0142): named
+   * so rather than as deleted. `null` for one never saved, which has none.
+   */
+  stored: { readonly ungranted: readonly string[] } | null;
   locale: Locale;
 }): React.JSX.Element | null {
   const { t } = useTranslation();
@@ -68,7 +74,11 @@ export function ReadingOrder({
             </thead>
             <tbody>
               {tiles.map((tile, index) => {
-                const name = byId.get(tile.questionId) ?? t("dashboard.questionGone");
+                const name =
+                  byId.get(tile.questionId) ??
+                  (stored?.ungranted.includes(tile.questionId) === true
+                    ? t("dashboard.questionNotGranted")
+                    : t("dashboard.questionGone"));
                 return (
                   <tr key={tile.questionId}>
                     <td className="num datum">{place(index, locale)}</td>

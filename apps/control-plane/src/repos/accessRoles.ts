@@ -26,6 +26,7 @@
 
 import { BUILT_IN_ROLES } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
+import { GRANT_NAMES_SOMETHING } from "./membership.ts";
 
 /** One role as a customer has it, with how many hold it and how many are invited at it. */
 export interface RoleRow {
@@ -134,7 +135,8 @@ export async function rolePolicy(
                         'toRole', true, 'object', g.object, 'action', g.action) ORDER BY g.object)
                FROM app.access_grant g
                WHERE g.tenant_id = r.tenant_id AND g.role_key = r.key
-                 AND (g.expires_at IS NULL OR g.expires_at > now())),
+                 AND (g.expires_at IS NULL OR g.expires_at > now())
+                 AND ${GRANT_NAMES_SOMETHING}),
               '[]'::json) AS grants
      FROM app.access_role r WHERE r.tenant_id = $1 AND r.key = $2`,
     [tenantId, key],

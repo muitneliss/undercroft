@@ -51,6 +51,26 @@ export const RawSearchRequest = z.object({
 });
 export type RawSearchRequest = z.infer<typeof RawSearchRequest>;
 
+/** The most streams one narrowed search names. */
+export const MAX_SEARCH_STREAMS = 1000;
+
+/**
+ * A search narrowed to the raw streams its reader reaches (ADR 0142), at
+ * `/v1/queries/raw/search/within`: each stream a source and an entity, or a whole source with
+ * `entity` null; a document is its source's `documents` stream. Empty finds nothing.
+ *
+ * Its own route for the reason `ScopedRunQueryRequest` has one: a worker that predates it would
+ * drop `streams` and search the whole lake. The worker narrows inside the candidate lookups,
+ * before anything is ranked or counted, so a page never holds or counts what the reader cannot
+ * see.
+ */
+export const RawSearchWithinRequest = RawSearchRequest.extend({
+  streams: z
+    .array(z.object({ source: z.string().min(1), entity: z.string().min(1).nullable() }))
+    .max(MAX_SEARCH_STREAMS),
+});
+export type RawSearchWithinRequest = z.infer<typeof RawSearchWithinRequest>;
+
 /** What both kinds of hit carry: where it came from, how well it matched, and a window on it. */
 const hitBase = {
   source: z.string().min(1),

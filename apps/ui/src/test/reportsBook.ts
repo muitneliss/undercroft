@@ -147,6 +147,7 @@ export const DASHBOARDS: readonly DashboardView[] = [
     filters: [{ name: "period", kind: "date_range", label: "Month range" }],
     updatedAt: WHEN_SAVED,
     updatedBy: AUTHOR,
+    ungranted: [],
   },
   {
     id: DASHBOARD_ID.receivables,
@@ -160,6 +161,7 @@ export const DASHBOARDS: readonly DashboardView[] = [
     filters: [],
     updatedAt: "2026-09-27T08:00:00Z",
     updatedBy: AUTHOR,
+    ungranted: [],
   },
   {
     id: DASHBOARD_ID.support,
@@ -168,6 +170,7 @@ export const DASHBOARDS: readonly DashboardView[] = [
     filters: [],
     updatedAt: "2026-09-29T08:00:00Z",
     updatedBy: AUTHOR,
+    ungranted: [],
   },
 ];
 

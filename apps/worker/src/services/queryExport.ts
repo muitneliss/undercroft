@@ -27,6 +27,7 @@ import {
   csvHeader,
   csvRows,
   type ExportQueryRequest,
+  type QueryScope,
   type TableResult,
 } from "@undercroft/contracts";
 import { describeError, type Logger, UndercroftError } from "@undercroft/core";
@@ -140,14 +141,22 @@ async function writeRows(
   }
 }
 
-/** The whole export, as the tenant's BI login, inside the read-only frame. */
-async function writeExport(deps: ExportDeps, input: ExportQueryRequest, sink: Sink): Promise<void> {
+/**
+ * What an export reads: the author's SQL, and the scope it reads under -- `null` or absent for the
+ * BI login, which reads every model; a reader's models for the scope login that reads only those
+ * (ADR 0142).
+ */
+export type ExportInput = ExportQueryRequest & { readonly scope?: QueryScope | null };
+
+/** The whole export, as the tenant's BI login or its scope login, inside the read-only frame. */
+async function writeExport(deps: ExportDeps, input: ExportInput, sink: Sink): Promise<void> {
   const roles = await tenantRolesFor(deps.exec, input.tenantId);
   if (roles === null) {
     throw new TenantNotProvisioned(input.tenantId);
   }
   const frame = { schema: roles.analyticsSchema, timeoutMs: EXPORT_STATEMENT_TIMEOUT_MS };
-  await deps.sessions.as({ tenantId: input.tenantId, kind: "bi" }, (exec) =>
+  const target = { tenantId: input.tenantId, kind: "bi" as const, scope: input.scope ?? null };
+  await deps.sessions.as(target, (exec) =>
     inReadOnlyTransaction(exec, frame, () => writeRows(deps, exec, input.sql, sink)),
   );
 }
@@ -180,7 +189,7 @@ async function cut(
 /** See the module docstring. */
 export function exportQuery(
   deps: ExportDeps,
-  input: ExportQueryRequest,
+  input: ExportInput,
 ): Promise<ReadableStream<Uint8Array>> {
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
   const writer = writable.getWriter();

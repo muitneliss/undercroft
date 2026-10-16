@@ -15,7 +15,7 @@ import { messages } from "../i18n/index.ts";
 import * as macros from "../services/macros.ts";
 import { findingSentence, wordCheck } from "./checkWords.ts";
 import { listingOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
-import { requirePermission } from "./permissionGate.ts";
+import { requireWholeReach } from "./permissionGate.ts";
 import { actorOf, router, tenantProcedure } from "./trpc.ts";
 
 const definition = z.string().max(MAX_MACRO_SQL_BYTES);
@@ -64,7 +64,7 @@ export const macrosRouter = router({
    * BAD_REQUEST with the same sentence `macros.check` gives for it; a taken name under
    * `create` is a CONFLICT.
    */
-  save: requirePermission("models:write")
+  save: requireWholeReach("models:write")
     .input(
       z.object({
         name: MacroName,
@@ -98,7 +98,7 @@ export const macrosRouter = router({
     }),
 
   /** Delete a macro nothing calls. One a model or another macro calls is a CONFLICT naming them. */
-  delete: requirePermission("models:write")
+  delete: requireWholeReach("models:write")
     .input(z.object({ name: MacroName }))
     .mutation(async ({ ctx, input }) => {
       const outcome = await macros.remove(ctx.exec, {

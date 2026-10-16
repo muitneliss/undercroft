@@ -113,18 +113,43 @@ describe("a customer's own role is never a built-in", () => {
   });
 });
 
-describe("a grant is a permission, once", () => {
+describe("a grant is a permission or one object, once", () => {
   const GRANT = `INSERT INTO app.access_grant (tenant_id, subject_kind, role_key, object, action)
                  VALUES ('CASE-0042', 'role', 'member', $1, $2)`;
 
-  it("refuses a pattern, an object that is not a permission, and an action other than use", async () => {
-    expect(await failure(GRANT, ["perm:*", "use"])).toContain("access_grant_permission_only");
-    expect(await failure(GRANT, ["model:orders", "read"])).toContain(
-      "access_grant_permission_only",
-    );
-    expect(await failure(GRANT, ["perm:lake:read", "write"])).toContain(
-      "access_grant_permission_only",
-    );
+  it("refuses a pattern, an object of no shape it knows, and the wrong action for either kind", async () => {
+    // A `*` anywhere but where it means "the whole of" would reach `keyMatch` as a pattern.
+    for (const [object, action] of [
+      ["perm:*", "use"],
+      ["model:fct_*", "read"],
+      ["raw:gmail.*", "read"],
+      ["raw:gmail/de*", "read"],
+      ["report:question:*", "read"],
+      ["*", "read"],
+      ["model:orders", "use"],
+      ["perm:lake:read", "read"],
+      ["perm:lake:read", "write"],
+      ["report:question:00000000-0000-4000-8000-00000000000A", "read"],
+    ]) {
+      expect(await failure(GRANT, [object, action])).toContain("access_grant_object_shape");
+    }
+  });
+
+  it("admits a permission with use, and each object form and its wildcard with read", async () => {
+    for (const object of [
+      "model:orders",
+      "model:*",
+      "raw:hubspot/deals",
+      "raw:gmail.3fa9c1d2e0ab/messages",
+      "raw:hubspot/*",
+      "raw:*",
+      "report:question:00000000-0000-4000-8000-00000000000a",
+      "report:dashboard:00000000-0000-4000-8000-00000000000b",
+      "report:*",
+    ]) {
+      expect(await failure(GRANT, [object, "read"])).toBeNull();
+    }
+    expect(await failure(GRANT, ["perm:lake:read", "use"])).toBeNull();
   });
 
   it("is stored once per subject, and accepted the first time", async () => {

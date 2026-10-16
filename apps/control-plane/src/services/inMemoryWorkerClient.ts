@@ -10,8 +10,8 @@ import {
   type BrowseListing,
   type BrowseScopeResponse,
   CSV_BOM,
-  type ExportQueryRequest,
   type QueryAnswer,
+  type QueryScope,
   type RawSearchResponse,
   resultCsv,
   type RevokeConnectionResponse,
@@ -25,7 +25,9 @@ import type {
   BuildInput,
   BuildOutcome,
   DropOutcome,
+  ExportInput,
   QueryInput,
+  ReportQueryInput,
   SearchInput,
   StoreCredentialInput,
   InitialiseOutcome,
@@ -142,19 +144,16 @@ export class InMemoryWorkerClient implements WorkerClient {
     });
   }
 
-  browseScope(input: {
-    source: string;
-    tenantId: string;
-    kind: BrowseListing;
-  }): Promise<WorkerOutcome<BrowseScopeResponse>> {
+  browseScope(
+    input: Parameters<WorkerClient["browseScope"]>[0],
+  ): Promise<WorkerOutcome<BrowseScopeResponse>> {
     this.browsed.push(input);
     return this.#unlessFailing(this.#choices);
   }
 
-  revokeConnection(input: {
-    source: string;
-    tenantId: string;
-  }): Promise<WorkerOutcome<RevokeConnectionResponse>> {
+  revokeConnection(
+    input: Parameters<WorkerClient["revokeConnection"]>[0],
+  ): Promise<WorkerOutcome<RevokeConnectionResponse>> {
     if (this.#failWith !== null) {
       return this.#fail();
     }
@@ -162,10 +161,9 @@ export class InMemoryWorkerClient implements WorkerClient {
     return Promise.resolve({ ok: true, value: { revokedUpstream: true } });
   }
 
-  initialiseDocumentKinds(input: {
-    tenantId: string;
-    triggeredBy: string;
-  }): Promise<InitialiseOutcome> {
+  initialiseDocumentKinds(
+    input: Parameters<WorkerClient["initialiseDocumentKinds"]>[0],
+  ): Promise<InitialiseOutcome> {
     if (this.#failWith !== null) {
       return Promise.resolve({ ok: false, reason: this.#failWith });
     }
@@ -179,11 +177,7 @@ export class InMemoryWorkerClient implements WorkerClient {
     return Promise.resolve({ ok: true, runId: `run-init-${String(this.initialised.length)}` });
   }
 
-  triggerIngest(input: {
-    source: string;
-    tenantId: string;
-    triggeredBy: string;
-  }): Promise<TriggerOutcome> {
+  triggerIngest(input: Parameters<WorkerClient["triggerIngest"]>[0]): Promise<TriggerOutcome> {
     if (this.#failWith !== null) {
       return Promise.resolve({ ok: false, reason: this.#failWith });
     }
@@ -237,8 +231,8 @@ export class InMemoryWorkerClient implements WorkerClient {
     return this.#unlessFailing({ columns: [], rows: [], truncated: false });
   }
 
-  /** Every query this double was asked to run, in order. */
-  readonly queries: QueryInput[] = [];
+  /** Every query asked, in order, with its scope -- which login the worker would read as. */
+  readonly queries: ReportQueryInput[] = [];
   /** Every search it was asked, in order. */
   readonly searches: SearchInput[] = [];
   #answer: QueryAnswer = { columns: [], rows: [], truncated: false };
@@ -261,7 +255,7 @@ export class InMemoryWorkerClient implements WorkerClient {
     return this;
   }
 
-  runQuery(input: QueryInput): Promise<WorkerOutcome<QueryAnswer>> {
+  runQuery(input: ReportQueryInput): Promise<WorkerOutcome<QueryAnswer>> {
     if (this.#failWith !== null) {
       return this.#fail();
     }
@@ -272,14 +266,14 @@ export class InMemoryWorkerClient implements WorkerClient {
     return Promise.resolve({ ok: true, value: this.#answer });
   }
 
-  /** Every export this double was asked to stream, in order. */
-  readonly exports: ExportQueryRequest[] = [];
+  /** Every export this double was asked to stream, in order, with its scope. */
+  readonly exports: ExportInput[] = [];
 
   /**
    * Stream the answer `answering` was given as the real worker streams one -- the shared CSV
    * encoder, its byte-order mark first -- or refuse as it refuses bad SQL.
    */
-  exportQuery(input: ExportQueryRequest): Promise<WorkerOutcome<ReadableStream<Uint8Array>>> {
+  exportQuery(input: ExportInput): Promise<WorkerOutcome<ReadableStream<Uint8Array>>> {
     if (this.#failWith !== null) {
       return this.#fail();
     }
@@ -291,7 +285,10 @@ export class InMemoryWorkerClient implements WorkerClient {
     return Promise.resolve({ ok: true, value: new Response(csv).body ?? new ReadableStream() });
   }
 
-  readSchema(): Promise<WorkerOutcome<SchemaResponse>> {
+  /** The scope of every analytics schema read, in order. */
+  readonly schemaScopes: (QueryScope | null)[] = [];
+  readSchema(input: { scope: QueryScope | null }): Promise<WorkerOutcome<SchemaResponse>> {
+    this.schemaScopes.push(input.scope);
     return this.#unlessFailing(this.#schema);
   }
 
@@ -304,8 +301,9 @@ export class InMemoryWorkerClient implements WorkerClient {
    * can honestly model. The login boundary is proven where it lives, against real Postgres
    * in `privileges.test.ts`.
    */
-  readonly runRawQuery: WorkerClient["runRawQuery"] = (input) => this.runQuery(input);
-  readonly readRawSchema: WorkerClient["readRawSchema"] = () => this.readSchema();
+  readonly runRawQuery: WorkerClient["runRawQuery"] = (input: QueryInput) =>
+    this.runQuery({ ...input, scope: null });
+  readonly readRawSchema: WorkerClient["readRawSchema"] = () => this.#unlessFailing(this.#schema);
 
   /**
    * Records the question and answers with whatever `answersSearchWith` was given.

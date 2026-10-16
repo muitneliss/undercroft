@@ -426,3 +426,8 @@
 ## [2026-10-16] ingest | Runbook: Onboarding a new person
 ## [2026-10-16] ingest | Runbook Sign-In Setup
 ## [2026-10-16] ingest | Architecture
+## [2026-10-16] ingest | ADR 0142 Object Reach and Scope Logins
+## [2026-10-16] ingest | Permissions
+## [2026-10-16] ingest | Runbook: Access control
+## [2026-10-16] ingest | Runbook Sign-In Setup
+## [2026-10-16] ingest | Architecture

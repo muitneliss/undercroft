@@ -17,7 +17,7 @@
  * parsers in `@undercroft/db`, all the way through.
  */
 
-import type { QueryAnswer, SchemaResponse, TableResult } from "@undercroft/contracts";
+import type { QueryAnswer, QueryScope, SchemaResponse, TableResult } from "@undercroft/contracts";
 import { tenantRolesFor } from "@undercroft/db/repos";
 
 import { runFramed, runFramedWithRelations, schemaColumns, typeNames } from "../repos/queries.ts";
@@ -56,16 +56,22 @@ export function queryFailedBy(error: unknown): QueryFailed {
  * tables of its analytics schema the statement read, from Postgres's plan of it
  * (`runFramedWithRelations`, ADR 0129) -- which the control plane, which may read the run
  * ledger where this login may not, turns into a qualifier for each table whose tests fail.
+ *
+ * With a `scope`, as the customer's scope login for those models instead (ADR 0142): the same
+ * frame and the same answer, from a login Postgres lets read only the scope's tables, so a table
+ * outside it is refused in Postgres's own words -- "permission denied for table" -- however the
+ * SQL names it, and whatever it `set_config`s first.
  */
 export async function runQuery(
   deps: QueryDeps,
-  input: { tenantId: string; sql: string; limit: number },
+  input: { tenantId: string; sql: string; limit: number; scope?: QueryScope | null },
 ): Promise<QueryAnswer> {
   const roles = await tenantRolesFor(deps.exec, input.tenantId);
   if (roles === null) {
     throw new TenantNotProvisioned(input.tenantId);
   }
-  return deps.sessions.as({ tenantId: input.tenantId, kind: "bi" }, async (exec) => {
+  const target = { tenantId: input.tenantId, kind: "bi" as const, scope: input.scope ?? null };
+  return deps.sessions.as(target, async (exec) => {
     let framed: Awaited<ReturnType<typeof runFramedWithRelations>>;
     try {
       framed = await runFramedWithRelations(exec, {
@@ -186,18 +192,21 @@ async function rawSchemaOf(deps: QueryDeps, input: { tenantId: string }): Promis
   return { tables: [...tables].map(([name, columns]) => ({ name, columns })) };
 }
 
-/** The tenant's analytics schema as its BI login sees it. */
+/**
+ * The tenant's analytics schema as its BI login sees it -- or, with a `scope`, as that scope
+ * login does: `information_schema` lists only the tables a login holds a privilege on, so a scoped
+ * reader's schema is their tables and nothing else, with no filter written here.
+ */
 export async function readSchema(
   deps: QueryDeps,
-  input: { tenantId: string },
+  input: { tenantId: string; scope?: QueryScope | null },
 ): Promise<SchemaResponse> {
   const roles = await tenantRolesFor(deps.exec, input.tenantId);
   if (roles === null) {
     throw new TenantNotProvisioned(input.tenantId);
   }
-  const rows = await deps.sessions.as({ tenantId: input.tenantId, kind: "bi" }, (exec) =>
-    schemaColumns(exec, roles.analyticsSchema),
-  );
+  const target = { tenantId: input.tenantId, kind: "bi" as const, scope: input.scope ?? null };
+  const rows = await deps.sessions.as(target, (exec) => schemaColumns(exec, roles.analyticsSchema));
   const tables = new Map<string, { name: string; type: string }[]>();
   for (const row of rows) {
     const columns = tables.get(row.table_name) ?? [];

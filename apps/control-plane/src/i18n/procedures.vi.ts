@@ -72,20 +72,26 @@ export const procedureSentences: SentenceTable = {
   "roles.delete":
     "Xoá một vai trò riêng của khách hàng, cùng mọi quyền đã trao cho nó. Bị từ chối khi còn người giữ hoặc còn lời mời đang mở, với vai trò có sẵn, và với vai trò có quyền bạn không giữ.",
   "grants.list":
-    "Các quyền đã trao trong khách hàng -- một quyền trao cho một vai trò hoặc một người, kèm thời hạn -- kể cả những quyền đã hết hạn, có đánh dấu. role hoặc email để lọc theo một đối tượng.",
+    "Các quyền đã trao trong khách hàng -- một quyền thao tác hoặc quyền xem một thứ, trao cho một vai trò hoặc một người, kèm thời hạn -- kể cả những quyền đã hết hạn, có đánh dấu. role hoặc email để lọc theo một đối tượng.",
   "grants.save":
-    "Trao một quyền cho một vai trò (role) hoặc một thành viên (email), không thời hạn hoặc đến expiresAt. Lưu lại cùng quyền đó sẽ dời thời hạn. Bạn chỉ trao được quyền chính bạn đang giữ.",
-  "grants.delete": "Thu lại một quyền đã trao, theo id. Chỉ với quyền chính bạn đang giữ.",
+    "Trao cho một vai trò (role) hoặc một thành viên (email), không thời hạn hoặc đến expiresAt, đúng một trong hai: permission, một quyền thao tác trong catalogue; hoặc object, quyền xem một thứ -- model:<tên>, raw:<nguồn>/<thực thể>, raw:<nguồn>/*, report:question:<id>, report:dashboard:<id>, hay toàn bộ với model:*, raw:*, report:*. Vai trò riêng chỉ xem được những gì được trao. Lưu lại cùng quyền đó sẽ dời thời hạn. Bạn chỉ trao được quyền chính bạn đang giữ và những gì chính bạn xem được.",
+  "grants.delete":
+    "Thu lại một quyền đã trao, theo id. Chỉ với quyền chính bạn đang giữ, hoặc thứ chính bạn xem được.",
+  "grants.reach":
+    'Những gì một vai trò (role), một thành viên (email) hay -- không nêu ai -- chính bạn làm được và xem được: permissions, và reach gồm models, raw, reports, mỗi phần là "all" hoặc các thứ được nêu tên. Hỏi trước và sau khi trao. Hỏi về người khác hay một vai trò cần people:manage.',
   "audit.mine":
     "Các thao tác của chính bạn, mới nhất trước: đã làm gì, qua đâu, và kết quả ra sao.",
   "audit.tenant": "Mọi thao tác trong khách hàng, của bất kỳ ai, mới nhất trước.",
   "audit.all": "Mọi thao tác trên nền tảng, mới nhất trước. Chỉ quản trị nền tảng.",
-  "lake.summary": "Những gì đã nạp, theo từng luồng: số lượng và độ mới.",
-  "lake.records": "Các bản ghi thô của một thực thể, hoặc những bản ghi một lần chạy đã ghi.",
-  "lake.documents": "Các tài liệu thô của một nguồn, hoặc những tài liệu một lần chạy đã ghi.",
+  "lake.summary":
+    "Những gì đã nạp, theo từng luồng: số lượng và độ mới. Chỉ những luồng bạn xem được.",
+  "lake.records":
+    "Các bản ghi thô của một thực thể, hoặc những bản ghi một lần chạy đã ghi. Chỉ luồng bạn xem được; luồng khác là một trang trống.",
+  "lake.documents":
+    "Các tài liệu thô của một nguồn, hoặc những tài liệu một lần chạy đã ghi. Chỉ nguồn có tài liệu bạn xem được; nguồn khác là một trang trống.",
   "lake.query": "Chạy một câu SELECT trên hồ dữ liệu thô.",
   "lake.search":
-    "Tìm kiếm toàn văn trên hồ dữ liệu thô. Mỗi loại chỉ xếp hạng các kết quả khớp mới nhất, và câu trả lời nói rõ khi bị cắt.",
+    "Tìm kiếm toàn văn trên hồ dữ liệu thô. Mỗi loại chỉ xếp hạng các kết quả khớp mới nhất, và câu trả lời nói rõ khi bị cắt. Chỉ trong những luồng bạn xem được, lọc trước khi xếp hạng.",
   "lake.querySchema":
     "Các bảng và cột mà lake query đọc được; tables cho đúng những bảng đó, match lọc theo một đoạn tên (không phân biệt hoa thường), columns: false chỉ lấy tên bảng.",
   "documentKinds.list":
@@ -99,11 +105,11 @@ export const procedureSentences: SentenceTable = {
   "documentKinds.publish":
     "Publish bản nháp catalogue, để mọi tài liệu được phân loại lại theo nó.",
   "models.list":
-    'Các mô hình dbt của khách hàng kèm lần dựng gần nhất: description (mô tả của tác giả, null khi không có), sqlSha256 và testsSha256 để so một bản sao, và số cột, không kèm SQL. names hoặc match để lọc; include: ["columns"] để lấy các cột của từng lần dựng, include: ["dependsOn"] để lấy những gì mỗi mô hình khai báo đọc: reads (model, seed, raw hoặc missing, kèm macro via) và undeclared (vì sao không đọc được thượng nguồn; reads rỗng mà undeclared có lý do không có nghĩa là không đọc gì); limit và cursor để chia trang, khi đó câu trả lời là { items, nextCursor }. lastTests là kết quả kiểm thử của lần dựng đã công bố đang phục vụ các dòng của từng mô hình: passing (đạt), failing (không đạt, failing đếm số kiểm thử) hoặc unknown (chưa có kết quả kiểm thử, không bao giờ coi là đạt); unpublished nêu một lần dựng mới hơn bị giữ lại vì nó hoặc kiểm thử của nó không đạt, và runId null kèm unpublished là mô hình chưa có phiên bản nào đạt.',
+    'Các mô hình dbt của khách hàng kèm lần dựng gần nhất: description (mô tả của tác giả, null khi không có), sqlSha256 và testsSha256 để so một bản sao, và số cột, không kèm SQL. names hoặc match để lọc; include: ["columns"] để lấy các cột của từng lần dựng, include: ["dependsOn"] để lấy những gì mỗi mô hình khai báo đọc: reads (model, seed, raw hoặc missing, kèm macro via) và undeclared (vì sao không đọc được thượng nguồn; reads rỗng mà undeclared có lý do không có nghĩa là không đọc gì); limit và cursor để chia trang, khi đó câu trả lời là { items, nextCursor }. lastTests là kết quả kiểm thử của lần dựng đã công bố đang phục vụ các dòng của từng mô hình: passing (đạt), failing (không đạt, failing đếm số kiểm thử) hoặc unknown (chưa có kết quả kiểm thử, không bao giờ coi là đạt); unpublished nêu một lần dựng mới hơn bị giữ lại vì nó hoặc kiểm thử của nó không đạt, và runId null kèm unpublished là mô hình chưa có phiên bản nào đạt. Chỉ những model và bảng tham chiếu bạn xem được.',
   "models.revision":
     "Một mã băm cho các mô hình, macro, bảng tham chiếu và câu hỏi của khách hàng và một mã cho tất cả, tính từ những gì mỗi lần lưu đã ghi: bằng nhau nghĩa là không có gì thay đổi.",
   "models.get":
-    "Một mô hình dbt, SQL, kiểm thử và mô tả của nó, kèm mã băm của SQL và kiểm thử, và lastTests: passing, failing hoặc unknown, cùng failingTests và warningTests theo tên, và unpublished: một lần dựng mới hơn bị giữ lại, Báo cáo không đọc các dòng của nó.",
+    "Một mô hình dbt, SQL, kiểm thử và mô tả của nó, kèm mã băm của SQL và kiểm thử, và lastTests: passing, failing hoặc unknown, cùng failingTests và warningTests theo tên, và unpublished: một lần dựng mới hơn bị giữ lại, Báo cáo không đọc các dòng của nó. Model bạn không xem được là NOT_FOUND.",
   "models.save":
     "Lưu một mô hình dbt; không chạy gì. tests: columns gán mỗi cột not_null, unique, {kind: accepted_values, values, quote?} hoặc {kind: relationships, to, field}; sql là các kiểm thử SQL {name, sql}, mỗi kiểm thử là một câu select trả về các dòng vi phạm quy tắc; kiểm thử nào cũng nhận severity error hoặc warn. Kiểm thử SQL hoặc relationships mà models.check thấy có lỗi sẽ bị từ chối và không lưu gì. description là mô tả tuỳ chọn, tối đa 1000 ký tự và không có { hay }: bỏ trống thì giữ mô tả đã lưu, null thì xoá. SQL, kiểm thử và mô tả giống hệt bản đã lưu trả về unchanged: true và không thay đổi gì.",
   "models.delete":
@@ -111,7 +117,7 @@ export const procedureSentences: SentenceTable = {
   "models.build":
     "Dựng mô hình bằng một lần dbt build: name cho một mô hình, hoặc names cho tối đa 20, mỗi mục là name, +name (kèm các mô hình phía trên) hoặc name+ (kèm các mô hình phía dưới); mọi tên phải là mô hình của khách hàng. Trước khi chạy, các mô hình cha được đọc mà không dựng lại sẽ được kiểm tra: một mô hình cha có lần kiểm thử mới nhất không đạt thì PRECONDITION_FAILED nêu mô hình cha, các kiểm thử và lần chạy (dựng lại nó, hoặc dựng +name); một mô hình cha chưa có kết quả kiểm thử được nêu trong parentTestsUnknown. Mặc định chờ kết quả và trả về waited true với ok, verdict (clean, tests-failing hoặc failed: thành công là clean; ok mà có kiểm thử không đạt là tests-failing), testsFailed, stepSummary (đếm theo loại và trạng thái), các bước được hỏi (steps: none, problems là mặc định, hoặc all; lọc bằng stepStatus, stepKind, stepName; trang tiếp đọc bằng runs.get với runId và stepCursor), rowCounts (số dòng của từng mô hình được nêu; null là không đếm được, không phải 0) và preview khi chỉ nêu một mô hình. Lần dựng ghi vào vùng staging và chỉ công bố cho Báo cáo những gì dựng được, đạt các kiểm thử mức error và có mô hình cha trong lần dựng cũng được công bố; promoted của từng bước mô hình cho biết nó có được công bố không, và mô hình bị giữ lại vẫn phục vụ phiên bản đạt gần nhất, nên rowCounts và preview của nó là null. wait false trả về ngay waited false với runId; chờ lần chạy đó bằng runs.get với waitSeconds. Khi đang có lần dựng khác, CONFLICT nêu runId và startedAt của lần đó.",
   "models.lineage":
-    "Mô hình nào đọc mô hình nào, bảng tham chiếu nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro. name cho phần quanh một mô hình, một bảng tham chiếu hay một bảng thô (raw.records), direction up, down hoặc both và depth để giới hạn số bước; limit và cursor để chia trang, mỗi trang tối đa limit nút và limit cạnh, kèm nextCursor.",
+    "Mô hình nào đọc mô hình nào, bảng tham chiếu nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro. name cho phần quanh một mô hình, một bảng tham chiếu hay một bảng thô (raw.records), direction up, down hoặc both và depth để giới hạn số bước; limit và cursor để chia trang, mỗi trang tối đa limit nút và limit cạnh, kèm nextCursor. Chỉ những model bạn xem được, cùng các cạnh của chúng.",
   "models.reference":
     "Tài liệu tham khảo cho người viết mô hình: các nguồn, macro của nền tảng và macro riêng của khách hàng. parts để chỉ lấy một số trong sources, platformMacros và tenantMacros; hai phần đầu giống hệt nhau ở mọi lần gọi.",
   "models.check":
@@ -127,28 +133,29 @@ export const procedureSentences: SentenceTable = {
     "Lưu một macro dbt, trọn một định nghĩa {% macro %} mà mọi mô hình gọi được; không chạy gì. Định nghĩa và mô tả giống hệt bản đã lưu trả về unchanged: true và không thay đổi gì.",
   "macros.delete": "Xoá một macro dbt; bị từ chối khi còn mô hình hay macro khác gọi nó.",
   "seeds.list":
-    "Các bảng tham chiếu (seed dbt) của khách hàng mà mô hình đọc bằng ref(): tên, số cột, số dòng và mã băm nội dung, không kèm ô nào. names hoặc match để lọc.",
+    "Các bảng tham chiếu (seed dbt) của khách hàng mà mô hình đọc bằng ref(): tên, số cột, số dòng và mã băm nội dung, không kèm ô nào. names hoặc match để lọc. Chỉ những bảng bạn xem được.",
   "seeds.get":
-    "Một bảng tham chiếu trọn vẹn: các cột với kiểu đã khai báo, mọi dòng, mỗi ô là chuỗi hoặc null, và mã băm.",
+    "Một bảng tham chiếu trọn vẹn: các cột với kiểu đã khai báo, mọi dòng, mỗi ô là chuỗi hoặc null, và mã băm. Bảng bạn không xem được là NOT_FOUND.",
   "seeds.save":
     "Lưu một bảng tham chiếu nhỏ: columns là [{name, type}] với type trong text, integer, bigint, numeric(18,4), boolean, date, timestamptz; rows là các mảng chuỗi hoặc null, mỗi cột một ô. Không suy đoán kiểu: ô nào cột không chứa được thì bị từ chối, nêu dòng và cột. Tối đa 10.000 dòng, 100 cột, 1 MB. Bảng giống hệt bản đã lưu trả về unchanged: true.",
   "seeds.delete":
     "Xoá một bảng tham chiếu và bảng đã nạp từ nó; bị từ chối khi còn mô hình đọc nó bằng ref().",
   "bi.answer":
-    "Trả lời một định nghĩa câu hỏi: columns, rows và truncated, cùng qualifiers nêu từng bảng nó đã đọc mà kiểm thử mới nhất không đạt hoặc chưa rõ, hoặc có lần dựng hiện tại bị giữ lại (unpublished: các dòng là phiên bản đạt gần nhất) (null khi không biết đã đọc bảng nào); không bao giờ giữ lại dòng nào. Mô hình chưa có phiên bản nào đạt thì PRECONDITION_FAILED nêu tên nó.",
+    "Trả lời một định nghĩa câu hỏi: columns, rows và truncated, cùng qualifiers nêu từng bảng nó đã đọc mà kiểm thử mới nhất không đạt hoặc chưa rõ, hoặc có lần dựng hiện tại bị giữ lại (unpublished: các dòng là phiên bản đạt gần nhất) (null khi không biết đã đọc bảng nào); không bao giờ giữ lại dòng nào. Mô hình chưa có phiên bản nào đạt thì PRECONDITION_FAILED nêu tên nó. Theo quyền của bạn: SQL chỉ đọc được những model bạn xem được, bảng khác bị từ chối.",
   "bi.runQuestion": "Chạy một câu hỏi đã lưu với tham số; trả lời như bi.answer, kèm qualifiers.",
   "bi.compile": "Dịch một định nghĩa câu hỏi thành SQL.",
   "bi.schema":
-    "Các bảng và cột mà báo cáo đọc được; tables cho đúng những bảng đó, match lọc theo một đoạn tên (không phân biệt hoa thường), columns: false chỉ lấy tên bảng.",
+    "Các bảng và cột mà báo cáo đọc được; tables cho đúng những bảng đó, match lọc theo một đoạn tên (không phân biệt hoa thường), columns: false chỉ lấy tên bảng. Chỉ các bảng của những model bạn xem được.",
   "bi.questions.list":
-    'Các câu hỏi đã lưu: loại, kiểu biểu đồ và definitionSha256, không kèm SQL. names hoặc match để lọc; include: ["definition", "chart"] để lấy đầy đủ từng phần; limit và cursor để chia trang, khi đó câu trả lời là { items, nextCursor }.',
-  "bi.questions.get": "Một câu hỏi đã lưu.",
+    'Các câu hỏi đã lưu: loại, kiểu biểu đồ và definitionSha256, không kèm SQL. names hoặc match để lọc; include: ["definition", "chart"] để lấy đầy đủ từng phần; limit và cursor để chia trang, khi đó câu trả lời là { items, nextCursor }. Chỉ những câu hỏi bạn xem được.',
+  "bi.questions.get": "Một câu hỏi đã lưu. Câu hỏi bạn không xem được là NOT_FOUND.",
   "bi.questions.answer":
     "Câu trả lời của một câu hỏi đã lưu với tham số, kèm qualifiers như bi.answer.",
   "bi.questions.save": "Lưu một câu hỏi.",
   "bi.questions.delete": "Xoá một câu hỏi.",
-  "bi.dashboards.list": "Các bảng điều khiển.",
-  "bi.dashboards.get": "Một bảng điều khiển.",
+  "bi.dashboards.list": "Các bảng điều khiển. Chỉ những bảng điều khiển bạn xem được.",
+  "bi.dashboards.get":
+    "Một bảng điều khiển. Bảng bạn không xem được là NOT_FOUND; ungranted nêu các ô có câu hỏi bạn không được mở.",
   "bi.dashboards.save": "Lưu một bảng điều khiển.",
   "bi.dashboards.delete": "Xoá một bảng điều khiển.",
   "bi.exports.create":

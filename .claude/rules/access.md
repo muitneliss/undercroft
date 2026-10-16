@@ -13,14 +13,18 @@ paths:
 
 What a person may do in a customer is a **permission** (`models:write`, `people:manage`, …), and
 a role is only a named set of them -- a built-in, or one the customer defined -- with grants of
-one permission to a role or a person, standing or until a moment, beside it. The catalogue and
+one permission to a role or a person, standing or until a moment, beside it. What a person may
+READ is their **reach** -- which models, raw streams and reports -- decided by the same model from
+object grants (`model:<name>`, `raw:<source>/<entity>`, `report:<kind>:<uuid>`, and the wholes
+`model:*`, `raw:*`, `report:*`). The catalogue and
 the built-in roles are defined once, in `packages/contracts/src/access.ts`; the control plane
 projects them, with the caller's `app.tenant_member` row, their role's row and their grants, into
 Casbin on every request and Casbin decides (`apps/control-plane/src/services/rbac.ts`). Our
 tables stay the owners. The reasoning, and the options rejected, are in
-`docs/adr/0139-tenant-access-is-casbin-policy.md` and, for a customer's own roles, grants and the
-subset rule, `docs/adr/0141-custom-roles-and-grants-under-the-subset-rule.md`; which procedures
-each permission covers is `docs/reference/permissions.md`.
+`docs/adr/0139-tenant-access-is-casbin-policy.md`, for a customer's own roles, grants and the
+subset rule `docs/adr/0141-custom-roles-and-grants-under-the-subset-rule.md`, and for reach and
+the scope logins that enforce it `docs/adr/0142-object-reach-and-scope-logins.md`; which
+procedures each permission covers, and the object grammar, are `docs/reference/permissions.md`.
 
 ## NEVER
 
@@ -63,7 +67,27 @@ each permission covers is `docs/reference/permissions.md`.
   rows (`builtin`, `permissions` NULL; their grants stay code) and the customer's own
   (`600_custom_roles.sql`). A built-in role is a code change AND a migration. A stored permission
   or grant object the catalogue does not know projects no Casbin line (`rbac.ts`), because a
-  stored `*` would otherwise reach `keyMatch` as a pattern.
+  stored `*` would otherwise reach `keyMatch` as a pattern. An object grant projects only an
+  object `parseReachObject` admits, with `read`; the grammar puts a `*` only where it means "the
+  whole of", and `access_grant_object_shape` (`610_object_grants.sql`) says the same in the
+  database.
+- **NEVER read a model, a raw stream or a report without asking the caller's reach.** `ctx.reach`
+  is Casbin's answer, beside `ctx.permissions`; a service that lists or reads one of them takes
+  the reach and narrows or refuses (`reachesModel`, `reachesStream`, `reachesReport`). What is
+  outside it answers as if it did not exist -- an empty page, `NOT_FOUND`, a dashboard's
+  `ungranted` -- never FORBIDDEN, which would confirm it. A new reader of these goes through the
+  same answer, or a narrowed role reads it whole.
+- **NEVER narrow a read after its LIMIT.** A search, a page or a count is narrowed where its rows
+  are chosen -- `lake.search` passes the reachable streams INTO the worker's candidate lookups --
+  or the page, its count and its "cut" note describe rows the reader cannot see.
+- **NEVER send a narrowed read to the worker on a route of old.** A reader of fewer than every
+  model reads through a scope login; the request goes to `/v1/queries/scoped/…` (or
+  `/raw/search/within`), never as a field on `/v1/queries/run`, which a worker older than the field
+  strips before answering as the login that reads everything. `workerQueries.ts` is the one place
+  that chooses the route.
+- **NEVER let a narrower reach use the build login.** A procedure that runs SQL as the customer's
+  dbt login, or changes what it runs, is built on `requireWholeReach`, not `requirePermission`:
+  that login reads every model and the whole lake, so it needs `model:*` and `raw:*`.
 
 ## Follow
 
@@ -80,7 +104,13 @@ each permission covers is `docs/reference/permissions.md`.
 - **Describe a procedure's work, not its gate.** `procedureManifest` reads the permission off
   the guard and adds "Needs …" to the procedure's sentence; the assistant's tool descriptions get
   the same from `permissionFor`. Writing it by hand is a second statement of one fact.
-- **Data reads will go through the scope.** PR 3 adds object grants (`model:<name>`,
-  `raw:<source>.<entity>`, …) evaluated by the same model and enforced through per-scope
-  database logins; until then a read is either open to every member or gated by a permission.
-  A row or column rule is never keyed on a session setting (`.claude/rules/privileges.md`).
+- **Reach is decided once per request and read everywhere from it.** `holdingOf` (`rbac.ts`) asks
+  Casbin each domain's whole, then each object the projected lines name; the browser and an agent
+  read the answer from `grants.reach` and never derive one. A built-in reaches the whole customer
+  (`BUILT_IN_POLICY`); a customer's own role reaches only what is granted to it.
+- **The subset rule weighs reach as well as permissions** -- `beyond` and `within` in
+  `services/authz.ts`, `REACH_NOT_HELD` -- for every change that gives or takes away a role, a
+  grant or a member.
+- **What the database enforces, the database enforces.** Which tables a reader's SQL may read is
+  the scope login's grants (`.claude/rules/privileges.md`), never a filter here; a row or column
+  rule (PR 4) is never keyed on a session setting.

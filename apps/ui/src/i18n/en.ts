@@ -465,6 +465,7 @@ export const en = {
       grants_list: "Listed grants",
       grants_save: "Granted a permission",
       grants_delete: "Took a grant away",
+      grants_reach: "Read what someone may do and see",
       audit_mine: "Read their own activity",
       audit_tenant: "Read a customer's activity",
       audit_all: "Read the platform's activity",
@@ -917,7 +918,7 @@ export const en = {
   },
 
   accessGrants: {
-    lead: "One permission given straight to a role or a person, standing or until the end of a day, on top of what their role already holds.",
+    lead: "A permission, or reading one thing, given straight to a role or a person, standing or until the end of a day, on top of what their role already holds. A customer's own role reads only what it is granted.",
     readOnly: "Giving or taking away a grant needs permission to manage roles (roles:manage).",
     notLoaded: "Could not load the grants of {{tenantId}}. Nothing was changed.",
     none: "Nothing has been granted beyond the roles.",
@@ -941,7 +942,10 @@ export const en = {
     subjectLabel: "Grant to",
     rolesGroup: "Roles",
     peopleGroup: "People",
-    permissionLabel: "Permission",
+    permissionLabel: "Permission or what to read",
+    permissionsGroup: "Permissions",
+    grantHint:
+      "Only what you hold and what you can read yourself. The built-in roles read everything already; a customer's own role reads only what is granted here.",
     permissionOption: "{{label}} · {{permission}}",
     untilLabel: "Until the end of (optional)",
     untilHint: "In Singapore time (SGT). Leave it empty for a standing grant.",
@@ -949,6 +953,24 @@ export const en = {
     adding: "Granting…",
     added: "Granted.",
     notAdded: "The permission was not granted",
+  },
+
+  grantObjects: {
+    wholeGroup: "Read the whole",
+    modelsGroup: "Models and reference tables",
+    streamsGroup: "Raw lake",
+    reportsGroup: "Reports",
+    everyModel: "Read every model and reference table",
+    wholeLake: "Read the whole raw lake",
+    everyReport: "Read every report",
+    model: "Read {{name}}",
+    wholeSource: "Read every stream of {{source}}",
+    stream: "Read the stream {{source}} / {{entity}}",
+    documents: "Read the documents of {{source}}",
+    questionOption: "Question: {{name}}",
+    dashboardOption: "Dashboard: {{name}}",
+    questionGone: "A question you cannot read, or one since deleted",
+    dashboardGone: "A dashboard you cannot read, or one since deleted",
   },
 
   grant: {
@@ -2054,6 +2076,7 @@ export const en = {
     noneToAdd: "Every question is already on the dashboard.",
     noQuestionsYet: "There are no questions to add yet. Ask one under Questions first.",
     questionGone: "This question has been deleted.",
+    questionNotGranted: "You have not been granted this question.",
     waiting_one: "This tile is waiting for a value for {{names}}.",
     waiting_other: "This tile is waiting for values for {{names}}.",
     removeTile: "Remove tile",

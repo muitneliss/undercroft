@@ -21,7 +21,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { byCodeUnit } from "@undercroft/core";
-import { getModel, provisionTenantRoles, saveModel } from "@undercroft/db/repos";
+import { getModel, provisionScope, provisionTenantRoles, saveModel } from "@undercroft/db/repos";
 import { PASSWORD_VAR } from "@undercroft/db/services";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
@@ -583,6 +583,37 @@ describe("runTransform, write-audit-publish", () => {
     expect(outcome.heldByViews).toEqual(new Map([["stg_deals", ["v_deals"]]]));
     expect(await biReads("stg_deals")).toEqual([1]);
     expect(await biReads("fct_pipeline")).toEqual([1]);
+  });
+
+  // ADR 0142: a scope login is granted the staged table inside the promotion, before it moves, so
+  // a republished table is readable by exactly the scopes that reach it, with no moment between.
+  it("a republished table keeps its scope's grant, and a scope that does not reach it gets none", async () => {
+    const deals = await db.asSuperuser((tx) => provisionScope(tx, TENANT, ["stg_deals"]));
+    const pipeline = await db.asSuperuser((tx) => provisionScope(tx, TENANT, ["fct_pipeline"]));
+    function build(n: number) {
+      return runTransform(
+        deps(
+          dbtThat(`CREATE TABLE staging_case_1.stg_deals AS SELECT ${String(n)} AS deal_id`, [
+            PARENT_OK,
+            testResult("pass"),
+          ]),
+        ),
+        { tenantId: TENANT, select: ["stg_deals"] },
+      );
+    }
+    function reads(login: string) {
+      return db.asRole(login, (tx) =>
+        tx.query<{ deal_id: number }>("SELECT deal_id FROM analytics_case_1.stg_deals"),
+      );
+    }
+
+    await build(1);
+    const first = await reads(deals);
+    await build(2);
+    const second = await reads(deals);
+
+    expect([first.rows, second.rows]).toEqual([[{ deal_id: 1 }], [{ deal_id: 2 }]]);
+    await expect(reads(pipeline)).rejects.toThrow("permission denied");
   });
 
   it("a view promoted with the table it reads replaces both, and BI reads the new rows through it", async () => {

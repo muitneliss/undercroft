@@ -31,10 +31,9 @@
 
 import { TRPCError } from "@trpc/server";
 import { tool, type ToolSet } from "ai";
-import { messages } from "../i18n/index.ts";
 import { TOOLS } from "../services/assistant/catalogue.ts";
 import type { Tier } from "../services/assistant/toolSpec.ts";
-import { PROCEDURE_PATHS, permissionFor, resolveProcedure } from "./procedures.ts";
+import { needsFor, PROCEDURE_PATHS, resolveProcedure } from "./procedures.ts";
 import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";
 
@@ -62,14 +61,13 @@ function refusal(error: unknown): never {
 }
 
 /**
- * A tool's description as the model reads it: the catalogue's words, then the permission its
- * procedure needs. English, as every description is -- the model reads it, no person does.
+ * A tool's description as the model reads it: the catalogue's words, then what its procedure's
+ * gates need -- the permission, and the whole reach where it runs as the build login. English, as
+ * every description is -- the model reads it, no person does.
  */
 function describedFor(description: string, path: string): string {
-  const permission = permissionFor(path);
-  return permission === null
-    ? description
-    : `${description} ${messages("en")("procedure.needs", { permission })}`;
+  const needs = needsFor(path, "en");
+  return needs === "" ? description : `${description} ${needs}`;
 }
 
 export interface BindOptions {

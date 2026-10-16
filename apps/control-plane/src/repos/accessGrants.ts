@@ -10,8 +10,9 @@
  * cannot disagree about whether a grant still holds. An expired grant is kept, as the record of
  * what somebody held and until when; saving it again moves its expiry.
  *
- * This module stores objects (`perm:models:write`) as the projection asks them and knows nothing
- * of the catalogue: which permission an object names is `services/rbac.ts`'s to say.
+ * This module stores objects (`perm:models:write`, `model:fct_sales`) as the projection asks them
+ * and knows nothing of the catalogue or the grammar: which permission or object one names is
+ * `services/rbac.ts`'s and `@undercroft/contracts/access`'s to say.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -197,25 +198,46 @@ export async function saveGrant(
 }
 
 /**
- * Delete one grant, unless its object is one the caller lacks (`lacksObjects`, the subset rule:
- * you may take away only what you could have given). `found` is the grant as it stood, `null`
- * when the customer has none with that id; `done` whether it went.
+ * Delete one grant, if it still grants `object` -- the object the caller was judged against (the
+ * subset rule: you may take away only what you could have given). Nothing rewrites a grant's
+ * object (`saveGrant` moves only its expiry), so the id and the object together name exactly the
+ * grant that was weighed, and the statement that deletes it is the one that checks. `done` is
+ * whether it went.
  */
 export async function deleteGrant(
   exec: SqlExecutor,
   tenantId: string,
   id: string,
-  lacksObjects: readonly string[],
-): Promise<{ readonly found: GrantRow | null; readonly done: boolean }> {
-  const found = await findGrant(exec, tenantId, id);
-  if (found === null) {
-    return { found: null, done: false };
-  }
+  object: string,
+): Promise<boolean> {
   const { rows } = await exec.query<{ id: string }>(
     `DELETE FROM app.access_grant
-     WHERE tenant_id = $1 AND id = $2 AND NOT (object = ANY ($3::text[]))
+     WHERE tenant_id = $1 AND id = $2 AND object = $3
      RETURNING id`,
-    [tenantId, id, [...lacksObjects]],
+    [tenantId, id, object],
   );
-  return { found, done: rows.length > 0 };
+  return rows.length > 0;
+}
+
+/**
+ * Whether the customer has the model, reference table, question or dashboard an object grant
+ * names (`model:<name>`, `report:<kind>:<id>`), by its parts: the name, or the kind and id.
+ */
+export async function objectExists(
+  exec: SqlExecutor,
+  tenantId: string,
+  named:
+    | { readonly model: string }
+    | { readonly kind: "question" | "dashboard"; readonly id: string },
+): Promise<boolean> {
+  const { rows } = await exec.query<{ found: boolean }>(
+    "model" in named
+      ? `SELECT EXISTS (SELECT 1 FROM app.model WHERE tenant_id = $1 AND name = $2)
+             OR EXISTS (SELECT 1 FROM app.seed WHERE tenant_id = $1 AND name = $2) AS found`
+      : named.kind === "question"
+        ? "SELECT EXISTS (SELECT 1 FROM app.bi_question WHERE tenant_id = $1 AND id = $2::uuid) AS found"
+        : "SELECT EXISTS (SELECT 1 FROM app.bi_dashboard WHERE tenant_id = $1 AND id = $2::uuid) AS found",
+    [tenantId, "model" in named ? named.model : named.id],
+  );
+  return rows[0]?.found === true;
 }

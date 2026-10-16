@@ -110,7 +110,7 @@ export const rolesRouter = router({
       const outcome = await roles.remove(ctx.exec, {
         tenantId: ctx.tenantId,
         key: input.key,
-        held: ctx.permissions,
+        held: { permissions: ctx.permissions, reach: ctx.reach },
         actor: actorOf(ctx),
       });
       if (outcome.ok) {
@@ -122,7 +122,7 @@ export const rolesRouter = router({
         case "not-found":
           throw noSuchRoleRefusal(ctx, input.key);
         case "not-held":
-          throw notHeldRefusal(ctx, outcome.lacking);
+          throw notHeldRefusal(ctx, outcome.lacking, outcome.objects);
         default:
           throw refusal(
             "CONFLICT",
