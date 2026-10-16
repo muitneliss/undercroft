@@ -9,66 +9,55 @@
  * expiry is a calendar day, sent as the last second of that day in the schedule zone
  * (`endOfScheduleDay`), so the day picked is the day printed.
  *
- * No `useState`, per `state.md`: the form is uncontrolled and read as `FormData` on submit.
+ * Since ADR 0143 a grant of one model or reference table may also say which rows it shows and
+ * which columns it hides (`GrantRuleFields`), and the form shows, under it, what the person or
+ * role it is for can see now (`ScopePreview`) -- read again once the grant is saved.
+ *
+ * No `useState`, per `state.md`: whom it is for, what it gives and its rules are the store's
+ * `grantDraft`, because the rule fields and the summary read them; the expiry is uncontrolled and
+ * read as `FormData` on submit.
  */
 
-import {
-  isPermission,
-  PERMISSIONS,
-  type Permission,
-  parseReachObject,
-} from "@undercroft/contracts/access";
+import { PERMISSIONS, type Permission } from "@undercroft/contracts/access";
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Errata } from "@/components/Errata.tsx";
 import { ObjectOptionGroups } from "@/components/GrantObjects.tsx";
+import { GrantRuleFields } from "@/components/GrantRuleFields.tsx";
+import { ScopePreview } from "@/components/ScopePreview.tsx";
 import { StatusLine } from "@/components/StatusLine.tsx";
 import type { GrantObjects } from "@/components/useGrantObjects.ts";
+import {
+  grantOf,
+  oneModelOf,
+  PERMISSION_OPTION,
+  PERSON_OPTION,
+  ROLE_OPTION,
+  subjectOf,
+} from "@/lib/grantChoices.ts";
+import { ruleOfDraft } from "@/lib/grantRules.ts";
 import { can, PERMISSION_LABELS } from "@/lib/permissions.ts";
 import { type RoleOption, roleName } from "@/lib/roles.ts";
 import { endOfScheduleDay } from "@/lib/when.ts";
+import { type GrantDraft, grantDraftFor, useUiStore } from "@/store.ts";
 import type { trpc } from "@/trpc.ts";
 
 type Save = ReturnType<typeof trpc.grants.save.useMutation>;
-
-/**
- * How the form's one subject select spells its two kinds of option. A role key never holds a
- * colon (`ROLE_KEY`), and neither prefix is an address, so the first colon always splits it.
- */
-const ROLE_OPTION = "role:";
-const PERSON_OPTION = "email:";
-
-/** How the one grant select spells a permission; an object option is the object itself. */
-const PERMISSION_OPTION = "perm:";
-
-/** What the grant select chose: a permission, or reading an object -- or nothing it offered. */
-function grantOf(value: string): { permission: Permission } | { object: string } | null {
-  if (value.startsWith(PERMISSION_OPTION)) {
-    const permission = value.slice(PERMISSION_OPTION.length);
-    return isPermission(permission) ? { permission } : null;
-  }
-  return parseReachObject(value) === null ? null : { object: value };
-}
-
-function subjectOf(value: string): { role: string } | { email: string } | null {
-  if (value.startsWith(ROLE_OPTION)) {
-    return { role: value.slice(ROLE_OPTION.length) };
-  }
-  if (value.startsWith(PERSON_OPTION)) {
-    return { email: value.slice(PERSON_OPTION.length) };
-  }
-  return null;
-}
+type GrantRequest = Parameters<Save["mutate"]>[0];
 
 /** Whom a grant is to and which permission: the form's two selects. */
 function GrantChoices({
+  tenantId,
+  draft,
   held,
   objects,
   roles,
   roster,
   disabled,
 }: {
+  tenantId: string;
+  draft: GrantDraft;
   held: readonly Permission[] | undefined;
   objects: GrantObjects;
   roles: readonly RoleOption[];
@@ -78,6 +67,7 @@ function GrantChoices({
   const { t } = useTranslation();
   const subjectId = useId();
   const permissionId = useId();
+  const patch = useUiStore((state) => state.patchGrantDraft);
   const offered = PERMISSIONS.filter((permission) => can(held, permission));
   return (
     <>
@@ -85,7 +75,18 @@ function GrantChoices({
         <label className="label" htmlFor={subjectId}>
           {t("accessGrants.subjectLabel")}
         </label>
-        <select className="input" disabled={disabled} id={subjectId} name="subject" required={true}>
+        <select
+          className="input"
+          disabled={disabled}
+          id={subjectId}
+          name="subject"
+          required={true}
+          value={draft.subject}
+          onChange={(event): void => {
+            patch(tenantId, { subject: event.currentTarget.value });
+          }}
+        >
+          <option value="">{t("accessGrants.choose")}</option>
           <optgroup label={t("accessGrants.rolesGroup")}>
             {roles.map((role) => (
               <option key={role.key} value={`${ROLE_OPTION}${role.key}`}>
@@ -112,7 +113,12 @@ function GrantChoices({
           id={permissionId}
           name="grant"
           required={true}
+          value={draft.grant}
+          onChange={(event): void => {
+            patch(tenantId, { grant: event.currentTarget.value });
+          }}
         >
+          <option value="">{t("accessGrants.choose")}</option>
           <optgroup label={t("accessGrants.permissionsGroup")}>
             {offered.map((permission) => (
               <option key={permission} value={`${PERMISSION_OPTION}${permission}`}>
@@ -129,6 +135,55 @@ function GrantChoices({
       </div>
     </>
   );
+}
+
+/** The day a grant holds until, uncontrolled. */
+function UntilField({ disabled }: { disabled: boolean }): React.JSX.Element {
+  const { t } = useTranslation();
+  const untilId = useId();
+  const untilHintId = useId();
+  return (
+    <div className="field">
+      <label className="label" htmlFor={untilId}>
+        {t("accessGrants.untilLabel")}
+      </label>
+      <input
+        aria-describedby={untilHintId}
+        className="input"
+        disabled={disabled}
+        id={untilId}
+        name="until"
+        type="date"
+      />
+      <p className="field__hint" id={untilHintId}>
+        {t("accessGrants.untilHint")}
+      </p>
+    </div>
+  );
+}
+
+/** What the form sends, from its draft and the day typed; `null` while it says nothing whole. */
+function requestOf(draft: GrantDraft, day: string): Omit<GrantRequest, "tenantId"> | null {
+  const subject = subjectOf(draft.subject);
+  const grant = grantOf(draft.grant);
+  const model = oneModelOf(draft.grant);
+  const rowRule = model === null ? null : ruleOfDraft(draft.conditions);
+  const expiresAt = day === "" ? null : endOfScheduleDay(day);
+  if (subject === null || grant === null || rowRule === "incomplete") {
+    return null;
+  }
+  if (day !== "" && expiresAt === null) {
+    return null;
+  }
+  return {
+    ...subject,
+    ...grant,
+    expiresAt,
+    ...(rowRule === null
+      ? {}
+      : { rowRule: rowRule.map((condition) => ({ ...condition, values: [...condition.values] })) }),
+    ...(model === null || draft.hidden.length === 0 ? {} : { hiddenColumns: [...draft.hidden] }),
+  };
 }
 
 /** The form that gives a permission to a role or a member, standing or until a day. */
@@ -150,58 +205,61 @@ export function GrantForm({
   formRef: React.RefObject<HTMLFormElement | null>;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const untilId = useId();
-  const untilHintId = useId();
+  // The draft itself, not `grantDraftFor`'s answer, is what the store is asked: an empty draft is
+  // a new object every time, and a selector that answers a new object re-renders forever.
+  const stored = useUiStore((state) => state.grantDraft);
+  const draft = grantDraftFor({ grantDraft: stored }, tenantId);
+  const model = oneModelOf(draft.grant);
+  const incomplete = model !== null && ruleOfDraft(draft.conditions) === "incomplete";
   return (
     <form
       className="stack stack--tight"
       ref={formRef}
       onSubmit={(event): void => {
         event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        const subject = subjectOf(String(data.get("subject") ?? ""));
-        const grant = grantOf(String(data.get("grant") ?? ""));
-        const day = String(data.get("until") ?? "");
-        const expiresAt = day === "" ? null : endOfScheduleDay(day);
-        if (subject === null || grant === null || (day !== "" && expiresAt === null)) {
-          return;
+        const request = requestOf(
+          draft,
+          String(new FormData(event.currentTarget).get("until") ?? ""),
+        );
+        if (request !== null) {
+          save.mutate({ tenantId, ...request });
         }
-        save.mutate({ tenantId, ...subject, ...grant, expiresAt });
       }}
     >
       <span className="label">{t("accessGrants.addHead")}</span>
       <GrantChoices
+        tenantId={tenantId}
+        draft={draft}
         held={held}
         objects={objects}
         roles={roles}
         roster={roster}
         disabled={save.isPending}
       />
-      <div className="field">
-        <label className="label" htmlFor={untilId}>
-          {t("accessGrants.untilLabel")}
-        </label>
-        <input
-          aria-describedby={untilHintId}
-          className="input"
+      {model === null ? null : (
+        <GrantRuleFields
+          tenantId={tenantId}
+          name={model}
+          seed={objects.seeds.has(model)}
           disabled={save.isPending}
-          id={untilId}
-          name="until"
-          type="date"
         />
-        <p className="field__hint" id={untilHintId}>
-          {t("accessGrants.untilHint")}
-        </p>
-      </div>
+      )}
+      <UntilField disabled={save.isPending} />
+      {incomplete ? <p className="note">{t("grantRules.incomplete")}</p> : null}
       {save.isError ? (
         <Errata heading={t("accessGrants.notAdded")} live={true} error={save.error} />
       ) : null}
       <StatusLine className="note" text={save.isSuccess ? t("accessGrants.added") : null} />
       <div className="row">
-        <button className="plate plate--primary" type="submit" disabled={save.isPending}>
+        <button
+          className="plate plate--primary"
+          type="submit"
+          disabled={save.isPending || incomplete}
+        >
           {save.isPending ? t("accessGrants.adding") : t("accessGrants.add")}
         </button>
       </div>
+      <ScopePreview tenantId={tenantId} subject={draft.subject} />
     </form>
   );
 }

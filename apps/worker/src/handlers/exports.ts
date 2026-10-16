@@ -22,14 +22,16 @@ import { UNAUTHENTICATED, serviceTokenOk } from "./bearer.ts";
 import type { LakeApiDeps } from "./lake.ts";
 
 /**
- * Both export routes: `/v1/queries/export` as the BI login, and `/v1/queries/scoped/export` as
- * the scope login of the models the request names (ADR 0142). Two paths and one handler: which
- * login reads is the route's, so a control plane newer than this worker can never have a scope
- * stripped and answered as the login that reads everything -- the older worker has no such route.
+ * The export routes: `/v1/queries/export` as the BI login, and `/v1/queries/scoped/export` as
+ * the scope login of the models the request names (ADR 0142) -- and `/v1/queries/limited/export`
+ * for a scope that also carries row or column rules (ADR 0143). One handler: which login reads is
+ * the route's, so a control plane newer than this worker can never have a scope, or its rules,
+ * stripped and answered as a login that reads more -- the older worker has no such route.
  */
 export function registerExportRoute(app: Hono, deps: LakeApiDeps): void {
   registerExportAt(app, deps, "/v1/queries/export", ExportQueryRequest);
   registerExportAt(app, deps, "/v1/queries/scoped/export", ScopedExportQueryRequest);
+  registerExportAt(app, deps, "/v1/queries/limited/export", ScopedExportQueryRequest);
 }
 
 function registerExportAt(

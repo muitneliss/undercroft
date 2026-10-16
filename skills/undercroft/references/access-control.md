@@ -25,8 +25,8 @@ with `PERMISSION_DENIED`.
 An operation not covered above is open to every member of the customer, a viewer included:
 listing and reading models, macros, seeds, questions and dashboards, `models.check`,
 `lake.summary`, `runs.list`, answering a saved question and exporting it, reading the roles
-(`roles.list`, `roles.get`), and reading what you yourself hold and reach (`grants.reach`). Every
-list and read is narrowed to what the person reaches (below).
+(`roles.list`, `roles.get`), and reading what you yourself hold and reach (`grants.reach`,
+`scopes.preview`). Every list and read is narrowed to what the person reaches (below).
 
 Every operation's description, in `undercroft describe` and in your MCP tool list, ends with
 the permission it needs ("Needs models:write.", in Vietnamese "Cần quyền models:write."), and --
@@ -105,6 +105,32 @@ held. Saving the same grant again moves its expiry; the same expiry again is `un
 
 What a person holds is their role's permissions, plus the grants in force to that role and to
 them. `tenants.get` answers with the permissions already decided; `grants.reach` with both.
+
+- `scopes.preview` answers the same subject's reach resolved: `permissions`; `models`, with
+  `whole`, `total` and `reached` -- every model and reference table they read, each with `rows`
+  (`null` for every row, else the rules a row meets one of), `hidden` and `broken` -- and `raw`
+  and `reports`. About anyone but yourself it needs `people:manage`. Ask it before a grant
+  and after.
+
+## Rows and columns of one model
+
+A grant on one model (`model:<name>`) may also carry `rowRule` -- one to ten conditions
+`{ "column", "op": "eq" | "in", "values" }`, all of which a row meets -- and `hiddenColumns`. Each
+column must be one the model's last build found (`models.get`); `model:*` and every other object
+carry none. Saving the grant again replaces its rules.
+
+- What a person reads of a model is the union of their grants on it: any grant without a row rule
+  is every row; a column is hidden only when every grant hides it.
+- A row rule is enforced by Postgres for every query the person runs; a value is compared as the
+  column's type and a NULL never matches. An answer over a row-limited table names it in
+  `rowsLimited`: its total is of the rows they may see.
+- A hidden column is refused, not blanked -- naming it or `SELECT *` is `COLUMN_NOT_GRANTED` -- and
+  left out of `bi.schema`, `models.list` and `models.get`. **Hiding is a list of what to hide: a
+  column a later build adds is visible until it is hidden.**
+- A rule naming a column the table no longer has shows that person no row of it, never every row;
+  `scopes.preview` marks it `broken`.
+- The subset rule: a caller who reads only some of a model may grant only a rule at least as narrow
+  as their own, hiding every column hidden from them.
 
 ## Objects: reach
 

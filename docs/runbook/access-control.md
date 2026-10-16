@@ -7,8 +7,9 @@ or reading one thing to a role or a person, makes a grant expire, checks what so
 takes access away -- in the web UI, with the CLI, and over MCP. What each permission covers, the
 object syntax and every bound are the [permissions reference](../reference/permissions.md); why it
 works this way is [ADR 0139](../adr/0139-tenant-access-is-casbin-policy.md),
-[ADR 0141](../adr/0141-custom-roles-and-grants-under-the-subset-rule.md) and
-[ADR 0142](../adr/0142-object-reach-and-scope-logins.md).
+[ADR 0141](../adr/0141-custom-roles-and-grants-under-the-subset-rule.md),
+[ADR 0142](../adr/0142-object-reach-and-scope-logins.md) and
+[ADR 0143](../adr/0143-row-and-column-rules-on-model-grants.md).
 
 ## Before you start
 
@@ -80,6 +81,37 @@ a role `sales` with no permissions, grant it `fct_sales`, grant it the dashboard
 questions, and give the people the role. A dashboard tile whose question someone was not granted
 shows **not granted**; a question over a model they were not granted is refused by the database.
 
+### Let someone read only some rows, or not some columns
+
+A grant on one model or reference table can say how much of it it gives. Choose the model under
+**Grant a permission**, and the form offers its columns, as its last build found them:
+
+1. **Only rows where**: press **Add a condition**, choose a column, **equals** or **is one of**, and
+   type the value -- one to a line for **is one of**. A row must meet every condition. A value is
+   compared as the column's own type, and an empty cell never matches.
+2. **Hide columns**: tick each column the person may not read. A hidden column is refused when they
+   query it, `SELECT *` included, never shown blank.
+3. Press **Grant**. Under the form, **They can see now** says what the role or person reads: how
+   many models, and for each one limited, which rows and which columns are hidden.
+
+To let the head of Sales see only Sales's rows of `fct_sales`: grant their role (or them) the model
+`fct_sales` with the condition `dept` **equals** `Sales`. To hide the salary column from staff:
+grant their role `fct_sales` with `salary` ticked under **Hide columns**.
+
+Three things to know:
+
+- **Grants add up.** Someone whose role reads Sales's rows and who is also granted the whole model
+  reads every row; two rules on one model show the rows of either. A built-in role reads every
+  model whole and is never limited.
+- **Hiding is a list of what to hide.** A column a later build adds is visible until somebody hides
+  it. Check **They can see now** after a model gains a column.
+- **A broken rule shows no rows.** A rule naming a column the model no longer has shows that person
+  none of the table's rows -- never all of them -- and **They can see now** says it is broken. Fix
+  the rule, or take it away.
+
+A total someone reads over a table whose rows they see only some of is the total of what they see:
+Reports says so above the figure.
+
 ### Take a grant away
 
 On **Grants**, press **Take away…** on its row, then the plate naming whose it is. Removing a
@@ -135,12 +167,23 @@ undercroft grants save --tenant-id CASE-0042 --role sales --object 'raw:hubspot/
 undercroft grants save --tenant-id CASE-0042 --role sales --object report:dashboard:<id>
 ```
 
-See what a role, a person or you yourself may do and read, before and after a grant:
+Let a role read only Sales's rows of a model, without its salary column. The rule and the hidden
+columns are arrays, so they go in the JSON input:
+
+```sh
+undercroft grants save --tenant-id CASE-0042 --role sales --object model:fct_sales \
+  --input-json '{"rowRule":[{"column":"dept","op":"eq","values":["Sales"]}],"hiddenColumns":["salary"]}'
+```
+
+See what a role, a person or you yourself may do and read, before and after a grant -- `grants
+reach` for the decision, `scopes preview` for what it comes to, model by model, with each one's
+rows, hidden columns and any broken rule:
 
 ```sh
 undercroft grants reach --tenant-id CASE-0042 --role sales --agent
 undercroft grants reach --tenant-id CASE-0042 --email lan@example.test --agent
-undercroft grants reach --tenant-id CASE-0042 --agent
+undercroft scopes preview --tenant-id CASE-0042 --role sales --agent
+undercroft scopes preview --tenant-id CASE-0042 --agent
 ```
 
 List the grants, for everybody or for one subject, and take one away by its `id`:
@@ -153,7 +196,7 @@ undercroft grants delete --tenant-id CASE-0042 --id <id from grants list> --yes
 ## Over MCP
 
 The tools are the same procedures with `.` as `_`: `roles_list`, `roles_get`, `roles_save`,
-`roles_delete`, `grants_list`, `grants_save`, `grants_delete` and `grants_reach`, beside
+`roles_delete`, `grants_list`, `grants_save`, `grants_delete`, `grants_reach` and `scopes_preview`, beside
 `people_setRole` and `people_invite`. Each takes the same input as the CLI command above, as JSON; `roles_save`, `roles_delete`, `grants_save` and `grants_delete` need a connection with a
 write grant. An agent with the `undercroft-access-control` skill
 ([agent skills](agent-skills.md)) turns a sentence such as "let Lan read the raw data until the
@@ -161,24 +204,33 @@ end of the month" into one of these calls and asks before making it.
 
 ## When it is refused
 
-| Refusal                             | What it means, and what to do                                                                                                                       |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FORBIDDEN`, `PERMISSION_REQUIRED`  | You lack the permission the command itself needs (`roles:manage`, or `people:manage`). Ask someone who holds it.                                    |
-| `FORBIDDEN`, `PERMISSION_NOT_HELD`  | The subset rule: `permissions` lists what you would give or take away without holding it. Ask someone who holds those, such as an admin.            |
-| `FORBIDDEN`, `REACH_NOT_HELD`       | The subset rule over reading: `objects` lists what you would give or take away without reading it yourself.                                         |
-| `FORBIDDEN`, `WHOLE_REACH_REQUIRED` | The console, a model preview, test failures and changes to models run as the build login, which reads everything: they need `model:*` and `raw:*`.  |
-| `NOT_FOUND`, `OBJECT_NOT_FOUND`     | The model, reference table, question or dashboard the object names does not exist. A raw stream need not exist yet.                                 |
-| `BAD_REQUEST`, `OBJECT_SHAPE`       | The object is not one a grant can name; the sentence lists the forms.                                                                               |
-| `BAD_REQUEST`, `ONE_OBJECT`         | Name exactly one of `--permission` and `--object`.                                                                                                  |
-| `NOT_FOUND`, `ROLE_NOT_FOUND`       | The customer has no role with that key. `roles list` shows the keys.                                                                                |
-| `NOT_FOUND`, `NOT_MEMBER`           | A grant to a person needs them to be a member. Invite them first.                                                                                   |
-| `CONFLICT`, `ROLE_IN_USE`           | The role is held or named by an open invitation; `members` and `invitations` say how many.                                                          |
-| `CONFLICT`, `ROLE_TAKEN`            | `--create` with a key in use. Edit that role, or choose another key.                                                                                |
-| `BAD_REQUEST`, `BUILT_IN_ROLE`      | `viewer`, `member`, `builder` and `admin` cannot be saved or deleted. Define a role of your own.                                                    |
-| `BAD_REQUEST`, `EXPIRY_PASSED`      | The expiry is not in the future.                                                                                                                    |
-| `CONFLICT` on the last admin        | A customer keeps someone holding `admin`. A role of the customer's own never counts as `admin`, whatever it holds: make someone else `admin` first. |
+| Refusal                               | What it means, and what to do                                                                                                                       |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FORBIDDEN`, `PERMISSION_REQUIRED`    | You lack the permission the command itself needs (`roles:manage`, or `people:manage`). Ask someone who holds it.                                    |
+| `FORBIDDEN`, `PERMISSION_NOT_HELD`    | The subset rule: `permissions` lists what you would give or take away without holding it. Ask someone who holds those, such as an admin.            |
+| `FORBIDDEN`, `REACH_NOT_HELD`         | The subset rule over reading: `objects` lists what you would give or take away without reading it yourself.                                         |
+| `FORBIDDEN`, `WHOLE_REACH_REQUIRED`   | The console, a model preview, test failures and changes to models run as the build login, which reads everything: they need `model:*` and `raw:*`.  |
+| `NOT_FOUND`, `OBJECT_NOT_FOUND`       | The model, reference table, question or dashboard the object names does not exist. A raw stream need not exist yet.                                 |
+| `BAD_REQUEST`, `OBJECT_SHAPE`         | The object is not one a grant can name; the sentence lists the forms.                                                                               |
+| `BAD_REQUEST`, `ONE_OBJECT`           | Name exactly one of `--permission` and `--object`.                                                                                                  |
+| `BAD_REQUEST`, `COLUMN_NOT_FOUND`     | A rule names a column the model's last build did not find; the sentence lists its columns. A model never built has none: build it first.            |
+| `BAD_REQUEST`, `RULES_NEED_ONE_MODEL` | A row rule or hidden columns go only on a grant of one model, never on `model:*`, a permission, raw data or a report.                               |
+| `BAD_REQUEST`, `RULE_SHAPE`           | An `eq` condition takes exactly one value; use `in` for several.                                                                                    |
+| `CONFLICT`, `GRANT_CHANGED`           | Someone else changed the grant while you saved it; read it again and save again.                                                                    |
+| `BAD_REQUEST`, `COLUMN_NOT_GRANTED`   | A query named a column your grants hide, or used `SELECT *` on such a table. Name the columns you may read.                                         |
+| `NOT_FOUND`, `ROLE_NOT_FOUND`         | The customer has no role with that key. `roles list` shows the keys.                                                                                |
+| `NOT_FOUND`, `NOT_MEMBER`             | A grant to a person needs them to be a member. Invite them first.                                                                                   |
+| `CONFLICT`, `ROLE_IN_USE`             | The role is held or named by an open invitation; `members` and `invitations` say how many.                                                          |
+| `CONFLICT`, `ROLE_TAKEN`              | `--create` with a key in use. Edit that role, or choose another key.                                                                                |
+| `BAD_REQUEST`, `BUILT_IN_ROLE`        | `viewer`, `member`, `builder` and `admin` cannot be saved or deleted. Define a role of your own.                                                    |
+| `BAD_REQUEST`, `EXPIRY_PASSED`        | The expiry is not in the future.                                                                                                                    |
+| `CONFLICT` on the last admin          | A customer keeps someone holding `admin`. A role of the customer's own never counts as `admin`, whatever it holds: make someone else `admin` first. |
 
 ## Not possible yet
 
-Rules on rows and columns -- "Sales reads only its own region's rows of `fct_sales`" -- are
-planned for a later release. A grant on a model reads all of it.
+- **Rules on raw rows.** A rule goes on a model or reference table; the raw lake is read whole or by
+  stream.
+- **Rules on a view-materialised model.** A scope login is never granted a view, so a reader of
+  fewer than every model cannot read one at all.
+- **Conditions other than equals and is one of** -- a range, a pattern, a condition one person
+  writes in SQL.

@@ -17,6 +17,7 @@
  */
 
 import type { QueryAnswer, TableResult } from "@undercroft/contracts";
+import { hiddenColumns, type Reach, rowsLimited } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 
 import { readTestStates, type TestStateName } from "./testState.ts";
@@ -42,23 +43,33 @@ export interface AnswerQualifier {
  * An answer as Reports serves it: the rows, whole, and the qualifiers. `qualifiers` is `null`
  * when which tables were read is not known -- a worker older than the plan read, or a plan it
  * could not read -- which a screen words as "not known", never as "nothing to say".
+ *
+ * `rowsLimited` names the tables it read of which the reader sees only some rows (ADR 0143): a
+ * total over one is the total of what they may see, not of the table, and the answer says so
+ * rather than letting it pass for the whole. `null` when which tables were read is not known.
  */
 export interface QualifiedAnswer extends TableResult {
   readonly qualifiers: readonly AnswerQualifier[] | null;
+  readonly rowsLimited: readonly string[] | null;
 }
 
-/** The worker's answer with a qualifier for each table it read whose tests are not passing. */
+/**
+ * The worker's answer with a qualifier for each table it read whose tests are not passing, and
+ * the tables it read whose rows `reach` sees only some of.
+ */
 export async function qualify(
   exec: SqlExecutor,
   tenantId: string,
   answer: QueryAnswer,
+  reach: Reach,
 ): Promise<QualifiedAnswer> {
   const { relations, ...table } = answer;
   if (relations === null || relations === undefined) {
-    return { ...table, qualifiers: null };
+    return { ...table, qualifiers: null, rowsLimited: null };
   }
+  const rowsLimitedHere = relations.filter((name) => rowsLimited(reach, name));
   if (relations.length === 0) {
-    return { ...table, qualifiers: [] };
+    return { ...table, qualifiers: [], rowsLimited: [] };
   }
   const testsOf = await readTestStates(exec, tenantId, relations);
   const qualifiers: AnswerQualifier[] = [];
@@ -77,7 +88,39 @@ export async function qualify(
       unpublished: tests.unpublished,
     });
   }
-  return { ...table, qualifiers };
+  return { ...table, qualifiers, rowsLimited: rowsLimitedHere };
+}
+
+/**
+ * `permission denied for table fct_sales`: Postgres's sentence for a statement that read a table,
+ * or a column of one, its login holds no privilege on. Read only to name a refusal that is
+ * already a refusal; a message it does not match is relayed as Postgres wrote it.
+ */
+const PERMISSION_DENIED = /permission denied for (?:table|relation) "?(?<name>[^"\s.]+)"?/u;
+
+/** A table the reader reaches but whose hidden columns their query named, or read with `*`. */
+export interface ColumnNotGranted {
+  readonly model: string;
+  readonly hidden: readonly string[];
+}
+
+/**
+ * Whether a query Postgres refused for want of a privilege read a table the reader reaches with
+ * hidden columns (ADR 0143). Postgres says "permission denied for table" for a hidden column as for
+ * a table outside the reader's reach, which reads as if they could not see the table at all; this
+ * names what they cannot see of it. `null` for anything else: a table they do not reach is refused
+ * as Postgres said it, which confirms nothing about it.
+ */
+export function columnNotGranted(
+  message: string | null | undefined,
+  reach: Reach,
+): ColumnNotGranted | null {
+  const name = PERMISSION_DENIED.exec(message ?? "")?.groups?.name;
+  if (name === undefined) {
+    return null;
+  }
+  const hidden = hiddenColumns(reach, name);
+  return hidden.length === 0 ? null : { model: name, hidden };
 }
 
 /**

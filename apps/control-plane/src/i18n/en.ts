@@ -114,6 +114,17 @@ export const en = {
       "Name exactly one of permission, to grant something a person may do, or object, to grant reading one thing (model:…, raw:…, report:…).",
     grantObjectShape:
       "{{object}} is not an object a grant can name. Use model:<name> or model:*, raw:<source>/<entity>, raw:<source>/* or raw:*, report:question:<id>, report:dashboard:<id> or report:*.",
+    grantRulesOneModel:
+      "A row rule and hidden columns can only be set on reading one particular model (model:<name>), not on model:*, a permission, raw data or a report.",
+    ruleEqualsOne: "An eq condition compares with exactly one value. For several values, use in.",
+    grantUnknownColumn:
+      "{{model}} has no column {{columns}}. Its columns, as its last build found them: {{known}}.",
+    grantNoColumnsYet:
+      "{{model}} has no columns on record because it has never built successfully, so a rule naming {{columns}} cannot be set yet. Build the model first.",
+    grantChanged:
+      "Someone else changed this grant while you were saving it, so nothing was written. Read it again (grants.list) and save again.",
+    columnNotGranted:
+      "Your access does not include some columns of {{model}} ({{columns}}), so the query was refused rather than leaving them blank. Select only the columns you need, and not SELECT *.",
     noSuchObject:
       "This customer has no {{object}}. models.list, seeds.list, bi.questions.list and bi.dashboards.list show what it has.",
     noSuchRole: "This customer has no role {{role}}. roles.list shows the roles it has.",

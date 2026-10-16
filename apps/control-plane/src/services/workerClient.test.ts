@@ -305,7 +305,7 @@ describe("a scoped read goes where only a worker that knows scopes answers (ADR 
   it("a scope is sent to the scoped route and nowhere else; none goes to the route of old", async () => {
     const sent: { path: string; body: unknown }[] = [];
     const worker = routed(["/v1/queries/run", "/v1/queries/scoped/run"], sent);
-    const scope = { models: ["fct_sales"] };
+    const scope = { models: ["fct_sales"], limits: [] };
 
     await worker.runQuery({ tenantId: "CASE-0042", sql: "select 1", limit: 1, scope });
     await worker.runQuery({ tenantId: "CASE-0042", sql: "select 1", limit: 1, scope: null });
@@ -321,7 +321,7 @@ describe("a scoped read goes where only a worker that knows scopes answers (ADR 
 
   it("a worker that predates scopes refuses a scoped read, a schema and a narrowed search", async () => {
     const old = routed(["/v1/queries/run", "/v1/queries/schema", "/v1/queries/raw/search"], []);
-    const scope = { models: ["fct_sales"] };
+    const scope = { models: ["fct_sales"], limits: [] };
 
     const query = await old.runQuery({ tenantId: "CASE-0042", sql: "select 1", limit: 1, scope });
     const schema = await old.readSchema({ tenantId: "CASE-0042", scope });
@@ -332,5 +332,51 @@ describe("a scoped read goes where only a worker that knows scopes answers (ADR 
     });
 
     expect([query.ok, schema.ok, search.ok]).toEqual([false, false, false]);
+  });
+});
+
+describe("a scope with rules goes where only a worker that knows rules answers (ADR 0143)", () => {
+  const limited = {
+    models: ["fct_sales"],
+    limits: [
+      {
+        model: "fct_sales",
+        rows: [[{ column: "dept", op: "eq" as const, values: ["Sales"] }]],
+        hidden: [],
+      },
+    ],
+  };
+
+  it("is sent to the limited routes, its rules with it, and a scope without rules is not", async () => {
+    const sent: { path: string; body: unknown }[] = [];
+    const worker = routed(["/v1/queries/scoped/run", "/v1/queries/limited/run"], sent);
+
+    await worker.runQuery({ tenantId: "CASE-0042", sql: "select 1", limit: 1, scope: limited });
+    await worker.runQuery({
+      tenantId: "CASE-0042",
+      sql: "select 1",
+      limit: 1,
+      scope: { models: ["fct_sales"], limits: [] },
+    });
+
+    expect(sent.map((call) => call.path)).toEqual([
+      "/v1/queries/limited/run",
+      "/v1/queries/scoped/run",
+    ]);
+    expect(sent[0]?.body).toMatchObject({ scope: limited });
+  });
+
+  it("is refused by a worker that knows scopes and not rules, which would read every row", async () => {
+    const older = routed(["/v1/queries/scoped/run", "/v1/queries/scoped/schema"], []);
+
+    const query = await older.runQuery({
+      tenantId: "CASE-0042",
+      sql: "select 1",
+      limit: 1,
+      scope: limited,
+    });
+    const schema = await older.readSchema({ tenantId: "CASE-0042", scope: limited });
+
+    expect([query.ok, schema.ok]).toEqual([false, false]);
   });
 });

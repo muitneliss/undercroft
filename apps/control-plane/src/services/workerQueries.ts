@@ -9,6 +9,11 @@
  * -- where it would have stripped a field it did not know and answered as a login that sees more.
  * The worker and the control plane deploy separately, so that difference is the whole of what
  * keeps a deploy in progress from widening anybody's reach.
+ *
+ * A scope that limits rows or columns (ADR 0143) goes to a route newer still, `/limited/…`: a
+ * worker that knows scopes and not rules would strip `limits` and read as a login that sees every
+ * row of the scope's tables. A scope without rules keeps PR 3's route, which every worker since
+ * has.
  */
 
 import type { QueryAnswer, QueryScope } from "@undercroft/contracts";
@@ -47,6 +52,11 @@ function queryOn(t: WorkerTransport): typeof query {
   return query;
 }
 
+/** The route a scoped read of `verb` takes: `limited` when its scope carries rules (see above). */
+export function scopedRoute(scope: QueryScope, verb: "run" | "schema" | "export"): string {
+  return scope.limits.length === 0 ? `/v1/queries/scoped/${verb}` : `/v1/queries/limited/${verb}`;
+}
+
 export function queriesOn(
   t: WorkerTransport,
 ): Pick<WorkerClient, "runQuery" | "readSchema" | "runRawQuery" | "readRawSchema" | "searchRaw"> {
@@ -56,11 +66,11 @@ export function queriesOn(
     runQuery: ({ scope, ...input }) =>
       scope === null
         ? query("/v1/queries/run", input)
-        : query("/v1/queries/scoped/run", { ...input, scope }),
+        : query(scopedRoute(scope, "run"), { ...input, scope }),
     readSchema: ({ scope, tenantId }) =>
       scope === null
         ? post("/v1/queries/schema", { tenantId })
-        : post("/v1/queries/scoped/schema", { tenantId, scope }),
+        : post(scopedRoute(scope, "schema"), { tenantId, scope }),
     // The raw lake's console. Same refusal handling, different login at the far end: the
     // worker answers this one as the tenant's dbt role, which is the only one that may read
     // `raw` at all. See `queryRunner.runRawQuery`.

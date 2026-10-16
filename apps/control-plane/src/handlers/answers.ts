@@ -12,7 +12,7 @@ import type { Locale } from "@undercroft/core/locale";
 import { type MessageKey, messages } from "../i18n/index.ts";
 import type { QualifiedAnswer } from "../services/answerQualifiers.ts";
 import * as bi from "../services/bi.ts";
-import type { Context } from "./trpc.ts";
+import { type Context, refusal } from "./trpc.ts";
 
 /** Which sentence a refused pasted token gets: the token is wrong, the source cannot, or the worker would not. */
 export function tokenRefusalKey(
@@ -76,6 +76,17 @@ export function answerRefusal(
           runId: outcome.runId,
         }),
       });
+    // A hidden column, named or under `*` (ADR 0143): refused, never blanked, and said so --
+    // Postgres's own "permission denied for table" would read as the whole table refused.
+    case "column-not-granted":
+      return refusal(
+        "BAD_REQUEST",
+        messages(locale)("error.columnNotGranted", {
+          model: outcome.model,
+          columns: outcome.hidden.join(", "),
+        }),
+        { reason: "COLUMN_NOT_GRANTED", model: outcome.model, columns: outcome.hidden.join(",") },
+      );
     default:
       return notRun(locale, outcome.reason, "error.queryNotRun");
   }

@@ -64,6 +64,8 @@ export const procedureSentences: SentenceTable = {
     "Take one grant away, by id. Only a grant of a permission you hold, or of something you can read yourself.",
   "grants.reach":
     'What a role (role), a member (email) or -- naming nobody -- you may do and read: permissions, and reach with models, raw and reports, each "all" or the named things. Ask it before a grant and after. Asking about a role or another person needs people:manage.',
+  "scopes.preview":
+    "What a role (role), a member (email) or -- naming nobody -- you can see, resolved: permissions; every model and reference table read, each with rows (null for every row, else the rows meeting any one rule), hidden (columns refused, never blanked), and broken when a row rule names a column the table no longer has -- that person then sees no row of it; and the raw streams and reports read. Hiding is a list of what to hide: a column a later build adds is seen until it is hidden. Ask it before a grant and after. Asking about a role or another person needs people:manage.",
   "audit.mine":
     "Your own actions, newest first: what you did, through which door, and how it ended.",
   "audit.tenant": "Every action taken in the customer, by anyone, newest first.",

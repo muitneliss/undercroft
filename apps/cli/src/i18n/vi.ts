@@ -53,6 +53,8 @@ export const vi = {
       "Các vai trò của khách hàng, có sẵn và riêng, cùng các quyền của từng vai trò; sửa cần quyền roles:manage.",
     grants:
       "Một quyền thao tác, hay quyền xem một model, một luồng dữ liệu thô hoặc một báo cáo, trao cho một vai trò hoặc một người, không thời hạn hoặc đến một thời điểm; xem các quyền đã trao cần people:manage, và reach cho biết một người làm được và xem được gì.",
+    scopes:
+      "Những gì một người xem được, đã quy ra cụ thể: mọi model họ đọc, các dòng và cột của nó, và quy tắc nào đã hỏng.",
     audit:
       "Ai đã làm gì: thao tác của chính bạn, của một khách hàng cho người có quyền audit:read ở đó, tất cả cho quản trị nền tảng.",
     runs: "Các lần chạy.",

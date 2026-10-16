@@ -1,13 +1,13 @@
 ---
 name: undercroft-access-control
-description: Turn a request about who may do or see what in an Undercroft customer into the smallest change that grants it, over its MCP tools or its CLI -- give someone a role, define a role of the customer's own, or grant one permission or reading one model, raw stream, report or dashboard to a role or a person, standing or until a date. Use when a person asks to let someone edit models, read the raw lake, manage sources or people, to "make X an admin", to create a role such as an accountant, to let a department see only some models or one dashboard, to give access until the end of the month, to take access away, or asks why someone may not do or see something. It reads what the caller holds and reaches first, asks one question at a time, explains the subset rule, states the plan and asks before every write, checks reach before and after, and says what is not possible yet. Needs the undercroft skill for how to reach the platform.
+description: Turn a request about who may do or see what in an Undercroft customer into the smallest change that grants it, over MCP or the CLI -- give someone a role, define a role of the customer's own, or grant one permission or reading one model, raw stream or report to a role or a person, standing or until a date, and on a model only some rows or not some columns. Use when someone asks to let a person edit models, read the raw lake or manage people, to "make X an admin", to create a role such as an accountant, to let a department see only some models, only its own rows ("trưởng phòng Sales chỉ thấy phòng mình") or one dashboard, to hide a column ("ẩn cột lương"), to give access until a date, to take it away, or why someone cannot see something or why a total differs. It reads what the caller holds first, asks one question at a time, explains the subset rule, asks before every write, and checks scopes.preview before and after. Needs the undercroft skill.
 ---
 
 # Who may do what, changed by the smallest step
 
 A request about access is usually a sentence about a person and a task: "let Minh fix the
 models", "Lan needs the raw data until the end of the month", "Sales should see only their
-dashboard". Undercroft answers it with one of four changes, and the right one is the smallest that
+dashboard". Undercroft answers it with one of five changes, and the right one is the smallest that
 covers the task and no more:
 
 1. **Give the person a role** the customer already has (`people.setRole`, or `people.invite`
@@ -20,6 +20,10 @@ covers the task and no more:
    (`model:fct_sales`), a raw stream or a whole source (`raw:hubspot/deals`, `raw:hubspot/*`), a
    question or a dashboard (`report:question:<id>`, `report:dashboard:<id>`), or the whole of one
    (`model:*`, `raw:*`, `report:*`).
+
+5. **Grant only some of a model** (`grants.save` with `object: "model:<name>"` and `rowRule`,
+   `hiddenColumns`, or both): only the rows meeting a rule, or not some columns. A rule narrows
+   the grant it is on, and nothing else.
 
 What a person may DO is their permissions; what they may READ is their **reach**. The four
 built-in roles reach everything. A role of the customer's own reaches ONLY what is granted to it,
@@ -73,6 +77,8 @@ covers. This skill names operations by procedure path.
 | `grants.save`, `grants.delete`             | `roles:manage`, and the subset rule      |
 | `grants.reach` about oneself               | membership of the customer, nothing more |
 | `grants.reach` about a role or a person    | `people:manage`                          |
+| `scopes.preview` about oneself             | membership of the customer, nothing more |
+| `scopes.preview` about a role or a person  | `people:manage`                          |
 
 **The subset rule.** Nobody may give, grant or take away a permission they do not hold
 themselves, nor reading something they cannot read themselves: `model:*` only by someone who
@@ -125,6 +131,22 @@ change each ends in:
   `bi.dashboards.list` and `bi.questions.list`), and opening one never widens what it reads --
   a question over a model they do not reach is refused. Check the model name in `models.list`
   first; a name the customer lacks is refused.
+- **"Trưởng phòng Sales chỉ thấy dòng của phòng mình" -- the head of Sales sees only their
+  department's rows.** A row rule on a model grant. Find the model and the column that names the
+  department (`models.get` lists the columns its last build found; never guess a column or a
+  value -- read a few rows through a report, or ask). Plan: a role of the customer's own (or a
+  grant to the one person) with `grants.save`, `object: "model:fct_sales"`, `rowRule:
+[{ "column": "dept", "op": "eq", "values": ["Sales"] }]`; `op: "in"` with several values for
+  several departments. Say back: they will see only rows whose `dept` is `Sales`, compared as
+  that column's type; a row with no department is never shown. Grants add up -- if their role or
+  another grant already reads the whole model, the rule changes nothing, so read `scopes.preview`
+  first and remove the wider grant if that is what is meant (its own act).
+- **"Ẩn cột lương với nhân viên" -- staff do not see the salary column.** Hidden columns on the
+  model grant of the staff's role: `grants.save` with `object: "model:fct_people"`,
+  `hiddenColumns: ["salary"]`. Say back: naming `salary`, or `SELECT *`, will be refused
+  (`COLUMN_NOT_GRANTED`), not shown blank; and **hiding is a list of what to hide -- a column a
+  later build adds is visible until it is hidden**. A column stays hidden only when every grant
+  that reaches them on the model hides it.
 - **"Cho Minh xem dữ liệu HubSpot" -- Minh may read the HubSpot data in the raw lake.** One person,
   one permission and one source: `grants.save` with `permission: "lake:read"`, then with
   `object: "raw:hubspot/*"`, both to Minh's address. A built-in role already reaches the whole
@@ -137,9 +159,15 @@ lacks one, say so before proposing it: name the permission or the object, say th
 who holds it can make this change, and suggest who -- someone with `admin` in this customer always
 can. Do not stop at "you cannot": if part of the request is within reach, offer that part.
 
-For a change to what someone reads, read their reach first -- `grants.reach` with `role` or
-`email` -- and say it in a sentence ("Sales reads every model today, because its role was given
-`model:*`"), so the plan says what changes rather than only what is added. To narrow a role that
+For a change to what someone reads, read what they see first -- `scopes.preview` with `role` or
+`email`, which answers every model they read with its rows, its hidden columns and whether a rule
+is broken -- and say it in a sentence ("Sales reads every model today, because its role was given
+`model:*`"; "Lan sees only Sales's rows of `fct_sales`, without `salary`"), so the plan says what
+changes rather than only what is added. `grants.reach` gives the same decision unresolved.
+
+A caller who reads only some rows or columns of a model may grant a rule only at least as narrow
+as their own: every condition of theirs, on the same column with values among theirs, and every
+column hidden from them hidden. Anything wider is `REACH_NOT_HELD`. To narrow a role that
 was given a whole (`model:*`), the change is taking that grant away (`grants.delete`) and granting
 the named things, each its own act.
 
@@ -153,9 +181,19 @@ next request; there is nothing to wait for.
 ### 5. Confirm from the platform
 
 Read back what changed: `roles.get` for a role, `grants.list` for a grant (an expired one is
-listed with `expired: true` and holds nothing), `people.members` for a role given, and
-`grants.reach` for what the role or the person reads now. Say what the person can now do and see,
-in terms of the task they asked about.
+listed with `expired: true` and holds nothing; a model grant answers its `rowRule` and
+`hiddenColumns`), `people.members` for a role given, and `scopes.preview` for what the role or the
+person sees now. Say what the person can now do and see, in terms of the task they asked about --
+which rows, which columns hidden -- and read out any model `scopes.preview` marks `broken`: a rule
+naming a column the table no longer has shows that person no row of it, never every row, and is
+for someone who manages grants to fix.
+
+When a reader asks why a figure is smaller than a colleague's, or why a query was refused:
+
+- **A partial total.** An answer over a table whose rows they see only some of names it in
+  `rowsLimited`; the total is of the rows they may see. Say so; never call it missing data.
+- **A refused column.** `COLUMN_NOT_GRANTED` names the hidden columns; select the others by name
+  instead of `SELECT *`.
 
 ## Refusals
 
@@ -192,6 +230,16 @@ in terms of the task they asked about.
 - **`VALIDATION_FAILED` with `reason: "BUILT_IN_ROLE"`**: a built-in cannot be changed. Offer a
   role of the customer's own.
 - **`VALIDATION_FAILED` with `reason: "EXPIRY_PASSED"`**: the expiry is not in the future.
+- **`VALIDATION_FAILED` with `reason: "COLUMN_NOT_FOUND"`**: a rule names a column the model's last
+  build did not find (`columns` names them); the sentence lists the columns it has. A model never
+  built has none -- it must be built first.
+- **`VALIDATION_FAILED` with `reason: "RULES_NEED_ONE_MODEL"`**: a row rule or hidden columns on
+  `model:*`, a permission, a raw stream or a report. Name one model.
+- **`VALIDATION_FAILED` with `reason: "RULE_SHAPE"`**: an `eq` with other than one value; use `in`.
+- **`CONFLICT` with `reason: "GRANT_CHANGED"`**: someone changed the grant while it was being
+  saved. Read `grants.list` again and ask before saving again.
+- **`VALIDATION_FAILED` with `reason: "COLUMN_NOT_GRANTED"`** on a query: the reader's grants hide
+  `columns` of `model`. They are refused, not blank.
 - **`CONFLICT` on `people.setRole` or `people.removeMember` for the last admin**: a customer must
   keep someone holding `admin`. A role of the customer's own never counts as that, whatever it
   holds.
@@ -200,9 +248,10 @@ in terms of the task they asked about.
 
 Say so plainly when asked, rather than approximating with something broader:
 
-- **Rules on rows or columns** -- "only Hanoi's invoices", "hide the salary column". Not
-  available; a grant on a model reads all of it, and what a model selects is the only way to
-  narrow what a report shows today.
+- **Rules on raw rows**, or on a view-materialised model. A rule goes on a model or reference
+  table that is a table; the raw lake is read whole or by stream.
+- **Conditions other than equals and is one of** -- "invoices over 10 million", "names starting
+  with A", a condition written in SQL. Only `eq` and `in` on a model's columns.
 - **Writing only some models.** `models:write` changes the whole dbt project, which reads every
   model and the raw lake, so it needs `model:*` and `raw:*`; there is no "edit only `fct_sales`".
 - **A grant across customers.** Every role, grant and permission holds in one customer.

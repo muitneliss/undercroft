@@ -39,7 +39,20 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
   credential; keep it that way.
 - **NEVER key row-level security on a session setting or on `SET ROLE`.** A SQL author can
   `SET` any GUC and `RESET ROLE`; the only thing they cannot change is which login they are.
-  `raw.tenant_of(current_user)` is the policy's one input.
+  `raw.tenant_of(current_user)` is the policy's one input on `raw`. On a customer's ANALYTICS
+  tables there is row security too since ADR 0143, for a model grant's row rule, and it is keyed
+  the same way: each policy names the logins it applies TO -- the BI login and the scope logins
+  that read every row (`undercroft_open`, `USING (true)`), and one rule-bearing scope login each
+  -- so the input is `current_user`, which a scope login cannot change (NOINHERIT, a member of
+  nothing). Never `TO PUBLIC` with an exclusion list: a login missing from it would read every
+  row. Never `FORCE`: the owner, the dbt login, builds and tests the table and must read all of
+  it. Written by `ops.apply_row_policies` alone, in the repeatable file, compiled with `%I` and
+  `%L` from the canonical rule (`ops.row_predicate`), typed against the column, and a rule that
+  does not compile is `USING (false)` -- never no policy.
+- **NEVER grant a scope login with hidden columns table-level SELECT.** It gets `SELECT
+(<visible columns>)`, computed from the table when the grant is written, so a hidden column is
+  refused and absent from `information_schema`; a column a later build adds is visible until
+  hidden (ADR 0143). `ops.apply_relation` writes both kinds, here and at each promotion.
 - **NEVER store a tenant role's password.** `ops.rotate_tenant_password` mints one for the
   worker right before the first build or query session of that login and returns it; the
   worker holds it in memory while any build or session of the login runs, and forgets it after.
@@ -56,8 +69,9 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
   written by `ops.apply_scope` and, at a promotion, `raw.grant_staged_to_scopes`, both in
   `repeatable/010_provision_tenant.sql`; it gets nothing in `raw`, `app`, `ops`, `dq_<slug>` or
   `staging_<slug>`, refused explicitly.
-- **NEVER revoke a scope login's grant to narrow a reader.** A scope's model set is fixed by its
-  hash, so its grants are only ever added; a reader whose reach changes reads as another login.
+- **NEVER revoke a scope login's grant to narrow a reader.** A scope's model set and rules are
+  fixed by its hash (`undercroft.scope/1` without rules, `/2` with), so its grants are only ever
+  added; a reader whose reach or rules change reads as another login.
   A promotion grants the STAGED relation before it moves it, inside its transaction, so a
   republished table is never ungranted to a scope that should read it nor granted to one that
   should not. `ops.lock_scopes` serialises the writers; take it before locking any relation.

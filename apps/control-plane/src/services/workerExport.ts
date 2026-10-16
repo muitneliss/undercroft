@@ -9,6 +9,7 @@
  */
 
 import type { ExportInput, WorkerClient, WorkerOutcome } from "./workerClient.ts";
+import { scopedRoute } from "./workerQueries.ts";
 import { BAD_REQUEST, REFUSAL_BY_STATUS } from "./workerRefusals.ts";
 import { envelopeOf, exchange, type WorkerTransport } from "./workerTransport.ts";
 
@@ -21,14 +22,15 @@ import { envelopeOf, exchange, type WorkerTransport } from "./workerTransport.ts
 const FIRST_BYTE_MS = 150_000;
 
 export function exportOn(t: WorkerTransport): WorkerClient["exportQuery"] {
-  // A scoped export to the scoped route only, for the reason `runQuery`'s is (ADR 0142).
+  // A scoped export to the scoped route only -- the limited one for a scope with rules -- for the
+  // reason `runQuery`'s is (ADR 0142, ADR 0143).
   return ({ scope, ...input }: ExportInput) =>
     exchange(
       t,
       scope === null
         ? { path: "/v1/queries/export", body: input, deadlineMs: FIRST_BYTE_MS }
         : {
-            path: "/v1/queries/scoped/export",
+            path: scopedRoute(scope, "export"),
             body: { ...input, scope },
             deadlineMs: FIRST_BYTE_MS,
           },

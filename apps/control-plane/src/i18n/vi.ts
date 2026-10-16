@@ -205,6 +205,26 @@ export const vi = {
     /** An object outside the grammar (`parseReachObject`), named so the caller can see the slip. */
     grantObjectShape:
       "{{object}} không phải một đối tượng trao được. Hãy dùng model:<tên> hoặc model:*, raw:<nguồn>/<thực thể>, raw:<nguồn>/* hoặc raw:*, report:question:<id>, report:dashboard:<id> hoặc report:*.",
+    /** A row rule or hidden columns on anything but a grant of one model (ADR 0143). */
+    grantRulesOneModel:
+      "Quy tắc theo dòng và cột ẩn chỉ đặt được trên quyền xem một model cụ thể (model:<tên>), không đặt được trên model:*, một quyền thao tác, dữ liệu thô hay báo cáo.",
+    /** `eq` compares with one value; several values are `in`. */
+    ruleEqualsOne: "Điều kiện eq so với đúng một giá trị. Với nhiều giá trị, hãy dùng in.",
+    /** A rule names columns the model does not have, as its last build found them. */
+    grantUnknownColumn:
+      "{{model}} không có cột {{columns}}. Các cột của nó, theo lần dựng gần nhất: {{known}}.",
+    /** A rule on a model never built: it has no columns on record to name. */
+    grantNoColumnsYet:
+      "{{model}} chưa có cột nào được ghi nhận vì chưa được dựng thành công lần nào, nên chưa đặt được quy tắc nhắc đến cột {{columns}}. Hãy dựng model trước.",
+    /** The grant changed between being weighed and being written: read it again. */
+    grantChanged:
+      "Quyền này vừa được người khác thay đổi trong lúc bạn lưu, nên chưa có gì được ghi. Hãy đọc lại (grants.list) rồi lưu lại.",
+    /**
+     * A query named a column the reader's grants hide, or used `SELECT *` on a table with hidden
+     * columns (ADR 0143). Postgres says "permission denied" for the table; this says which columns.
+     */
+    columnNotGranted:
+      "Quyền xem của bạn không gồm một số cột của {{model}} ({{columns}}), nên câu truy vấn bị từ chối thay vì để trống các cột đó. Hãy chỉ chọn những cột bạn cần, đừng dùng SELECT *.",
     /** An object grant on a model or report this customer does not have. */
     noSuchObject:
       "Khách hàng này không có {{object}}. models.list, seeds.list, bi.questions.list và bi.dashboards.list cho thấy những gì đang có.",

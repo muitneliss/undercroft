@@ -23,7 +23,8 @@ Casbin on every request and Casbin decides (`apps/control-plane/src/services/rba
 tables stay the owners. The reasoning, and the options rejected, are in
 `docs/adr/0139-tenant-access-is-casbin-policy.md`, for a customer's own roles, grants and the
 subset rule `docs/adr/0141-custom-roles-and-grants-under-the-subset-rule.md`, and for reach and
-the scope logins that enforce it `docs/adr/0142-object-reach-and-scope-logins.md`; which
+the scope logins that enforce it `docs/adr/0142-object-reach-and-scope-logins.md`, for row and
+column rules on a model grant `docs/adr/0143-row-and-column-rules-on-model-grants.md`; which
 procedures each permission covers, and the object grammar, are `docs/reference/permissions.md`.
 
 ## NEVER
@@ -112,5 +113,17 @@ procedures each permission covers, and the object grammar, are `docs/reference/p
   `services/authz.ts`, `REACH_NOT_HELD` -- for every change that gives or takes away a role, a
   grant or a member.
 - **What the database enforces, the database enforces.** Which tables a reader's SQL may read is
-  the scope login's grants (`.claude/rules/privileges.md`), never a filter here; a row or column
-  rule (PR 4) is never keyed on a session setting.
+  the scope login's grants (`.claude/rules/privileges.md`), never a filter here; which of a
+  table's rows and columns, the scope login's row policies and column grants (ADR 0143), never a
+  filter here and never a session setting.
+- **A rule narrows its own grant, and grants add up** (ADR 0143). A model grant's `rowRule` and
+  `hiddenColumns` are read with the grant; what a reader reads of a model is the union over their
+  grants of it (`unionOf`, `limitsOf` in `rbac.ts`), carried on the reach as `limits` and on the
+  scope the worker reads under. Ask it with `limitOf`, `rowsLimited` and `hiddenColumns`; never
+  read the grants back. A new reader of a model's columns leaves the hidden ones out
+  (`columnsShown.ts`); a new answer over the worker's relations says which were row-limited.
+- **A scope with rules goes to `/v1/queries/limited/…`**, never to `/scoped/…`, which a worker older
+  than rules answers as a login that reads every row. `scopedRoute` in `workerQueries.ts` chooses.
+- **A broken rule is never read as no rule.** Its reader sees no row of the table; whether it is
+  broken is `ops.scope_faults`'s answer, the same function the policy writer asks, never a second
+  check written here.

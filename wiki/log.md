@@ -431,3 +431,11 @@
 ## [2026-10-16] ingest | Runbook: Access control
 ## [2026-10-16] ingest | Runbook Sign-In Setup
 ## [2026-10-16] ingest | Architecture
+## [2026-10-16] ingest | ADR 0143 Row and Column Rules on Model Grants
+## [2026-10-16] ingest | Permissions
+## [2026-10-16] ingest | Runbook: Access control
+## [2026-10-16] ingest | Architecture
+## [2026-10-16] ingest | Runbook: Access control
+## [2026-10-16] ingest | Permissions
+## [2026-10-16] ingest | Architecture
+## [2026-10-16] ingest | ADR 0143 Row and Column Rules on Model Grants

@@ -38,6 +38,7 @@ import type {
   VisualDefinition,
 } from "@undercroft/contracts/bi";
 import type { Permission } from "@undercroft/contracts/access";
+import type { RowOp } from "@undercroft/contracts/rowRules";
 import type { TestKind } from "@undercroft/contracts/models";
 import { DEFAULT_LOCALE, type Locale } from "@undercroft/core/locale";
 import { create } from "zustand";
@@ -420,6 +421,28 @@ interface UiState {
   setRoleDraft: (draft: RoleDraft | null) => void;
   /** Tick or untick one permission of the draft for this role; another role's draft is left alone. */
   toggleRolePermission: (tenantId: string, key: string, permission: Permission) => void;
+  /**
+   * The grant being written in People's Grants view (ADR 0143): whom it is for, what it gives,
+   * and -- for one model -- its row rule and hidden columns, which the form draws from that
+   * model's columns. Held here because the rule builder and the "sees" summary both read it, and
+   * because it is the reader's until they press Grant. One draft, carrying its tenant, so a rule
+   * written on one customer never appears on another's. Not persisted.
+   */
+  grantDraft: GrantDraft | null;
+  /** Change what the draft names; choosing another object drops the rules, which named its columns. */
+  patchGrantDraft: (
+    tenantId: string,
+    patch: Partial<Pick<GrantDraft, "subject" | "grant">>,
+  ) => void;
+  addRuleCondition: (tenantId: string, column: string) => void;
+  setRuleCondition: (
+    tenantId: string,
+    key: string,
+    patch: Partial<Omit<RuleConditionDraft, "key">>,
+  ) => void;
+  removeRuleCondition: (tenantId: string, key: string) => void;
+  toggleHiddenColumn: (tenantId: string, column: string) => void;
+  dropGrantDraft: () => void;
   cronDraft: CronDraft | null;
   /** Hold `cron` as the draft for this card's `schedule`, replacing any other draft. */
   setCronDraft: (tenantId: string, source: string, schedule: CronSchedule, cron: string) => void;
@@ -442,6 +465,37 @@ export function roleDraftFor(
 ): readonly Permission[] | null {
   const held = state.roleDraft;
   return held !== null && held.tenantId === tenantId && held.key === key ? held.permissions : null;
+}
+
+/** One condition of a row rule as the form holds it: its values one to a line, as typed. */
+export interface RuleConditionDraft {
+  /** The React key of the condition's row: conditions are added and removed in place. */
+  readonly key: string;
+  readonly column: string;
+  readonly op: RowOp;
+  readonly values: string;
+}
+
+/** See `grantDraft`. */
+export interface GrantDraft {
+  readonly tenantId: string;
+  /** `role:<key>` or `email:<address>`, as the form's subject select spells it; `""` for none. */
+  readonly subject: string;
+  /** `perm:<permission>` or an object, as the form's grant select spells it; `""` for none. */
+  readonly grant: string;
+  readonly conditions: readonly RuleConditionDraft[];
+  readonly hidden: readonly string[];
+}
+
+/** The grant being written for this customer, or an empty one. */
+export function grantDraftFor(
+  state: { readonly grantDraft: GrantDraft | null },
+  tenantId: string,
+): GrantDraft {
+  const held = state.grantDraft;
+  return held !== null && held.tenantId === tenantId
+    ? held
+    : { tenantId, subject: "", grant: "", conditions: [], hidden: [] };
 }
 
 /** Which of a card's two schedules a cron draft is for. See `cronDraft`. */
@@ -490,6 +544,7 @@ export function holdsUnsavedWork(
     | "cronDraft"
     | "scopeDraft"
     | "roleDraft"
+    | "grantDraft"
     | "lakeSql"
   >,
 ): boolean {
@@ -501,6 +556,8 @@ export function holdsUnsavedWork(
     state.cronDraft !== null ||
     state.scopeDraft !== null ||
     state.roleDraft !== null ||
+    (state.grantDraft !== null &&
+      (state.grantDraft.conditions.length > 0 || state.grantDraft.hidden.length > 0)) ||
     Object.values(state.lakeSql).some((sql) => sql.trim() !== "")
   );
 }
@@ -1032,6 +1089,69 @@ function accountSlice(set: Setter): Pick<UiState, "selectedAccount" | "selectAcc
   };
 }
 
+/** Each new condition's key, unique for the tab. */
+let conditionKeys = 0;
+
+/** The grant being written. See `grantDraft`. */
+function grantSlice(
+  set: Setter,
+): Pick<
+  UiState,
+  | "grantDraft"
+  | "patchGrantDraft"
+  | "addRuleCondition"
+  | "setRuleCondition"
+  | "removeRuleCondition"
+  | "toggleHiddenColumn"
+  | "dropGrantDraft"
+> {
+  /** Change this customer's draft, starting one if there is none for it. */
+  function change(tenantId: string, edit: (draft: GrantDraft) => GrantDraft): void {
+    set((state) => ({ grantDraft: edit(grantDraftFor(state, tenantId)) }));
+  }
+  return {
+    grantDraft: null,
+    patchGrantDraft: (tenantId, patch): void => {
+      change(tenantId, (draft) =>
+        patch.grant === undefined || patch.grant === draft.grant
+          ? { ...draft, ...patch }
+          : { ...draft, ...patch, conditions: [], hidden: [] },
+      );
+    },
+    addRuleCondition: (tenantId, column): void => {
+      conditionKeys += 1;
+      const key = `condition-${String(conditionKeys)}`;
+      change(tenantId, (draft) => ({
+        ...draft,
+        conditions: [...draft.conditions, { key, column, op: "eq", values: "" }],
+      }));
+    },
+    setRuleCondition: (tenantId, key, patch): void => {
+      change(tenantId, (draft) => ({
+        ...draft,
+        conditions: draft.conditions.map((condition) =>
+          condition.key === key ? { ...condition, ...patch } : condition,
+        ),
+      }));
+    },
+    removeRuleCondition: (tenantId, key): void => {
+      change(tenantId, (draft) => ({
+        ...draft,
+        conditions: draft.conditions.filter((condition) => condition.key !== key),
+      }));
+    },
+    toggleHiddenColumn: (tenantId, column): void => {
+      change(tenantId, (draft) => ({
+        ...draft,
+        hidden: draft.hidden.includes(column)
+          ? draft.hidden.filter((each) => each !== column)
+          : [...draft.hidden, column],
+      }));
+    },
+    dropGrantDraft: (): unknown => set({ grantDraft: null }),
+  };
+}
+
 /** A customer's own role being edited. See `roleDraft`. */
 function roleSlice(
   set: Setter,
@@ -1062,6 +1182,7 @@ export const useUiStore = create<UiState>()(
       ...cronSlice(set),
       ...kindsSlice(set),
       ...roleSlice(set),
+      ...grantSlice(set),
       ...scopeSlice(set),
       ...lakeSlice(set),
       ...modelSlice(set),

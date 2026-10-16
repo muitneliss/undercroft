@@ -25,6 +25,7 @@ const t = translatorFor("vi");
 afterEach(() => {
   cleanup();
   useUiStore.getState().setRoleDraft(null);
+  useUiStore.getState().dropGrantDraft();
 });
 
 interface Grant {
@@ -35,6 +36,8 @@ interface Grant {
   permission: Permission | null;
   object: string;
   action: string;
+  rowRule: { column: string; op: "eq" | "in"; values: string[] }[] | null;
+  hiddenColumns: string[] | null;
   expiresAt: string | null;
   expired: boolean;
   grantedBy: string | null;
@@ -64,7 +67,15 @@ function open(
     roles = builtInRoles(),
     grants = [],
     reach = { models: "all", raw: "all", reports: "all" },
-  }: { permissions?: Permission[]; roles?: ListedRole[]; grants?: Grant[]; reach?: Reached } = {},
+    extra = {},
+  }: {
+    permissions?: Permission[];
+    roles?: ListedRole[];
+    grants?: Grant[];
+    reach?: Reached;
+    /** More procedures this suite's server answers, for one test. */
+    extra?: Readonly<Record<string, (input: unknown) => unknown>>;
+  } = {},
 ): { received: Received[] } {
   const kept = { roles: [...roles], grants: [...grants] };
   return mountRoute({
@@ -123,6 +134,8 @@ function open(
           permission,
           object: permission === null ? String(field(input, "object")) : `perm:${permission}`,
           action: permission === null ? "read" : "use",
+          rowRule: (field(input, "rowRule") as Grant["rowRule"] | undefined) ?? null,
+          hiddenColumns: (field(input, "hiddenColumns") as string[] | undefined) ?? null,
           expiresAt: (field(input, "expiresAt") as string | null) ?? null,
           expired: false,
           grantedBy: "ada@example.test",
@@ -135,6 +148,7 @@ function open(
         kept.grants = kept.grants.filter((grant) => grant.id !== field(input, "id"));
         return { ok: true };
       },
+      ...extra,
     },
   });
 }
@@ -255,6 +269,8 @@ describe("the grants", () => {
     permission: "lake:read",
     object: "perm:lake:read",
     action: "use",
+    rowRule: null,
+    hiddenColumns: null,
     expiresAt: null,
     expired: false,
     grantedBy: "ada@example.test",
@@ -310,6 +326,133 @@ describe("the grants", () => {
     expect(sent(received, "grants.save")).toEqual([
       { tenantId: TENANT, role: "member", object: "model:fct_sales", expiresAt: null },
     ]);
+  });
+
+  it("gives a role Sales's rows of a model with a column hidden, and shows what the role then sees", async () => {
+    const previewed: unknown[] = [];
+    const { received } = open("/?view=access", {
+      extra: {
+        "models.get": () => ({
+          name: "fct_sales",
+          lastBuild: {
+            runId: "r-1",
+            status: "success",
+            endedAt: null,
+            columnCount: 3,
+            columns: ["dept", "amount", "salary"],
+          },
+        }),
+        "scopes.preview": (input) => {
+          previewed.push(input);
+          return {
+            permissions: [],
+            models: {
+              whole: false,
+              total: 2,
+              reached: [
+                {
+                  name: "fct_sales",
+                  kind: "model",
+                  rows: [[{ column: "dept", op: "in", values: ["Sales", "Support"] }]],
+                  hidden: ["salary"],
+                  broken: null,
+                },
+                {
+                  name: "fct_costs",
+                  kind: "model",
+                  rows: [[{ column: "region", op: "eq", values: ["north"] }]],
+                  hidden: [],
+                  broken: { fault: "column-missing", columns: ["region"] },
+                },
+              ],
+            },
+            raw: { sources: [], streams: [] },
+            reports: { questions: [], dashboards: [] },
+          };
+        },
+      },
+    });
+    const form = (await screen.findByText(t("accessGrants.addHead"))).closest("form");
+    if (form === null) {
+      throw new Error("the grant form is not a form");
+    }
+    await within(form).findByRole("option", { name: "fct_sales" });
+
+    fireEvent.change(within(form).getByLabelText(t("accessGrants.subjectLabel")), {
+      target: { value: "role:member" },
+    });
+    fireEvent.change(within(form).getByLabelText(t("accessGrants.permissionLabel")), {
+      target: { value: "model:fct_sales" },
+    });
+    fireEvent.click(
+      await within(form).findByRole("button", { name: t("grantRules.addCondition") }),
+    );
+    fireEvent.change(within(form).getByLabelText(t("grantRules.opLabel")), {
+      target: { value: "in" },
+    });
+    fireEvent.change(within(form).getByLabelText(t("grantRules.valuesLabel")), {
+      target: { value: "Sales\nSupport\n" },
+    });
+    fireEvent.click(within(form).getByRole("checkbox", { name: "salary" }));
+    fireEvent.click(within(form).getByRole("button", { name: t("accessGrants.add") }));
+
+    await waitFor(() => {
+      expect(sent(received, "grants.save")).toEqual([
+        {
+          tenantId: TENANT,
+          role: "member",
+          object: "model:fct_sales",
+          expiresAt: null,
+          rowRule: [{ column: "dept", op: "in", values: ["Sales", "Support"] }],
+          hiddenColumns: ["salary"],
+        },
+      ]);
+    });
+    // What the role now sees, from the server: the rows, the hidden column, and a broken rule.
+    expect(
+      await screen.findByText(
+        t("scopePreview.brokenColumn", { model: "fct_costs", columns: "region" }),
+      ),
+    ).toBeDefined();
+    expect(screen.getByText(t("scopePreview.someModels", { count: 2, total: 2 }))).toBeDefined();
+    expect(previewed).toContainEqual({ tenantId: TENANT, role: "member" });
+  });
+
+  it("refuses to send a condition left without a value, which would grant every row", async () => {
+    const { received } = open("/?view=access", {
+      extra: {
+        "models.get": () => ({
+          name: "fct_sales",
+          lastBuild: {
+            runId: "r-1",
+            status: "success",
+            endedAt: null,
+            columnCount: 1,
+            columns: ["dept"],
+          },
+        }),
+      },
+    });
+    const form = (await screen.findByText(t("accessGrants.addHead"))).closest("form");
+    if (form === null) {
+      throw new Error("the grant form is not a form");
+    }
+    await within(form).findByRole("option", { name: "fct_sales" });
+    fireEvent.change(within(form).getByLabelText(t("accessGrants.subjectLabel")), {
+      target: { value: "role:member" },
+    });
+    fireEvent.change(within(form).getByLabelText(t("accessGrants.permissionLabel")), {
+      target: { value: "model:fct_sales" },
+    });
+    fireEvent.click(
+      await within(form).findByRole("button", { name: t("grantRules.addCondition") }),
+    );
+
+    expect(screen.getByText(t("grantRules.incomplete"))).toBeDefined();
+    const add = within(form).getByRole("button", { name: t("accessGrants.add") });
+    expect(add.hasAttribute("disabled")).toBe(true);
+    fireEvent.submit(form);
+    expect(sent(received, "grants.save")).toEqual([]);
   });
 
   it("offers a wildcard only to a reader the server says reaches the whole of it", async () => {

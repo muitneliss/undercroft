@@ -31,20 +31,30 @@
  */
 
 import type { Permission } from "@undercroft/contracts/access";
+import type { RowRule } from "@undercroft/contracts/rowRules";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   deleteGrant,
   findGrant,
+  findSameGrant,
   type GrantRow,
   type GrantSubject,
   listGrants,
   saveGrant,
 } from "../repos/accessGrants.ts";
-import { rolePolicy } from "../repos/accessRoles.ts";
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
-import { memberIdForEmail } from "../repos/membership.ts";
-import { type Beyond, conferredBy, type Holding, heldByMember, within } from "./authz.ts";
-import { beyondFor, exists, grantedBy, type NamedGrant } from "./grantObjects.ts";
+import { type Beyond, type Holding, within } from "./authz.ts";
+import {
+  beyondFor,
+  exists,
+  type Granted,
+  grantedBy,
+  type NamedGrant,
+  rulesStored,
+  storedRules,
+  unknownColumns,
+} from "./grantObjects.ts";
+import { type NamedSubject, resolve, type SubjectRefusal } from "./grantSubjects.ts";
 import { permissionOfObject } from "./rbac.ts";
 
 /** One grant as an administrator reads it. */
@@ -64,6 +74,10 @@ export interface GrantItem {
   readonly object: string;
   /** `use` for a permission, `read` for an object. */
   readonly action: string;
+  /** A model grant's row rule (ADR 0143): conditions a row meets, all of them; `null` for every row. */
+  readonly rowRule: RowRule | null;
+  /** A model grant's hidden columns; `null` for none. */
+  readonly hiddenColumns: readonly string[] | null;
   readonly expiresAt: string | null;
   readonly expired: boolean;
   readonly grantedBy: string | null;
@@ -79,43 +93,13 @@ function item(row: GrantRow): GrantItem {
     permission: permissionOfObject(row.object),
     object: row.object,
     action: row.action,
+    rowRule: row.rowRule,
+    hiddenColumns: row.hiddenColumns,
     expiresAt: row.expiresAt,
     expired: row.expired,
     grantedBy: row.grantedBy,
     createdAt: row.createdAt,
   };
-}
-
-/** Who a request names: a role by key, or a member by address -- exactly one. */
-export interface NamedSubject {
-  readonly role?: string | undefined;
-  readonly email?: string | undefined;
-}
-
-type SubjectRefusal = "one-subject" | "no-such-role" | "not-member";
-
-type Resolved =
-  | { readonly ok: true; readonly subject: GrantSubject }
-  | { readonly ok: false; readonly reason: SubjectRefusal };
-
-/** The subject a request names, resolved against what the customer has. */
-async function resolve(
-  exec: SqlExecutor,
-  tenantId: string,
-  named: NamedSubject,
-): Promise<Resolved> {
-  if ((named.role === undefined) === (named.email === undefined)) {
-    return { ok: false, reason: "one-subject" };
-  }
-  if (named.role !== undefined) {
-    return (await rolePolicy(exec, tenantId, named.role)) === null
-      ? { ok: false, reason: "no-such-role" }
-      : { ok: true, subject: { kind: "role", role: named.role } };
-  }
-  const userId = await memberIdForEmail(exec, tenantId, named.email ?? "");
-  return userId === null
-    ? { ok: false, reason: "not-member" }
-    : { ok: true, subject: { kind: "user", userId } };
 }
 
 export type ListOutcome =
@@ -152,36 +136,62 @@ function notHeld(found: Beyond): NotHeld {
 
 export type SaveOutcome =
   | { readonly ok: true; readonly id: string; readonly unchanged: boolean }
-  /** Neither or both of a permission and an object; or an object the grammar does not admit. */
+  /**
+   * Neither or both of a permission and an object; an object the grammar does not admit; a rule
+   * on anything but one model (ADR 0143); an `eq` with other than one value.
+   */
   | { readonly ok: false; readonly reason: SubjectRefusal | "one-object" | "unknown-object" }
+  | { readonly ok: false; readonly reason: "rules-need-one-model" | "eq-one-value" }
+  /** A rule names a column the model does not have, as its last build found it. */
+  | {
+      readonly ok: false;
+      readonly reason: "unknown-column";
+      readonly model: string;
+      readonly unknown: readonly string[];
+      readonly known: readonly string[];
+    }
+  /** The grant was changed or made by someone else between being weighed and being written. */
+  | { readonly ok: false; readonly reason: "changed" }
   /** The expiry is not in the future: a grant that is over before it starts grants nothing. */
   | { readonly ok: false; readonly reason: "expired" }
   /** The object names a model, a reference table or a report the customer does not have. */
   | { readonly ok: false; readonly reason: "no-such-object"; readonly object: string }
   | NotHeld;
 
+/** What `save` is asked: whom, what, until when, and who asks with what they hold. */
+type SaveInput = NamedSubject &
+  NamedGrant & {
+    tenantId: string;
+    expiresAt: string | null;
+    held: Holding;
+    now: Date;
+    actor: Actor;
+    actorId: string;
+  };
+
+/** A grant that passed every check, ready to write: what it gives, to whom, over which row. */
+type Checked =
+  | {
+      readonly ok: true;
+      readonly granted: Extract<Granted, { ok: true }>;
+      readonly subject: GrantSubject;
+      /** The same grant stored already, as it was weighed; `null` when there is none. */
+      readonly judged: GrantRow | null;
+    }
+  | Exclude<SaveOutcome, { ok: true }>;
+
 /**
- * Give a permission, or reading an object, to a role or a member, standing (`expiresAt` null) or
- * until `expiresAt`. The same grant stored already has its expiry moved; an identical one is
- * `unchanged`.
+ * Every refusal a grant can earn before it is written, in order: what it names, the subset rule,
+ * the expiry, whom it is for, that the thing exists, that its rules name the model's columns
+ * (ADR 0143) -- and, since saving it again replaces what it gave, the subset rule over the grant
+ * it replaces, weighed as a removal is.
  */
-export async function save(
-  exec: SqlExecutor,
-  input: NamedSubject &
-    NamedGrant & {
-      tenantId: string;
-      expiresAt: string | null;
-      held: Holding;
-      now: Date;
-      actor: Actor;
-      actorId: string;
-    },
-): Promise<SaveOutcome> {
+async function checked(exec: SqlExecutor, input: SaveInput): Promise<Checked> {
   const granted = grantedBy(input);
   if (!granted.ok) {
     return granted;
   }
-  const over = beyondFor(input.held, granted.object);
+  const over = beyondFor(input.held, granted.object, granted.rules);
   if (!within(over)) {
     return notHeld(over);
   }
@@ -195,14 +205,49 @@ export async function save(
   if (granted.reach !== null && !(await exists(exec, input.tenantId, granted.reach))) {
     return { ok: false, reason: "no-such-object", object: granted.object };
   }
-  const saved = await saveGrant(exec, {
+  const columns = await unknownColumns(exec, input.tenantId, granted);
+  if (columns !== null) {
+    return { ok: false, reason: "unknown-column", ...columns };
+  }
+  const judged = await findSameGrant(exec, {
     tenantId: input.tenantId,
     subject: resolved.subject,
     object: granted.object,
     action: granted.action,
-    expiresAt: input.expiresAt,
-    grantedBy: input.actorId,
   });
+  const replaced =
+    judged === null ? null : beyondFor(input.held, judged.object, rulesStored(judged));
+  if (replaced !== null && !within(replaced)) {
+    return notHeld(replaced);
+  }
+  return { ok: true, granted, subject: resolved.subject, judged };
+}
+
+/**
+ * Give a permission, or reading an object, to a role or a member, standing (`expiresAt` null) or
+ * until `expiresAt`. The same grant stored already has its expiry and rules replaced; an
+ * identical one is `unchanged`.
+ */
+export async function save(exec: SqlExecutor, input: SaveInput): Promise<SaveOutcome> {
+  const found = await checked(exec, input);
+  if (!found.ok) {
+    return found;
+  }
+  const { granted, subject, judged } = found;
+  const stored = storedRules(granted.rules);
+  const saved = await saveGrant(exec, {
+    tenantId: input.tenantId,
+    subject,
+    object: granted.object,
+    action: granted.action,
+    expiresAt: input.expiresAt,
+    rules: stored,
+    grantedBy: input.actorId,
+    judged,
+  });
+  if (saved === "changed") {
+    return { ok: false, reason: "changed" };
+  }
   if (saved.written) {
     await recordAudit(exec, {
       tenantId: input.tenantId,
@@ -215,8 +260,15 @@ export async function save(
         ...(input.permission === undefined
           ? { object: granted.object }
           : { permission: input.permission }),
-        before: saved.existed ? { expiresAt: saved.previousExpiresAt } : null,
-        after: { expiresAt: input.expiresAt },
+        before:
+          judged === null
+            ? null
+            : {
+                expiresAt: judged.expiresAt,
+                rowRule: judged.rowRule,
+                hiddenColumns: judged.hiddenColumns,
+              },
+        after: { expiresAt: input.expiresAt, ...stored },
       }),
     });
   }
@@ -237,11 +289,11 @@ export async function remove(
   if (found === null) {
     return { ok: false, reason: "not-found" };
   }
-  const over = beyondFor(input.held, found.object);
+  const over = beyondFor(input.held, found.object, rulesStored(found));
   if (!within(over)) {
     return notHeld(over);
   }
-  if (!(await deleteGrant(exec, input.tenantId, input.id, found.object))) {
+  if (!(await deleteGrant(exec, input.tenantId, found))) {
     return { ok: false, reason: "not-found" };
   }
   await recordAudit(exec, {
@@ -254,37 +306,12 @@ export async function remove(
         role: found.role,
         email: found.email,
         object: found.object,
+        rowRule: found.rowRule,
+        hiddenColumns: found.hiddenColumns,
         expiresAt: found.expiresAt,
       },
       after: null,
     }),
   });
   return { ok: true };
-}
-
-export type ReachOutcome =
-  | { readonly ok: true; readonly holding: Holding }
-  | { readonly ok: false; readonly reason: SubjectRefusal };
-
-/**
- * What a role confers or a member holds -- the permissions, and what they reach, as Casbin decides
- * them -- or, naming nobody, what the caller holds. The question to ask before a grant and after
- * it: "what can this person see now".
- */
-export async function holdingFor(
-  exec: SqlExecutor,
-  input: NamedSubject & { tenantId: string; caller: Holding },
-): Promise<ReachOutcome> {
-  if (input.role === undefined && input.email === undefined) {
-    return { ok: true, holding: input.caller };
-  }
-  if (input.role !== undefined && input.email !== undefined) {
-    return { ok: false, reason: "one-subject" };
-  }
-  if (input.role !== undefined) {
-    const holding = await conferredBy(exec, input.tenantId, input.role);
-    return holding === null ? { ok: false, reason: "no-such-role" } : { ok: true, holding };
-  }
-  const holding = await heldByMember(exec, input.tenantId, input.email ?? "");
-  return holding === null ? { ok: false, reason: "not-member" } : { ok: true, holding };
 }

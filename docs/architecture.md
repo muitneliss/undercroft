@@ -211,21 +211,22 @@ The worker (`apps/worker/src/server.ts`) listens on port 8081 inside the compose
 route needs `Authorization: Bearer <UNDERCROFT_TRIGGER_TOKEN>`, the service token. The lake write
 API also accepts a tenant's ingest key.
 
-| Route                                                             | Caller                     | Does                                                                             |
-| ----------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------- |
-| `GET /v1/runs/due`, `GET /v1/runs/extract-due`                    | Kestra                     | Lists the tenant and source pairs that are due                                   |
-| `POST /v1/runs/ingest`                                            | Kestra, control plane      | Starts an ingest and answers 202. By default a transform runs after it succeeds. |
-| `POST /v1/runs/extract`                                           | Kestra                     | Reads text out of landed documents                                               |
-| `POST /v1/runs/transform`                                         | tooling                    | Runs `dbt build` for one tenant                                                  |
-| `POST /v1/models/build`, `POST /v1/dq/failures`                   | control plane              | Builds one model; returns a failed test's stored rows                            |
-| `POST /v1/models/drop`                                            | control plane              | Drops what one model built, before its row is deleted                            |
-| `POST /v1/queries/run`, `/schema`                                 | control plane              | Runs report SQL as the tenant's BI login                                         |
-| `POST /v1/queries/scoped/run`, `/scoped/schema`, `/scoped/export` | control plane              | Runs report SQL as a scope login, for a reader of only some models (ADR 0142)    |
-| `POST /v1/queries/raw/run`, `/raw/schema`, `/raw/search`          | control plane              | Runs Lake Console SQL and lake search as the tenant's dbt login                  |
-| `POST /v1/queries/raw/search/within`                              | control plane              | Lake search narrowed to the streams its reader reaches                           |
-| `POST /v1/connections/credential`, `/browse`, `/revoke`           | control plane              | Seals a consented credential, browses a provider, revokes a grant                |
-| `POST /v1/lake/records`                                           | scripts with an ingest key | The lake write API                                                               |
-| `GET /v1/runs/:id`, `GET /health`                                 | anyone with the token      | A run's state; liveness                                                          |
+| Route                                                                | Caller                     | Does                                                                             |
+| -------------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------- |
+| `GET /v1/runs/due`, `GET /v1/runs/extract-due`                       | Kestra                     | Lists the tenant and source pairs that are due                                   |
+| `POST /v1/runs/ingest`                                               | Kestra, control plane      | Starts an ingest and answers 202. By default a transform runs after it succeeds. |
+| `POST /v1/runs/extract`                                              | Kestra                     | Reads text out of landed documents                                               |
+| `POST /v1/runs/transform`                                            | tooling                    | Runs `dbt build` for one tenant                                                  |
+| `POST /v1/models/build`, `POST /v1/dq/failures`                      | control plane              | Builds one model; returns a failed test's stored rows                            |
+| `POST /v1/models/drop`                                               | control plane              | Drops what one model built, before its row is deleted                            |
+| `POST /v1/queries/run`, `/schema`                                    | control plane              | Runs report SQL as the tenant's BI login                                         |
+| `POST /v1/queries/scoped/run`, `/scoped/schema`, `/scoped/export`    | control plane              | Runs report SQL as a scope login, for a reader of only some models (ADR 0142)    |
+| `POST /v1/queries/limited/run`, `/limited/schema`, `/limited/export` | control plane              | The same, for a scope that also limits rows or hides columns (ADR 0143)          |
+| `POST /v1/queries/raw/run`, `/raw/schema`, `/raw/search`             | control plane              | Runs Lake Console SQL and lake search as the tenant's dbt login                  |
+| `POST /v1/queries/raw/search/within`                                 | control plane              | Lake search narrowed to the streams its reader reaches                           |
+| `POST /v1/connections/credential`, `/browse`, `/revoke`              | control plane              | Seals a consented credential, browses a provider, revokes a grant                |
+| `POST /v1/lake/records`                                              | scripts with an ingest key | The lake write API                                                               |
+| `GET /v1/runs/:id`, `GET /health`                                    | anyone with the token      | A run's state; liveness                                                          |
 
 Jobs run inside the worker process. There is no separate queue. On `SIGTERM` the worker stops
 running jobs at a safe point and drains for up to 45 seconds, inside the 60 second grace period
@@ -433,7 +434,9 @@ Reports are first-party ([ADR 0020](adr/0020-bi-is-first-party-metabase-leaves-t
 question is a saved definition plus a chart. It compiles to SQL in which every identifier and
 literal is quoted, and the worker runs that SQL as the tenant's BI login -- or, for a reader who
 reaches only some models, as a scope login granted exactly those tables
-([ADR 0142](adr/0142-object-reach-and-scope-logins.md)). Result rows are never stored.
+([ADR 0142](adr/0142-object-reach-and-scope-logins.md)) -- and, for a reader of only some rows or
+columns of a model, granted only those columns and limited by a row-level policy on the table
+([ADR 0143](adr/0143-row-and-column-rules-on-model-grants.md)). Result rows are never stored.
 
 Full-text search covers record payloads and document text through two GIN expression indexes.
 Text is folded, so Vietnamese matches with or without tone marks

@@ -300,3 +300,268 @@ describe("a scope login's password and its end", () => {
     expect(login).toMatch(LOGIN);
   });
 });
+
+describe("a scope's row and column rules (ADR 0143)", () => {
+  const PEOPLE = "analytics_case_0042.fct_people";
+  const SALES = { column: "dept", op: "eq", values: ["Sales"] } as const;
+
+  beforeEach(async () => {
+    await db.asRole("undercroft_dbt_case_0042", (tx) =>
+      tx.exec(`CREATE TABLE ${PEOPLE} AS
+               SELECT * FROM (VALUES ('Sales', 1, 1000), ('Support', 2, 2000), (NULL, 7, 3000))
+                 AS v(dept, region_id, salary)`),
+    );
+  });
+
+  /** The departments a login reads of the table, in order; NULL as `null`. */
+  async function deptsAs(login: string): Promise<(string | null)[]> {
+    const { rows } = await db.asRole(login, (tx) =>
+      tx.query<{ dept: string | null }>(`SELECT dept FROM ${PEOPLE} ORDER BY region_id`),
+    );
+    return rows.map((row) => row.dept);
+  }
+
+  it("shows a ruled login only its rows, while the BI login and an unruled scope read every one", async () => {
+    const sales = await provisionScope(
+      db,
+      TENANT,
+      ["fct_people"],
+      [{ model: "fct_people", rows: [[SALES]], hidden: [] }],
+    );
+    const whole = await provisionScope(db, TENANT, ["fct_people"]);
+
+    expect(await deptsAs(sales)).toEqual(["Sales"]);
+    expect(await deptsAs(whole)).toEqual(["Sales", "Support", null]);
+    expect(await deptsAs("undercroft_bi_case_0042")).toEqual(["Sales", "Support", null]);
+    // The table's owner builds and tests it, and row security is not forced on it.
+    expect(await deptsAs("undercroft_dbt_case_0042")).toEqual(["Sales", "Support", null]);
+  });
+
+  it("gives two scopes with different rules on one table each its own rows, and ORs one scope's rules", async () => {
+    const sales = await provisionScope(
+      db,
+      TENANT,
+      ["fct_people"],
+      [{ model: "fct_people", rows: [[SALES]], hidden: [] }],
+    );
+    const either = await provisionScope(
+      db,
+      TENANT,
+      ["fct_people"],
+      [
+        {
+          model: "fct_people",
+          rows: [
+            [{ column: "dept", op: "eq", values: ["Support"] }],
+            [{ column: "region_id", op: "in", values: ["7"] }],
+          ],
+          hidden: [],
+        },
+      ],
+    );
+
+    expect(sales).not.toBe(either);
+    expect(await deptsAs(sales)).toEqual(["Sales"]);
+    // `region_id` is an integer: the value '7' is compared as the integer 7, and matches the row
+    // whose department is NULL, which no department rule ever does.
+    expect(await deptsAs(either)).toEqual(["Support", null]);
+  });
+
+  it("refuses a hidden column named or through *, leaves it out of information_schema, and reads the rest", async () => {
+    const staff = await provisionScope(
+      db,
+      TENANT,
+      ["fct_people"],
+      [{ model: "fct_people", rows: null, hidden: ["salary"] }],
+    );
+
+    await db.asRole(staff, async (tx) => {
+      expect(await refusalOf(() => tx.query(`SELECT salary FROM ${PEOPLE}`))).toMatch(DENIED);
+      expect(await refusalOf(() => tx.query(`SELECT * FROM ${PEOPLE}`))).toMatch(DENIED);
+      const counted = await tx.query<{ n: string }>(`SELECT count(*)::text AS n FROM ${PEOPLE}`);
+      expect(counted.rows).toEqual([{ n: "3" }]);
+      const columns = await tx.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = 'analytics_case_0042' AND table_name = 'fct_people' ORDER BY 1`,
+      );
+      expect(columns.rows.map((row) => row.column_name)).toEqual(["dept", "region_id"]);
+    });
+  });
+
+  it("shows a rule naming a column the table lacks no row, and reports it, rather than every row", async () => {
+    const broken = await provisionScope(
+      db,
+      TENANT,
+      ["fct_people"],
+      [
+        {
+          model: "fct_people",
+          rows: [[{ column: "region", op: "eq", values: ["north"] }]],
+          hidden: [],
+        },
+      ],
+    );
+    const mistyped = await provisionScope(
+      db,
+      TENANT,
+      ["fct_people"],
+      [
+        {
+          model: "fct_people",
+          rows: [[{ column: "region_id", op: "eq", values: ["north"] }]],
+          hidden: [],
+        },
+      ],
+    );
+
+    expect(await deptsAs(broken)).toEqual([]);
+    expect(await deptsAs(mistyped)).toEqual([]);
+    expect(await deptsAs("undercroft_bi_case_0042")).toHaveLength(3);
+    const { rows } = await db.query<{ model: string; fault: string; columns: string[] }>(
+      "SELECT * FROM ops.scope_faults($1, $2::text[], $3::jsonb) ORDER BY fault",
+      [
+        TENANT,
+        ["fct_people"],
+        JSON.stringify([
+          {
+            model: "fct_people",
+            rows: [[{ column: "region", op: "eq", values: ["north"] }]],
+            hidden: [],
+          },
+        ]),
+      ],
+    );
+    expect(rows).toEqual([{ model: "fct_people", fault: "column-missing", columns: ["region"] }]);
+  });
+
+  it("keeps a republished table's policies and column grants, written before it moves", async () => {
+    const sales = await provisionScope(
+      db,
+      TENANT,
+      ["fct_people"],
+      [{ model: "fct_people", rows: [[SALES]], hidden: ["salary"] }],
+    );
+    await db.asRole("undercroft_dbt_case_0042", async (tx) => {
+      await tx.exec("BEGIN");
+      await tx.exec(`CREATE TABLE staging_case_0042.fct_people AS
+                     SELECT * FROM (VALUES ('Sales', 1, 9), ('Support', 2, 9), ('Sales', 3, 9))
+                       AS v(dept, region_id, salary)`);
+      await tx.query("SELECT raw.grant_staged_to_scopes(current_user, $1::text[])", [
+        ["fct_people"],
+      ]);
+      await tx.exec(`DROP TABLE ${PEOPLE} RESTRICT`);
+      await tx.exec("ALTER TABLE staging_case_0042.fct_people SET SCHEMA analytics_case_0042");
+      await tx.exec("COMMIT");
+    });
+
+    expect(await deptsAs(sales)).toEqual(["Sales", "Sales"]);
+    expect(await deptsAs("undercroft_bi_case_0042")).toEqual(["Sales", "Support", "Sales"]);
+    await db.asRole(sales, async (tx) => {
+      expect(await refusalOf(() => tx.query(`SELECT salary FROM ${PEOPLE}`))).toMatch(DENIED);
+    });
+  });
+
+  it("restates a table's policies on re-provisioning without rewriting them, and drops them with their last scope", async () => {
+    const sales = await provisionScope(
+      db,
+      TENANT,
+      ["fct_people"],
+      [{ model: "fct_people", rows: [[SALES]], hidden: [] }],
+    );
+    function policies(): Promise<{ rows: { oid: number; polname: string }[] }> {
+      return db.query<{ oid: number; polname: string }>(
+        `SELECT p.oid::int AS oid, p.polname FROM pg_policy p
+         WHERE p.polrelid = '${PEOPLE}'::regclass ORDER BY p.polname`,
+      );
+    }
+    const before = await policies();
+
+    await db.query("SELECT ops.provision_tenant($1)", [TENANT]);
+
+    expect((await policies()).rows).toEqual(before.rows);
+    expect(before.rows.map((row) => row.polname)).toEqual([sales, "undercroft_open"].sort());
+
+    await db.exec(
+      `UPDATE ops.tenant_scope SET last_used_at = now() - interval '8 days' WHERE role_name = '${sales}'`,
+    );
+    await db.query("SELECT ops.provision_tenant($1)", [TENANT]);
+    await provisionScope(db, TENANT, ["fct_people"]);
+
+    expect((await policies()).rows).toEqual([]);
+    const { rows } = await db.query<{ relrowsecurity: boolean }>(
+      `SELECT relrowsecurity FROM pg_class WHERE oid = '${PEOPLE}'::regclass`,
+    );
+    expect(rows).toEqual([{ relrowsecurity: false }]);
+  });
+
+  it("hashes the rules: one login for one set of rules in any order, another for other rules, and PR 3's for none", async () => {
+    const plain = await provisionScope(db, TENANT, ["fct_people"]);
+    const ruled = await provisionScope(
+      db,
+      TENANT,
+      ["fct_people"],
+      [
+        {
+          model: "fct_people",
+          rows: [[SALES, { column: "region_id", op: "in", values: ["2", "1"] }]],
+          hidden: ["salary"],
+        },
+      ],
+    );
+    const reordered = await provisionScope(
+      db,
+      TENANT,
+      ["fct_people"],
+      [
+        {
+          model: "fct_people",
+          rows: [[{ column: "region_id", op: "in", values: ["1", "2", "1"] }, SALES]],
+          hidden: ["salary", "salary"],
+        },
+      ],
+    );
+    const nothingNarrowed = await provisionScope(
+      db,
+      TENANT,
+      ["fct_people"],
+      [{ model: "fct_people", rows: null, hidden: [] }],
+    );
+
+    expect(ruled).not.toBe(plain);
+    expect(reordered).toBe(ruled);
+    expect(nothingNarrowed).toBe(plain);
+    const { rows } = await db.query<{ hash: string }>(
+      "SELECT encode(sha256(convert_to('undercroft.scope/1;models=fct_people', 'UTF8')), 'hex') AS hash",
+    );
+    expect(plain.endsWith(`__${(rows[0]?.hash ?? "").slice(0, 7)}`)).toBe(true);
+  });
+
+  it("refuses a rule that is not one, and a rule on a model outside the scope", async () => {
+    expect(
+      await refusalOf(() =>
+        provisionScope(
+          db,
+          TENANT,
+          ["fct_people"],
+          [
+            {
+              model: "fct_people",
+              rows: [[{ column: "dept; drop", op: "eq", values: ["x"] }]],
+              hidden: [],
+            },
+          ],
+        ),
+      ),
+    ).toContain("row rule");
+    expect(
+      await refusalOf(() =>
+        provisionScope(
+          db,
+          TENANT,
+          ["fct_people"],
+          [{ model: "fct_sales", rows: null, hidden: ["n"] }],
+        ),
+      ),
+    ).toContain("only a model of the scope");
+  });
+});

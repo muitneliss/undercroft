@@ -37,6 +37,8 @@ export interface GrantObjects {
   readonly reports: readonly ObjectOption[];
   /** A report's name by its object, for the table to name a grant on it. */
   readonly names: ReadonlyMap<string, string>;
+  /** Which names are reference tables, whose columns `seeds.get` answers rather than `models.get`. */
+  readonly seeds: ReadonlySet<string>;
 }
 
 /** The wildcards the reader holds, as the server says: only those may be given. */
@@ -121,5 +123,6 @@ export function useGrantObjects(tenantId: string): GrantObjects {
     streams: streamOptions(lake.data, t),
     reports,
     names: new Map(reports.map((option) => [option.object, option.label])),
+    seeds: new Set((seeds.data ?? []).map((seed) => seed.name)),
   };
 }

@@ -33,6 +33,7 @@ import {
 import type { Context as HonoContext, Hono } from "hono";
 import { messages as catalogue } from "../i18n/index.ts";
 import type { Assistant, Responded } from "../services/assistant/agent.ts";
+import { type ScopeSummary, scopeSummaryOf } from "../services/assistant/prompt.ts";
 import { inputSchemas, mutates, summarizeFor, TOOLS } from "../services/assistant/catalogue.ts";
 import type { Tier } from "../services/assistant/toolSpec.ts";
 import { history, remember, resume } from "../services/assistant/conversation.ts";
@@ -146,7 +147,11 @@ function isChatBody(body: unknown): body is ChatBody {
  * customer, or nowhere.
  */
 type Standing =
-  | { readonly role: string; readonly permissions: readonly Permission[] }
+  | {
+      readonly role: string;
+      readonly permissions: readonly Permission[];
+      readonly scope: ScopeSummary | null;
+    }
   | "deactivated"
   | null;
 
@@ -170,10 +175,19 @@ type Standing =
  */
 async function authority(ctx: Context, tenantId: string): Promise<Standing> {
   try {
-    const tenant = await appRouter.createCaller(ctx).tenants.get({ tenantId });
-    return tenant.deactivatedAt === null
-      ? { role: tenant.role, permissions: tenant.permissions }
-      : "deactivated";
+    const caller = appRouter.createCaller(ctx);
+    const tenant = await caller.tenants.get({ tenantId });
+    if (tenant.deactivatedAt !== null) {
+      return "deactivated";
+    }
+    // What the reader can see, so the model can say why a total is partial or a column refused
+    // (ADR 0143). Their own preview, which any member may read: asked through the same caller.
+    // Not knowing it is said as nothing, and does not keep the reader from asking.
+    const scope = await caller.scopes
+      .preview({ tenantId })
+      .then(scopeSummaryOf)
+      .catch(() => null);
+    return { role: tenant.role, permissions: tenant.permissions, scope };
   } catch {
     return null;
   }
@@ -205,6 +219,7 @@ type Admitted =
       readonly body: ChatBody;
       readonly role: string;
       readonly permissions: readonly Permission[];
+      readonly scope: ScopeSummary | null;
     }
   | { readonly ok: false; readonly response: Response };
 
@@ -235,7 +250,14 @@ async function admit(c: HonoContext, deps: AssistantRouteDeps, ctx: Context): Pr
     return { ok: false, response: refusedStanding(c, ctx, held) };
   }
 
-  return { ok: true, assistant, body, role: held.role, permissions: held.permissions };
+  return {
+    ok: true,
+    assistant,
+    body,
+    role: held.role,
+    permissions: held.permissions,
+    scope: held.scope,
+  };
 }
 
 /**
@@ -297,7 +319,7 @@ export function registerAssistantRoutes(app: Hono, deps: AssistantRouteDeps): vo
     if (!admitted.ok) {
       return admitted.response;
     }
-    const { assistant, body, role, permissions } = admitted;
+    const { assistant, body, role, permissions, scope } = admitted;
     // Narrowed by `admit`, which refuses an anonymous caller before anything else.
     const userId = ctx.user?.userId ?? "";
 
@@ -324,6 +346,7 @@ export function registerAssistantRoutes(app: Hono, deps: AssistantRouteDeps): vo
         tenantId: body.tenantId,
         role,
         permissions,
+        scope,
         superadmin: ctx.superadmin,
         now: nowInSingapore(),
       },

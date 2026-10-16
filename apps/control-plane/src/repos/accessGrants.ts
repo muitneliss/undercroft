@@ -15,6 +15,7 @@
  * `services/rbac.ts`'s and `@undercroft/contracts/access`'s to say.
  */
 
+import type { RowRule } from "@undercroft/contracts/rowRules";
 import type { SqlExecutor } from "@undercroft/db";
 
 /** Who a grant is to: a role the customer has, by key, or a member, by user id. */
@@ -31,6 +32,10 @@ export interface GrantRow {
   readonly email: string | null;
   readonly object: string;
   readonly action: string;
+  /** A model grant's row rule (ADR 0143); `null` for every row. */
+  readonly rowRule: RowRule | null;
+  /** A model grant's hidden columns; `null` for none. */
+  readonly hiddenColumns: readonly string[] | null;
   /** `null` for a grant that does not expire. */
   readonly expiresAt: string | null;
   /** Whether `expiresAt` has passed, by the database's clock: an expired grant holds nothing. */
@@ -47,6 +52,8 @@ interface GrantRecord {
   email: string | null;
   object: string;
   action: string;
+  row_rule: RowRule | null;
+  hidden_columns: string[] | null;
   expires_at: Date | string | null;
   expired: boolean;
   granted_by: string | null;
@@ -54,7 +61,8 @@ interface GrantRecord {
 }
 
 const GRANT_SELECT = `
-  SELECT g.id, g.subject_kind, g.role_key, member.email, g.object, g.action, g.expires_at,
+  SELECT g.id, g.subject_kind, g.role_key, member.email, g.object, g.action,
+         g.row_rule, g.hidden_columns, g.expires_at,
          coalesce(g.expires_at <= now(), false) AS expired,
          granter.email AS granted_by, g.created_at
   FROM app.access_grant g
@@ -73,6 +81,8 @@ function toGrant(row: GrantRecord): GrantRow {
     email: row.email,
     object: row.object,
     action: row.action,
+    rowRule: row.row_rule,
+    hiddenColumns: row.hidden_columns,
     expiresAt: row.expires_at === null ? null : iso(row.expires_at),
     expired: row.expired,
     grantedBy: row.granted_by,
@@ -129,12 +139,46 @@ export interface GrantSaved {
   readonly written: boolean;
 }
 
+/** A model grant's rules as a column pair stores them: `null` for none of each (ADR 0143). */
+export interface StoredRules {
+  readonly rowRule: RowRule | null;
+  readonly hiddenColumns: readonly string[] | null;
+}
+
+/** Who a grant is to, as the two subject columns hold it. */
+function subjectColumns(subject: GrantSubject): { role: string | null; userId: string | null } {
+  return {
+    role: subject.kind === "role" ? subject.role : null,
+    userId: subject.kind === "user" ? subject.userId : null,
+  };
+}
+
+/** The grant stored for this subject, object and action (`access_grant_once`), or `null`. */
+export async function findSameGrant(
+  exec: SqlExecutor,
+  input: { tenantId: string; subject: GrantSubject; object: string; action: string },
+): Promise<GrantRow | null> {
+  const { role, userId } = subjectColumns(input.subject);
+  const { rows } = await exec.query<GrantRecord>(
+    `${GRANT_SELECT}
+     WHERE g.tenant_id = $1 AND g.subject_kind = $2
+       AND g.role_key IS NOT DISTINCT FROM $3::text AND g.user_id IS NOT DISTINCT FROM $4::uuid
+       AND g.object = $5 AND g.action = $6`,
+    [input.tenantId, input.subject.kind, role, userId, input.object, input.action],
+  );
+  const [row] = rows;
+  return row === undefined ? null : toGrant(row);
+}
+
 /**
- * Store a grant, or move the expiry of the same grant stored already -- one row per subject,
- * object and action (`access_grant_once`). An identical grant is written nowhere.
+ * Store a grant, or replace the one stored already for the same subject, object and action --
+ * its expiry and, for a model grant, its rules (ADR 0143). An identical grant is written nowhere.
  *
- * `previous` reads the row as it stood before the statement: a data-modifying CTE does not see
- * its own writes, so the answer can say what the expiry was without a second round trip.
+ * `judged` is the grant as the caller was weighed against it: `null` when there was none, or the
+ * row `findSameGrant` read. The write takes effect only if the row still is that -- an INSERT that
+ * yields to one made meanwhile, an UPDATE guarded on the rules it replaces -- so the subset rule's
+ * "you may take away only what you could have given" is held in the writing statement under the
+ * row's lock, not read first and trusted after (ADR 0141). `"changed"` when it was not.
  */
 export async function saveGrant(
   exec: SqlExecutor,
@@ -144,79 +188,134 @@ export async function saveGrant(
     object: string;
     action: string;
     expiresAt: string | null;
+    rules: StoredRules;
     grantedBy: string;
+    judged: GrantRow | null;
   },
-): Promise<GrantSaved> {
-  const role = input.subject.kind === "role" ? input.subject.role : null;
-  const userId = input.subject.kind === "user" ? input.subject.userId : null;
-  const { rows } = await exec.query<{
-    id: string;
-    existed: boolean;
-    previous_expires_at: Date | string | null;
-    written: boolean;
-  }>(
-    `WITH previous AS (
-       SELECT id, expires_at FROM app.access_grant
-       WHERE tenant_id = $1 AND subject_kind = $2
-         AND role_key IS NOT DISTINCT FROM $3::text AND user_id IS NOT DISTINCT FROM $4::uuid
-         AND object = $5 AND action = $6
-     ),
-     saved AS (
-       INSERT INTO app.access_grant
-         (tenant_id, subject_kind, role_key, user_id, object, action, expires_at, granted_by)
-       VALUES ($1, $2, $3::text, $4::uuid, $5, $6, $7::timestamptz, $8)
-       ON CONFLICT ON CONSTRAINT access_grant_once DO UPDATE
-         SET expires_at = EXCLUDED.expires_at, granted_by = EXCLUDED.granted_by
-         WHERE app.access_grant.expires_at IS DISTINCT FROM EXCLUDED.expires_at
-       RETURNING id
-     )
-     SELECT coalesce((SELECT id FROM saved), (SELECT id FROM previous)) AS id,
-            EXISTS (SELECT 1 FROM previous) AS existed,
-            (SELECT expires_at FROM previous) AS previous_expires_at,
-            EXISTS (SELECT 1 FROM saved) AS written`,
+): Promise<GrantSaved | "changed"> {
+  const { role, userId } = subjectColumns(input.subject);
+  const rowRule = input.rules.rowRule === null ? null : JSON.stringify(input.rules.rowRule);
+  const hidden = input.rules.hiddenColumns === null ? null : [...input.rules.hiddenColumns];
+  const { judged } = input;
+  if (judged === null) {
+    const { rows } = await exec.query<{ id: string }>(
+      `INSERT INTO app.access_grant
+         (tenant_id, subject_kind, role_key, user_id, object, action, expires_at,
+          row_rule, hidden_columns, granted_by)
+       VALUES ($1, $2, $3::text, $4::uuid, $5, $6, $7::timestamptz, $8::jsonb, $9::text[], $10)
+       ON CONFLICT ON CONSTRAINT access_grant_once DO NOTHING
+       RETURNING id`,
+      [
+        input.tenantId,
+        input.subject.kind,
+        role,
+        userId,
+        input.object,
+        input.action,
+        input.expiresAt,
+        rowRule,
+        hidden,
+        input.grantedBy,
+      ],
+    );
+    const id = rows[0]?.id;
+    return id === undefined
+      ? "changed"
+      : { id, existed: false, previousExpiresAt: null, written: true };
+  }
+  const unchanged =
+    sameInstant(judged.expiresAt, input.expiresAt) && rulesText(judged) === rulesText(input.rules);
+  if (unchanged) {
+    return { id: judged.id, existed: true, previousExpiresAt: judged.expiresAt, written: false };
+  }
+  const { rows } = await exec.query<{ id: string }>(
+    `UPDATE app.access_grant
+     SET expires_at = $3::timestamptz, row_rule = $4::jsonb, hidden_columns = $5::text[],
+         granted_by = $6
+     WHERE tenant_id = $1 AND id = $2
+       AND row_rule IS NOT DISTINCT FROM $7::jsonb
+       AND hidden_columns IS NOT DISTINCT FROM $8::text[]
+     RETURNING id`,
     [
       input.tenantId,
-      input.subject.kind,
-      role,
-      userId,
-      input.object,
-      input.action,
+      judged.id,
       input.expiresAt,
+      rowRule,
+      hidden,
       input.grantedBy,
+      judged.rowRule === null ? null : JSON.stringify(judged.rowRule),
+      judged.hiddenColumns === null ? null : [...judged.hiddenColumns],
     ],
   );
-  const [row] = rows;
-  if (row === undefined) {
-    throw new Error("saving a grant answered no row; the statement always selects one");
-  }
-  return {
-    id: row.id,
-    existed: row.existed,
-    previousExpiresAt: row.previous_expires_at === null ? null : iso(row.previous_expires_at),
-    written: row.written,
-  };
+  return rows.length === 0
+    ? "changed"
+    : { id: judged.id, existed: true, previousExpiresAt: judged.expiresAt, written: true };
 }
 
 /**
- * Delete one grant, if it still grants `object` -- the object the caller was judged against (the
- * subset rule: you may take away only what you could have given). Nothing rewrites a grant's
- * object (`saveGrant` moves only its expiry), so the id and the object together name exactly the
- * grant that was weighed, and the statement that deletes it is the one that checks. `done` is
- * whether it went.
+ * A grant's rules as one text, in the order they were written: a stored row rule comes back from
+ * `jsonb` with its keys in `jsonb`'s own order, so the two are compared field by field.
+ */
+function rulesText(rules: StoredRules): string {
+  return JSON.stringify([
+    rules.rowRule?.map((condition) => [condition.column, condition.op, condition.values]) ?? null,
+    rules.hiddenColumns,
+  ]);
+}
+
+/** Whether two instants, as stored or as asked for, are one: an ISO string or `null` each. */
+function sameInstant(a: string | null, b: string | null): boolean {
+  return a === null || b === null ? a === b : new Date(a).getTime() === new Date(b).getTime();
+}
+
+/**
+ * Delete one grant, if it still grants what the caller was judged against -- its object and its
+ * rules (the subset rule: you may take away only what you could have given). Nothing rewrites a
+ * grant's object, and its rules change only through `saveGrant`, so the id, the object and the
+ * rules together name exactly the grant that was weighed, and the statement that deletes it is the
+ * one that checks. The answer is whether it went.
  */
 export async function deleteGrant(
   exec: SqlExecutor,
   tenantId: string,
-  id: string,
-  object: string,
+  judged: GrantRow,
 ): Promise<boolean> {
   const { rows } = await exec.query<{ id: string }>(
     `DELETE FROM app.access_grant
      WHERE tenant_id = $1 AND id = $2 AND object = $3
+       AND row_rule IS NOT DISTINCT FROM $4::jsonb
+       AND hidden_columns IS NOT DISTINCT FROM $5::text[]
      RETURNING id`,
-    [tenantId, id, object],
+    [
+      tenantId,
+      judged.id,
+      judged.object,
+      judged.rowRule === null ? null : JSON.stringify(judged.rowRule),
+      judged.hiddenColumns === null ? null : [...judged.hiddenColumns],
+    ],
   );
   return rows.length > 0;
+}
+
+/**
+ * The columns of the model or reference table `name`, as its last successful build found them
+ * (`app.model.columns`) or as it was declared (`app.seed.columns`): what a rule on it may name
+ * (ADR 0143). `null` for a name the customer has neither of; empty for a model never built.
+ */
+export async function columnsOfModel(
+  exec: SqlExecutor,
+  tenantId: string,
+  name: string,
+): Promise<string[] | null> {
+  const { rows } = await exec.query<{ columns: string[] | null }>(
+    `SELECT coalesce(
+       (SELECT array(SELECT jsonb_array_elements_text(m.columns))
+        FROM app.model m WHERE m.tenant_id = $1 AND m.name = $2),
+       (SELECT array(SELECT c ->> 'name' FROM jsonb_array_elements(s.columns) c)
+        FROM app.seed s WHERE s.tenant_id = $1 AND s.name = $2)) AS columns`,
+    [tenantId, name],
+  );
+  return rows[0]?.columns ?? null;
 }
 
 /**

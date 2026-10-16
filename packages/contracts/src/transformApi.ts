@@ -11,6 +11,14 @@
 
 import { z } from "zod";
 
+import {
+  COLUMN_NAME,
+  MAX_HIDDEN_COLUMNS,
+  MAX_RULE_CONDITIONS,
+  MAX_RULE_VALUE_CHARS,
+  MAX_RULE_VALUES,
+  ROW_OPS,
+} from "./rowRules.ts";
 import { MAX_BUILD_SELECTORS, MAX_MODEL_SQL_BYTES, ModelName, ModelSelector } from "./models.ts";
 import { SeedName } from "./seeds.ts";
 
@@ -209,18 +217,51 @@ export type RunQueryRequest = z.infer<typeof RunQueryRequest>;
 /** The most models one scope names: more than any customer has, and a bound on the request. */
 export const MAX_SCOPE_MODELS = 5000;
 
+/** A rule's value holds no control character, as the database's CHECK says (`630_grant_rules.sql`). */
+const NO_CONTROL_CHARACTER = /^\P{Cc}*$/u;
+
+/** One condition of a row rule, on every wire (ADR 0143): `@undercroft/contracts/access`'s bounds. */
+export const RowConditionShape = z.object({
+  column: z.string().regex(COLUMN_NAME),
+  op: z.enum(ROW_OPS),
+  values: z
+    .array(z.string().max(MAX_RULE_VALUE_CHARS).regex(NO_CONTROL_CHARACTER))
+    .min(1)
+    .max(MAX_RULE_VALUES),
+});
+
+/** One grant's row rule: one to `MAX_RULE_CONDITIONS` conditions, all of which a row meets. */
+export const RowRuleShape = z.array(RowConditionShape).min(1).max(MAX_RULE_CONDITIONS);
+
+/** Columns hidden from a reader, by name. */
+export const HiddenColumnsShape = z.array(z.string().regex(COLUMN_NAME)).max(MAX_HIDDEN_COLUMNS);
+
 /**
- * The reach a reader's SQL runs under, for a reader who does not reach every model (ADR 0142):
- * the models and reference tables they may read, by name. The worker reads as the customer's
- * SCOPE LOGIN for exactly that set, which Postgres lets read those tables and nothing else; a
- * reader who reaches every model sends no scope at all and reads as the customer's BI login.
+ * How much of one model a scope reads (ADR 0143): the rows meeting any one of `rows` -- `null`
+ * for every row -- and every column but `hidden`. The union of the reader's grants on the model,
+ * computed by the control plane; enforced by the scope login's column grants and row policy.
+ */
+export const ScopeLimit = z.object({
+  model: ModelName,
+  rows: z.array(RowRuleShape).min(1).max(100).nullable(),
+  hidden: HiddenColumnsShape,
+});
+export type ScopeLimit = z.infer<typeof ScopeLimit>;
+
+/**
+ * The reach a reader's SQL runs under, for a reader who does not reach every model, or reaches
+ * only part of one (ADR 0142, ADR 0143): the models and reference tables they may read, by name,
+ * and how much of each they read. The worker reads as the customer's SCOPE LOGIN for exactly
+ * that, which Postgres lets read those tables, those columns and those rows, and nothing else; a
+ * reader who reaches every model whole sends no scope at all and reads as the customer's BI login.
  *
  * The set, not a hash of it: the worker provisions the login the first time a set is asked
  * for, and the canonical form and its hash are computed in ONE place, `ops.provision_scope`.
- * PR 4's row and column rules join this object as fields of their own.
+ * `limits` defaults to none, which is what a control plane older than rules sends.
  */
 export const QueryScope = z.object({
   models: z.array(ModelName).max(MAX_SCOPE_MODELS),
+  limits: z.array(ScopeLimit).max(MAX_SCOPE_MODELS).default([]),
 });
 export type QueryScope = z.infer<typeof QueryScope>;
 

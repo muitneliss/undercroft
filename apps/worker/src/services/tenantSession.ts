@@ -18,8 +18,9 @@
  * so this map is the whole of the truth about who holds a login.
  *
  * A SCOPE LOGIN (ADR 0142) is one more login of the same customer: the one a reader who reaches
- * only some models reads as, granted SELECT on exactly those tables. It is leased the same way,
- * keyed by its model set, and made on first use: the first holder of a set asks
+ * only some models reads as, granted SELECT on exactly those tables -- and, for a reader of only
+ * some of a model's rows or columns (ADR 0143), only those. It is leased the same way, keyed by
+ * its models and rules, and made on first use: the first holder of a set asks
  * `ops.provision_scope` for the login before it rotates the password, so a grant changed in the
  * control plane a moment ago is in force at the reader's next session with nothing to push. The
  * set is the control plane's to compute; which tables it reads is Postgres's to enforce.
@@ -30,6 +31,7 @@
  */
 
 import type { QueryScope } from "@undercroft/contracts";
+import { scopeKey } from "@undercroft/contracts/rowRules";
 import { asExecutor, createRolePool, type SqlExecutor } from "@undercroft/db";
 import {
   extendTenantPassword,
@@ -113,14 +115,15 @@ function scopeOf(target: SessionTarget): QueryScope | null {
 }
 
 /**
- * Which lease a target takes: one per (tenant, login). A scope login is keyed by its model set,
- * deduplicated and sorted, which names one login exactly as `ops.provision_scope`'s hash does --
- * two keys for one login would be two holders rotating each other out (ADR 0087).
+ * Which lease a target takes: one per (tenant, login). A scope login is keyed by its models and
+ * its rules in one canonical text (`scopeKey`), which names one login exactly as
+ * `ops.provision_scope`'s hash does -- two keys for one login would be two holders rotating each
+ * other out (ADR 0087), and one key for two would hand a reader another scope's password.
  */
 function leaseKey(target: SessionTarget): string {
   const scope = scopeOf(target);
   const base = `${target.tenantId}\u0000${target.kind}`;
-  return scope === null ? base : `${base}\u0000${[...new Set(scope.models)].sort().join(",")}`;
+  return scope === null ? base : `${base}\u0000${scopeKey(scope)}`;
 }
 
 /**
@@ -139,7 +142,10 @@ function createLeases(exec: SqlExecutor): WithLease {
     const scope = scopeOf(target);
     return scope === null
       ? { kind: target.kind }
-      : { kind: "scope", login: await provisionScope(exec, target.tenantId, scope.models) };
+      : {
+          kind: "scope",
+          login: await provisionScope(exec, target.tenantId, scope.models, scope.limits),
+        };
   }
 
   async function take(key: string, target: SessionTarget, validForMs: number): Promise<Lease> {
@@ -256,7 +262,7 @@ export function sessionsBySetRole(
       const role =
         scope === null
           ? roleFor(roles, target.kind)
-          : await provisionScope(exec, target.tenantId, scope.models);
+          : await provisionScope(exec, target.tenantId, scope.models, scope.limits);
       return asRole(role, fn);
     },
     withPassword: passwordsOf(createLeases(exec)),

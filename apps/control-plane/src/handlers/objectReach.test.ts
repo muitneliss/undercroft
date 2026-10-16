@@ -312,7 +312,9 @@ describe("reports", () => {
     expect(Array.isArray(listed) ? listed.map((question) => question.id) : null).toEqual([revenue]);
     expect([hidden.code, unanswered.code]).toEqual(["NOT_FOUND", "NOT_FOUND"]);
     // Answered under the reader's scope: Postgres, not this process, keeps it to fct_sales.
-    expect(worker.queries.map((query) => query.scope)).toEqual([{ models: ["fct_sales"] }]);
+    expect(worker.queries.map((query) => query.scope)).toEqual([
+      { models: ["fct_sales"], limits: [] },
+    ]);
   });
 
   it("a built-in's answer reads as the BI login, with no scope", async () => {
@@ -397,7 +399,7 @@ describe("reports", () => {
 
     const opened = await sales.bi.exports.get({ tenantId: TENANT, id: asked.id });
 
-    expect(opened.scope).toEqual({ models: ["fct_sales"] });
+    expect(opened.scope).toEqual({ models: ["fct_sales"], limits: [] });
   });
 });
 

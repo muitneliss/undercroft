@@ -165,13 +165,17 @@ export async function reachWhatWasMade(
   if (input.reach.reports === "all") {
     return;
   }
+  // A report made this instant has no grant yet; one that somehow has is theirs already, which
+  // is all this is for, so a "changed" answer needs nothing more.
   await saveGrant(exec, {
     tenantId: input.tenantId,
     subject: { kind: "user", userId: input.actorId },
     object: reportObject(input.kind, input.id),
     action: READ_ACTION,
     expiresAt: null,
+    rules: { rowRule: null, hiddenColumns: null },
     grantedBy: input.actorId,
+    judged: null,
   });
 }
 

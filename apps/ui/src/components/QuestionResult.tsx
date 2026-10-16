@@ -73,7 +73,10 @@ function ReadingPane({
   }
   return (
     <>
-      <AnswerQualifiers qualifiers={reading.result.qualifiers} />
+      <AnswerQualifiers
+        qualifiers={reading.result.qualifiers}
+        rowsLimited={reading.result.rowsLimited}
+      />
       <ResultReading
         result={reading.result}
         chart={draft.chart}
@@ -115,7 +118,7 @@ export function ResultLeaf({
       ) : (
         <>
           <ChartOptions columns={result.columns} chart={draft.chart} onChange={setQuestionChart} />
-          <AnswerQualifiers qualifiers={result.qualifiers} />
+          <AnswerQualifiers qualifiers={result.qualifiers} rowsLimited={result.rowsLimited} />
           <ResultReading
             result={result}
             chart={draft.chart}
