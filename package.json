@@ -61,7 +61,7 @@
     "desktop:check": "bun run apps/desktop/scripts/check.ts",
     "desktop:release": "bun run apps/desktop/scripts/release.ts",
     "skill:check": "bun run scripts/skillCheck.ts",
-    "test": "bun test --parallel --timeout 10000",
+    "test": "bun run scripts/test.ts",
     "itest": "UNDERCROFT_ITEST=1 bun test integration",
     "visual": "bun run scripts/visual.ts",
     "visual:update": "bun run scripts/visual.ts --update",

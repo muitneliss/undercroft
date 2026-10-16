@@ -36,8 +36,8 @@ paths: ["**/*.test.ts", "**/*.test.tsx", "**/testing.ts"]
 - **A test that never touches the database does not sit under a `beforeEach` that opens
   one.** Put it in its own `describe` or file; a pure function pays nothing for a fixture it
   does not use.
-- **Files run in parallel** (`bun test --parallel`, one process per core, each file in a
-  fresh global). A suite owns its own temp directory, port and database; it may not depend on
+- **Files run in parallel** (`bun test --parallel`, one process per two cores as
+  `scripts/test.ts` computes it, each file in a fresh global). A suite owns its own temp directory, port and database; it may not depend on
   another file having run first.
 - **PGlite proves the grants are correct**, not that a hostile connection cannot escalate
   past `SET ROLE`; that, and `FOR UPDATE` concurrency, are integration-tier against real
