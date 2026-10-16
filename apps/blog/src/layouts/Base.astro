@@ -20,7 +20,7 @@ import {
   langPrefix,
   legalPath,
 } from "../site.ts";
-import type { JsonLd } from "../structuredData.ts";
+import { type JsonLd, jsonLdText } from "../structuredData.ts";
 import "../styles/blog.css";
 
 interface Alternate {
@@ -106,7 +106,12 @@ const home = `${langPrefix(lang)}/`;
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogUrl} />
-    {jsonLd.map((data) => <script type="application/ld+json" set:html={JSON.stringify(data)} />)}
+    {
+      jsonLd.map((data) => (
+        // biome-ignore lint/nursery/noAstroSetHtmlDirective: JSON-LD has to be written raw, as Astro's own docs write it, and `jsonLdText` escapes the one character that could end the script early.
+        <script type="application/ld+json" set:html={jsonLdText(data)} />
+      ))
+    }
   </head>
   <body>
     <a class="skip" href="#main">{s.skip}</a>

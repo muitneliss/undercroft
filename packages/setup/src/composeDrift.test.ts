@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, it } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { byCodeUnit } from "@undercroft/core";
 import type { Answers } from "./answers.ts";
 import { COMPOSE_FILE, PROJECT } from "./composeFile.ts";
 import { parseEnv } from "./envFile.ts";
@@ -54,7 +55,9 @@ function image(service: ComposeService | undefined): string {
 }
 
 it("runs exactly the server's services, each from the server's image", () => {
-  expect(Object.keys(install.services).sort()).toEqual(Object.keys(server.services).sort());
+  expect(Object.keys(install.services).sort(byCodeUnit)).toEqual(
+    Object.keys(server.services).sort(byCodeUnit),
+  );
   for (const name of Object.keys(server.services)) {
     expect(`${name}: ${image(install.services[name])}`).toBe(
       `${name}: ${image(server.services[name])}`,

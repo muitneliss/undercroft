@@ -12,6 +12,12 @@ export interface ObjectStore {
   /**
    * Keys under `prefix`, sorted. Materialised, so a caller may delete while iterating.
    *
+   * Sorted by UTF-16 code unit -- `byCodeUnit` from `@undercroft/core`, which both stores
+   * sort by. It must NOT become `localeCompare`: that orders by locale, so the same keys would
+   * come back in a different order on a different machine, and this is what retention walks
+   * to decide what to prune. It is also the order S3 itself returns keys in, which is what
+   * lets the in-memory store stand in for it.
+   *
    * `startAfter` resumes the listing at the first key strictly greater than it -- S3's own
    * `StartAfter`, which is why it is on the seam at all rather than emulated above it. A
    * caller holding a position in the sorted order then pays for what is after that position
@@ -24,25 +30,6 @@ export interface ObjectStore {
    */
   list: (prefix: string, startAfter?: string) => Promise<string[]>;
   delete: (key: string) => Promise<void>;
-}
-
-/**
- * The order `list` promises: lexicographic by UTF-16 code unit.
- *
- * Spelled out rather than left to a bare `.sort()`, which means the same thing but says so
- * only by omission. It must NOT become `localeCompare`: that orders by locale, so the same
- * keys would come back in a different order on a different machine, and `list` is what
- * retention walks to decide what to prune. It is also the order S3 itself returns keys in,
- * which is what lets the in-memory store stand in for it.
- */
-export function byCodeUnit(a: string, b: string): number {
-  if (a < b) {
-    return -1;
-  }
-  if (a > b) {
-    return 1;
-  }
-  return 0;
 }
 
 /** Raised when a requested object is not present. */

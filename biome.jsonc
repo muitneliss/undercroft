@@ -134,8 +134,8 @@
 
     // Domains are Biome's per-framework rule bundles. Five are on: the five whose framework
     // is actually in `package.json`. The other ten are `none`, and that costs NO coverage
-    // -- a Solid rule only ever fires on Solid code, so switching it off in a repo with no
-    // Solid removes findings that were never about this codebase.
+    // -- a Solid rule has nothing true to say about React code, so switching it off in a repo
+    // with no Solid removes findings that were never about this codebase.
     //
     // Having all fifteen on was not strictness, it was noise, and the noise was paid for in
     // suppressions: 255 of the findings behind the `biome-ignore-all` headers came from these
@@ -153,6 +153,17 @@
     // `react` is the UI (react 19.0.0) and `test` is the Bun suite. `tailwind` joined once
     // `tailwindcss` entered `apps/ui/package.json` (docs/adr/0025). Turn a domain back on the
     // day its framework enters `package.json`, not before. ADR 0018.
+    //
+    // SINCE BIOME 2.5.15 A `none` HERE SWITCHES OFF ALMOST NOTHING, and that is the one thing
+    // about this block a reader has to know. biomejs/biome#11919 made a rule "enabled
+    // explicitly in the configuration" outrank a domain set to `none`, and a group written as a
+    // bare severity -- `"suspicious": "error"` above -- counts as enabling every rule in that
+    // group explicitly (`as_explicitly_enabled_rules`, via the group's `get_enabled_rules`).
+    // Measured on one tree with this one config: 0 findings under 2.5.14, 2,539 under 2.5.15,
+    // and 13 under 2.5.15 with the group severities deleted -- the severities stay, because
+    // they are what makes an `info` rule fail the gate. The entries below still say which
+    // frameworks this repo has; what keeps an absent framework's rules off is now the
+    // repo-wide block named for them under `overrides`, one rule at a time. ADR 0140.
     "domains": {
       "astro": "none",
       "drizzle": "none",
@@ -278,7 +289,34 @@
             // framework's `test()` with a non-string title, in 19 files that contain no test.
             // In a real suite it wants a shorter title shape than `tests.md` asks for, so it
             // has nothing to say on either side of the line.
-            "useValidTestTitle": "off"
+            "useValidTestTitle": "off",
+            // New in 2.5.15: `width` becomes `inline-size`, `margin-left` becomes
+            // `margin-inline-start`. 474 findings across nine sheets, and in this product every
+            // one of them computes to the property it would replace: both languages it ships
+            // (`LOCALES` in `packages/core/src/locale.ts`, `vi` and `en`) are written left to
+            // right in horizontal lines, so the rewrite is a spelling with no rendering behind
+            // it. It is not free, either: `SizeGrip` reads a pane's travel back as the computed
+            // `minWidth`/`maxWidth`/`minHeight`/`maxHeight`, and `apps/ui/src/layout.test.ts`
+            // pins those off the real sheet. A browser resolves `min-inline-size` into
+            // `minWidth`; happy-dom, which the suite runs on, does not -- measured: a declared
+            // `min-inline-size: 6rem` reads back as `minWidth: ""`. So the rewrite would empty
+            // every value those pins and the grip read under test, and whether it renders the
+            // same could only be checked in the visual tier, which needs Docker. Turn it on the
+            // day a right-to-left or vertical locale enters `LOCALES`; then the rewrite is the fix.
+            "useLogicalProperties": "off",
+            // New in 2.5.15, and 14 of its 22 findings are its inference being wrong. It does
+            // not see a destructuring default: `fill = false` is read as `boolean | undefined`
+            // (nine props across `Book`, `ResultTable`, `ConnectionCard`, `Errata`, `Facts` and
+            // `SqlEditor`). It does not see a `typeof` narrowing: `typeof cell === "boolean"`
+            // then `cell ? ...` is "a union of different types" (four: `cells.ts`, `plot.ts`, the
+            // widget's `table.ts`, `canonicalJson.ts`), nor `test.quote === undefined ? [] :
+            // [test.quote ? ...]` (one, `dbtTests.ts`). Satisfying those means `=== true` on a
+            // value that is already a `boolean`, which reads as a doubt the code does not have.
+            // Of the eight it reads right, seven are `!iso` on a `string | null | undefined` and
+            // its kin, where an empty string and a missing one ARE one answer -- an empty tenant
+            // id is no tenant -- and one is an assertion in `lineage.test.ts` that fails the
+            // same way either way. The inference gap `noUnnecessaryConditions` is off for below.
+            "useStrictBooleanExpressions": "off"
           },
           "complexity": {
             // `void promise` is this repo's marker for a call that is deliberately not
@@ -361,6 +399,36 @@
       }
     },
 
+    // Rules of frameworks this repo does not have -- what `"solid": "none"` and `"qwik": "none"`
+    // used to switch off, until 2.5.15 stopped letting a domain outrank the group severities
+    // (see `domains` above, and ADR 0140). Each is listed because it FIRES here. Of the other
+    // 78 rules whose every domain is `none`, one fires and is the blog's to answer -- the blog
+    // IS Astro (its entry below) -- and 77 find nothing in this tree; a rule that finds nothing
+    // is not switched off on a guess. When a Biome bump brings one of them to life on code that
+    // is not its framework's, it joins this block with its count.
+    //
+    // All four read React code as their own framework's. `noReactSpecificProps` (Solid, Qwik)
+    // is the rule ADR 0012 records: its fix rewrites `className` to `class`, which React does
+    // not accept -- 1,729 findings in 131 `.tsx` files. `useSolidForComponent` says `.map`
+    // recreates DOM elements "in Solid" (130 in `.tsx`, four in `.astro`),
+    // `noSolidDestructuredProps` says destructured props lose Solid's reactivity, which React
+    // props do not have (118), and `useQwikValidLexicalScope` wants Qwik's `$(...)` around 30
+    // closures in plain `.ts` that Qwik never serialises. Under 2.5.14, the same tree and this
+    // config: zero of each.
+    {
+      "includes": ["**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noSolidDestructuredProps": "off",
+            "useQwikValidLexicalScope": "off"
+          },
+          "performance": { "useSolidForComponent": "off" },
+          "suspicious": { "noReactSpecificProps": "off" }
+        }
+      }
+    },
+
     // A React component file is PascalCase. That is the convention the whole `apps/ui` tree
     // already follows, and the rule's default list does not include it, so `Icon.tsx` was the
     // one file it could never be happy with. This is the rule aimed correctly, not switched
@@ -388,9 +456,23 @@
     // are "not valid React props" (18 findings), a heading's static `id` "should use
     // useId()", which a static page has no runtime to call, and an Astro endpoint's
     // `export const GET` "is a React component". Every rule outside that domain stays on.
+    //
+    // Since 2.5.15 the domain line alone does not hold them, because a group's bare severity
+    // now outranks `none` (ADR 0140), so the two that fire are named. `noUnknownAttribute`
+    // came back with the bump: 17 findings, `class` and `datetime` in `PostIndex.astro` and
+    // `PostPage.astro` and Astro's `set:html` in `Base.astro`. `useUniqueElementIds`, the
+    // `useId()` one, comes back -- two headings' ids -- the moment this entry carries any
+    // `rules` at all. That is measured, not explained: with the domain line alone it stays
+    // quiet, with a rule beside it (in this entry or a second one for the same files) it fires.
     {
       "includes": ["apps/blog/**"],
-      "linter": { "domains": { "react": "none" } }
+      "linter": {
+        "domains": { "react": "none" },
+        "rules": {
+          "correctness": { "useUniqueElementIds": "off" },
+          "suspicious": { "noUnknownAttribute": "off" }
+        }
+      }
     },
     // An Astro component is named by its file, PascalCase as a React one is (`Base.astro`
     // is imported as `Base`), the same exception `apps/ui/**/*.tsx` has above.
@@ -705,9 +787,10 @@
       "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
     },
 
-    // There is no Playwright here. The rule is nursery rather than playwright-domain, so
-    // `"playwright": "none"` does not reach it, and it reads two ordinary `describe`-shaped
-    // calls -- a Drive API request and a connector-runtime helper -- as test declarations.
+    // There is no Playwright here. The rule IS playwright-domain (`biome explain` says so in
+    // 2.5.14 and 2.5.15 alike), but `"playwright": "none"` did not reach it then and reaches
+    // almost nothing now (ADR 0140), and it reads two ordinary `describe`-shaped calls -- a
+    // Drive API request and a connector-runtime helper -- as test declarations.
     {
       "includes": [
         "apps/worker/src/services/google/api.ts",
@@ -916,7 +999,7 @@
       "linter": { "rules": { "style": { "useErrorCause": "off" } } }
     },
     {
-      "includes": ["packages/core/src/pacer.ts", "packages/lake/src/objectStore.ts"],
+      "includes": ["packages/core/src/pacer.ts", "packages/core/src/order.ts"],
       "linter": { "rules": { "nursery": { "noMisleadingReturnType": "off" } } }
     },
     {

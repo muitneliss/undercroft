@@ -7,6 +7,19 @@ import { CONTACT_EMAIL, PRODUCT_URL, REPO_URL } from "./site.ts";
 /** A schema.org node; its shape is schema.org's, not ours to type field by field. */
 export type JsonLd = Record<string, unknown>;
 
+/**
+ * A node as the text of its `<script type="application/ld+json">`, which the page writes raw
+ * (`set:html`): a script's body is not HTML, so escaping it as HTML would corrupt the JSON.
+ *
+ * Every `<` is written `<`. `JSON.stringify` leaves it bare, and these nodes carry a post's
+ * own title and description: a post about markup with `</script>` in its title would close the
+ * element mid-string and turn the rest of the JSON into the page. `<` is the same
+ * character to every JSON parser, so what a search engine reads is unchanged.
+ */
+export function jsonLdText(node: JsonLd): string {
+  return JSON.stringify(node).replaceAll("<", "\\u003c");
+}
+
 export function organization(logoUrl: string): JsonLd {
   return {
     "@type": "Organization",

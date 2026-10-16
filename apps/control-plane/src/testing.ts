@@ -16,7 +16,6 @@
  * Bun's own again -- see `liftDom` for why that is a swap and not `unregister()`.
  */
 
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { InMemoryEmailSender, type Logger } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import type { BetterAuthOptions } from "better-auth";
@@ -90,16 +89,18 @@ function isDescriptor(value: unknown): value is PropertyDescriptor {
  * test` process then rendered into one body and searched another. Swapping keeps the one
  * window throughout, so nothing bound to it goes stale.
  *
- * The list of what to swap is happy-dom's own record, `GlobalRegistrator.registered`: the
- * descriptor each global had before it replaced it, or `null` for one it added. Private to
- * TypeScript in 15.11.7 and public at run time; reading it is what makes the swap exact
- * rather than a guessed list of constructors. It is `null` when happy-dom is not registered,
- * and then there is nothing to swap. A happy-dom that renamed it would leave its own
- * `Response` installed, and the server's first request would fail loudly on it rather than
- * pass wrongly.
+ * The list of what to swap is the record the test preload (`apps/ui/src/test/setup.ts`) takes
+ * when it registers happy-dom: the descriptor each global had before, or `null` for one it
+ * added. It was happy-dom's own `GlobalRegistrator.registered` until 20.x made that a
+ * `#private` field -- this read went on finding nothing, and every server suite answered
+ * through happy-dom's `Response` -- so the preload now records it itself, by comparing the
+ * global object before and after. Exact rather than a guessed list of constructors. Absent
+ * when happy-dom is not registered, and then there is nothing to swap; a record gone missing
+ * still leaves happy-dom's `Response` installed, and the server's first request fails loudly
+ * on it rather than passing wrongly.
  */
 function liftDom(): () => void {
-  const replaced: unknown = Reflect.get(GlobalRegistrator, "registered");
+  const replaced: unknown = Reflect.get(globalThis, Symbol.for("undercroft.test.domReplaced"));
   if (typeof replaced !== "object" || replaced === null) {
     return () => undefined;
   }

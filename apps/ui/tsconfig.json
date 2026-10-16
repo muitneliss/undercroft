@@ -8,8 +8,7 @@
     "jsx": "react-jsx",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src/**/*", "src/**/*.json"],
   "references": [{ "path": "../../packages/core" }, { "path": "../../packages/contracts" }]

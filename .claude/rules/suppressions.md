@@ -43,14 +43,20 @@ silences the rule for the **whole file**, and Biome never reports one that has g
   does not.
 - **A genuine one-off gets the line-level `// biome-ignore`**, which Biome expires by itself —
   `bun run lint` runs with `--error-on-warnings`, so an unused one fails the gate. This is the
-  only suppression form a source file or a suite may carry, and the whole tree holds **ten**
-  across eight files:
+  only suppression form a source file or a suite may carry, and the whole tree holds
+  **seventeen** across fifteen files:
   - a `^` that flips a GCM tag bit;
   - a control range that IS the assertion;
   - a compose file's `${IMAGE_TAG:-latest}` quoted as fixture bytes, twice;
   - an integration suite's `process.env` gate and its CommonJS `pg` import;
   - a refusal-reason catalogue key long enough to read as a secret;
+  - the four public source names in each UI catalogue, and a class name in `queryTimeout.ts`,
+    all three read as secrets;
+  - the two MCP widgets' assertions onto the output the door typed for them;
   - the `PATH` the CLI suite and the CLI pack check hand to the process they spawn;
+  - the `await` on a reader's `Extracted | Promise<Extracted>`, which Biome 2.5.15's
+    `useAwaitThenable` reads as no Promise at all;
+  - the blog's JSON-LD, written with Astro's `set:html` and escaped by `jsonLdText`;
   - the charting `Big#toNumber()` below.
 - **A plugin is suppressed by NAME: `// biome-ignore lint/plugin/money:`.** Measured against
   Biome 2.5.14: naming the plugin silences that plugin and no other, and Biome reports the
@@ -62,6 +68,10 @@ silences the rule for the **whole file**, and Biome never reports one that has g
   `solid` on in a repo with no Solid does not add strictness, it adds 255 findings that were
   never about this codebase, and the suppressions they force teach readers to skip
   suppressions. Turn a domain back on the day its dependency arrives.
+- **Since Biome 2.5.15 that `none` switches off almost nothing**: a group written as a bare
+  severity enables its rules explicitly, and an explicit rule now outranks a domain. So an
+  absent framework's rule that FIRES is switched off by name, with its count, in the
+  repo-wide entry `biome.jsonc` keeps for them; one that finds nothing is left alone. ADR 0140.
 - **Say what you measured.** Every entry in `biome.jsonc` names the finding count, the file,
   or the transcript behind it — `noUnnecessaryConditions` is off with the `tsc` error code
   that proves the rule wrong, not with an opinion about it. A reason a reader cannot check is

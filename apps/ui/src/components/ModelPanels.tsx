@@ -102,7 +102,11 @@ export function TestsForm({
   canEdit: boolean;
 }): React.JSX.Element {
   const modelTestColumnId = useId();
-  const modelColumnsId = useId();
+  // Without React's colons: an `<input list>` names its `<datalist>` by id, which any id may
+  // do, but happy-dom 20 resolves it as the CSS selector `datalist#<id>` unescaped, and
+  // `datalist#:r8:` is not one -- the input then throws while rendering, under `bun test` only.
+  // A browser looks the id up directly and is indifferent to the change.
+  const modelColumnsId = useId().replaceAll(":", "");
   const columnHintId = useId();
   const { t } = useTranslation();
   const addColumn = useUiStore((state) => state.addModelTestColumn);

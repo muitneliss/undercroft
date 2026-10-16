@@ -13,7 +13,8 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { byCodeUnit, ObjectNotFound, type ObjectStore } from "./objectStore.ts";
+import { byCodeUnit } from "@undercroft/core";
+import { ObjectNotFound, type ObjectStore } from "./objectStore.ts";
 
 export interface S3StoreConfig {
   readonly bucket: string;

@@ -10,14 +10,6 @@ import { fileURLToPath, URL } from "node:url";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 /**
- * With a URL, because a browser always has one and `about:blank` reports its origin as the
- * string `"null"`. Better Auth reads `window.location.origin` when no base URL is configured
- * and refuses `"null"` outright -- and `@/auth` builds that client at module scope, so any
- * suite reaching `SignIn` (which is every suite that renders `App`) would fail on an import
- * rather than on anything it asserts. The host is invented, per `.claude/rules/pii.md`, and
- * nothing asserts it.
- */
-/**
  * Bun's own stream constructors, captured BEFORE happy-dom can replace them.
  *
  * happy-dom installs its own `TransformStream` and `WritableStream` but leaves `ReadableStream`
@@ -39,9 +31,51 @@ const nativeStreams = {
   CountQueuingStrategy: globalThis.CountQueuingStrategy,
 };
 
+/**
+ * What each global was before happy-dom replaced it, or `null` for one it added: the record
+ * `startControlPlane` (`apps/control-plane/src/testing.ts`) swaps back while a real server runs
+ * in this process, so `Bun.serve` is handed Bun's own `Response` and not happy-dom's.
+ *
+ * Taken HERE, by comparing the global object before and after registering, because happy-dom
+ * keeps its own record private: up to 15.x it was `GlobalRegistrator.registered`, public at run
+ * time, and 20.x made it a `#private` field, which left every server suite in the process
+ * answering through happy-dom's `Response` (the bump in #477). A record this file makes cannot
+ * be renamed out from under the harness that reads it. Published under a registry symbol, the
+ * one name the two files share.
+ */
+const before = new Map(
+  Reflect.ownKeys(globalThis).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]),
+);
+
+/**
+ * With a URL, because a browser always has one and `about:blank` reports its origin as the
+ * string `"null"`. Better Auth reads `window.location.origin` when no base URL is configured
+ * and refuses `"null"` outright -- and `@/auth` builds that client at module scope, so any
+ * suite reaching `SignIn` (which is every suite that renders `App`) would fail on an import
+ * rather than on anything it asserts. The host is invented, per `.claude/rules/pii.md`, and
+ * nothing asserts it.
+ */
 GlobalRegistrator.register({ url: "https://undercroft.test/" });
 
 Object.assign(globalThis, nativeStreams);
+
+function sameDescriptor(
+  a: PropertyDescriptor | undefined,
+  b: PropertyDescriptor | undefined,
+): boolean {
+  return (
+    a !== undefined && b !== undefined && a.value === b.value && a.get === b.get && a.set === b.set
+  );
+}
+
+const replaced: Record<PropertyKey, PropertyDescriptor | null> = {};
+for (const key of Reflect.ownKeys(globalThis)) {
+  const was = before.get(key);
+  if (!sameDescriptor(was, Object.getOwnPropertyDescriptor(globalThis, key))) {
+    replaced[key] = was ?? null;
+  }
+}
+Reflect.set(globalThis, Symbol.for("undercroft.test.domReplaced"), replaced);
 
 /**
  * `bun test` does not run `vite.config.ts`, so `__UNDERCROFT_RELEASE__` would be undefined

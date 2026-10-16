@@ -52,11 +52,13 @@ function memberId(archiveId: string, member: ArchiveMember): string {
 
 /** A member's bytes inflated once, however many documents hold its archive. */
 function inflatedOnce(member: ArchiveMember): () => Promise<Uint8Array> {
-  let bytes: Uint8Array | null | undefined;
+  // Boxed, so "not inflated yet" (no box) cannot be read as "inflated, and unreadable" (a box
+  // holding null): a member that would not inflate is not tried again for the next document
+  // that holds it.
+  let inflated: { readonly bytes: Uint8Array | null } | undefined;
   return (): Promise<Uint8Array> => {
-    if (bytes === undefined) {
-      bytes = member.bytes();
-    }
+    inflated ??= { bytes: member.bytes() };
+    const { bytes } = inflated;
     // Raised rather than returned: the sink records a failed fetch as a refusal, by this name.
     return bytes === null ? Promise.reject(new Error(MEMBER_UNREADABLE)) : Promise.resolve(bytes);
   };

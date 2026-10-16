@@ -17,7 +17,7 @@ import { createHash } from "node:crypto";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { ProtocolErrorCode } from "@modelcontextprotocol/server";
 import type { TRPCError } from "@trpc/server";
-import { createLogger } from "@undercroft/core";
+import { byCodeUnit, createLogger } from "@undercroft/core";
 import type { TestDatabase } from "@undercroft/db/testing";
 import { currentTraceId } from "@undercroft/telemetry";
 import { type ControlPlane, startControlPlane } from "../testing.ts";
@@ -113,7 +113,7 @@ async function toolNames(token: string): Promise<string[]> {
   const client = await connect(token);
   const { tools } = await client.listTools();
   await client.close();
-  return tools.map((tool) => tool.name).sort();
+  return tools.map((tool) => tool.name).sort(byCodeUnit);
 }
 
 /** One JSON-RPC `tools/list` over plain HTTP, for what a client library would hide: the status. */
@@ -134,7 +134,7 @@ describe("the tools a token is offered", () => {
     const expected = Object.keys(appRouter._def.procedures)
       .filter((path) => !(path in MCP_EXCLUDED || SESSION_ONLY.some((only) => only === path)))
       .map((path) => path.replaceAll(".", "_"))
-      .sort();
+      .sort(byCodeUnit);
 
     expect(await toolNames(await mint("write"))).toEqual(expected);
   });

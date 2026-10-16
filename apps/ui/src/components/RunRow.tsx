@@ -35,12 +35,15 @@ import {
 } from "@/lib/runs.ts";
 import { formatDateTime, formatDuration, relativeTime } from "@/lib/when.ts";
 
+/** No connections to name: one array for every row, not a new one each render. */
+const NO_ACCOUNTS: readonly AccountName[] = [];
+
 export function RunRow({
   run,
   locale,
   open,
   href,
-  accounts = [],
+  accounts = NO_ACCOUNTS,
 }: {
   run: RunView;
   locale: Locale;

@@ -218,8 +218,9 @@ Where a rule can be made mechanical it is.
 
 **Biome is the linter and the formatter**, at `preset: "all"` — every rule it ships, at error
 severity. `domains` names the five that apply here — `react` and `tailwind`, both in
-`package.json`, plus `project`, `test` and `types`; the other ten are `none`, which costs no
-coverage because a Solid rule only ever fires on Solid code.
+`package.json`, plus `project`, `test` and `types`; the other ten are `none`. Since Biome 2.5.15
+a group raised by severity overrides a `none` domain, so the absent frameworks' rules that fire
+here anyway are also switched off by name in `biome.jsonc` (ADR 0140).
 
 Where a rule cannot apply here it is answered in `biome.jsonc`, with the reason beside it —
 repo-wide when it can never hold, and as a path entry naming the files when it is an

@@ -7,7 +7,8 @@
  * suite is green and the code has never run.
  */
 
-import { byCodeUnit, ObjectNotFound, type ObjectStore } from "./objectStore.ts";
+import { byCodeUnit } from "@undercroft/core";
+import { ObjectNotFound, type ObjectStore } from "./objectStore.ts";
 
 /** How many calls of each kind a store has served. One per S3 round trip. */
 export interface ObjectStoreCalls {
