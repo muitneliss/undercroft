@@ -1,13 +1,15 @@
 ---
 title: What an ingest run counts
 type: source
-date: 2026-10-13
+date: 2026-10-16
 tags: []
 source: docs/reference/run-counts.md
 source_path: docs/reference/run-counts.md
-source_hash: 9033c1d5459d555c0872de727aa0d3b5a3d0c697318db5a846b723a187cc2394
-ingested: 2026-10-13
+source_hash: 16cb505dd36c3fa16bc16af7227ea067b8ca9d5a4aab60eaa44816ed8eca499f
+ingested: 2026-10-16
 ---
+
+# What an ingest run counts
 
 # What an ingest run counts
 
@@ -25,7 +27,7 @@ The reference page for the five per-entity numbers an ingest run reports, which 
 
 **Drive folders.** A Drive run also reports a `folders` entity: the folders its walk listed, each a record of its id and the folder that listed it, landed again only when that changed, so an unchanged tree counts nothing. `files` never counts a folder. A file whose bytes are held but whose record changed (it moved) counts as Changed on `files` and adds nothing to `documents`. [[ADR 0078 A Drive Walk Lands the Folders It Lists]].
 
-**From a count to its records.** For an admin, New and Changed link to the Raw lake narrowed to the run (`?run=`; `lake records --run-id`, `lake documents --run-id` for `documents`). A member or viewer sees plain figures. A raw record names only the run that last wrote it, so the page lists what no later run rewrote and answers `ofRun`: `wrote` (New + Changed), `current` (still naming the run), `rewritten` (the difference) — `null` when it cannot be subtracted honestly (still running, no count for the stream, more rows than counted). [[ADR 0091 A Run Keeps the Scope It Read With and Its Counts Open Its Rows]].
+**From a count to its records.** For a holder of `lake:read` (a builder or an admin), New and Changed link to the Raw lake narrowed to the run (`?run=`; `lake records --run-id`, `lake documents --run-id` for `documents`). Anyone else sees plain figures. A raw record names only the run that last wrote it, so the page lists what no later run rewrote and answers `ofRun`: `wrote` (New + Changed), `current` (still naming the run), `rewritten` (the difference) — `null` when it cannot be subtracted honestly (still running, no count for the stream, more rows than counted). [[ADR 0091 A Run Keeps the Scope It Read With and Its Counts Open Its Rows]].
 
 **Scope and account.** A run records the scope it read with as it reads it; the run detail and `runs get` show it as `scope`, and an older run shows an em dash, never today's scope. A source card's runs link opens the Journal filtered to that account (`?source=`; `runs list --source`).
 

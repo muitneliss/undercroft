@@ -27,8 +27,8 @@
  * it. `aria-disabled` with the reason in the accessible name says the same thing
  * to someone who cannot see the turned-over leaf.
  *
- * A division can also be face-down for the reader's role in the open book: People
- * opens only for an admin of it (ADR 0119). The same turned-over leaf, with that
+ * A division can also be face-down for what the reader may do in the open book: People
+ * opens only for a holder of `people:manage` there (ADR 0119, ADR 0139). The same turned-over leaf, with that
  * reason in its name instead. Which reason applies is `closedTo`'s to decide, so
  * the strip and the leaf `Book` prints can never disagree about it.
  *
@@ -56,19 +56,19 @@ import {
   type DivisionId,
   divisionPath,
 } from "@/lib/divisions.ts";
-import type { Role } from "@/lib/roles.ts";
+import type { Permission } from "@/lib/permissions.ts";
 
 /** The phone layout's breakpoint, where the strip sits at the foot and scrolls sideways. */
 const FOOT_STRIP = "(max-width: 760px)";
 
 export function TabRail({
   tenantId,
-  role,
+  permissions,
   current,
 }: {
   tenantId: string | undefined;
-  /** The reader's role in the open book, or `undefined` while it is not known. */
-  role: Role | undefined;
+  /** What the reader may do in the open book, as the server said it, or `undefined` while not known. */
+  permissions: readonly Permission[] | undefined;
   current: DivisionId;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -114,7 +114,7 @@ export function TabRail({
         <Tab
           key={div.id}
           div={div}
-          closed={closedTo(div, { tenantId, role })}
+          closed={closedTo(div, { tenantId, permissions })}
           tenantId={tenantId}
           current={div.id === current}
         />

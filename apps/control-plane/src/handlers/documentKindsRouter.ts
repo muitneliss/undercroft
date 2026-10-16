@@ -1,8 +1,8 @@
 /**
  * The `documentKinds` procedures: a tenant's catalogue of document kinds. ADR 0085.
  *
- * Any member may read the catalogue and what publishing it would cost; only an admin may change
- * it or publish it, because a publish sends every text to the classifier again. Same layer and
+ * Any member may read the catalogue and what publishing it would cost; only a holder of
+ * `catalogue:manage` may change it or publish it, because a publish sends every text to the classifier again. Same layer and
  * rules as the other routers: validate, call one service, decide what its answer means.
  */
 
@@ -12,12 +12,13 @@ import { z } from "zod";
 
 import { messages } from "../i18n/index.ts";
 import * as documentKinds from "../services/documentKinds.ts";
-import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
+import { requirePermission } from "./permissionGate.ts";
+import { actorOf, router, tenantProcedure } from "./trpc.ts";
 
 export const documentKindsRouter = router({
   list: tenantProcedure.query(({ ctx, input }) => documentKinds.list(ctx.exec, input.tenantId)),
 
-  add: requireRole("admin")
+  add: requirePermission("catalogue:manage")
     .input(z.object({ kind: DocumentKindName, description: DocumentKindDescription.optional() }))
     .mutation(async ({ ctx, input }) => {
       const outcome = await documentKinds.add(ctx.exec, {
@@ -42,7 +43,7 @@ export const documentKindsRouter = router({
       return { ok: true };
     }),
 
-  update: requireRole("admin")
+  update: requirePermission("catalogue:manage")
     .input(z.object({ kind: DocumentKindName, description: DocumentKindDescription }))
     .mutation(async ({ ctx, input }) => {
       const outcome = await documentKinds.update(ctx.exec, {
@@ -58,7 +59,7 @@ export const documentKindsRouter = router({
       return { ok: true };
     }),
 
-  remove: requireRole("admin")
+  remove: requirePermission("catalogue:manage")
     .input(z.object({ kind: DocumentKindName }))
     .mutation(async ({ ctx, input }) => {
       const outcome = await documentKinds.remove(ctx.exec, {
@@ -82,7 +83,7 @@ export const documentKindsRouter = router({
    * Draw the first catalogue from a sample, as a worker run, and answer with its id to watch.
    * Nothing is published: the admin reviews what was kept, then publishes.
    */
-  initialise: requireRole("admin").mutation(async ({ ctx }) => {
+  initialise: requirePermission("catalogue:manage").mutation(async ({ ctx }) => {
     const say = messages(ctx.locale);
     if (ctx.worker === null) {
       throw new TRPCError({
@@ -117,7 +118,7 @@ export const documentKindsRouter = router({
   }),
 
   /** Publish the draft as the version the worker classifies against. */
-  publish: requireRole("admin").mutation(async ({ ctx }) => {
+  publish: requirePermission("catalogue:manage").mutation(async ({ ctx }) => {
     const outcome = await documentKinds.publish(ctx.exec, {
       tenantId: ctx.tenantId,
       actor: actorOf(ctx),

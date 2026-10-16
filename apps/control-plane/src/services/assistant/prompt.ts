@@ -14,14 +14,23 @@
  */
 
 import type { Locale } from "@undercroft/core";
-import type { Role } from "../authz.ts";
+import { PERMISSIONS, type Permission } from "@undercroft/contracts/access";
 
 export interface PromptFacts {
   readonly locale: Locale;
   /** The customer whose book is open, if one is. */
   readonly tenantId: string | null;
-  /** What the caller may do in that customer. `null` outside one. */
-  readonly role: Role | null;
+  /**
+   * The role key the caller holds in that customer, as `tenants.get` answered it -- any key, a
+   * builder's included, never narrowed to a list this file keeps. `null` outside one.
+   */
+  readonly role: string | null;
+  /**
+   * What that role lets the caller do there, as Casbin decided it (ADR 0139). The model is told
+   * these rather than left to infer them from the role's name, which is how it would come to
+   * promise a builder a button only an admin has.
+   */
+  readonly permissions: readonly Permission[];
   readonly superadmin: boolean;
   /** Asia/Singapore, always -- see `.claude/rules/i18n.md` on why a locale never moves it. */
   readonly now: string;
@@ -69,7 +78,10 @@ const STANDING_INSTRUCTIONS: readonly string[] = [
   "than describing several vaguely. If you do not have what an action needs, ask for it.",
   "",
   "You act as the reader, with exactly their permissions. If a tool refuses you, that is their",
-  "permission boundary and not a problem to route around -- tell them what it said.",
+  "permission boundary and not a problem to route around -- tell them what it said. A FORBIDDEN",
+  "refusal names the permission the reader lacks (such as models:write). Say which one, and that",
+  "someone in this customer who holds people:manage can give them a role that has it. Never",
+  "guess at a permission the facts below do not list, and never call a lacking one a fault.",
   "",
   "Choosing which mailbox labels or Drive files may be read is a consent decision made in",
   "Google's own picker, not something you can set. Offer to open it instead.",
@@ -81,13 +93,20 @@ const STANDING_INSTRUCTIONS: readonly string[] = [
   "chart -- so say what they mean rather than re-listing them.",
 ];
 
+/** What the reader holds, as a sentence the model can quote. `none` is a real answer. */
+function held(permissions: readonly Permission[]): string {
+  return permissions.length === 0 ? "none" : permissions.join(", ");
+}
+
 export function systemPrompt(facts: PromptFacts): string {
   const where =
     facts.tenantId === null
       ? "The reader has not opened a customer's book yet. Use listCustomers first, and ask " +
         "which one they mean rather than picking for them."
       : `The reader has ${facts.tenantId} open and holds the role "${facts.role ?? "none"}" ` +
-        `in it. Pass tenantId "${facts.tenantId}" unless they name another customer.`;
+        `in it, with these permissions there: ${held(facts.permissions)}. The permissions that ` +
+        `exist are ${PERMISSIONS.join(", ")}; any member may read without one. Pass tenantId ` +
+        `"${facts.tenantId}" unless they name another customer.`;
 
   return [
     `You are the assistant inside Undercroft, a data platform. Answer in ${LANGUAGE[facts.locale]}.`,

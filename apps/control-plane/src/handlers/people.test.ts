@@ -278,6 +278,65 @@ describe("an invitation can be withdrawn before it is used", () => {
   });
 });
 
+/**
+ * `builder` (ADR 0139) end to end: the router accepts it, both role columns' CHECKs accept it
+ * (`590_tenant_roles.sql`), and the person holds what it grants. And the CHECKs' quiet side
+ * turned round: a key no policy knows is refused by the database itself, not only by zod.
+ */
+describe("a builder can be invited and given", () => {
+  it("an invited builder signs in holding it, with what it lets them do", async () => {
+    const api = await admin();
+    await api.people.invite({ tenantId: "CASE-0042", email: "cy@example.test", role: "builder" });
+
+    const admitted = await resolveInvitedUser(db, "cy@example.test");
+
+    expect(admitted).not.toBeNull();
+    const signedIn = caller({ userId: admitted?.appUserId ?? "", email: "cy@example.test" });
+    const tenant = await signedIn.tenants.get({ tenantId: "CASE-0042" });
+    expect([tenant.role, tenant.permissions]).toEqual([
+      "builder",
+      ["lake:read", "models:write", "reports:author"],
+    ]);
+  });
+
+  it("an existing member is made a builder, and the roster says so", async () => {
+    const api = await admin();
+    await seedMember("hand@example.test", "member");
+
+    const changed = await api.people.setRole({
+      tenantId: "CASE-0042",
+      email: "hand@example.test",
+      role: "builder",
+    });
+
+    expect(changed).toEqual({
+      email: "hand@example.test",
+      role: "builder",
+      previousRole: "member",
+    });
+    const members = await api.people.members({ tenantId: "CASE-0042" });
+    expect(members.find((m) => m.email === "hand@example.test")?.role).toBe("builder");
+  });
+
+  it("a role no policy knows is refused by the database, on both columns", async () => {
+    const userId = await seedMember("hand@example.test", "member");
+
+    expect(
+      await errorCode(() =>
+        db.query("UPDATE app.tenant_member SET role = 'owner' WHERE user_id = $1", [userId]),
+      ),
+    ).toBe("UNKNOWN");
+    expect(
+      await errorCode(() =>
+        db.query(
+          `INSERT INTO app.invitation (tenant_id, email, role, token_sha256, expires_at)
+           VALUES ('CASE-0042', 'x@example.test', 'owner', repeat('a', 64), now())`,
+        ),
+      ),
+    ).toBe("UNKNOWN");
+  });
+});
+
 describe("an admin can change or end an existing member's access", () => {
   it("changing a member's role is what the roster then reports", async () => {
     // A mis-clicked invitation: meant as viewer, accepted as admin. Before #168 this was

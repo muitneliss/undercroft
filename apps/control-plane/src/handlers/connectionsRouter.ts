@@ -13,7 +13,8 @@ import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
 import { providerName } from "../services/oauthProviders.ts";
 import { isChoiceRefusal } from "../services/scopeChoices.ts";
-import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
+import { requirePermission } from "./permissionGate.ts";
+import { actorOf, router, tenantProcedure } from "./trpc.ts";
 import { tokenRefusalKey } from "./answers.ts";
 import { browseRefusal, cutRefusal } from "./browseRefusal.ts";
 import { listedOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
@@ -74,7 +75,7 @@ export const connectionsRouter = router({
   // cost an afternoon to tell apart from one. A procedure that cannot do the thing says
   // so; `.claude/rules/money.md` calls this never guessing, and a fabricated URL is a
   // guess with a 200 on it.
-  startOAuth: requireRole("admin")
+  startOAuth: requirePermission("sources:manage")
     // `addAccount` connects a further account of the kind rather than (re)connecting `source`.
     // ADR 0043.
     .input(z.object({ source: z.string().min(1), addAccount: z.boolean().default(false) }))
@@ -118,7 +119,7 @@ export const connectionsRouter = router({
    * search or a page (`scopeChoices.ts`): 2,331 Drive folders with their paths overflowed an
    * agent's client (issue 443). With none of them the listing comes whole, as the picker reads it.
    */
-  browseScope: requireRole("admin")
+  browseScope: requirePermission("sources:manage")
     .input(
       z.object({
         source: z.string().min(1),
@@ -150,7 +151,7 @@ export const connectionsRouter = router({
     }),
 
   /** Record what may be read. Admin-only: it widens or narrows a live grant. */
-  setScope: requireRole("admin")
+  setScope: requirePermission("sources:manage")
     .input(z.object({ source: z.string().min(1), selection: z.unknown() }))
     .mutation(async ({ ctx, input }) => {
       const result = await connections.setScope(ctx.exec, {
@@ -171,7 +172,7 @@ export const connectionsRouter = router({
    * account. The worker proves the token before sealing it, so a refusal here is worded
    * for the person who pasted it -- the token is wrong, not the platform.
    */
-  setToken: requireRole("admin")
+  setToken: requirePermission("sources:manage")
     .input(z.object({ source: z.string().min(1), token: z.string().min(1).max(512) }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.worker === null) {
@@ -210,7 +211,7 @@ export const connectionsRouter = router({
    * properties. `cron` is required with `custom` and refused with anything else, which the
    * service decides and this procedure words.
    */
-  setCadence: requireRole("admin")
+  setCadence: requirePermission("sources:manage")
     .input(
       z.object({
         source: z.string().min(1),
@@ -237,7 +238,7 @@ export const connectionsRouter = router({
    * (ADR 0082). The same flat shape and the same words as `setCadence`, and one more refusal: a
    * source that reads no list through a change filter the source runs has nothing to re-sync.
    */
-  setResync: requireRole("admin")
+  setResync: requirePermission("sources:manage")
     .input(
       z.object({
         source: z.string().min(1),
@@ -266,7 +267,7 @@ export const connectionsRouter = router({
    * disappearing while Google's grant stands would make "you can disconnect at any time"
    * -- copy already on the consent card -- a half-truth.
    */
-  disconnect: requireRole("admin")
+  disconnect: requirePermission("sources:manage")
     .input(z.object({ source: z.string().min(1) }))
     .mutation(({ ctx, input }) =>
       connections.disconnect(ctx.exec, ctx.worker, {

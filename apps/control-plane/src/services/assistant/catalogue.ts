@@ -8,10 +8,12 @@
  * `appRouter.createCaller(ctx)`, which is the one place the model and the router meet.
  *
  * The split is worth more than rule compliance. Because the binding goes through the real
- * router, every tool inherits `tenantProcedure`, `requireRole`, the 404-not-403 boundary and
- * the locale-worded refusals unchanged -- a viewer who asks the assistant to trigger a run gets
- * the refusal a viewer clicking the button gets, because the tool refuses ITSELF. Nothing here
- * re-implements an authorization check, so nothing here can drift away from one.
+ * router, every tool inherits `tenantProcedure`, `requirePermission`, the 404-not-403 boundary
+ * and the locale-worded refusals unchanged -- a viewer who asks the assistant to trigger a run
+ * gets the refusal a viewer clicking the button gets, because the tool refuses ITSELF. Nothing
+ * here re-implements an authorization check, so nothing here can drift away from one -- and no
+ * description here names the permission a tool needs: `bindTools` adds it from the procedure's
+ * own guard (ADR 0139), so a moved gate cannot leave a stale sentence behind.
  *
  * WHY THE DESCRIPTIONS ARE IN ENGLISH while every reader-facing string is Vietnamese-first: a
  * description is read by the model, never rendered. `.claude/rules/i18n.md` governs what a
@@ -52,7 +54,8 @@ function countItems(output: unknown): string | null {
 export const READ_TOOLS = {
   listCustomers: {
     description:
-      "List the customers (cases) this person can see, with the role they hold in each. " +
+      "List the customers (cases) this person can see, with the role they hold in each and " +
+      "the permissions that role holds there. " +
       "Call this first when the person has not said which customer they mean.",
     inputSchema: z.object({}),
     tier: "read",
@@ -104,7 +107,7 @@ export const READ_TOOLS = {
       "Full-text search across everything landed for one customer, in Vietnamese or English. " +
       "Diacritics are folded, so 'hop dong' finds 'Hợp đồng'. Each kind ranks only its newest " +
       "matches, and `capped` names a kind that had more: say so rather than calling the hits " +
-      "everything that matched. Admin only.",
+      "everything that matched.",
     inputSchema: inTenant.extend({
       q: z.string().min(1).describe("What to look for, in the reader's own words."),
       limit: z.number().int().min(1).max(25).default(10),

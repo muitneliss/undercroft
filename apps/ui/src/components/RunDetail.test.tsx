@@ -34,6 +34,7 @@ import "@/i18n/index.ts";
 import { MISSING } from "@/lib/money.ts";
 import type { AccountName } from "@/lib/runs.ts";
 import { chosenAccount, useUiStore } from "@/store.ts";
+import { held } from "@/test/access.ts";
 import { runDetail } from "@/test/fixtures.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -105,12 +106,12 @@ function step(kind: "model" | "test", name: string): RunDetailView["steps"][numb
 }
 
 function mount(
-  role: "viewer" | "member" | "admin",
+  role: "viewer" | "member" | "builder" | "admin",
   detail: RunDetailView,
   at: { accounts?: readonly AccountName[]; address?: string } = {},
 ): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const tenant = { tenantId: TENANT, displayName: "Acme", role };
+  const tenant = { tenantId: TENANT, displayName: "Acme", role, permissions: held(role) };
   // Seeded, as the book's own head has already read it by the time a leaf opens -- and so the
   // role is known at the first render, and a figure without a link cannot pass merely because
   // the role had not arrived yet.
@@ -151,17 +152,19 @@ function mount(
 }
 
 describe("a run's counts", () => {
-  it("open, for an admin, the rows that run wrote in the raw lake", async () => {
-    mount("admin", gmailRun());
+  for (const role of ["admin", "builder"] as const) {
+    it(`open, for a ${role}, the rows that run wrote in the raw lake (lake:read)`, async () => {
+      mount(role, gmailRun());
 
-    const created = await screen.findByRole("link", { name: "3" });
-    const changed = screen.getByRole("link", { name: "2" });
+      const created = await screen.findByRole("link", { name: "3" });
+      const changed = screen.getByRole("link", { name: "2" });
 
-    expect(created.getAttribute("href")).toBe(
-      `/tenants/${TENANT}/lake?source=gmail&entity=messages&run=run-1`,
-    );
-    expect(changed.getAttribute("href")).toBe(created.getAttribute("href"));
-  });
+      expect(created.getAttribute("href")).toBe(
+        `/tenants/${TENANT}/lake?source=gmail&entity=messages&run=run-1`,
+      );
+      expect(changed.getAttribute("href")).toBe(created.getAttribute("href"));
+    });
+  }
 
   for (const role of ["member", "viewer"] as const) {
     it(`are plain figures for a ${role}`, async () => {

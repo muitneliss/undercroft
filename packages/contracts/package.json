@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./access": "./src/access.ts",
     "./models": "./src/models.ts",
     "./seeds": "./src/seeds.ts",
     "./bi": "./src/bi.ts",

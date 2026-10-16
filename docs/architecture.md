@@ -72,8 +72,8 @@ Each of these rules shapes a boundary you will find in the code.
 | **One writer, many callers.**                | Every byte enters through `LakeStore`'s create-only path, which only the worker imports. The lake write API, a scheduled sync and a Gmail harvest are all callers of that one path.                                                              | [0004](adr/0004-declarative-connectors-and-the-lake-write-api.md), [0015](adr/0015-a-first-party-collector-for-byte-sources.md) |
 
 The same one-door idea applies to people and agents. The web UI, the CLI, MCP clients and the
-assistant all reach the platform through the same tRPC procedures and the same role gates. No
-caller gets a private back door.
+assistant all reach the platform through the same tRPC procedures and the same permission
+checks. No caller gets a private back door.
 
 ## System context
 
@@ -524,7 +524,7 @@ sequenceDiagram
 
     A->>UI: Connect a source
     UI->>CP: tRPC connections.startOAuth
-    CP->>CP: requireRole admin, record the handshake state
+    CP->>CP: requirePermission sources:manage, record the handshake state
     CP-->>UI: provider authorize URL
     UI->>G: redirect, the admin consents
     G->>CP: GET /oauth/provider/callback with a code
@@ -600,7 +600,8 @@ sequenceDiagram
 ```
 
 The Lake Console and lake search follow the same path, but the worker connects as the tenant's
-dbt login, which can read `raw` under row-level security. Only an admin can use them.
+dbt login, which can read `raw` under row-level security. Only a caller holding `lake:read` -- a
+builder or an admin -- can use them.
 
 ### Pushing records through the lake write API
 
@@ -649,7 +650,7 @@ sequenceDiagram
     CP->>CP: bearerContext: verify the JWT, re-read the consent row
     CP-->>C: tools the grant admits, one per router procedure
     C->>CP: tools/call runs_list
-    CP->>CP: appRouter.createCaller ctx, the same role gates as the web UI
+    CP->>CP: appRouter.createCaller ctx, the same permission checks as the web UI
     CP-->>C: result, with a widget resource for a grid or a run
 ```
 
@@ -712,9 +713,16 @@ Every door into the router goes through the same base procedures in
   `handlers/surface.ts`, and an unclassified mutation fails closed.
 - `tenantProcedure` answers NOT_FOUND to a caller who is not a member of the tenant, so the API
   cannot be used to discover which tenants exist.
-- `requireRole` answers FORBIDDEN once membership is established but the role is too low.
-  Roles are `viewer`, then `member`, then `admin`. Superadmins are named in
-  `UNDERCROFT_SUPERADMINS` and act as admin in every existing tenant
+- `requirePermission` (`handlers/permissionGate.ts`) answers FORBIDDEN once membership is
+  established but the caller's permissions in that tenant lack the one the procedure needs; the
+  refusal names the permission and carries `{ reason: "PERMISSION_REQUIRED", permission }`. A
+  role is a set of permissions: `viewer` holds none, `member` `reports:author`, `builder` that
+  plus `models:write` and `lake:read`, and `admin` every permission. Casbin decides, over a policy
+  projected per request from `app.tenant_member` and the built-in grants
+  (`packages/contracts/src/access.ts`, `services/rbac.ts`); the catalogue and what each
+  permission covers are in [the permissions reference](reference/permissions.md), the reasoning
+  in [ADR 0139](adr/0139-tenant-access-is-casbin-policy.md). Superadmins are named in
+  `UNDERCROFT_SUPERADMINS` and hold admin in every existing tenant
   ([ADR 0013](adr/0013-superadmins-named-in-the-environment.md)).
 - `account.*` is session-only, so no token can mint another token.
 
@@ -851,7 +859,7 @@ all.
 | Why the lake is the only durable layer | [0001](adr/0001-raw-lake-is-the-only-durable-layer.md), [0002](adr/0002-one-generic-raw-table-no-business-schema.md)                                                                                                                                  |
 | How a connector spec works             | [0004](adr/0004-declarative-connectors-and-the-lake-write-api.md), `specs/schema/connector.v1.json`                                                                                                                                                   |
 | How runs stream, resume and stop       | [0033](adr/0033-an-ingest-streams-and-does-not-re-read-what-it-holds.md), [0051](adr/0051-a-deploy-stops-a-run-at-a-safe-point-and-the-run-keeps-its-counts.md), [0056](adr/0056-a-drive-ingest-stops-within-one-file-and-a-cut-off-run-says-so.md)   |
-| Tenancy, roles and grants              | [0005](adr/0005-the-role-and-grant-model.md), [0018](adr/0018-per-tenant-roles-and-row-level-security.md), `.claude/rules/privileges.md`                                                                                                              |
+| Tenancy, roles and grants              | [0005](adr/0005-the-role-and-grant-model.md), [0018](adr/0018-per-tenant-roles-and-row-level-security.md), [0139](adr/0139-tenant-access-is-casbin-policy.md), [permissions](reference/permissions.md), `.claude/rules/privileges.md`                 |
 | How agents reach the platform          | [0029](adr/0029-the-assistant-is-an-interleaf.md), [0044](adr/0044-an-agent-reaches-undercroft-as-a-caller.md), [0060](adr/0060-an-agent-reaches-undercroft-over-mcp.md), [0061](adr/0061-an-mcp-client-signs-its-person-in-and-draws-two-widgets.md) |
 | Operating the deployment               | [deployment runbook](runbook/deployment.md), [0008](adr/0008-deploy-on-release-from-ci.md), [0049](adr/0049-dokploy-clones-the-compose-file-from-main.md)                                                                                             |
 | Working on the code                    | [`CLAUDE.md`](../CLAUDE.md) and `.claude/rules/`                                                                                                                                                                                                      |

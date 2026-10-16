@@ -10,7 +10,10 @@ Drive land in an immutable raw lake. People write dbt models over that lake, and
 dashboards read the tables the models build.
 
 Everything the web UI does, you can do too, as the person who signed in and never as more.
-Every role check and every refusal the web UI has applies to you unchanged.
+Every permission check and every refusal the web UI has applies to you unchanged. What the
+person may do in a customer is a set of permissions their role holds; read
+`references/access-control.md` for the catalogue, the built-in roles and how to check the
+person's own with `tenants.get` before you plan a write.
 
 ## Words the platform uses
 
@@ -22,14 +25,15 @@ Every role check and every refusal the web UI has applies to you unchanged.
   whose parents in the build were published is moved to where Reports reads it. A model whose
   build was held keeps serving its last passing version.
 - **Macro**: a named piece of dbt Jinja a model calls, such as `{{ parse_amount(...) }}`.
-  The platform ships a few into every project; a customer's admin can save the customer's
-  own with `macros.save`, and every model of that customer can then call it. Reuse one
-  (`macros.list`) before writing the same expression into a second model.
+  The platform ships a few into every project; whoever holds `models:write` in a customer (a
+  builder or an admin) can save the customer's own with `macros.save`, and every model of
+  that customer can then call it. Reuse one (`macros.list`) before writing the same
+  expression into a second model.
 - **Seed**: a reference table a person keeps by hand -- accounts mapped to groups, codes to
-  labels -- that models read with `{{ ref('name') }}` like another model. A customer's admin
-  saves one with `seeds.save`: columns each with a declared type, rows of strings or `null`.
-  Nothing is inferred, and a cell its column cannot hold is refused, naming the row and the
-  column. Keep such a table as a seed (`seeds.list`), never as a `VALUES` list inside a model.
+  labels -- that models read with `{{ ref('name') }}` like another model. Whoever holds
+  `models:write` saves one with `seeds.save`: columns each with a declared type, rows of
+  strings or `null`. Nothing is inferred, and a cell its column cannot hold is refused,
+  naming the row and the column. Keep such a table as a seed (`seeds.list`), never as a `VALUES` list inside a model.
 - **Question** (_câu hỏi_ in Vietnamese): a saved query over the built models, either a
   visual definition or SQL, together with how to draw it as a table or a chart. It is what
   other BI tools call a saved query, a chart or a Look; the name comes from Metabase, the BI
@@ -178,7 +182,9 @@ Both doors refuse with the same codes. Branch on the code, and give the person t
 
 - **Never retry:** `AUTHENTICATION_REQUIRED`, `PERMISSION_DENIED`, `WRITES_DISABLED`,
   `HUMAN_REQUIRED` and `NOT_FOUND`. They do not change on a retry. `NOT_FOUND` may mean the
-  thing is not yours to see, and the platform deliberately does not say which.
+  thing is not yours to see, and the platform deliberately does not say which. A
+  `PERMISSION_DENIED` whose details say `reason: "PERMISSION_REQUIRED"` names the
+  `permission` the person lacks: `references/access-control.md` says what to tell them.
 - **Ask first:** `CONFLICT` means the platform's state refused it, and the message says which
   state -- a name already taken, a build already running. Tell the person; do not loop. A
   customer an admin has deactivated refuses every operation this way, with

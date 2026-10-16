@@ -30,6 +30,7 @@ import {
   draftFromDashboard,
   newDashboardDraft,
 } from "@/lib/dashboardDraft.ts";
+import { can } from "@/lib/permissions.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { bodiesListed } from "@/lib/listAnswers.ts";
 import { useUiStore } from "@/store.ts";
@@ -111,7 +112,7 @@ export function Dashboard({ tenantId }: { tenantId: string }): React.JSX.Element
       draft={held}
       stored={dashboard.data ?? null}
       questions={questions.data}
-      canAuthor={tenant.data.role !== "viewer"}
+      canAuthor={can(tenant.data.permissions, "reports:author")}
       locale={locale}
       onSaved={async (savedId): Promise<void> => {
         await utils.bi.dashboards.list.invalidate({ tenantId });

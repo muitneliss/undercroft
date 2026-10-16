@@ -11,12 +11,13 @@ import { z } from "zod";
 import { Email, Role } from "./inputs.ts";
 import { messages } from "../i18n/index.ts";
 import * as people from "../services/people.ts";
-import { actorOf, requireRole, router } from "./trpc.ts";
+import { requirePermission } from "./permissionGate.ts";
+import { actorOf, router } from "./trpc.ts";
 
 /**
  * Why a role change or a removal was refused, worded for the caller.
  *
- * NOT_FOUND is safe to word here: `requireRole` has already established that the caller is
+ * NOT_FOUND is safe to word here: `requirePermission` has already established that the caller is
  * an admin of this tenant, so saying an address holds no role in it reveals nothing they
  * could not read off the roster. The last-admin refusal is CONFLICT, because the request is
  * well-formed and authorised and it is the tenant's present state that forbids it.
@@ -42,10 +43,12 @@ export const peopleRouter = router({
    * through `audit.mine` (ADR 0113). The browser keeps the division closed to anyone else; this
    * gate is the control, and the one the CLI, `/mcp` and the assistant reach as well.
    */
-  members: requireRole("admin").query(({ ctx }) => people.members(ctx.exec, ctx.tenantId)),
+  members: requirePermission("people:manage").query(({ ctx }) =>
+    people.members(ctx.exec, ctx.tenantId),
+  ),
 
   /** The invitations sent into the customer. Admin-only, for the reason `members` is. */
-  invitations: requireRole("admin").query(({ ctx }) =>
+  invitations: requirePermission("people:manage").query(({ ctx }) =>
     people.invitationsFor(ctx.exec, ctx.tenantId),
   ),
 
@@ -55,7 +58,7 @@ export const peopleRouter = router({
    * Admin-only: an invitation grants a role inside a customer's tenant, and the buttons
    * behind it mint OAuth tokens into that customer's accounting system.
    */
-  invite: requireRole("admin")
+  invite: requirePermission("people:manage")
     .input(z.object({ email: Email, role: Role }))
     .mutation(async ({ ctx, input }) => {
       const result = await people.invite(ctx.exec, {
@@ -98,7 +101,7 @@ export const peopleRouter = router({
    * By address rather than user id, like `invite`: the address is what the roster shows and
    * what a person types at the command line.
    */
-  setRole: requireRole("admin")
+  setRole: requirePermission("people:manage")
     .input(z.object({ email: Email, role: Role }))
     .mutation(async ({ ctx, input }) => {
       const result = await people.setRole(ctx.exec, {
@@ -114,7 +117,7 @@ export const peopleRouter = router({
     }),
 
   /** End an existing member's access. Admin-only, and never the last admin's. */
-  removeMember: requireRole("admin")
+  removeMember: requirePermission("people:manage")
     .input(z.object({ email: Email }))
     .mutation(async ({ ctx, input }) => {
       const result = await people.removeMember(ctx.exec, {
@@ -129,7 +132,7 @@ export const peopleRouter = router({
     }),
 
   /** Withdraw an invitation that has not been accepted. */
-  revokeInvitation: requireRole("admin")
+  revokeInvitation: requirePermission("people:manage")
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const revoked = await people.revokeInvitation(ctx.exec, {

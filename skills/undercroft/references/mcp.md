@@ -14,7 +14,8 @@ person to connect; the project's `docs/runbook/mcp-setup.md` has the steps for e
 The connection carries a **grant** the person chose:
 
 - `read` lists only the tools that read. A tool that writes is not offered at all.
-- `write` lists every tool the person's role allows.
+- `write` lists every tool, and each still needs the permission its description names, which
+  the person's role in that customer must hold (`access-control.md` in this folder).
 
 The grant never widens on your request. When the operation you need is not listed, or a call
 is refused with `WRITES_DISABLED`, tell the person that the connection is read-only and that
@@ -82,7 +83,12 @@ A refused call returns `isError: true` with a `structuredContent` of:
 ```json
 {
   "code": "PERMISSION_DENIED",
-  "message": "Thao tác này cần vai trò admin.",
+  "message": "Thao tác này cần quyền đọc hồ dữ liệu thô (lake:read). Hãy nhờ người có quyền people:manage trong khách hàng này cấp cho bạn một vai trò có quyền đó.",
+  "details": {
+    "reason": "PERMISSION_REQUIRED",
+    "permission": "lake:read",
+    "tenantId": "CASE-0042"
+  },
   "traceId": "4bf92f3577b34da6a3ce929d0e0e4736"
 }
 ```
@@ -90,7 +96,8 @@ A refused call returns `isError: true` with a `structuredContent` of:
 - `code` is the same vocabulary the CLI uses; `SKILL.md` says which to retry.
 - `message` is the server's own sentence, in the person's language. Give it to them as it is.
 - `details` holds the facts the server named, when it named any. `VALIDATION_FAILED` carries
-  the schema's `issues`.
+  the schema's `issues`; a missing permission carries `reason: "PERMISSION_REQUIRED"` and the
+  `permission`, which `access-control.md` in this folder explains.
 - A call a read-only grant does not allow is refused with the code `WRITES_DISABLED`.
 - `traceId` identifies the request on the server. Quote it in a bug report.
 

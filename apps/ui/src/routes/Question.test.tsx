@@ -16,6 +16,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import "@/i18n/index.ts";
 import { Question } from "@/routes/Question.tsx";
 import { useUiStore } from "@/store.ts";
+import { held } from "@/test/access.ts";
 import { type Answer, mountRoute } from "@/test/mountRoute.tsx";
 
 const TENANT = "CASE-0042";
@@ -62,7 +63,7 @@ function saved(over: Record<string, unknown> = {}): unknown {
 
 function served(role: string, question: unknown, result: unknown = RESULT): Record<string, Answer> {
   return {
-    "tenants.get": () => ({ tenantId: TENANT, displayName: "Acme", role }),
+    "tenants.get": () => ({ tenantId: TENANT, displayName: "Acme", role, permissions: held(role) }),
     "bi.schema": () => ({
       tables: [
         {

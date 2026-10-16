@@ -3,8 +3,8 @@
  * model-context client asks for it (ADR 0061), and on the account page's token form (ADR 0060).
  *
  * A grant is not a role. The server decides every call twice: the grant is the ceiling
- * (`grantAdmits` in `surface.ts`), and then the role gates run against the person's CURRENT
- * membership (`requireRole` in `trpc.ts`), so a viewer's write token is still refused every
+ * (`grantAdmits` in `surface.ts`), and then the permission gates run against the person's CURRENT
+ * membership (`requirePermission` in `trpc.ts`), so a viewer's write token is still refused every
  * customer's write. Without this band the page offered "read and write" to a viewer and never
  * said that, in their customers, it would buy nothing but the one write that is theirs rather
  * than a customer's -- `session.setLocale`.
@@ -30,6 +30,7 @@
 import { useTranslation } from "react-i18next";
 
 import { Skeleton } from "@/components/Skeleton.tsx";
+import type { Permission } from "@/lib/permissions.ts";
 import { ROLE_RIGHTS, ROLES, type Role } from "@/lib/roles.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -42,6 +43,7 @@ interface Held {
   readonly id: string;
   readonly displayName: string;
   readonly role: string;
+  readonly permissions: readonly Permission[];
   readonly deactivatedAt: string | null;
 }
 
@@ -57,11 +59,12 @@ function byRole(held: readonly Held[]): readonly { role: Role; customers: readon
 }
 
 /**
- * Whether write would add nothing in any customer: viewer in every one held, the deactivated
- * included (see the docstring). A role the browser does not know is not a viewer.
+ * Whether write would add nothing in any customer: no permission held in any one, the
+ * deactivated included (see the docstring). Asked of the server's `permissions`, never of the
+ * role's name (ADR 0139): a role the browser has never heard of is judged by what it holds.
  */
 function viewerEverywhere(held: readonly Held[]): boolean {
-  return held.every((tenant) => tenant.role === "viewer");
+  return held.every((tenant) => tenant.permissions.length === 0);
 }
 
 function RoleLines({ held }: { held: readonly Held[] }): React.JSX.Element {

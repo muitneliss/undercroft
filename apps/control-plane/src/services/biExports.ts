@@ -155,7 +155,7 @@ export function openExport(
   return findLiveExport(exec, input);
 }
 
-/** Whether exporting `kind` needs a member's authority, rather than any role's. */
-export function exportNeedsMember(kind: ExportKind): boolean {
+/** Whether exporting `kind` needs `reports:author`, rather than only membership. */
+export function exportNeedsAuthor(kind: ExportKind): boolean {
   return kind !== "question";
 }

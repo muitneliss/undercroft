@@ -21,6 +21,7 @@ import "@/i18n/index.ts";
 import { draftFrom } from "@/lib/modelDraft.ts";
 import { ModelEditor } from "@/routes/ModelEditor.tsx";
 import { useUiStore } from "@/store.ts";
+import { held } from "@/test/access.ts";
 import { NO_TEST_RECORD } from "@/test/fixtures.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -112,7 +113,12 @@ function mount(name: string): void {
           }
           if (path.endsWith("/tenants.get")) {
             return Promise.resolve(
-              answer({ tenantId: TENANT, displayName: "Acme", role: "admin" }),
+              answer({
+                tenantId: TENANT,
+                displayName: "Acme",
+                role: "admin",
+                permissions: held("admin"),
+              }),
             );
           }
           if (path.endsWith("/models.get")) {

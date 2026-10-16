@@ -31,6 +31,7 @@ import { ModelFacts } from "@/components/ModelFacts.tsx";
 import { BuildPanel, Reference, TestsForm } from "@/components/ModelPanels.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StatusLine } from "@/components/StatusLine.tsx";
+import { can } from "@/lib/permissions.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { lineagePath } from "@/lib/lineage.ts";
 import { descriptionFor, draftFrom, isDirty, type ModelDraft, testsFor } from "@/lib/modelDraft.ts";
@@ -152,9 +153,11 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
     return <Skeleton rows={6} />;
   }
 
-  const isAdmin = tenant.data.role === "admin";
-  // A viewer may only run saved questions, and before a successful build there is no table.
-  const queryable = tenant.data.role !== "viewer" && model.data.lastBuild?.status === "success";
+  const canWrite = can(tenant.data.permissions, "models:write");
+  // Asking a new question of the table is authoring a report; a reader without
+  // `reports:author` may only run saved ones, and before a successful build there is no table.
+  const queryable =
+    can(tenant.data.permissions, "reports:author") && model.data.lastBuild?.status === "success";
 
   return (
     <div className="sheet">
@@ -166,7 +169,7 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
         tenantId={tenantId}
         stored={model.data}
         draft={held}
-        isAdmin={isAdmin}
+        canWrite={canWrite}
         queryable={queryable}
         locale={locale}
         actions={{ save, build, busy }}
@@ -182,7 +185,7 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
       <h2 className="head">{t("models.testsHead")}</h2>
       <div className="body stack">
         <p className="prose">{t("models.testsLead")}</p>
-        <TestsForm draft={held} columns={model.data.lastBuild?.columns ?? []} canEdit={isAdmin} />
+        <TestsForm draft={held} columns={model.data.lastBuild?.columns ?? []} canEdit={canWrite} />
       </div>
 
       <div className="band-rule" />
@@ -191,7 +194,7 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
         <Reference tenantId={tenantId} />
       </div>
 
-      <DeleteBand tenantId={tenantId} name={name} isAdmin={isAdmin} busy={busy} remove={remove} />
+      <DeleteBand tenantId={tenantId} name={name} canWrite={canWrite} busy={busy} remove={remove} />
     </div>
   );
 }
@@ -211,7 +214,7 @@ function EditorBand({
   tenantId,
   stored,
   draft,
-  isAdmin,
+  canWrite,
   queryable,
   locale,
   actions,
@@ -219,7 +222,7 @@ function EditorBand({
   tenantId: string;
   stored: ModelDetail;
   draft: ModelDraft;
-  isAdmin: boolean;
+  canWrite: boolean;
   queryable: boolean;
   locale: "vi" | "en";
   actions: ModelActions;
@@ -258,21 +261,21 @@ function EditorBand({
       <h1>{name}</h1>
       <ModelFacts tenantId={tenantId} stored={stored} dirty={isDirty(draft)} locale={locale} />
 
-      {isAdmin ? null : <p className="note">{t("models.readOnlyNote")}</p>}
+      {canWrite ? null : <p className="note">{t("models.readOnlyNote")}</p>}
 
-      <ModelDescription draft={draft} canEdit={isAdmin} />
+      <ModelDescription draft={draft} canEdit={canWrite} />
 
       <Suspense fallback={<Skeleton rows={6} />}>
         <SqlEditor
           key={`${tenantId}/${name}/${mounted}`}
           value={draft.sql}
           onChange={setModelSql}
-          readOnly={!isAdmin}
+          readOnly={!canWrite}
           label={t("models.sqlLabel")}
         />
       </Suspense>
 
-      {isAdmin ? (
+      {canWrite ? (
         <ModelVerbs
           tenantId={tenantId}
           name={name}
@@ -310,19 +313,19 @@ function EditorBand({
 function DeleteBand({
   tenantId,
   name,
-  isAdmin,
+  canWrite,
   busy,
   remove,
 }: {
   tenantId: string;
   name: string;
-  isAdmin: boolean;
+  canWrite: boolean;
   busy: boolean;
   remove: Remove;
 }): React.JSX.Element | null {
   const { t } = useTranslation();
 
-  if (!isAdmin) {
+  if (!canWrite) {
     return null;
   }
 

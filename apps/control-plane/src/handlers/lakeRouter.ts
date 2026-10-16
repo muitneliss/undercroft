@@ -1,10 +1,10 @@
 /**
- * The raw lake division's API: what landed, the rows themselves, and an admin's own SQL.
+ * The raw lake division's API: what landed, the rows themselves, and a reader's own SQL.
  *
  * Its own file for the reason `biRouter` and `modelsRouter` have theirs -- `router.ts` is the
  * table of contents, not the procedures -- and because the three tiers of authority here are
- * worth reading in one place: a summary every member may see, rows only an admin may page,
- * and a console only an admin may write.
+ * worth reading in one place: a summary every member may see, and rows and a console only a
+ * holder of `lake:read` may page or write (builder and admin, ADR 0139).
  */
 
 import { TRPCError } from "@trpc/server";
@@ -23,7 +23,8 @@ import { messages } from "../i18n/index.ts";
 import * as lake from "../services/lake.ts";
 import { notRun } from "./answers.ts";
 import { SchemaFilterInput, schemaOrRefusal } from "./schemaFilter.ts";
-import { requireRole, router, tenantProcedure } from "./trpc.ts";
+import { requirePermission } from "./permissionGate.ts";
+import { router, tenantProcedure } from "./trpc.ts";
 
 export const lakeRouter = router({
   /**
@@ -33,15 +34,15 @@ export const lakeRouter = router({
   summary: tenantProcedure.query(({ ctx, input }) => lake.summary(ctx.exec, input.tenantId)),
 
   /**
-   * The rows themselves, admin-only: a payload is the source's data verbatim, and for a
-   * CRM or a mailbox that is names and addresses. The role gate is the whole of the
+   * The rows themselves, for `lake:read` only: a payload is the source's data verbatim, and for
+   * a CRM or a mailbox that is names and addresses. The permission gate is the whole of the
    * decision; the service only pages.
    *
    * `runId` narrows the page to the rows that run wrote and still names, and answers beside it
    * how many it wrote that a later run has since rewritten (`ofRun`, ADR 0091): what a run's
    * counts open onto from its leaf. The gate is unchanged -- the same rows, fewer of them.
    */
-  records: requireRole("admin")
+  records: requirePermission("lake:read")
     .input(
       z.object({
         source: z.string().trim().min(1).max(64),
@@ -61,7 +62,7 @@ export const lakeRouter = router({
       }),
     ),
 
-  documents: requireRole("admin")
+  documents: requirePermission("lake:read")
     .input(
       z.object({
         source: z.string().trim().min(1).max(64),
@@ -80,18 +81,18 @@ export const lakeRouter = router({
     ),
 
   /**
-   * One SELECT over the raw lake, written by an admin, answered as the tenant's dbt login.
+   * One SELECT over the raw lake, written by its reader, answered as the tenant's dbt login.
    *
-   * ADMIN-ONLY, and for the same reason `records` and `documents` are: a raw payload is
-   * the source's data verbatim. What is different here is only that the admin chooses the
-   * shape of the answer instead of paging a fixed one.
+   * `lake:read`, for the same reason `records` and `documents` are: a raw payload is the
+   * source's data verbatim. What is different here is only that the reader chooses the shape
+   * of the answer instead of paging a fixed one.
    *
    * The dbt login is the one that may read `raw`; the BI login behind `bi.answer` cannot,
    * and that stays true. A write is refused by the read-only transaction the worker frames
    * every query in, before any grant is consulted -- which matters because the dbt login
    * CAN create in its own two schemas. `queryRunner.runRawQuery`.
    */
-  query: requireRole("admin")
+  query: requirePermission("lake:read")
     .input(
       z.object({
         sql: z.string().trim().min(1).max(MAX_QUERY_SQL_BYTES),
@@ -139,14 +140,15 @@ export const lakeRouter = router({
   /**
    * One question over the whole of the tenant's raw lake, in Vietnamese or English.
    *
-   * ADMIN-ONLY, for the same reason `records` and `documents` are and one sharper: a hit
+   * `lake:read`, for the same reason `records` and `documents` are and one sharper: a hit
    * carries an excerpt of what a source actually said, and for a scanned contract that is
    * whatever the contract says. It reaches the text through the tenant's dbt login at the
    * worker, not through this process -- the control plane is still denied that column, and a
    * reader admitted here could have written the same SELECT in the console beside it.
-   * ADR 0026.
+   * ADR 0026, which made it admin-only; ADR 0139 opened it to `lake:read`, which is exactly the
+   * set of people the console beside it already admits.
    */
-  search: requireRole("admin")
+  search: requirePermission("lake:read")
     .input(
       z.object({
         q: z.string().trim().min(1).max(MAX_SEARCH_QUERY_CHARS),
@@ -187,10 +189,10 @@ export const lakeRouter = router({
     }),
 
   /**
-   * The `raw` schema's tables and columns: the console's sidebar. Admin-only, as above.
+   * The `raw` schema's tables and columns: the console's sidebar. `lake:read`, as above.
    * Narrowed to the named or matching tables when asked, by the rule `bi.schema` uses.
    */
-  querySchema: requireRole("admin")
+  querySchema: requirePermission("lake:read")
     .input(SchemaFilterInput)
     .query(async ({ ctx, input }) => {
       if (ctx.worker === null) {

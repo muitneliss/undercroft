@@ -15,13 +15,15 @@
  * section is a decision about the wheel before it is a route.
  *
  * `scoped` divisions are sections of one customer's book and cannot be opened
- * until a customer is chosen. `adminOnly` divisions open only for an admin of
- * that customer (ADR 0119). Either way they render face-down rather than being
- * hidden, because a division that vanishes teaches nobody that it exists.
- * `closedTo` is the one place both rules are read.
+ * until a customer is chosen. A division that `requires` a permission opens only
+ * for a reader who holds it in that customer -- ADR 0119 closed People to anyone
+ * but an admin, and ADR 0139 restated that as the permission its procedures need.
+ * Either way they render face-down rather than being hidden, because a division
+ * that vanishes teaches nobody that it exists. `closedTo` is the one place both
+ * rules are read.
  */
 
-import type { Role } from "@/lib/roles.ts";
+import { can, type Permission } from "@/lib/permissions.ts";
 
 export type DivisionId =
   | "customers"
@@ -49,11 +51,11 @@ export interface Division {
   /** Whether this division belongs to a single customer's book. */
   scoped: boolean;
   /**
-   * Whether only an admin of the customer may open it: every procedure it reads is
-   * `requireRole("admin")` on the server, so for anyone else it could print nothing but
+   * The permission a reader must hold to open it, or `null` for any member: every procedure the
+   * division reads needs it on the server, so for anyone else it could print nothing but
    * refusals. The server's gate is the control; this only says so before it is asked.
    */
-  adminOnly: boolean;
+  requires: Permission | null;
 }
 
 /** Ring order: the way a customer's data actually moves through the product. */
@@ -64,7 +66,7 @@ export const DIVISIONS: readonly Division[] = [
     hue: "#b24b1a",
     extent: 2,
     scoped: false,
-    adminOnly: false,
+    requires: null,
   },
   {
     id: "sources",
@@ -72,7 +74,7 @@ export const DIVISIONS: readonly Division[] = [
     hue: "#eda600",
     extent: 4,
     scoped: true,
-    adminOnly: false,
+    requires: null,
   },
   {
     id: "journal",
@@ -80,16 +82,16 @@ export const DIVISIONS: readonly Division[] = [
     hue: "#3e782b",
     extent: 3,
     scoped: true,
-    adminOnly: false,
+    requires: null,
   },
-  { id: "lake", labelKey: "nav.lake", hue: "#0f7673", extent: 3, scoped: true, adminOnly: false },
+  { id: "lake", labelKey: "nav.lake", hue: "#0f7673", extent: 3, scoped: true, requires: null },
   {
     id: "models",
     labelKey: "nav.models",
     hue: "#634cb0",
     extent: 3,
     scoped: true,
-    adminOnly: false,
+    requires: null,
   },
   {
     id: "reports",
@@ -97,7 +99,7 @@ export const DIVISIONS: readonly Division[] = [
     hue: "#7f4023",
     extent: 4,
     scoped: true,
-    adminOnly: false,
+    requires: null,
   },
   {
     id: "people",
@@ -105,12 +107,12 @@ export const DIVISIONS: readonly Division[] = [
     hue: "#234c9e",
     extent: 2,
     scoped: true,
-    adminOnly: true,
+    requires: "people:manage",
   },
 ] as const;
 
 /** Why a division will not open for a reader. */
-export type Closed = "no-customer" | "admin-only";
+export type Closed = "no-customer" | "not-permitted";
 
 /**
  * What a face-down division says, by why it is closed: a `title` for a pointer, and a `hint`
@@ -119,30 +121,38 @@ export type Closed = "no-customer" | "admin-only";
  */
 export const CLOSED_WORDS = {
   "no-customer": { title: "nav.lockedTitle", hint: "nav.lockedHint" },
-  "admin-only": { title: "nav.adminOnlyTitle", hint: "nav.adminOnlyHint" },
+  "not-permitted": { title: "nav.notPermittedTitle", hint: "nav.notPermittedHint" },
 } as const satisfies Record<Closed, { title: `nav.${string}`; hint: `nav.${string}` }>;
 
 /**
  * Why a division will not open for this reader, or `null` when it will.
  *
- * `no-customer`: it belongs to a book and none is open. `admin-only`: the reader's role in the
- * open book is known and is not admin -- a platform superadmin holds `admin` in every customer
- * (ADR 0013), so they are never closed out.
+ * `no-customer`: it belongs to a book and none is open. `not-permitted`: the reader's
+ * permissions in the open book are known and do not include the one the division requires -- a
+ * platform superadmin holds every permission in every customer (ADR 0013), so they are never
+ * closed out.
  *
- * A role that is NOT known -- `tenants.get` still on its way, or refused -- closes nothing. A
- * guess either way would be wrong for somebody: closing would show an admin a division turned
- * face-down that is theirs, and the server refuses a non-admin whatever the browser drew, so the
- * worst an open guess costs is a refusal the division prints itself.
+ * Permissions that are NOT known -- `tenants.get` still on its way, or refused -- close nothing.
+ * A guess either way would be wrong for somebody: closing would show an admin a division turned
+ * face-down that is theirs, and the server refuses a reader without the permission whatever the
+ * browser drew, so the worst an open guess costs is a refusal the division prints itself.
  */
 export function closedTo(
   div: Division,
-  reader: { readonly tenantId: string | undefined; readonly role: Role | undefined },
+  reader: {
+    readonly tenantId: string | undefined;
+    readonly permissions: readonly Permission[] | undefined;
+  },
 ): Closed | null {
   if (div.scoped && !reader.tenantId) {
     return "no-customer";
   }
-  if (div.adminOnly && reader.role !== undefined && reader.role !== "admin") {
-    return "admin-only";
+  if (
+    div.requires !== null &&
+    reader.permissions !== undefined &&
+    !can(reader.permissions, div.requires)
+  ) {
+    return "not-permitted";
   }
   return null;
 }

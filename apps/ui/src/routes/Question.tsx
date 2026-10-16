@@ -13,7 +13,7 @@
  * tile's is (`components/QuestionResult.tsx`), under the tenant's read-only login through the
  * worker. Its three panes -- the drawing, the rows that drew it, and how it is defined -- are
  * chosen in the address (`?view=`, `lib/questionPane.ts`), so a link can open on any of them,
- * and every role may read all three. A member or an admin turns to the two-leaf workbench
+ * and every role may read all three. A holder of `reports:author` turns to the two-leaf workbench
  * with Edit question (`?edit=1`), the definition on one leaf and its answer on the other; a
  * new question opens there, having nothing yet to read. A viewer never sees the workbench.
  */
@@ -24,6 +24,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import type { QuestionView, SchemaView } from "@/api/types.ts";
+import { can } from "@/lib/permissions.ts";
 import { columnsListed } from "@/lib/schemaAnswer.ts";
 import { Errata, type ServerError } from "@/components/Errata.tsx";
 import {
@@ -147,7 +148,7 @@ export function Question({ tenantId }: { tenantId: string }): React.JSX.Element 
       draft={held}
       stored={question.data ?? null}
       schema={schema.data}
-      canAuthor={tenant.data.role !== "viewer"}
+      canAuthor={can(tenant.data.permissions, "reports:author")}
       locale={locale}
       onSaved={async (savedId): Promise<void> => {
         await utils.bi.questions.list.invalidate({ tenantId });

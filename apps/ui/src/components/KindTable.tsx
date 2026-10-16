@@ -132,12 +132,12 @@ function RowActions({
 function Row({
   row,
   tenantId,
-  isAdmin,
+  canManage,
   writes,
 }: {
   row: KindRow;
   tenantId: string;
-  isAdmin: boolean;
+  canManage: boolean;
   writes: KindWrites;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -148,7 +148,7 @@ function Row({
     <tr>
       <td className="mono">{row.kind}</td>
       <td>
-        {isAdmin && editing ? (
+        {canManage && editing ? (
           <EditingCell row={row} tenantId={tenantId} update={writes.update} />
         ) : (
           row.description
@@ -156,7 +156,7 @@ function Row({
       </td>
       <td>{t(ORIGIN_KEY[row.origin])}</td>
       <td className="num">{sharePercent(row.sampleShare) ?? t("kinds.shareNone")}</td>
-      {isAdmin ? (
+      {canManage ? (
         <td>
           {editing ? null : <RowActions row={row} tenantId={tenantId} remove={writes.remove} />}
         </td>
@@ -168,12 +168,12 @@ function Row({
 export function KindTable({
   kinds,
   tenantId,
-  isAdmin,
+  canManage,
   writes,
 }: {
   kinds: readonly KindRow[];
   tenantId: string;
-  isAdmin: boolean;
+  canManage: boolean;
   writes: KindWrites;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -188,12 +188,18 @@ export function KindTable({
               <th scope="col">{t("kinds.colDescription")}</th>
               <th scope="col">{t("kinds.colOrigin")}</th>
               <th scope="col">{t("kinds.colShare")}</th>
-              {isAdmin ? <th scope="col">{t("kinds.colActions")}</th> : null}
+              {canManage ? <th scope="col">{t("kinds.colActions")}</th> : null}
             </tr>
           </thead>
           <tbody>
             {kinds.map((row) => (
-              <Row key={row.kind} row={row} tenantId={tenantId} isAdmin={isAdmin} writes={writes} />
+              <Row
+                key={row.kind}
+                row={row}
+                tenantId={tenantId}
+                canManage={canManage}
+                writes={writes}
+              />
             ))}
           </tbody>
         </table>

@@ -138,6 +138,17 @@ describe("seeds.save", () => {
     expect(got.sha256).toBe(listed[0]?.sha256 ?? "");
   });
 
+  it("a builder saves one, without being an admin (ADR 0139)", async () => {
+    const builder = await seedMember("b@example.test", "builder");
+
+    expect(await caller(builder, "b@example.test").seeds.save({ ...GROUPS, create: true })).toEqual(
+      {
+        ok: true,
+        unchanged: false,
+      },
+    );
+  });
+
   it("a member is refused, and so is a delete: a seed changes what every model reading it builds", async () => {
     const member = await seedMember("m@example.test", "member");
     const as = caller(member, "m@example.test", "en", new InMemoryWorkerClient());

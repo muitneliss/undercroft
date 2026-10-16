@@ -19,6 +19,7 @@
  */
 
 import process from "node:process";
+import { BUILT_IN_ROLES, isBuiltInRole } from "@undercroft/contracts/access";
 import {
   createHttpEmailSender,
   DEFAULT_LOCALE,
@@ -31,8 +32,6 @@ import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { ensureTenant, findTenant } from "./repos/tenant.ts";
 import * as people from "./services/people.ts";
 import { invitationMessage } from "./services/people.ts";
-
-const ROLES = new Set(["viewer", "member", "admin"]);
 
 interface Args {
   readonly email: string;
@@ -54,7 +53,7 @@ interface Args {
 function usage(message: string): never {
   process.stderr.write(
     `${message}\n\n` +
-      "usage: bun run invite -- <email> --tenant <id> [--role viewer|member|admin]\n" +
+      `usage: bun run invite -- <email> --tenant <id> [--role ${BUILT_IN_ROLES.join("|")}]\n` +
       "                       [--create-tenant] [--lang vi|en]\n" +
       "\n" +
       "  --create-tenant   create the tenant if it does not exist (for the first admin)\n" +
@@ -119,8 +118,8 @@ function require(email: string, tenantId: string, role: string): void {
   if (tenantId === "") {
     usage("--tenant is required");
   }
-  if (!ROLES.has(role)) {
-    usage(`--role must be one of ${[...ROLES].join(", ")}`);
+  if (!isBuiltInRole(role)) {
+    usage(`--role must be one of ${BUILT_IN_ROLES.join(", ")}`);
   }
 }
 

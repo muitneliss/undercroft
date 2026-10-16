@@ -27,10 +27,12 @@
  * `app.tenant_member` keys -- is what a role is resolved against. `Context.user.userId` is
  * always the `app_user` uuid, never Better Auth's id. `services/invite.ts` holds that seam.
  *
- * What is NOT here is the query. A role, and the tenant's state, are resolved through
- * `services/authz.ts`, which answers with an `Access` or `null`; turning that `null` into
+ * What is NOT here is the query. A role, its permissions and the tenant's state are resolved
+ * through `services/authz.ts`, which answers with an `Access` or `null`; turning that `null` into
  * NOT_FOUND, and a deactivated tenant into PRECONDITION_FAILED, are the decisions argued above,
- * and holding them in one place is why every tenant-scoped procedure gets them right.
+ * and holding them in one place is why every tenant-scoped procedure gets them right. What a
+ * procedure needs beyond membership is ONE permission, declared with `requirePermission` in
+ * `permissionGate.ts` (ADR 0139).
  */
 
 import { initTRPC, TRPCError } from "@trpc/server";
@@ -50,7 +52,7 @@ import {
 } from "../services/audit.ts";
 import type { OAuthApps } from "../services/connectedApps.ts";
 import type { SignInMethod } from "./auth.ts";
-import { accessIn, outranks, type Role } from "../services/authz.ts";
+import { accessIn } from "../services/authz.ts";
 import type { SpecReads } from "../services/connections.ts";
 import type { StartOutcome } from "../services/oauth.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
@@ -461,6 +463,7 @@ export const tenantStatusProcedure = authedProcedure
       ctx: {
         ...ctx,
         role: access.role,
+        permissions: access.permissions,
         deactivatedAt: access.deactivatedAt,
         tenantId: input.tenantId,
       },
@@ -504,9 +507,9 @@ export const tenantProcedure = tenantStatusProcedure.use(({ ctx, next }) => {
  * lack platform authority is what lets the UI leave the affordance out rather than present
  * a button that fails.
  *
- * Note what this does NOT accept: a tenant `admin`. Platform authority is not the top of the
- * role ladder, it is beside it -- `ROLE_RANK` orders authority *within* a customer, and no
- * amount of it adds up to the right to create another one.
+ * Note what this does NOT accept: a tenant `admin`. Platform authority is not the sum of a
+ * customer's permissions, it is beside them -- every permission is held *within* one customer,
+ * and no set of them adds up to the right to create another one.
  */
 export const superadminProcedure = authedProcedure.use(({ ctx, next }) => {
   if (!ctx.superadmin) {
@@ -517,28 +520,3 @@ export const superadminProcedure = authedProcedure.use(({ ctx, next }) => {
   }
   return next();
 });
-
-/**
- * Require at least `min` authority. FORBIDDEN here is correct: membership is established.
- *
- * On `tenantProcedure` unless told otherwise, so an admin procedure is refused on a deactivated
- * customer like every other. `tenantStatusProcedure` is passed by the one admin procedure that
- * must work there: reactivating it.
- */
-export function requireRole(
-  min: Role,
-  on: typeof tenantStatusProcedure = tenantProcedure,
-): ReturnType<typeof tenantProcedure.use> {
-  return on.use(({ ctx, next }) => {
-    if (!outranks(ctx.role, min)) {
-      // Worded, because the UI shows this message to the caller verbatim. The two refusals
-      // above it -- UNAUTHORIZED, and NOT_FOUND for a non-member -- deliberately carry no
-      // message at all: what they must not do is confirm that the tenant exists.
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: messages(ctx.locale)("error.requiresRole", { role: min }),
-      });
-    }
-    return next();
-  });
-}

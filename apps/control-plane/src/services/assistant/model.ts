@@ -49,6 +49,20 @@ export interface Turn {
    * back something else entirely. Biome's `noThenProperty` catches it, and it is right to.
    */
   readonly reply: readonly Step[];
+  /**
+   * When present, a phrase the system prompt must contain for this turn to answer -- what the
+   * model must have been TOLD, as `when` is what it was asked. A prompt missing it is
+   * unscripted and refused like any other, so a fact the handler dropped on the way to the
+   * model (the reader's role, their permissions) fails the suite rather than going unsaid.
+   */
+  readonly told?: string;
+}
+
+/** What the model was told about itself this turn: the system prompt, verbatim. */
+function systemText(options: LanguageModelV4CallOptions): string {
+  return options.prompt
+    .map((message) => (message.role === "system" ? message.content : ""))
+    .join("\n");
 }
 
 /** Nothing is being counted; the field is required and a scripted model has no tokens. */
@@ -142,8 +156,11 @@ export function inMemoryLanguageModel(turns: readonly Turn[]): LanguageModelV4 {
 
     doStream: (options): Promise<{ stream: ReadableStream<LanguageModelV4StreamPart> }> => {
       const asked = lastUserText(options);
-      const index = remaining.findIndex((candidate) =>
-        asked.toLowerCase().includes(candidate.when.toLowerCase()),
+      const told = systemText(options);
+      const index = remaining.findIndex(
+        (candidate) =>
+          asked.toLowerCase().includes(candidate.when.toLowerCase()) &&
+          (candidate.told === undefined || told.includes(candidate.told)),
       );
       if (index === -1) {
         return Promise.reject(

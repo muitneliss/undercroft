@@ -57,8 +57,9 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
   is a dbt model you wrote. Undercroft has no opinion about what a "customer" is.
 - **Multi-tenant.** Per-tenant credentials sealed with AES-256-GCM, and a control-plane
   UI where someone connects their own accounts. Each tenant's rows are fenced by row-level
-  security, and its people are viewers, members or admins. An admin invites, changes a
-  role and removes a member, but never the last admin.
+  security, and what each of its people may do is a set of
+  [permissions](docs/reference/permissions.md) their role holds: viewer, member, builder or
+  admin. An admin invites, changes a role and removes a member, but never the last admin.
 - **Anything can ingest.** A REST lake API means a shell script or an orchestrator can
   land data too — through the same create-only, content-addressed path.
 - **Documents, not only records.** Gmail and Drive are first-party collectors, because a
@@ -81,7 +82,7 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
   every read an agent makes, and every sign-in, sign-out and refused token. Each person reads
   their own on the account page, an admin a customer's in People, a superadmin all of it.
 - **An assistant with exactly your permissions.** It reaches the platform's own procedures
-  through the real role gates, so it can refuse you; a change is proposed as a proof you
+  through the real permission checks, so it can refuse you; a change is proposed as a proof you
   strike, and a separate model checks you asked for it before one is ever offered.
 - **A CLI for people and agents.** `undercroft` does everything the web UI does, one command
   per API procedure, as the person who signed in — never more. Writes stay off for
@@ -104,8 +105,8 @@ rather not open a terminal; the terminal wizard does the same and also runs unat
 
 ## Ways in
 
-Every way in reaches the same procedures through the same role gates, as the person who
-signed in. This page only says which to choose; each runbook says how.
+Every way in reaches the same procedures through the same permission checks, as the person
+who signed in. This page only says which to choose; each runbook says how.
 Bringing a new person in, from invitation to their first session with an agent, is
 [onboarding](docs/runbook/onboarding.md), in Vietnamese and English.
 

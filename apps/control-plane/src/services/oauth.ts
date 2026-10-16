@@ -31,7 +31,7 @@ import { createPkce, hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 
 import { consentTarget } from "./accountResolution.ts";
-import type { AdminStanding } from "./authz.ts";
+import type { Standing } from "./authz.ts";
 import { sealResolved } from "./consentSeal.ts";
 import {
   consumeHandshake,
@@ -238,7 +238,8 @@ export type CompleteOutcome =
       reason:
         | "not-configured"
         | "bad-state"
-        | "not-admin"
+        /** The caller does not hold `sources:manage` there (ADR 0139). */
+        | "not-permitted"
         /** The customer was deactivated while the consent was out (ADR 0110). Nothing is sealed. */
         | "tenant-deactivated"
         | "exchange-failed"
@@ -254,32 +255,32 @@ export type CompleteOutcome =
 
 export interface CompleteDeps extends OAuthDeps {
   /**
-   * Answers where the caller stands as an admin of the tenant. Injected, so this stays
+   * Answers where the caller stands with `sources:manage` in the tenant. Injected, so this stays
    * pure-ish.
    *
-   * It takes the whole caller rather than a uuid because "admin" here means **authority**,
-   * not membership, and platform authority is named by address in `UNDERCROFT_SUPERADMINS`.
-   * Handed only a `userId`, the one honest implementation left is a `tenant_member` lookup --
-   * which is exactly the bug this signature exists to make unwritable: a superadmin holds
-   * admin in every tenant and has a row in none of them, so the consent they started was
-   * refused here as `not-admin` after Google had already granted it. `authz.adminStandingIn`
-   * is the implementation; the type is what stops a caller inventing a narrower one.
+   * It takes the whole caller rather than a uuid because the permission here means
+   * **authority**, not membership, and platform authority is named by address in
+   * `UNDERCROFT_SUPERADMINS`. Handed only a `userId`, the one honest implementation left is a
+   * `tenant_member` lookup -- which is exactly the bug this signature exists to make unwritable:
+   * a superadmin holds admin in every tenant and has a row in none of them, so the consent they
+   * started was refused here after Google had already granted it. `authz.standingIn` is the
+   * implementation; the type is what stops a caller inventing a narrower one.
    *
    * A standing rather than a boolean since ADR 0110: a consent started before its customer
    * was deactivated must not seal a credential after, and the refusal has to say that rather
-   * than call an admin a non-admin.
+   * than call a holder a non-holder.
    */
-  adminStanding: (
+  sourcesStanding: (
     tenantId: string,
     caller: { userId: string; email: string },
-  ) => Promise<AdminStanding>;
+  ) => Promise<Standing>;
 }
 
 /**
  * Finish a consent: consume the state, exchange the code, hand the credential to the worker.
  *
  * The order is the security argument. State first, because it is the CSRF control and
- * consuming it makes a replay impossible; then the role check, because it is the
+ * consuming it makes a replay impossible; then the permission check, because it is the
  * authorisation control and must be re-asked at the moment of use; only then is the code
  * spent. A code exchanged before those checks is a token minted into a customer's account
  * on the strength of a request nobody verified.
@@ -308,11 +309,11 @@ export async function completeConsent(
 
   const { caller } = input;
   const standing =
-    caller === null ? "not-admin" : await deps.adminStanding(handshake.tenantId, caller);
-  if (caller === null || standing !== "admin") {
+    caller === null ? "lacks" : await deps.sourcesStanding(handshake.tenantId, caller);
+  if (caller === null || standing !== "holds") {
     return {
       ok: false,
-      reason: standing === "deactivated" ? "tenant-deactivated" : "not-admin",
+      reason: standing === "deactivated" ? "tenant-deactivated" : "not-permitted",
       tenantId: handshake.tenantId,
       source: handshake.source,
     };

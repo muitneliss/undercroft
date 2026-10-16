@@ -2,12 +2,13 @@
  * The authorization semantics, exercised through a real caller against PGlite.
  *
  * No HTTP and no mocks: the test builds a context and calls the router directly, so it
- * runs the actual middleware -- the 404-not-403 boundary, the role ranks -- against real
- * Postgres grants and rows.
+ * runs the actual middleware -- the 404-not-403 boundary, the permission gates Casbin decides
+ * (ADR 0139) -- against real Postgres grants and rows.
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
+import type { Permission } from "@undercroft/contracts/access";
 import { DEFAULT_LOCALE } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { procedureManifest, resolveProcedure } from "./procedures.ts";
@@ -117,7 +118,7 @@ describe("a non-member is told the tenant does not exist", () => {
   });
 });
 
-describe("role ranks gate privileged actions once membership is established", () => {
+describe("permissions gate privileged actions once membership is established", () => {
   it("a viewer calling startOAuth gets FORBIDDEN, because they know the tenant exists", async () => {
     const user = await seedUser("viewer@example.test");
     await seedMembership("CASE-1", user, "viewer");
@@ -215,6 +216,148 @@ describe("role ranks gate privileged actions once membership is established", ()
   });
 });
 
+/**
+ * The built-in roles as what each lets a person do (ADR 0139). A shipped contract: the UI, the
+ * CLI and an agent all read `permissions` off `tenants.get` to know what they may do, so the
+ * matrix is pinned whole rather than one permission at a time.
+ */
+describe("what each built-in role holds", () => {
+  const EVERY: Permission[] = [
+    "audit:read",
+    "catalogue:manage",
+    "keys:manage",
+    "lake:read",
+    "models:write",
+    "people:manage",
+    "reports:author",
+    "roles:manage",
+    "sources:manage",
+    "tenant:manage",
+  ];
+
+  it("is answered by tenants.get, sorted, and is the same row tenants.list gives", async () => {
+    const held: Record<string, unknown> = {};
+    const listed: Record<string, unknown> = {};
+    for (const role of ["viewer", "member", "builder", "admin"] as const) {
+      const user = await seedUser(`${role}@example.test`);
+      await seedMembership("CASE-1", user, role);
+      const as = caller({ userId: user, email: `${role}@example.test` });
+      held[role] = (await as.tenants.get({ tenantId: "CASE-1" })).permissions;
+      listed[role] = (await as.tenants.list())[0]?.permissions;
+    }
+
+    expect(held).toEqual({
+      viewer: [],
+      member: ["reports:author"],
+      builder: ["lake:read", "models:write", "reports:author"],
+      admin: EVERY,
+    });
+    expect(listed).toEqual(held);
+  });
+
+  it("a superadmin holds every permission in a tenant they are no member of", async () => {
+    const user = await seedUser("root@example.test");
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
+    const root = caller({ userId: user, email: "root@example.test" }, true);
+
+    expect((await root.tenants.get({ tenantId: "CASE-1" })).permissions).toEqual(EVERY);
+    expect((await root.tenants.list())[0]?.permissions).toEqual(EVERY);
+  });
+});
+
+/**
+ * Issue 481: a builder fixes the dbt project without the authority to change who reaches the
+ * customer or what it connects. The opened gates are pinned in each area's own suite
+ * (`models.test.ts`, `macros.test.ts`, `seeds.test.ts`, `lake.test.ts`); this is the other half
+ * -- everything an admin keeps, refused by name.
+ */
+describe("a builder", () => {
+  async function builder() {
+    const user = await seedUser("builder@example.test");
+    await seedMembership("CASE-1", user, "builder");
+    return caller({ userId: user, email: "builder@example.test" });
+  }
+
+  /** The refusal's code and the permission it names, or `NO_ERROR`. */
+  async function lacking(fn: () => Promise<unknown>): Promise<string> {
+    try {
+      await fn();
+      return "NO_ERROR";
+    } catch (error) {
+      if (!(error instanceof TRPCError)) {
+        return "UNKNOWN";
+      }
+      return `${error.code}:${refusalFacts(error)?.permission ?? ""}`;
+    }
+  }
+
+  it("is refused people, sources, keys, runs and the customer, each naming what it lacks", async () => {
+    const as = await builder();
+    const tenantId = "CASE-1";
+
+    expect({
+      invite: await lacking(() =>
+        as.people.invite({ tenantId, email: "new@example.test", role: "viewer" }),
+      ),
+      disconnect: await lacking(() => as.connections.disconnect({ tenantId, source: "gmail" })),
+      mint: await lacking(() => as.keys.mint({ tenantId, label: "script" })),
+      trigger: await lacking(() => as.runs.trigger({ tenantId, source: "hubspot" })),
+      rename: await lacking(() => as.tenants.rename({ tenantId, displayName: "Renamed" })),
+    }).toEqual({
+      invite: "FORBIDDEN:people:manage",
+      disconnect: "FORBIDDEN:sources:manage",
+      mint: "FORBIDDEN:keys:manage",
+      trigger: "FORBIDDEN:sources:manage",
+      rename: "FORBIDDEN:tenant:manage",
+    });
+  });
+
+  it("is told in their own language what they lack and who can grant it", async () => {
+    const user = await seedUser("builder@example.test");
+    await seedMembership("CASE-1", user, "builder");
+
+    try {
+      await caller({ userId: user, email: "builder@example.test" }).people.members({
+        tenantId: "CASE-1",
+      });
+      throw new Error("expected a refusal");
+    } catch (error) {
+      expect(error instanceof TRPCError ? error.message : "").toBe(
+        "Thao tác này cần quyền quản lý người dùng (people:manage). Hãy nhờ người có quyền people:manage trong khách hàng này cấp cho bạn một vai trò có quyền đó.",
+      );
+    }
+  });
+});
+
+/**
+ * Every tenant procedure that changes something declares the permission it needs (ADR 0139).
+ * Read off the running router, so the next write somebody adds on bare `tenantProcedure` --
+ * open to every viewer -- fails here rather than shipping. A POST that only reads (`models.check`,
+ * an export's request) is a read for this purpose, as it is for a credential's grant.
+ */
+describe("the router's permissions", () => {
+  it("leave no tenant write open to every member", async () => {
+    const open = (await procedureManifest())
+      .filter((spec) => spec.tenantScoped && spec.effect !== "read" && spec.permission === null)
+      .map((spec) => spec.path);
+
+    expect(open).toEqual([]);
+  });
+
+  it("are described where every caller outside the browser reads a procedure", async () => {
+    const specs = await procedureManifest();
+    const save = specs.find((spec) => spec.path === "models.save");
+    const list = specs.find((spec) => spec.path === "models.list");
+
+    expect(save?.permission).toBe("models:write");
+    expect(save?.description.en.endsWith(" Needs models:write.")).toBe(true);
+    expect(save?.description.vi.endsWith(" Cần quyền models:write.")).toBe(true);
+    // The quiet side: a read any member may make names no permission.
+    expect(list?.permission).toBeNull();
+    expect(list?.description.en).not.toContain("Needs");
+  });
+});
+
 describe("unauthenticated access", () => {
   it("session.me without a user is UNAUTHORIZED", async () => {
     expect(await errorCode(() => caller(null).session.me())).toBe("UNAUTHORIZED");
@@ -267,7 +410,7 @@ describe("a superadmin holds admin in every tenant", () => {
 
 describe("a superadmin can act in a tenant, not only see it", () => {
   it("may invite to a tenant they have no membership in", async () => {
-    // `people.invite` is requireRole("admin"). Platform authority has to satisfy it, or a
+    // `people.invite` needs people:manage. Platform authority has to satisfy it, or a
     // superadmin can see a customer and do nothing about who may reach it.
     const user = await seedUser("root@example.test");
     await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
@@ -326,7 +469,7 @@ describe("creating a customer is platform authority, not a tenant role", () => {
   });
 
   it("a tenant admin cannot, however senior in their own customer", async () => {
-    // The point of the pairing: `admin` is the top of ROLE_RANK and still is not this.
+    // The point of the pairing: `admin` holds every permission there is and still not this.
     const user = await seedUser("admin@example.test");
     await seedMembership("CASE-1", user, "admin");
 

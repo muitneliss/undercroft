@@ -15,6 +15,7 @@
  * gets widened by accident.
  */
 
+import { ADMIN_ROLE, type Permission } from "@undercroft/contracts/access";
 import type { SqlExecutor } from "@undercroft/db";
 import { isRoleCollision, provisionTenantRoles } from "@undercroft/db/repos";
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
@@ -29,27 +30,36 @@ import {
   type Tenant,
   undoCreateTenant,
 } from "../repos/tenant.ts";
+import { permissionsOf } from "./rbac.ts";
 
-export type { MemberTenant } from "../repos/membership.ts";
+/** A tenant in the caller's list, with the role they hold there and what it lets them do. */
+export interface ListedTenant extends MemberTenant {
+  readonly permissions: readonly Permission[];
+}
 export type { Tenant } from "../repos/tenant.ts";
 
 /**
  * The tenants this caller may see. Non-membership is invisible, not forbidden.
  *
  * A superadmin sees every tenant, each reported as `admin` -- which is exactly the authority
- * `authz.authorityIn` grants them when they open one, so the list and the page cannot
- * disagree about what may be done there.
+ * `authz.accessIn` grants them when they open one, so the list and the page cannot
+ * disagree about what may be done there. Each row's `permissions` is asked of the same
+ * evaluator for the same reason (ADR 0139): the list is how a page knows which divisions to
+ * offer before it has opened any one customer.
  */
 export async function listForCaller(
   exec: SqlExecutor,
   caller: { userId: string; superadmin: boolean },
-): Promise<MemberTenant[]> {
-  if (!caller.superadmin) {
-    return await listForUser(exec, caller.userId);
-  }
-
-  const all = await listAllTenants(exec);
-  return all.map((tenant) => ({ ...tenant, role: "admin" }));
+): Promise<ListedTenant[]> {
+  const rows: readonly MemberTenant[] = caller.superadmin
+    ? (await listAllTenants(exec)).map((tenant) => ({ ...tenant, role: ADMIN_ROLE }))
+    : await listForUser(exec, caller.userId);
+  return await Promise.all(
+    rows.map(async (row) => ({
+      ...row,
+      permissions: await permissionsOf({ userId: caller.userId, tenantId: row.id, role: row.role }),
+    })),
+  );
 }
 
 /** One tenant, or `null`. */
@@ -177,7 +187,7 @@ export type TransitionResult =
  * Nothing is deleted. The state is one column (`ops.tenant.deactivated_at`), the transition one
  * conditional UPDATE, and the audit row the record of who did it -- written here rather than
  * by the handler, because "the customer was deactivated, and by whom" is one fact. Authority is
- * not re-checked: this is reachable through `requireRole("admin")` alone.
+ * not re-checked: this is reachable through `requirePermission("tenant:manage")` alone.
  */
 export async function deactivate(
   exec: SqlExecutor,

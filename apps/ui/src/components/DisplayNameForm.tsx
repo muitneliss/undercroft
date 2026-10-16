@@ -12,8 +12,8 @@
  * makes that impossible to ask for rather than merely refused, and this form has one field
  * because the procedure has one field.
  *
- * `canEdit` hides the form from a viewer or member. That is courtesy and not the control:
- * `tenants.rename` is `requireRole("admin")` and refuses whatever the browser chose to
+ * `canEdit` hides the form from a reader without `tenant:manage`. That is courtesy and not the
+ * control: `tenants.rename` is `requirePermission("tenant:manage")` and refuses whatever the browser chose to
  * render. The note in its place names who *can*, so a reader who cannot is not at a dead end.
  *
  * No `useState`, per `state.md`. The input is uncontrolled and read through a ref on submit;

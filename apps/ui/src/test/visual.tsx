@@ -14,6 +14,8 @@
  *
  * Which role the reader has is fixture data, exactly as on the server: `tenants.list` names it
  * per customer, `tenants.get` for the open book, `session.me` whether they are a superadmin.
+ * Each tenant answer carries the role's `permissions` too, from `held` in `@/test/access.ts`,
+ * because a screen decides on those and never on the role (ADR 0139).
  *
  * Only for `*.vrt.test.tsx`, which Vitest runs in Chromium (ADR 0099). `bun test` never loads
  * this file.

@@ -11,20 +11,23 @@ runbook mà nó dẫn tới. _English follows the Vietnamese._
 Người dùng chỉ đăng nhập được khi đã được mời. Quản trị viên mời họ ở trang **People** của
 khách hàng, bằng đúng địa chỉ email họ sẽ dùng, và chọn vai trò:
 
-| Vai trò  | Làm được                                                                    |
-| -------- | --------------------------------------------------------------------------- |
-| `viewer` | xem nguồn, lần chạy, model, báo cáo                                         |
-| `member` | như trên, và lưu câu hỏi báo cáo, dashboard                                 |
-| `admin`  | như trên, và đọc raw lake, lưu và dựng model, kết nối nguồn, mời người khác |
+| Vai trò   | Làm được                                                                    |
+| --------- | --------------------------------------------------------------------------- |
+| `viewer`  | xem nguồn, lần chạy, model, báo cáo                                         |
+| `member`  | như trên, và lưu câu hỏi báo cáo, dashboard                                 |
+| `builder` | như trên, và đọc raw lake, lưu và dựng model, macro, bảng tham chiếu        |
+| `admin`   | như trên, và kết nối nguồn, tạo khoá nạp dữ liệu, mời và quản lý người khác |
 
-Người muốn dựng model cần vai trò `admin`. Nếu hệ thống chưa có ai để mời người đầu tiên, xem
+Người muốn dựng model cần vai trò `builder` (quyền `models:write` và `lake:read`) hoặc `admin`;
+không cần là `admin` chỉ để sửa model. Mỗi vai trò là một tập quyền, liệt kê ở
+[Permissions](../reference/permissions.md). Nếu hệ thống chưa có ai để mời người đầu tiên, xem
 [Bootstrap the first admin](sign-in-setup.md#7-bootstrap-the-first-admin).
 
 Ba từ gặp ngay trong trang Báo cáo:
 
 - **Model**: một câu `SELECT` (dbt) trên dữ liệu thô, được dựng thành một bảng. Logic nằm ở
   đây: nối bảng, gộp trùng, múi giờ, định nghĩa một chỉ số. Model chỉ đổi khi được dựng lại,
-  tức là sau mỗi lần đồng bộ thành công hoặc khi admin bấm dựng.
+  tức là sau mỗi lần đồng bộ thành công hoặc khi một builder hay admin bấm dựng.
 - **Câu hỏi**: một truy vấn đã lưu trên các model đã dựng, dựng bằng biểu mẫu hoặc viết SQL,
   kèm cách vẽ nó thành bảng hay biểu đồ. Các công cụ BI khác gọi nó là _saved query_, _chart_
   hay _Look_; tên "câu hỏi" (_question_) được giữ từ Metabase, BI mà Undercroft dùng trước
@@ -78,20 +81,23 @@ Ba thói quen tốt:
 Sign-in is invite-only. An admin invites the person from the customer's **People** page, with
 the exact email address they will use, and picks a role:
 
-| Role     | Can                                                                                |
-| -------- | ---------------------------------------------------------------------------------- |
-| `viewer` | see sources, runs, models and reports                                              |
-| `member` | all of that, and save report questions and dashboards                              |
-| `admin`  | all of that, and read the raw lake, save and build models, connect sources, invite |
+| Role      | Can                                                                          |
+| --------- | ---------------------------------------------------------------------------- |
+| `viewer`  | see sources, runs, models and reports                                        |
+| `member`  | all of that, and save report questions and dashboards                        |
+| `builder` | all of that, and read the raw lake, save and build models, macros and seeds  |
+| `admin`   | all of that, and connect sources, mint ingest keys, invite and manage people |
 
-Building models needs `admin`. If nobody can invite the first person yet, see
+Building models needs `builder` (the `models:write` and `lake:read` permissions) or `admin`;
+nobody has to be made `admin` only to fix models. Each role is a set of permissions, listed in
+[Permissions](../reference/permissions.md). If nobody can invite the first person yet, see
 [Bootstrap the first admin](sign-in-setup.md#7-bootstrap-the-first-admin).
 
 Three words they meet on the Reports page:
 
 - **Model**: a dbt `SELECT` over the raw data, built into a table. The logic lives here:
   joins, deduplication, time zones, what a metric means. A model changes only when it is
-  built, which is after each successful sync or when an admin builds it.
+  built, which is after each successful sync or when a builder or an admin builds it.
 - **Question**: a saved query over the built models, made with the form or written as SQL,
   together with how to draw it as a table or a chart. Other BI tools call it a saved query, a
   chart or a Look; the name comes from Metabase, the BI Undercroft used before its own. A

@@ -2,8 +2,9 @@
 
 A macro is a named piece of dbt Jinja that a model calls, such as `{{ parse_amount(...) }}`.
 The platform ships a few into every project. A customer can also have macros of its own,
-saved by one of its admins, and every model of that customer can call them. This page says
-how to find one to reuse, when to propose a new one, and what a definition must look like.
+saved by someone holding `models:write` (a builder or an admin), and every model of that
+customer can call them. This page says how to find one to reuse, when to propose a new one,
+and what a definition must look like.
 
 ## Find one before you write one
 

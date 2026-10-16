@@ -102,7 +102,9 @@ describe("what is recorded", () => {
         userId: viewer.userId,
         channel: "web",
         outcome: "refused",
-        reason: "FORBIDDEN",
+        // The refusal's own code, which names what refused it: a missing permission (ADR
+        // 0139), as a read token's write is recorded as WRITES_DISABLED below.
+        reason: "PERMISSION_REQUIRED",
         tenantId: "CASE-1",
       },
     ]);

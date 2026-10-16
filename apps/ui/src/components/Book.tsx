@@ -29,7 +29,7 @@ import { lazy, type ReactNode, Suspense, useEffect, useId, useRef } from "react"
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
-import { AdminOnlyNotice } from "@/components/AdminOnlyNotice.tsx";
+import { NotPermittedNotice } from "@/components/NotPermittedNotice.tsx";
 import { Colophon } from "@/components/Colophon.tsx";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
@@ -39,7 +39,7 @@ import { TabRail } from "@/components/TabRail.tsx";
 import { DeactivatedNotice } from "@/components/TenantDeactivation.tsx";
 import { applyBoard } from "@/lib/acetate.ts";
 import { closedTo, type DivisionId, division } from "@/lib/divisions.ts";
-import type { Role } from "@/lib/roles.ts";
+import type { Permission } from "@/lib/permissions.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -190,7 +190,8 @@ function leafPage(page: {
   tenantId: string | undefined;
   current: DivisionId;
   pending: boolean;
-  role: Role | undefined;
+  role: string | undefined;
+  permissions: readonly Permission[] | undefined;
   deactivatedAt: string | null;
   children: ReactNode;
 }): ReactNode {
@@ -204,16 +205,28 @@ function leafPage(page: {
     return (
       <DeactivatedNotice
         tenantId={page.tenantId}
-        role={page.role ?? ""}
+        permissions={page.permissions ?? []}
         deactivatedAt={page.deactivatedAt}
       />
     );
   }
-  // The rule the tab strip reads, so the tab and the leaf cannot disagree. A known role is
-  // `closedTo`'s own condition for closing anything here; it is repeated so the notice is
-  // handed a role it can name.
-  if (page.role !== undefined && closedTo(division(page.current), page) !== null) {
-    return <AdminOnlyNotice tenantId={page.tenantId} current={page.current} role={page.role} />;
+  // The rule the tab strip reads, so the tab and the leaf cannot disagree. Known permissions
+  // and a division that requires one are `closedTo`'s own conditions for closing anything here;
+  // they are repeated so the notice is handed the role and the permission it names.
+  const { requires } = division(page.current);
+  if (
+    page.role !== undefined &&
+    requires !== null &&
+    closedTo(division(page.current), page) === "not-permitted"
+  ) {
+    return (
+      <NotPermittedNotice
+        tenantId={page.tenantId}
+        current={page.current}
+        role={page.role}
+        permission={requires}
+      />
+    );
   }
   return page.children;
 }
@@ -299,7 +312,7 @@ export function Book({
       <a className="book__skip" href={`#${pageId}`}>
         {t("app.skip")}
       </a>
-      <TabRail tenantId={tenantId} role={tenant.data?.role} current={current} />
+      <TabRail tenantId={tenantId} permissions={tenant.data?.permissions} current={current} />
 
       {/*
         Keyed to WHICH BOOK IS OPEN AT WHICH DIVISION, which is the same thing as
@@ -363,6 +376,7 @@ export function Book({
               current,
               pending: tenant.isPending,
               role: tenant.data?.role,
+              permissions: tenant.data?.permissions,
               deactivatedAt,
               children,
             })}

@@ -16,7 +16,7 @@
  * (`ModelLineage`, ADR 0092), in the same address with `?view=lineage`: a view of Models and
  * not an eighth division, because the wheel is full (ADR 0019).
  *
- * Creating is admin-only, like saving: a model is what a dashboard will show. The name is
+ * Creating needs `models:write`, like saving: a model is what a dashboard will show. The name is
  * checked by the browser's own constraint validation before it is sent, so a bad name is a
  * message at the field and not a refusal from the server; the server refuses regardless.
  */
@@ -32,6 +32,7 @@ import { ModelLineage } from "@/components/ModelLineage.tsx";
 import { ModelRow } from "@/components/ModelRow.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
+import { can } from "@/lib/permissions.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { LINEAGE_VIEW, lineagePath, VIEW_PARAM } from "@/lib/lineage.ts";
 import { wholeList } from "@/lib/listAnswers.ts";
@@ -78,7 +79,7 @@ export function Models({ tenantId }: { tenantId: string }): React.JSX.Element {
     );
   }
 
-  const isAdmin = tenant.data.role === "admin";
+  const canWrite = can(tenant.data.permissions, "models:write");
   const base = divisionPath("models", tenantId);
 
   return (
@@ -109,11 +110,11 @@ export function Models({ tenantId }: { tenantId: string }): React.JSX.Element {
         {lineage ? (
           <ModelLineage tenantId={tenantId} />
         ) : (
-          <ModelList isAdmin={isAdmin} tenantId={tenantId} />
+          <ModelList canWrite={canWrite} tenantId={tenantId} />
         )}
       </div>
 
-      {isAdmin && !lineage ? (
+      {canWrite && !lineage ? (
         <>
           <div className="band-rule" />
           <h2 className="head">{t("models.newHead")}</h2>
@@ -269,10 +270,10 @@ function caption(
 
 function ModelList({
   tenantId,
-  isAdmin,
+  canWrite,
 }: {
   tenantId: string;
-  isAdmin: boolean;
+  canWrite: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const [params] = useSearchParams();
@@ -298,7 +299,7 @@ function ModelList({
     return (
       <EmptyState
         title={t("models.emptyTitle")}
-        body={isAdmin ? t("models.emptyBody") : t("models.emptyBodyViewer")}
+        body={canWrite ? t("models.emptyBody") : t("models.emptyBodyViewer")}
       />
     );
   }

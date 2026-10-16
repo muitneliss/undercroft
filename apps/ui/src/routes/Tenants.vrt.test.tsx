@@ -14,11 +14,30 @@ import type { AppRouter } from "@undercroft/control-plane/router";
 import { describe, test as it } from "vitest";
 
 import { open } from "@/test/visual.tsx";
+import { held } from "@/test/access.ts";
 
 const CUSTOMERS: inferRouterOutputs<AppRouter>["tenants"]["list"] = [
-  { id: "CASE-0042", displayName: "Demo Co.", role: "admin", deactivatedAt: null },
-  { id: "CASE-0067", displayName: "Atlas Example", role: "member", deactivatedAt: null },
-  { id: "CASE-0081", displayName: "Paper & Pine Demo", role: "viewer", deactivatedAt: null },
+  {
+    id: "CASE-0042",
+    displayName: "Demo Co.",
+    role: "admin",
+    permissions: held("admin"),
+    deactivatedAt: null,
+  },
+  {
+    id: "CASE-0067",
+    displayName: "Atlas Example",
+    role: "member",
+    permissions: held("member"),
+    deactivatedAt: null,
+  },
+  {
+    id: "CASE-0081",
+    displayName: "Paper & Pine Demo",
+    role: "viewer",
+    permissions: held("viewer"),
+    deactivatedAt: null,
+  },
 ];
 
 describe("the customer index, in English", () => {

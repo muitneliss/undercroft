@@ -15,6 +15,7 @@ import { cleanup, screen } from "@testing-library/react";
 import "@/i18n/index.ts";
 import { vi } from "@/i18n/vi.ts";
 import { Consent } from "@/routes/Consent.tsx";
+import { held } from "@/test/access.ts";
 import { mountRoute } from "@/test/mountRoute.tsx";
 
 afterEach(cleanup);
@@ -26,7 +27,12 @@ function openConsent(tenants: readonly { id: string; displayName: string; role: 
     element: <Consent signedInAs="ada@example.test" />,
     answers: {
       "session.me": () => ({ userId: "u-ada", email: "ada@example.test", superadmin: false }),
-      "tenants.list": () => tenants.map((tenant) => ({ ...tenant, deactivatedAt: null })),
+      "tenants.list": () =>
+        tenants.map((tenant) => ({
+          ...tenant,
+          permissions: held(tenant.role),
+          deactivatedAt: null,
+        })),
     },
   });
 }

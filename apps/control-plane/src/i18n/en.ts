@@ -75,6 +75,23 @@ export const en = {
     action: "Open Sources",
   },
 
+  permission: {
+    reportsAuthor: "author questions and dashboards",
+    modelsWrite: "save, build and preview models, macros and reference tables",
+    lakeRead: "read the raw lake",
+    sourcesManage: "manage sources",
+    keysManage: "manage ingest keys",
+    catalogueManage: "manage the document-kind catalogue",
+    peopleManage: "manage people",
+    auditRead: "read the customer's audit log",
+    tenantManage: "manage the customer",
+    rolesManage: "manage roles",
+  },
+
+  procedure: {
+    needs: "Needs {{permission}}.",
+  },
+
   error: {
     notInvited:
       "That address has not been invited. Ask an administrator for an invitation, and sign in with the exact address it was sent to.",
@@ -84,7 +101,8 @@ export const en = {
     notMember: "{{email}} does not have access to this customer.",
     lastAdmin:
       "{{email}} is this customer's only admin. Make someone else an admin first, so the customer is not left with nobody who can manage access.",
-    requiresRole: "This action requires the {{role}} role.",
+    requiresPermission:
+      "This action needs permission to {{label}} ({{permission}}). Ask someone who holds people:manage in this customer for a role that has it.",
     requiresSuperadmin: "This action requires platform administrator access.",
     writesDisabled:
       "This token may only read, so it cannot do this. Mint a token that may write on the Account page if you mean to allow it.",

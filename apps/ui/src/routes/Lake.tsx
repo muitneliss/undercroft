@@ -25,6 +25,7 @@ import { Errata } from "@/components/Errata.tsx";
 import { ArrowRight } from "@/components/Icon.tsx";
 import { LakeSummary } from "@/components/LakeSummary.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { can } from "@/lib/permissions.ts";
 import { kindsPath } from "@/lib/documentKinds.ts";
 import { consolePath, type LakeStream, parseStream, streamParams, streamsOf } from "@/lib/lake.ts";
 import { useUiStore } from "@/store.ts";
@@ -60,7 +61,7 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
     );
   }
 
-  const isAdmin = tenant.data.role === "admin";
+  const readsLake = can(tenant.data.permissions, "lake:read");
   const streams = streamsOf(summary.data);
   const open = parseStream(params);
 
@@ -77,20 +78,24 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
           locale={locale}
           openStream={open}
           // The index doubles as the way in, but only for the reader the server would let
-          // through. A member sees the same counts with no links: the facts are theirs, the
-          // payload is not, and a link that answered 403 would be a promise this leaf breaks.
-          {...(isAdmin
+          // through. A reader without `lake:read` sees the same counts with no links: the facts
+          // are theirs, the payload is not, and a link that answered 403 would be a promise this
+          // leaf breaks.
+          {...(readsLake
             ? {
                 hrefFor: (stream: LakeStream): string =>
                   `?${new URLSearchParams(streamParams(stream)).toString()}`,
               }
             : {})}
         />
-        {/* Why the index is all a member or viewer gets. Without it the bands an admin reads
-            below are simply absent, which reads as a lake with nothing more in it rather than
-            one whose rows are an admin's. Only once there is something landed to be kept from
-            them: over an empty lake the sentence would promise rows that do not exist. */}
-        {!isAdmin && streams.length > 0 ? <p className="note">{t("lake.adminOnlyNote")}</p> : null}
+        {/* Why the index is all a reader without `lake:read` gets. Without it the bands a
+            holder reads below are simply absent, which reads as a lake with nothing more in it
+            rather than one whose rows need a permission. Only once there is something landed to
+            be kept from them: over an empty lake the sentence would promise rows that do not
+            exist. */}
+        {!readsLake && streams.length > 0 ? (
+          <p className="note">{t("lake.needsLakeReadNote")}</p>
+        ) : null}
       </div>
 
       <div className="band-rule" />
@@ -98,7 +103,7 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
       <div className="body stack">
         <p className="prose">{t("lake.kindsLead", { tenantId })}</p>
         {/* A door, as the console's is: the catalogue is a page of this division, and every
-            member may read it, so the door is not behind the admin check below. */}
+            member may read it, so the door is not behind the `lake:read` check below. */}
         <div className="row">
           <Link className="plate" to={kindsPath(tenantId)}>
             {t("lake.kindsOpen")}
@@ -107,7 +112,7 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
         </div>
       </div>
 
-      {isAdmin && streams.length > 0 ? (
+      {readsLake && streams.length > 0 ? (
         <>
           <div className="band-rule" />
           <h2 className="head">{t("lake.browserHead")}</h2>

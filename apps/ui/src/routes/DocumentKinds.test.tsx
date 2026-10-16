@@ -18,6 +18,7 @@ import "@/i18n/index.ts";
 import { DocumentKinds } from "@/routes/DocumentKinds.tsx";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
+import { held } from "@/test/access.ts";
 
 const TENANT = "CASE-0042";
 
@@ -54,7 +55,12 @@ function mount(): { publishes: () => number } {
           const path = new URL(String(input), "http://localhost").pathname;
           if (path.endsWith("/tenants.get")) {
             return Promise.resolve(
-              answer({ tenantId: TENANT, displayName: "Acme", role: "admin" }),
+              answer({
+                tenantId: TENANT,
+                displayName: "Acme",
+                role: "admin",
+                permissions: held("admin"),
+              }),
             );
           }
           if (path.endsWith("/documentKinds.list")) {

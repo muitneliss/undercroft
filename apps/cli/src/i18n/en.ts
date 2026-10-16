@@ -29,7 +29,7 @@ export const en = {
     documentKinds: "The customer's catalogue of document kinds.",
     people: "Who has access, and invitations.",
     audit:
-      "Who did what: your own actions, a customer's for its admins, everything for a superadmin.",
+      "Who did what: your own actions, a customer's for whoever holds audit:read there, everything for a superadmin.",
     runs: "Runs.",
     session: "The current session.",
     tenants: "Customers.",

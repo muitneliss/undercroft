@@ -23,6 +23,7 @@ import { KindAdd } from "@/components/KindAdd.tsx";
 import { KindPublish } from "@/components/KindPublish.tsx";
 import { KindTable } from "@/components/KindTable.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { can } from "@/lib/permissions.ts";
 import { formatDateTime } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -68,15 +69,15 @@ type KindWritesAll = ReturnType<typeof useKindWrites>;
 /** An empty catalogue: what initialising does, and -- for an admin -- the plate that starts it. */
 function Uninitialised({
   tenantId,
-  isAdmin,
+  canManage,
   initialise,
 }: {
   tenantId: string;
-  isAdmin: boolean;
+  canManage: boolean;
   initialise: KindWritesAll["initialise"];
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const action = isAdmin ? (
+  const action = canManage ? (
     <div className="row">
       <button
         className="plate plate--primary"
@@ -167,7 +168,7 @@ export function DocumentKinds({ tenantId }: { tenantId: string }): React.JSX.Ele
     );
   }
 
-  const isAdmin = tenant.data.role === "admin";
+  const canManage = can(tenant.data.permissions, "catalogue:manage");
   const { kinds, available, published, unpublishedChanges, readableDocuments } = catalogue.data;
 
   return (
@@ -184,9 +185,9 @@ export function DocumentKinds({ tenantId }: { tenantId: string }): React.JSX.Ele
           readableDocuments={readableDocuments}
         />
         {kinds.length === 0 ? (
-          <Uninitialised tenantId={tenantId} isAdmin={isAdmin} initialise={writes.initialise} />
+          <Uninitialised tenantId={tenantId} canManage={canManage} initialise={writes.initialise} />
         ) : (
-          <KindTable kinds={kinds} tenantId={tenantId} isAdmin={isAdmin} writes={writes} />
+          <KindTable kinds={kinds} tenantId={tenantId} canManage={canManage} writes={writes} />
         )}
         <div className="row">
           <Link className="plate" to={`/tenants/${tenantId}/lake`}>
@@ -195,7 +196,7 @@ export function DocumentKinds({ tenantId }: { tenantId: string }): React.JSX.Ele
         </div>
       </div>
 
-      {isAdmin && kinds.length > 0 ? (
+      {canManage && kinds.length > 0 ? (
         <>
           <div className="band-rule" />
           <h2 className="head">{t("kinds.addHead")}</h2>
@@ -216,7 +217,7 @@ export function DocumentKinds({ tenantId }: { tenantId: string }): React.JSX.Ele
         </>
       ) : null}
 
-      {!isAdmin && kinds.length > 0 ? (
+      {!canManage && kinds.length > 0 ? (
         <div className="body">
           <p className="note">{t("kinds.adminOnly", { tenantId })}</p>
         </div>

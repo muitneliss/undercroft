@@ -114,6 +114,15 @@ describe("macros.save", () => {
     ]);
   });
 
+  it("a builder saves one too, without being an admin (ADR 0139)", async () => {
+    const builder = await seedMember("b@example.test", "builder");
+
+    await caller(builder, "b@example.test").macros.save(NORMALISE);
+
+    const listed = whole(await caller(builder, "b@example.test").macros.list({ tenantId: TENANT }));
+    expect(listed.map((m) => m.name)).toEqual(["normalise_name"]);
+  });
+
   it("a member is refused: a macro changes what every model calling it builds", async () => {
     const member = await seedMember("m@example.test", "member");
     const got = await refusal(() => caller(member, "m@example.test").macros.save(NORMALISE));

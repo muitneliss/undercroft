@@ -63,14 +63,14 @@ function WithdrawCell({
 export function OpenInvitations({
   open,
   search,
-  isAdmin,
+  canManage,
   revoke,
   tenantId,
   locale,
 }: {
   open: readonly { id: string; email: string; role: string; expiresAt: string }[];
   search: string;
-  isAdmin: boolean;
+  canManage: boolean;
   revoke: ReturnType<typeof trpc.people.revokeInvitation.useMutation>;
   tenantId: string;
   locale: Locale;
@@ -94,7 +94,7 @@ export function OpenInvitations({
                 <th scope="col">{t("people.colAddress")}</th>
                 <th scope="col">{t("people.colInvitedAs")}</th>
                 <th scope="col">{t("people.colExpires")}</th>
-                {isAdmin ? <th scope="col">{t("people.colWithdraw")}</th> : null}
+                {canManage ? <th scope="col">{t("people.colWithdraw")}</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -108,7 +108,7 @@ export function OpenInvitations({
                     the date in UTC while every other date on the schedule is in Singapore
                     time, so an invitation expiring at 07:00 SGT showed the previous day. */}
                   <td className="datum datum--quiet">{formatDate(invitation.expiresAt, locale)}</td>
-                  {isAdmin ? (
+                  {canManage ? (
                     <WithdrawCell invitation={invitation} revoke={revoke} tenantId={tenantId} />
                   ) : null}
                 </tr>
@@ -176,10 +176,12 @@ function InviteOutcome({
  * connector's grant for each role the person holds, so this note binds both readers.
  *
  * One catalogue entry per role, never assembled from role names (`i18n.md`), and each states
- * what the router's gates allow and refuse and nothing more: `requireRole("member")` on asking
- * and saving questions and dashboards, `requireRole("admin")` on every write to connections,
- * models, macros, document kinds, keys, people and the customer's name, on starting a run and on
- * reading the raw lake's contents. A gate that moves makes these sentences false, so a change
+ * what the router's gates allow and refuse and nothing more, read through the permissions each
+ * built-in role holds (ADR 0139): `reports:author` (member, builder, admin) on asking and saving
+ * questions and dashboards; `models:write` and `lake:read` (builder, admin) on writing models,
+ * macros and reference tables and on reading the raw lake's contents; and the rest -- sources,
+ * keys, document kinds, people, the audit log, the customer itself -- an admin's alone. A grant
+ * or a gate that moves makes these sentences false, so a change
  * to one is a change to both catalogues in the same commit. No test pins the two together:
  * the sentences are prose, and a check that they match the router would have to parse them.
  *
@@ -202,13 +204,13 @@ export function RoleRights({ tenantId }: { tenantId: string }): React.JSX.Elemen
 
 /** Inviting somebody, which only an admin of this tenant may do. */
 export function InvitePanel({
-  isAdmin,
+  canManage,
   invite,
   tenantId,
   displayName,
   emailFieldRef,
 }: {
-  isAdmin: boolean;
+  canManage: boolean;
   invite: ReturnType<typeof trpc.people.invite.useMutation>;
   tenantId: string;
   displayName: string;
@@ -222,7 +224,7 @@ export function InvitePanel({
   const roleFieldRef = useRef<HTMLSelectElement>(null);
   return (
     <>
-      {isAdmin ? (
+      {canManage ? (
         <form
           className="stack stack--tight"
           onSubmit={(event): void => {

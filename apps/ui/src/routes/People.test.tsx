@@ -21,6 +21,7 @@ import { MemoryRouter } from "react-router-dom";
 import { Opened } from "@/components/Opened.tsx";
 import { translatorFor } from "@/i18n/index.ts";
 import { People } from "@/routes/People.tsx";
+import { held } from "@/test/access.ts";
 import { mountRoute } from "@/test/mountRoute.tsx";
 import { trpc } from "@/trpc.ts";
 
@@ -49,7 +50,12 @@ function mount(
           const path = new URL(String(input), "http://localhost").pathname;
           if (path.endsWith("/tenants.get")) {
             return Promise.resolve(
-              answer({ tenantId: TENANT, displayName: "Acme", role: "admin" }),
+              answer({
+                tenantId: TENANT,
+                displayName: "Acme",
+                role: "admin",
+                permissions: held("admin"),
+              }),
             );
           }
           if (path.endsWith("/people.members")) {
@@ -117,6 +123,20 @@ describe("the last admin", () => {
     expect(screen.queryByText(t("people.lastAdmin"))).toBeNull();
     expect(offered("ada@example.test")).toEqual({ roleSelect: true, remove: true });
     expect(offered("bo@example.test")).toEqual({ roleSelect: true, remove: true });
+  });
+});
+
+describe("the roles offered", () => {
+  it("are the four built-ins, builder among them, on a member's row (ADR 0139)", async () => {
+    mount([
+      { userId: "u1", email: "ada@example.test", role: "admin" },
+      { userId: "u2", email: "bo@example.test", role: "builder" },
+    ]);
+
+    const select = await screen.findByLabelText(t("people.roleFor", { email: "bo@example.test" }));
+    const offeredRoles = [...select.querySelectorAll("option")].map((option) => option.value);
+    expect(offeredRoles).toEqual(["viewer", "member", "builder", "admin"]);
+    expect(select instanceof HTMLSelectElement ? select.value : null).toBe("builder");
   });
 });
 
@@ -218,7 +238,12 @@ describe("the customer's activity (ADR 0113)", () => {
       url: "/?view=activity",
       element: <People tenantId={TENANT} signedInAs="ada@example.test" />,
       answers: {
-        "tenants.get": () => ({ tenantId: TENANT, displayName: "Acme", role }),
+        "tenants.get": () => ({
+          tenantId: TENANT,
+          displayName: "Acme",
+          role,
+          permissions: held(role),
+        }),
         "people.members": () => [{ userId: "u1", email: "ada@example.test", role }],
         "people.invitations": () => [],
         "audit.tenant": () => ({
@@ -260,9 +285,9 @@ describe("the customer's activity (ADR 0113)", () => {
   });
 });
 
-describe("only the customer's admin opens it (ADR 0119)", () => {
+describe("only a holder of people:manage opens it (ADR 0119, ADR 0139)", () => {
   /** The division as the app opens it, inside the book, read by `role`. */
-  function openInBook(role: "admin" | "member") {
+  function openInBook(role: "admin" | "builder" | "member") {
     const mounted = mountRoute({
       pattern: "/tenants/:tenantId/people",
       url: `/tenants/${TENANT}/people`,
@@ -274,7 +299,13 @@ describe("only the customer's admin opens it (ADR 0119)", () => {
         </Opened>
       ),
       answers: {
-        "tenants.get": () => ({ id: TENANT, displayName: "Acme", role, deactivatedAt: null }),
+        "tenants.get": () => ({
+          id: TENANT,
+          displayName: "Acme",
+          role,
+          permissions: held(role),
+          deactivatedAt: null,
+        }),
         "people.members": () => [{ userId: "u1", email: "ada@example.test", role }],
         "people.invitations": () => [],
       },
@@ -286,14 +317,35 @@ describe("only the customer's admin opens it (ADR 0119)", () => {
     const { received, strip } = openInBook("member");
 
     await screen.findByRole("heading", {
-      name: t("nav.adminOnlyHead", { division: t("nav.people") }),
+      name: t("nav.notPermittedHead", { division: t("nav.people") }),
     });
-    const tab = within(strip).getByTitle(t("nav.adminOnlyTitle"));
+    const tab = within(strip).getByTitle(t("nav.notPermittedTitle"));
     expect(tab.getAttribute("aria-disabled")).toBe("true");
-    expect(tab.textContent).toBe(`${t("nav.people")}${t("nav.adminOnlyHint")}`);
+    expect(tab.textContent).toBe(`${t("nav.people")}${t("nav.notPermittedHint")}`);
     const asked = received.map((request) => request.path);
     expect(asked).not.toContain("people.members");
     expect(asked).not.toContain("people.invitations");
+  });
+
+  it("closes to a builder too, and names the permission that would open it", async () => {
+    // A builder holds more than a member -- models:write, lake:read -- and still not this.
+    // A gate on "holds any permission" would open it; the one on people:manage must not.
+    const { received } = openInBook("builder");
+
+    await screen.findByRole("heading", {
+      name: t("nav.notPermittedHead", { division: t("nav.people") }),
+    });
+    expect(
+      screen.getByText(
+        t("nav.notPermittedLead", {
+          tenantId: TENANT,
+          role: "builder",
+          permission: "people:manage",
+          label: t("permission.peopleManage"),
+        }),
+      ),
+    ).toBeDefined();
+    expect(received.map((request) => request.path)).not.toContain("people.members");
   });
 
   it("opens for its admin, whose tab stays a link", async () => {
@@ -303,6 +355,6 @@ describe("only the customer's admin opens it (ADR 0119)", () => {
     // have answered (the reader's address is in the running head from the start).
     expect(await screen.findByRole("heading", { name: t("people.title") })).toBeDefined();
     expect(within(strip).getByRole("link", { name: t("nav.people") })).toBeDefined();
-    expect(within(strip).queryByTitle(t("nav.adminOnlyTitle"))).toBeNull();
+    expect(within(strip).queryByTitle(t("nav.notPermittedTitle"))).toBeNull();
   });
 });

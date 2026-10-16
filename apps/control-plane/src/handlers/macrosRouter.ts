@@ -1,8 +1,9 @@
 /**
  * The `macros` procedures: a tenant's own dbt macros. ADR 0086.
  *
- * Any member may read and check them, as they may read and check models; only an admin may
- * save or delete one, because a macro changes what every model calling it builds. Same layer
+ * Any member may read and check them, as they may read and check models; only a holder of
+ * `models:write` may save or delete one, because a macro changes what every model calling it
+ * builds. Same layer
  * and rules as the other routers: validate, call one service, decide what its answer means.
  */
 
@@ -14,7 +15,8 @@ import { messages } from "../i18n/index.ts";
 import * as macros from "../services/macros.ts";
 import { findingSentence, wordCheck } from "./checkWords.ts";
 import { listingOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
-import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
+import { requirePermission } from "./permissionGate.ts";
+import { actorOf, router, tenantProcedure } from "./trpc.ts";
 
 const definition = z.string().max(MAX_MACRO_SQL_BYTES);
 
@@ -62,7 +64,7 @@ export const macrosRouter = router({
    * BAD_REQUEST with the same sentence `macros.check` gives for it; a taken name under
    * `create` is a CONFLICT.
    */
-  save: requireRole("admin")
+  save: requirePermission("models:write")
     .input(
       z.object({
         name: MacroName,
@@ -96,7 +98,7 @@ export const macrosRouter = router({
     }),
 
   /** Delete a macro nothing calls. One a model or another macro calls is a CONFLICT naming them. */
-  delete: requireRole("admin")
+  delete: requirePermission("models:write")
     .input(z.object({ name: MacroName }))
     .mutation(async ({ ctx, input }) => {
       const outcome = await macros.remove(ctx.exec, {
