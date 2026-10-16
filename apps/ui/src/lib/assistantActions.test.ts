@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, test as it } from "bun:test";
+import { byCodeUnit } from "@undercroft/core/order";
 
 import { CLIENT_ACTIONS, draftLakeQuery, openDivision } from "@/lib/assistantActions.ts";
 import type { DivisionId } from "@/lib/divisions.ts";
@@ -87,6 +88,9 @@ describe("the registry the panel dispatches on", () => {
   it("holds exactly the two navigate tools, so an unknown name is ignored", () => {
     // A name not here is one the browser will not act on, which is what keeps a model unable
     // to invent a client-side capability by naming one.
-    expect(Object.keys(CLIENT_ACTIONS).sort()).toEqual(["draftLakeQuery", "openDivision"]);
+    expect(Object.keys(CLIENT_ACTIONS).sort(byCodeUnit)).toEqual([
+      "draftLakeQuery",
+      "openDivision",
+    ]);
   });
 });

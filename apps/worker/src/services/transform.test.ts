@@ -20,6 +20,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { byCodeUnit } from "@undercroft/core";
 import { getModel, provisionTenantRoles, saveModel } from "@undercroft/db/repos";
 import { PASSWORD_VAR } from "@undercroft/db/services";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
@@ -282,7 +283,7 @@ describe("runTransform", () => {
     );
 
     expect(seen.files["macros/tenant/trimmed.sql"]).toContain("{% macro trimmed(x) %}");
-    expect(Object.keys(seen.env).sort()).toEqual([PASSWORD_VAR, "PATH"].sort());
+    expect(Object.keys(seen.env).sort(byCodeUnit)).toEqual([PASSWORD_VAR, "PATH"].sort(byCodeUnit));
     expect(seen.env.PATH).toBe("/opt/dbt/bin");
     expect(Object.values(seen.env).join("\n")).not.toContain("master-key-material");
   });

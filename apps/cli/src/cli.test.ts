@@ -20,6 +20,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
+import { byCodeUnit } from "@undercroft/core";
 import { appRouter } from "@undercroft/control-plane/router";
 import { type ControlPlane, startControlPlane } from "@undercroft/control-plane/testing";
 import { buildCli } from "../scripts/build.ts";
@@ -174,8 +175,8 @@ describe("an agent reads the platform through the same door as the browser", () 
     const described = envelope(await undercroft(["describe", "--agent"]));
     const entries = (described.data ?? []) as readonly { readonly procedure: string | null }[];
 
-    expect(entries.flatMap((entry) => entry.procedure ?? []).sort()).toEqual(
-      Object.keys(appRouter._def.procedures).sort(),
+    expect(entries.flatMap((entry) => entry.procedure ?? []).sort(byCodeUnit)).toEqual(
+      Object.keys(appRouter._def.procedures).sort(byCodeUnit),
     );
   });
 

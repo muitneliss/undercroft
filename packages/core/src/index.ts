@@ -67,6 +67,7 @@ export {
   toBig,
   type Verdict,
 } from "./money.ts";
+export { byCodeUnit } from "./order.ts";
 export { createPacer, type Pacer, type PacerOptions } from "./pacer.ts";
 export {
   DEFAULT_RETRY,

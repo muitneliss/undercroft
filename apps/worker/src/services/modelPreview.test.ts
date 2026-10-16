@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { byCodeUnit } from "@undercroft/core";
 import { saveModel } from "@undercroft/db/repos";
 import { PASSWORD_VAR } from "@undercroft/db/services";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
@@ -149,7 +150,10 @@ describe("previewModel", () => {
       limit: 10,
     });
 
-    expect(Object.keys(seen[0]?.models ?? {}).sort()).toEqual(["fct_deals.sql", "stg_deals.sql"]);
+    expect(Object.keys(seen[0]?.models ?? {}).sort(byCodeUnit)).toEqual([
+      "fct_deals.sql",
+      "stg_deals.sql",
+    ]);
     expect(preview.rows).toEqual([[3, 2]]);
     expect(preview.truncated).toBe(false);
   });

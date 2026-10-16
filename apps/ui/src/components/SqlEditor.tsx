@@ -18,7 +18,8 @@
  * different model is opened. Pushing a controlled value back in on every keystroke would move
  * the cursor and fight the undo history. The store is still the owner of the draft --
  * `onChange` writes it there -- and `.claude/rules/state.md` holds: there is no `useState`,
- * and every `useRef` here is a DOM handle or a latch for a callback.
+ * and every `useRef` here is a DOM handle or a latch -- for a callback, or for the props a
+ * new view is built from.
  *
  * THE HOST DIV HAS ONE REACT CHILD: the grip on its bottom edge. CodeMirror APPENDS its own
  * `view.dom` to the parent it is given rather than clearing it, and React never reorders a
@@ -237,6 +238,20 @@ interface SqlEditorProps {
   schema?: SchemaResponse;
 }
 
+/**
+ * `value` as of the last commit, in a ref an effect can read without re-running on it.
+ *
+ * Written in an effect rather than during render, so a render React throws away never reaches
+ * it; declared before the effects that read it, which therefore see this commit's value.
+ */
+function useLatest<T>(value: T): { readonly current: T } {
+  const latchRef = useRef(value);
+  useEffect(() => {
+    latchRef.current = value;
+  }, [value]);
+  return latchRef;
+}
+
 export function SqlEditor({
   value,
   onChange,
@@ -250,13 +265,13 @@ export function SqlEditor({
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const changeRef = useRef(onChange);
-  const submitRef = useRef(onSubmit);
-
-  useEffect(() => {
-    changeRef.current = onChange;
-    submitRef.current = onSubmit;
-  }, [onChange, onSubmit]);
+  const changeRef = useLatest(onChange);
+  const submitRef = useLatest(onSubmit);
+  // What a NEW view is built from, latched like the callbacks rather than listed below: the
+  // view is built once and rebuilt only when `readOnly` changes. A `value` in that list would
+  // rebuild it on every keystroke, losing the cursor and the undo history (the docstring's
+  // "uncontrolled"); `schema` reaches a live view through its own effect further down.
+  const mountRef = useLatest({ value, label, schema });
 
   useImperativeHandle(
     ref,
@@ -270,9 +285,10 @@ export function SqlEditor({
       return;
     }
 
+    const latest = mountRef.current;
     const view = mount(
       element,
-      { doc: value, readOnly, label, schema },
+      { doc: latest.value, readOnly, label: latest.label, schema: latest.schema },
       (selected): boolean => submitVia(submitRef, selected),
       (next): void => {
         changeRef.current(next);
@@ -284,7 +300,9 @@ export function SqlEditor({
       viewRef.current = null;
       view.destroy();
     };
-  }, [readOnly]);
+    // The three latches are one object each for the component's life, so only `readOnly`
+    // ever re-runs this; they are listed because a ref from a custom hook is not known stable.
+  }, [readOnly, changeRef, mountRef, submitRef]);
 
   /** The schema, whenever it arrives or changes, without disturbing what has been typed. */
   useEffect(() => {

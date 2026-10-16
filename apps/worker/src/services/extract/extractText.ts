@@ -451,6 +451,7 @@ export async function extractDocument(deps: ExtractDeps, input: Document): Promi
 
   const type = input.contentType.split(";")[0]?.trim().toLowerCase() ?? "";
   const reader = READERS.get(type);
+  // biome-ignore lint/nursery/useAwaitThenable: a `Reader` returns `Extracted | Promise<Extracted>`, and a union with a Promise in it is what `await` takes; Biome 2.5.15 reads it as no Promise at all. typescript-eslint's `await-thenable` accepts it.
   return reader === undefined ? refused(UNSUPPORTED_TYPE) : await reader(deps, input);
 }
 

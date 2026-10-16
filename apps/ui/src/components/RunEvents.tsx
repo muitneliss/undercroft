@@ -87,9 +87,11 @@ function useTail(lines: number): {
     }
   }
 
+  // Runs once per line the run writes. An empty feed draws no region, so there is no foot to
+  // hold until the first line lands.
   useEffect(() => {
     const el = regionRef.current;
-    if (el !== null && pinnedRef.current) {
+    if (lines > 0 && el !== null && pinnedRef.current) {
       el.scrollTop = el.scrollHeight;
     }
   }, [lines]);
