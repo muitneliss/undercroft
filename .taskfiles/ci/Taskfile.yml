@@ -45,10 +45,14 @@ tasks:
       - task: :build:ui
 
   test:
-    desc: The offline unit/component test suite (bun test --parallel).
+    desc: The offline unit/component test suite (bun test --parallel, on half the cores).
     cmds:
-      # Files run in one worker process per core, each in a fresh global (`--parallel` implies
-      # `--isolate`), so a suite may not rely on state another file left behind.
+      # Files run in parallel worker processes, each in a fresh global (`--parallel` implies
+      # `--isolate`), so a suite may not rely on state another file left behind. There are half
+      # as many workers as cores, at least one, computed in `scripts/test.ts`: one per core made
+      # the PGlite-backed `beforeEach` hooks cross the 10 s timeout on a busy machine, and on 18
+      # cores 9 workers ran the suite in 66.6 s with no failure against 91-94 s and 2-3 timeouts
+      # for 18. The script records the full measurement.
       - bun run test
 
   test-one:
