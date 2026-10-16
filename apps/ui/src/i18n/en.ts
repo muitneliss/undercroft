@@ -49,14 +49,27 @@ export const en = {
     people: "People",
     lockedTitle: "Choose a customer first",
     lockedHint: " — choose a customer first",
-    adminOnlyTitle: "Only an admin of this customer can open this",
-    adminOnlyHint: " — only an admin of this customer can open this",
-    adminOnlyHead: "Only an admin can open {{division}}",
-    adminOnlyLead:
-      "This section is for the admins of {{tenantId}} alone. Your role here is {{role}}.",
-    adminOnlyOwn:
+    notPermittedTitle: "Your role in this customer does not open this",
+    notPermittedHint: " — your role in this customer does not open this",
+    notPermittedHead: "Your role does not open {{division}}",
+    notPermittedLead:
+      "Opening it needs permission to {{label}} ({{permission}}). Your role in {{tenantId}} is {{role}}; someone who holds people:manage there can give you a role that has it.",
+    notPermittedOwn:
       "What you have done yourself, in this customer and every other, is on your account page.",
-    adminOnlyOwnLink: "See your activity",
+    notPermittedOwnLink: "See your activity",
+  },
+
+  permission: {
+    reportsAuthor: "author questions and dashboards",
+    modelsWrite: "save, build and preview models, macros and reference tables",
+    lakeRead: "read the raw lake",
+    sourcesManage: "manage sources",
+    keysManage: "manage ingest keys",
+    catalogueManage: "manage the document-kind catalogue",
+    peopleManage: "manage people",
+    auditRead: "read the customer's audit log",
+    tenantManage: "manage the customer",
+    rolesManage: "manage roles",
   },
 
   common: {
@@ -598,8 +611,8 @@ export const en = {
     kindsLead:
       "Every readable document is classified against the catalogue of document kinds of {{tenantId}}: invoices, contracts, statements… See and edit the catalogue here.",
     kindsOpen: "Open the document kinds",
-    consoleAdminOnly:
-      "Only an administrator of this customer runs queries over the raw lake. The counts of what has landed are still yours to read on the Raw lake page.",
+    consoleNeedsLakeRead:
+      "Running queries over the raw lake needs permission to read it (lake:read). The counts of what has landed are still yours to read on the Raw lake page.",
     consoleRows_one: "{{count, number}} row",
     consoleRows_other: "{{count, number}} rows",
     consoleRowsFrom_one: "{{count, number}} row, from row {{from, number}}",
@@ -650,7 +663,7 @@ export const en = {
     colBytes: "Size",
     browserHead: "Browse records",
     browserLead:
-      "Each record exactly as the source sent it, before any transform. Admins only: raw data can carry names and addresses.",
+      "Each record exactly as the source sent it, before any transform. Needs lake:read: raw data can carry names and addresses.",
     streamLabel: "Stream",
     chooseStream: "Choose a stream",
     streamRecords: "Records",
@@ -674,8 +687,8 @@ export const en = {
     payloadCopied: "Original string copied.",
     copyBlocked:
       "The browser blocked the clipboard. Select the payload above and copy it by hand; no data was changed.",
-    adminOnlyNote:
-      "You can read this summary. Raw records, content search and the SQL console require administrator access.",
+    needsLakeReadNote:
+      "You can read this summary. Raw records, content search and the SQL console need permission to read the raw lake (lake:read).",
     noRows: "This stream has no records yet.",
 
     runRows: "Only the rows that still carry {{runId}}.",
@@ -811,9 +824,11 @@ export const en = {
     rightsViewer:
       "Sees the connected sources, the run journal, the raw lake's summary, the models and macros, and the document kinds; opens and runs saved questions and dashboards. Cannot write or save a question, or change anything else.",
     rightsMember:
-      "Everything a viewer may do, and also: writes and runs new questions, saves and deletes questions and dashboards. Does not connect accounts, read the raw lake's contents, save or build models, see who has access, or invite or remove anyone.",
+      "Everything a viewer may do, and also: writes and runs new questions, saves and deletes questions and dashboards. Does not read the raw lake's contents, save or build models, connect accounts, see who has access, or invite or remove anyone.",
+    rightsBuilder:
+      "Everything a member may do, and also: saves, deletes, builds and previews models, saves and deletes macros and reference tables; reads, searches and queries the raw lake's records and documents, and the rows a failed data-quality test stored. Does not connect accounts, mint ingest keys, edit the document kinds, see who has access, invite or remove anyone, or rename or deactivate the customer.",
     rightsAdmin:
-      "Everything a member may do, and also: connects and disconnects accounts, chooses what they read and how often, starts a sync now; reads, searches and queries the raw lake's records and documents, and the rows a failed data-quality test stored; saves, deletes and builds models, saves and deletes macros; edits and publishes the document kinds; mints and revokes ingest keys; sees who has access and who is invited, invites people, changes their role, removes them and withdraws invitations; reads everything done in the customer, by anyone; renames the customer. Adding a new customer is for platform administrators only.",
+      "Everything a builder may do, and also: connects and disconnects accounts, chooses what they read and how often, starts a sync now; edits and publishes the document kinds; mints and revokes ingest keys; sees who has access and who is invited, invites people, changes their role, removes them and withdraws invitations; reads everything done in the customer, by anyone; renames, deactivates and reactivates the customer. Adding a new customer is for platform administrators only.",
     notInvited: "Not invited",
     invitedAndEmailed: "Invited {{email}}. They have been emailed.",
     invitedNotEmailedHeading: "Invited, but not emailed",
@@ -1452,7 +1467,7 @@ export const en = {
     emptyBody:
       "A model is one SELECT over raw.records, built into a table in this customer's analytics schema. Create the first one from the template below.",
     emptyBodyViewer:
-      "A model is one SELECT over raw.records, built into a table in this customer's analytics schema. An admin can create the first one.",
+      "A model is one SELECT over raw.records, built into a table in this customer's analytics schema. Someone who holds models:write can create the first one.",
     caption_one: "{{shown, number}} / {{count, number}} model",
     caption_other: "{{shown, number}} / {{count, number}} models",
     colName: "Name",
@@ -1522,7 +1537,8 @@ export const en = {
     descriptionLabel: "Description",
     descriptionHint:
       "Optional. A sentence or two about the model's rows, for whoever reads the list, for an assistant choosing a model, and for dbt. No curly braces { }.",
-    readOnlyNote: "Only an admin can edit a model. You are reading the saved version.",
+    readOnlyNote:
+      "Editing a model needs models:write, which your role does not hold. You are reading the saved version.",
     save: "Save",
     saving: "Saving…",
     notSaved: "Not saved",
@@ -1761,7 +1777,7 @@ export const en = {
     emptyBody:
       "A question is a query over the built models — made in the builder or written as SQL — and how it is drawn. A dashboard puts questions together under shared filters. Ask the first one.",
     emptyBodyViewer:
-      "A question is a query over the built models and how it is drawn. A member or an admin can ask the first one.",
+      "A question is a query over the built models and how it is drawn. Someone who holds reports:author can ask the first one.",
     searchLabel: "Search by name",
     searchPlaceholder: "A dashboard's or a question's name",
     clearSearch: "Clear search",
@@ -1916,7 +1932,8 @@ export const en = {
     emptyTitle: "This dashboard is empty",
     emptyBody:
       "Add a saved question; each one is a tile on a twelve-column grid. The filters at the top bind to each question's parameters.",
-    emptyBodyViewer: "No tiles on this dashboard yet. A member or an admin can add questions.",
+    emptyBodyViewer:
+      "No tiles on this dashboard yet. Someone who holds reports:author can add questions.",
     filtersHead: "Filters",
     apply: "Apply",
     clear: "Clear filters",

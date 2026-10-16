@@ -230,8 +230,9 @@ Three things worth knowing:
   one and it is granted. That is also the recovery path if every tenant admin leaves.
 - **It grants authority, never identity.** You still prove you control the address, through
   Google or a one-time code, exactly like everyone else.
-- **A superadmin administers every customer**, present and future. It is not the top of the
-  `viewer`/`member`/`admin` ladder, it is beside it. ADR 0013.
+- **A superadmin administers every customer**, present and future: it holds `admin` in each
+  one without being a member of it, beside the customer's own roles rather than above them.
+  ADR 0013.
 
 ### The way that needs no deploy: `task dev:invite`
 
@@ -293,16 +294,22 @@ SELECT email, accepted_at FROM app.invitation;
 
 Open the tenant → **People**. Enter an address, pick a role, send.
 
-| Role     | Can                                                                                                                                              |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `viewer` | look                                                                                                                                             |
-| `member` | look, and author questions and dashboards                                                                                                        |
-| `admin`  | all of it, plus connect accounts, run a sync, edit and build models, browse and query the raw lake, see who has access, invite and manage people |
+| Role      | Can                                                                                                                        |
+| --------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `viewer`  | look                                                                                                                       |
+| `member`  | look, and author questions and dashboards                                                                                  |
+| `builder` | that, plus edit, preview and build models, macros and reference tables, and browse and query the raw lake                  |
+| `admin`   | all of it, plus connect accounts, run a sync, mint ingest keys, edit the document kinds, see who has access, manage people |
 
-The People page opens for an admin of the customer only, and the roster and the open invitations
-are refused to anyone else through every door, the CLI and MCP included (ADR 0119). A `member` or
-`viewer` who opens it finds a note in its place that points them at their own activity on the
-account page.
+Each role is a set of permissions, and the server checks the permission, not the role's name;
+[the permissions reference](../reference/permissions.md) lists every permission, what it covers
+and which role holds it (ADR 0139). Roles a customer defines for itself, and grants on a single
+model or raw stream, come in later changes.
+
+The People page opens only for someone who holds `people:manage` in the customer (an admin), and
+the roster and the open invitations are refused to anyone else through every door, the CLI and
+MCP included (ADR 0119). A `viewer`, `member` or `builder` who opens it finds a note in its place
+that points them at their own activity on the account page.
 
 Beside the form the page states what each role may do in that customer, worded from the same
 gates the server enforces. The page tells you whether the invitation was actually emailed. If
@@ -318,8 +325,8 @@ refused is the one that would leave the customer with no admin: make someone els
 first. The roster shows this in advance: while one member holds `admin`, that row says it is
 the last admin and offers neither a lower role nor Remove. Every role change and removal is
 written to `ops.audit_log` as `people.setRole` or `people.removeMember`, with who did it, when,
-and the role the person held before. An admin reads it under **Hoạt động / Activity** on the
-same page, or with `undercroft audit tenant`; refused attempts are there too.
+and the role the person held before. Whoever holds `audit:read` (an admin) reads it under
+**Hoạt động / Activity** on the same page, or with `undercroft audit tenant`; refused attempts are there too.
 
 Sign-in itself is on the record, in each person's own **Activity** on the account page: every
 sign-in and sign-out (one row, whichever button ended the session), an address turned away

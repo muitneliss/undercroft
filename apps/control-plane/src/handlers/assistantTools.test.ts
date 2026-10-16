@@ -127,17 +127,17 @@ describe("a bound tool carries the caller's authority, not the assistant's", () 
     );
   });
 
-  it("a viewer is refused an admin-only read, in their own language", async () => {
+  it("a viewer is refused a lake:read read, in their own language, naming what they lack", async () => {
     const user = await seedMember("viewer@example.test", "viewer");
-    // `lake.search` is admin-only. The refusal carries the procedure's own worded message, so
-    // the model can tell the reader what happened rather than quietly trying something else.
+    // `lake.search` needs lake:read. The refusal carries the procedure's own worded message, so
+    // the model can tell the reader what they lack rather than quietly trying something else.
     await expect(
       call(context(user), "searchLake", { tenantId: "CASE-0042", q: "hợp đồng", limit: 5 }),
-    ).rejects.toThrow(/FORBIDDEN/u);
+    ).rejects.toThrow(/FORBIDDEN: .*\(lake:read\)/u);
   });
 
-  it("an admin gets past that same boundary", async () => {
-    const user = await seedMember("admin@example.test", "admin");
+  it("a builder gets past that same boundary, as an admin does (ADR 0139)", async () => {
+    const user = await seedMember("builder@example.test", "builder");
     // The quiet half of the guard above -- without it, a `searchLake` that threw for everybody
     // would satisfy the viewer test while the feature was broken.
     //
@@ -162,6 +162,20 @@ describe("a bound tool carries the caller's authority, not the assistant's", () 
     // once left the one person able to set up a deployment unable to finish a consent.
     const answered = await call(context(user, true), "sourceStatus", { tenantId: "CASE-0042" });
     expect(Array.isArray(answered)).toBe(true);
+  });
+});
+
+describe("a bound tool tells the model what it needs", () => {
+  it("names the permission its procedure's guard declares, and none for one every member may call", () => {
+    const tools = bindTools(context(null, false, noDatabase), {
+      tiers: ["read", "navigate", "write", "privileged"],
+    });
+
+    // Read off the router's guard rather than written in the catalogue, so a moved gate moves
+    // the sentence with it (ADR 0139).
+    expect(String(tools.searchLake?.description).endsWith(" Needs lake:read.")).toBe(true);
+    expect(String(tools.invitePerson?.description).endsWith(" Needs people:manage.")).toBe(true);
+    expect(String(tools.sourceStatus?.description)).not.toContain("Needs");
   });
 });
 

@@ -12,11 +12,11 @@ import { TenantId } from "./inputs.ts";
 import { messages } from "../i18n/index.ts";
 import * as tenants from "../services/tenants.ts";
 import type { Tenant, TransitionResult } from "../services/tenants.ts";
+import { requirePermission } from "./permissionGate.ts";
 import {
   actorOf,
   authedProcedure,
   refusal,
-  requireRole,
   router,
   superadminProcedure,
   tenantStatusProcedure,
@@ -53,7 +53,10 @@ export const tenantsRouter = router({
   ),
 
   /**
-   * One customer, and the caller's role in it -- answered while it is deactivated too.
+   * One customer, and the caller's role and permissions in it -- answered while it is
+   * deactivated too. `permissions` is what Casbin decided for this caller (ADR 0139), sorted:
+   * what a page, the CLI or an agent reads to know what it may do, rather than inferring it
+   * from the role.
    *
    * `tenantStatusProcedure`, deliberately: this is how a page, the CLI or an agent learns that
    * a customer is deactivated (`deactivatedAt`), and a refusal in its place would leave them
@@ -65,14 +68,14 @@ export const tenantsRouter = router({
     if (tenant === null) {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
-    return { ...tenant, role: ctx.role };
+    return { ...tenant, role: ctx.role, permissions: ctx.permissions };
   }),
 
   /**
    * Create a customer. Superadmin only.
    *
-   * Not `requireRole("admin")`, which would read as the stricter choice and is in fact the
-   * wrong axis entirely: a tenant `admin` is senior *inside one customer*, and nothing
+   * Not `requirePermission("tenant:manage")`, which would read as the stricter choice and is in
+   * fact the wrong axis entirely: a tenant `admin` is senior *inside one customer*, and nothing
    * about that authority implies the right to bring another customer into existence. This
    * is the one procedure in the router whose authority is not tenant-scoped, and ADR 0013
    * is what permits it to exist at all.
@@ -109,7 +112,7 @@ export const tenantsRouter = router({
   /**
    * Correct a customer's display name. Tenant admin, and the id is not an input.
    *
-   * `requireRole("admin")` rather than `superadminProcedure`, which is the opposite axis to
+   * `requirePermission("tenant:manage")` rather than `superadminProcedure`, which is the opposite axis to
    * `create` above and deliberately so: bringing a customer into existence is platform
    * authority, but retitling one that already exists is an act *inside* that customer, and
    * a tenant admin is exactly who that belongs to. A superadmin still reaches it, because
@@ -123,7 +126,7 @@ export const tenantsRouter = router({
    * An empty name falls back to the id, matching `create`: the list renders
    * `displayName || id`, and a blank row is not a name.
    */
-  rename: requireRole("admin")
+  rename: requirePermission("tenant:manage")
     .input(z.object({ displayName: z.string().trim().max(200) }))
     .mutation(async ({ ctx, input }) => {
       const renamed = await tenants.rename(ctx.exec, {
@@ -149,7 +152,7 @@ export const tenantsRouter = router({
    * PRECONDITION_FAILED every procedure gives there; the service's own `already-deactivated`
    * is the same answer for the one caller who loses a race to a second admin.
    */
-  deactivate: requireRole("admin").mutation(async ({ ctx }) => {
+  deactivate: requirePermission("tenant:manage").mutation(async ({ ctx }) => {
     const result = await tenants.deactivate(ctx.exec, {
       tenantId: ctx.tenantId,
       actor: actorOf(ctx),
@@ -165,11 +168,13 @@ export const tenantsRouter = router({
    * deactivated -- the same code as the refusal it undoes, so a transition to the state a
    * customer is already in reads the same in both directions, and is never a quiet success.
    */
-  reactivate: requireRole("admin", tenantStatusProcedure).mutation(async ({ ctx }) => {
-    const result = await tenants.reactivate(ctx.exec, {
-      tenantId: ctx.tenantId,
-      actor: actorOf(ctx),
-    });
-    return transitioned(ctx, result);
-  }),
+  reactivate: requirePermission("tenant:manage", tenantStatusProcedure).mutation(
+    async ({ ctx }) => {
+      const result = await tenants.reactivate(ctx.exec, {
+        tenantId: ctx.tenantId,
+        actor: actorOf(ctx),
+      });
+      return transitioned(ctx, result);
+    },
+  ),
 });

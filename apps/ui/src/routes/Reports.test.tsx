@@ -14,6 +14,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 // The side effect is the point: without it every key renders as itself. See `@/i18n`.
 import "@/i18n/index.ts";
 import { Reports } from "@/routes/Reports.tsx";
+import { held } from "@/test/access.ts";
 import { mountRoute } from "@/test/mountRoute.tsx";
 
 const TENANT = "CASE-0042";
@@ -51,7 +52,12 @@ describe("the two lists", () => {
       url: `/tenants/${TENANT}/reports?q=doanh%20thu`,
       element: <Reports tenantId={TENANT} />,
       answers: {
-        "tenants.get": () => ({ tenantId: TENANT, displayName: "Acme", role: "viewer" }),
+        "tenants.get": () => ({
+          tenantId: TENANT,
+          displayName: "Acme",
+          role: "viewer",
+          permissions: held("viewer"),
+        }),
         "bi.questions.list": () => QUESTIONS,
         "bi.dashboards.list": () => DASHBOARDS,
       },

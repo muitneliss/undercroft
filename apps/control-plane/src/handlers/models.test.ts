@@ -1,7 +1,8 @@
 /**
  * Models over tRPC: who may write one, and what a taken name is told.
  *
- * The role gate is pinned from both sides -- a member is refused, an admin is answered --
+ * The permission gate (`models:write`, ADR 0139) is pinned from both sides -- a member is
+ * refused, a builder and an admin are answered --
  * and the worded refusals on this router arrive in the caller's language: a name already in
  * use, and a delete that did not happen because what the model built could not be dropped.
  */
@@ -120,10 +121,27 @@ afterEach(async () => {
 });
 
 describe("models.save", () => {
-  it("a member is refused: what a dashboard shows is an admin's decision", async () => {
+  it("a member is refused: what a dashboard shows needs models:write, named in the refusal", async () => {
     const member = await seedMember("m@example.test", "member");
-    const got = await refusal(() => caller(member, "m@example.test").models.save(DRAFT));
+    const got = await refusedWith(() => caller(member, "m@example.test").models.save(DRAFT));
     expect(got.code).toBe("FORBIDDEN");
+    expect(got.facts).toEqual({
+      reason: "PERMISSION_REQUIRED",
+      permission: "models:write",
+      tenantId: TENANT,
+    });
+  });
+
+  it("a builder saves, without being an admin (issue 481)", async () => {
+    const builder = await seedMember("b@example.test", "builder");
+
+    await caller(builder, "b@example.test").models.save({ ...DRAFT, create: true });
+
+    const full = await caller(builder, "b@example.test").models.get({
+      tenantId: TENANT,
+      name: "stg_deals",
+    });
+    expect(full.sql).toBe("select 1");
   });
 
   it("an admin saves, and any member then reads it back", async () => {
@@ -752,6 +770,18 @@ describe("a model's latest tests (issue 456)", () => {
 });
 
 describe("dq.failures", () => {
+  it("a builder reads them too: lake:read, which an author of models needs (ADR 0139)", async () => {
+    const builder = await seedMember("b@example.test", "builder");
+    const worker = new InMemoryWorkerClient();
+    const input = { tenantId: TENANT, runId: "r-1", uniqueId: "test.undercroft.x.a1" };
+
+    expect(await caller(builder, "b@example.test", "vi", { worker }).dq.failures(input)).toEqual({
+      columns: [],
+      rows: [],
+      truncated: false,
+    });
+  });
+
   it("a member is refused: failing rows are source data; an admin reads them", async () => {
     const member = await seedMember("m@example.test", "member");
     const admin = await seedMember("a@example.test", "admin");

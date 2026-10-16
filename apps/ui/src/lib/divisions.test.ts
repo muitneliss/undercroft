@@ -5,6 +5,8 @@
 
 import { describe, expect, test as it } from "bun:test";
 
+import { held } from "@/test/access.ts";
+
 import { closedTo, DIVISIONS, division, divisionPath } from "./divisions.ts";
 
 /** `--errata` in index.css. Held out of the wheel so the slip is the only thing wearing it. */
@@ -46,17 +48,25 @@ describe("divisionPath", () => {
 describe("closedTo", () => {
   const people = division("people");
 
-  it("closes People to a member and a viewer of the open book, and to nobody else (ADR 0119)", () => {
-    const closed = (["viewer", "member", "admin"] as const).map((role) =>
-      closedTo(people, { tenantId: "CASE-0042", role }),
+  it("closes People to whoever lacks people:manage, and to nobody else (ADR 0119, ADR 0139)", () => {
+    const closed = (["viewer", "member", "builder", "admin"] as const).map((role) =>
+      closedTo(people, { tenantId: "CASE-0042", permissions: held(role) }),
     );
-    expect(closed).toEqual(["admin-only", "admin-only", null]);
+    expect(closed).toEqual(["not-permitted", "not-permitted", "not-permitted", null]);
     expect(
-      DIVISIONS.filter((d) => closedTo(d, { tenantId: "CASE-0042", role: "viewer" }) !== null),
+      DIVISIONS.filter(
+        (d) => closedTo(d, { tenantId: "CASE-0042", permissions: held("viewer") }) !== null,
+      ),
     ).toEqual([people]);
   });
 
-  it("closes nothing on a role it does not know yet, so an admin's tab never turns over on a guess", () => {
-    expect(closedTo(people, { tenantId: "CASE-0042", role: undefined })).toBeNull();
+  it("opens People to a reader holding people:manage whatever their role is called", () => {
+    // The permission decides, never the role's name: a customer's own role (PR 2) holding
+    // people:manage must find the division open, which a check on "admin" would refuse.
+    expect(closedTo(people, { tenantId: "CASE-0042", permissions: ["people:manage"] })).toBeNull();
+  });
+
+  it("closes nothing on permissions it does not know yet, so an admin's tab never turns over on a guess", () => {
+    expect(closedTo(people, { tenantId: "CASE-0042", permissions: undefined })).toBeNull();
   });
 });

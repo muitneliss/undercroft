@@ -50,7 +50,7 @@ export const vi = {
     documentKinds: "Catalogue loại tài liệu của khách hàng.",
     people: "Người có quyền truy cập và lời mời.",
     audit:
-      "Ai đã làm gì: thao tác của chính bạn, của một khách hàng cho quản trị của nó, tất cả cho quản trị nền tảng.",
+      "Ai đã làm gì: thao tác của chính bạn, của một khách hàng cho người có quyền audit:read ở đó, tất cả cho quản trị nền tảng.",
     runs: "Các lần chạy.",
     session: "Phiên hiện tại.",
     tenants: "Khách hàng.",

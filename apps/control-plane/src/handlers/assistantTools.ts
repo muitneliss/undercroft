@@ -8,9 +8,14 @@
  *
  * A bound tool runs the procedure's own middleware. `tenantProcedure` resolves authority and
  * answers NOT_FOUND rather than FORBIDDEN for a non-member, so the assistant cannot be used to
- * discover which customers exist. `requireRole` refuses a viewer asking for an admin verb, in
- * the viewer's own language, with the same sentence the button would have produced. None of
- * that is re-implemented here -- so none of it can drift from the copy that ships.
+ * discover which customers exist. `requirePermission` refuses a reader lacking the verb's
+ * permission, in their own language, with the same sentence the button would have produced and
+ * the permission named. None of that is re-implemented here -- so none of it can drift from the
+ * copy that ships.
+ *
+ * What each tool needs is told to the model the same way: the permission the procedure's guard
+ * declares (`permissionFor`) is added to the tool's description here, so the catalogue never
+ * states a gate of its own that could fall out of step with the router's.
  *
  * The tool therefore REFUSES ITSELF. What comes back to the model on a refusal is the
  * procedure's message, which is deliberate: the model needs to be able to tell the reader "you
@@ -26,9 +31,10 @@
 
 import { TRPCError } from "@trpc/server";
 import { tool, type ToolSet } from "ai";
+import { messages } from "../i18n/index.ts";
 import { TOOLS } from "../services/assistant/catalogue.ts";
 import type { Tier } from "../services/assistant/toolSpec.ts";
-import { PROCEDURE_PATHS, resolveProcedure } from "./procedures.ts";
+import { PROCEDURE_PATHS, permissionFor, resolveProcedure } from "./procedures.ts";
 import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";
 
@@ -53,6 +59,17 @@ function refusal(error: unknown): never {
     throw new Error(`${error.code}: ${error.message || "refused"}`);
   }
   throw error;
+}
+
+/**
+ * A tool's description as the model reads it: the catalogue's words, then the permission its
+ * procedure needs. English, as every description is -- the model reads it, no person does.
+ */
+function describedFor(description: string, path: string): string {
+  const permission = permissionFor(path);
+  return permission === null
+    ? description
+    : `${description} ${messages("en")("procedure.needs", { permission })}`;
 }
 
 export interface BindOptions {
@@ -101,7 +118,7 @@ export function bindTools(ctx: Context, options: BindOptions): ToolSet {
     }
 
     tools[name] = tool({
-      description: spec.description,
+      description: describedFor(spec.description, spec.procedure),
       inputSchema: spec.inputSchema,
       // `.catch(refusal)` rather than try/await/catch: `refusal` returns `never`, so this says
       // the same thing in one clause and leaves no `await` for a reader to wonder about.

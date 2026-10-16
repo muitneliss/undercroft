@@ -2,7 +2,7 @@
 
 Undercroft answers the Model Context Protocol at `/mcp` on the control plane: every procedure
 the web UI uses, offered as a tool to claude.ai, Claude Desktop, Claude Code or any other MCP
-client, under the same role gates as the browser. ADR 0060 and ADR 0061 record the decisions;
+client, under the same permission checks as the browser. ADR 0060 and ADR 0061 record the decisions;
 this is how to use it.
 
 A client connects in one of two ways:
@@ -73,18 +73,18 @@ project.
 ## What a token is
 
 A token is **yours**, not a customer's. It reaches exactly what you reach in the browser -- every
-customer you are a member of, with the role you hold in each -- and never more. Removing your
+customer you are a member of, with the permissions your role holds in each -- and never more. Removing your
 access removes your tokens' at the next request.
 
 Each token carries a **grant** you choose when you mint it:
 
-| Grant                | The agent is offered             | The agent can                                                           |
-| -------------------- | -------------------------------- | ----------------------------------------------------------------------- |
-| `read` (Chỉ đọc)     | only the tools classified `read` | look at runs, the lake, models, reports, and people if you are an admin |
-| `write` (Đọc và ghi) | every tool your role allows      | also trigger runs, save and delete, invite and remove                   |
+| Grant                | The agent is offered                  | The agent can                                                                                      |
+| -------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `read` (Chỉ đọc)     | only the tools classified `read`      | look at runs, models and reports, and the lake and people where your role's permissions reach them |
+| `write` (Đọc và ghi) | every tool, each under its permission | also trigger runs, save and delete, invite and remove, as far as your role's permissions reach     |
 
 What counts as a read is `EFFECTS` in `apps/control-plane/src/handlers/surface.ts`. Some things
-that look harmless are **not** reads: `lake_query` runs SQL an admin wrote against the raw lake,
+that look harmless are **not** reads: `lake_query` runs SQL a builder or an admin wrote against the raw lake,
 `models_preview` runs an unsaved model's SQL as the same login (ADR 0132), and every `*_delete` /
 `*_revoke` / `*_disconnect` is destructive. Mint `read` unless you mean the
 agent to change things: an agent reading a customer's mail can be talked into acting by it.
@@ -224,7 +224,7 @@ account procedures themselves (tokens and connected apps).
 | a tool the UI has is missing               | A `read` token is not offered writes. Mint a `write` token if you mean to allow them.                                                                                                                                                                                                                                            |
 | `WRITES_DISABLED`                          | The same, for a client that called a write it was not offered.                                                                                                                                                                                                                                                                   |
 | `NOT_FOUND` for a customer you can name    | You are not a member of it -- the same answer the browser gives, so it confirms nothing.                                                                                                                                                                                                                                         |
-| `PERMISSION_DENIED`                        | You are a member, without the role. The sentence names the role needed.                                                                                                                                                                                                                                                          |
+| `PERMISSION_DENIED`                        | You are a member, without the permission. The sentence names it, and `details.permission` carries its key (`details.reason` is `PERMISSION_REQUIRED`); someone who holds `people:manage` in the customer can give you a role that has it. [Permissions](../reference/permissions.md) lists which role holds what.                |
 | `CONFLICT` naming `TENANT_DEACTIVATED`     | An admin deactivated the customer. Every tool refuses for it until an admin reactivates it; `tenants_get` still says since when.                                                                                                                                                                                                 |
 | `INTERNAL_ERROR` with a `traceId`          | Follow it: `task obs:trace TRACE=<id>`, or hand the id to the `debug-trace` skill. The server logs one `mcp_call` line per call, with the tool, the token's id and the outcome.                                                                                                                                                  |
 | a `-32602` error naming the tool           | The name is not a tool this server offers: a typo, or a procedure that is not offered at all.                                                                                                                                                                                                                                    |

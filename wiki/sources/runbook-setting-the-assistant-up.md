@@ -1,13 +1,15 @@
 ---
 title: 'Runbook: Setting the assistant up'
 type: source
-date: 2026-09-24
+date: 2026-10-16
 tags: []
 source: docs/runbook/assistant-setup.md
 source_path: docs/runbook/assistant-setup.md
-source_hash: fd40a1f6088e7cf7860a0f7c3110118d3f6e434e7ba527709f2da04ba92a8270
-ingested: 2026-09-24
+source_hash: 4f3fea1b357d43b8ac0ce5fc353c1a51bec8221c79a249710c0fbc5004f55422
+ingested: 2026-10-16
 ---
+
+# Runbook: Setting the assistant up
 
 # Runbook: Setting the assistant up
 
@@ -21,4 +23,4 @@ The boot log says which state it came up in and is worth reading, because nothin
 
 What it will not do, worth knowing before somebody reports it as a bug: it does not run SQL (ask for a query and it writes one into the lake console's editor and takes you there, because `lake.query` executes against a customer's data as their own role and an author has to see what they are about to run); it does not author or build dbt models, for the same reason; it does not change a member's role or remove a member -- those procedures exist but are deliberately not given to it, so a membership is changed in the People division or with `undercroft people set-role` / `remove-member`; and it does not choose Gmail labels or Drive files, because that is consent, given by an admin on the scope page (Gmail labels) or in Google's Picker (Drive).
 
-A failure table closes the page. The fist is absent when no customer is open, since the panel needs a book. "Trợ lý chưa được cấu hình" means no model key. Answering but never offering to act means no TypeSafe key or an unreachable gate -- check the boot log's `writes=`. Being told you have not asked for something you just asked for means the gate scored below `ASKED_FOR_THRESHOLD`, which ADR 0029 lists as open; say it again more plainly. A refusal naming a role is the procedure refusing rather than the assistant, which holds exactly your permissions. "Cuộc trò chuyện này đã quá dài" is `MAX_TURNS`. And a figure saying the result is not kept is correct on a reloaded conversation, because results are digested rather than stored.
+A failure table closes the page. The fist is absent when no customer is open, since the panel needs a book. "Trợ lý chưa được cấu hình" means no model key. Answering but never offering to act means no TypeSafe key or an unreachable gate -- check the boot log's `writes=`. Being told you have not asked for something you just asked for means the gate scored below `ASKED_FOR_THRESHOLD`, which ADR 0029 lists as open; say it again more plainly. A refusal naming a permission is the procedure refusing rather than the assistant, which holds exactly your permissions ([[ADR 0139 Tenant Access Is Casbin Policy]]). "Cuộc trò chuyện này đã quá dài" is `MAX_TURNS`. And a figure saying the result is not kept is correct on a reloaded conversation, because results are digested rather than stored.

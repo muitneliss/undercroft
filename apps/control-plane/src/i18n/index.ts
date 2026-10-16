@@ -24,6 +24,7 @@
  * what this server writes. This one is reachable only through `messages`.
  */
 
+import type { Permission } from "@undercroft/contracts/access";
 import { DEFAULT_LOCALE, LOCALES, type Locale } from "@undercroft/core";
 import { createInstance } from "i18next";
 
@@ -80,4 +81,27 @@ export function messages(
   // only accept a UI key. Behaviour is unchanged: i18next already returns the key when it
   // cannot resolve one, and `i18n.test.ts` asserts that no key here is left unresolved.
   return (key, vars): string => t(key, key, vars ?? {});
+}
+
+/**
+ * Each permission's catalogue key. A map rather than a key built from the permission, because
+ * i18next reads the `:` in `models:write` as a namespace separator; typed against the catalogue
+ * so a new permission is a `tsc` error until both languages word it.
+ */
+const PERMISSION_KEYS = {
+  "reports:author": "permission.reportsAuthor",
+  "models:write": "permission.modelsWrite",
+  "lake:read": "permission.lakeRead",
+  "sources:manage": "permission.sourcesManage",
+  "keys:manage": "permission.keysManage",
+  "catalogue:manage": "permission.catalogueManage",
+  "people:manage": "permission.peopleManage",
+  "audit:read": "permission.auditRead",
+  "tenant:manage": "permission.tenantManage",
+  "roles:manage": "permission.rolesManage",
+} as const satisfies Record<Permission, MessageKey>;
+
+/** One permission in words, in the language of the request that is being refused. */
+export function permissionLabel(locale: Locale, permission: Permission): string {
+  return messages(locale)(PERMISSION_KEYS[permission]);
 }

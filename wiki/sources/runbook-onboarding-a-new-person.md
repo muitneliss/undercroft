@@ -1,21 +1,23 @@
 ---
 title: 'Runbook: Onboarding a new person'
 type: source
-date: 2026-10-10
+date: 2026-10-16
 tags: []
 source: docs/runbook/onboarding.md
 source_path: docs/runbook/onboarding.md
-source_hash: ec758b47c8a939bdde770b4705c890de63c20115212395b5f44022e41651730d
-ingested: 2026-10-10
+source_hash: ecb2439f9216aded354e539efdbb80fb5a9e066974591edca3a8f5ebf325bec3
+ingested: 2026-10-16
 ---
+
+# Runbook: Onboarding a new person
 
 # Runbook: Onboarding a new person
 
 The order of steps that takes a new person from no access to an AI agent working in Undercroft, in Vietnamese first and English second; commands stay in the runbooks it links, so each how-to keeps one owner.
 
-**1. Invite.** Sign-in is invite-only: an admin invites the exact email address from the customer's People page and picks a role -- `viewer` (sees sources, runs, models, reports), `member` (also saves report questions and dashboards), `admin` (also reads the raw lake, saves and builds models, connects sources, invites). Building models needs `admin`. With nobody yet able to invite, see "Bootstrap the first admin" in the sign-in runbook.
+**1. Invite.** Sign-in is invite-only: an admin invites the exact email address from the customer's People page and picks a role -- `viewer` (sees sources, runs, models, reports), `member` (also saves report questions and dashboards), `builder` (also reads the raw lake, saves and builds models), `admin` (also connects sources, invites; every permission, [[Permissions]]). Building models needs `admin`. With nobody yet able to invite, see "Bootstrap the first admin" in the sign-in runbook.
 
-**Three words on the Reports page.** A *model* is a dbt `SELECT` over the raw data built into a table; the logic (joins, deduplication, time zones, what a metric means) lives there, and it changes only when built -- after each successful sync or when an admin builds it. A *question* (câu hỏi) is a saved query over the built models, from the form or as SQL, plus how to draw it as a table or chart -- what other BI tools call a saved query, a chart or a Look; the name is kept from Metabase, the BI Undercroft used before its own. It runs each time it is opened, so it is as fresh as the model's last build and no fresher; keep it thin (pick, filter, group, sort one model) and move logic a second question would copy into a model. A *dashboard* is saved questions on a grid under shared filters.
+**Three words on the Reports page.** A *model* is a dbt `SELECT` over the raw data built into a table; the logic (joins, deduplication, time zones, what a metric means) lives there, and it changes only when built -- after each successful sync or when a builder or an admin builds it. A *question* (câu hỏi) is a saved query over the built models, from the form or as SQL, plus how to draw it as a table or chart -- what other BI tools call a saved query, a chart or a Look; the name is kept from Metabase, the BI Undercroft used before its own. It runs each time it is opened, so it is as fresh as the model's last build and no fresher; keep it thin (pick, filter, group, sort one model) and move logic a second question would copy into a model. A *dashboard* is saved questions on a grid under shared filters.
 
 **2. Sign in once on the web**, with Google or an emailed code, to prove the invitation matches before any agent is involved.
 

@@ -13,8 +13,11 @@
  * about what the platform can do.
  */
 
+import type { Permission } from "@undercroft/contracts/access";
+import type { Locale } from "@undercroft/core";
 import { asSchema } from "ai";
 import { ZodType } from "zod";
+import { messages } from "../i18n/index.ts";
 import { procedureSentences as en } from "../i18n/procedures.en.ts";
 import { procedureSentences as vi } from "../i18n/procedures.vi.ts";
 import { appRouter } from "./router.ts";
@@ -25,6 +28,7 @@ import {
   type ProcedureSpec,
   SESSION_ONLY,
 } from "./surface.ts";
+import { permissionGuardedBy } from "./permissionGate.ts";
 import { sessionProcedure, tenantStatusProcedure } from "./trpc.ts";
 
 export type Caller = ReturnType<typeof appRouter.createCaller>;
@@ -144,6 +148,42 @@ function assertSessionOnlyAgrees(path: ProcedurePath, procedure: unknown): void 
   }
 }
 
+/**
+ * The permission a procedure declares, read off its middleware chain the way `SESSION_GUARD` is:
+ * by the identity of the guard `requirePermission` built. `null` for a procedure that declares
+ * none. Two would be a procedure whose need no sentence can state, so the walk refuses it.
+ */
+function permissionOf(path: string, procedure: unknown): Permission | null {
+  const declared = middlewaresOf(path, procedure)
+    .map(permissionGuardedBy)
+    .filter((permission) => permission !== null);
+  if (declared.length > 1) {
+    throw new Error(
+      `${path}: declares ${declared.join(" and ")}; a procedure needs one permission`,
+    );
+  }
+  return declared[0] ?? null;
+}
+
+/**
+ * The permission a router procedure declares, by dotted path; `null` for one that declares none
+ * or a path the router lacks. For a door that describes a procedure without the whole manifest --
+ * the assistant's tools (`assistantTools.ts`).
+ */
+export function permissionFor(path: string): Permission | null {
+  const procedure: unknown = PROCEDURE_PATHS.has(path)
+    ? Reflect.get(appRouter._def.procedures, path)
+    : undefined;
+  return procedure === undefined ? null : permissionOf(path, procedure);
+}
+
+/** A procedure's sentence in one language, and the sentence naming its permission if it has one. */
+function described(sentence: string, permission: Permission | null, locale: Locale): string {
+  return permission === null
+    ? sentence
+    : `${sentence} ${messages(locale)("procedure.needs", { permission })}`;
+}
+
 /** A subscription is refused: no caller built from this manifest has a way to serve one. */
 function typeOf(path: string, procedure: unknown): "query" | "mutation" {
   const def = defOf(procedure);
@@ -193,8 +233,8 @@ function mergeObjects(path: string, schemas: readonly JsonSchema[]): JsonSchema 
 }
 
 /**
- * The router, described: every procedure's path, type, merged input, tenant scope, effect and
- * sentences, sorted by path.
+ * The router, described: every procedure's path, type, merged input, tenant scope, permission,
+ * effect and sentences, sorted by path.
  *
  * Throws, naming the procedure, on anything it cannot describe honestly. The tables it joins
  * are typed against the router, so their gaps are `tsc` errors before this ever runs; what is
@@ -217,6 +257,7 @@ export async function procedureManifest(): Promise<ProcedureSpec[]> {
     if (effect === null) {
       throw new Error(`${path}: a mutation with no effect in handlers/surface.ts`);
     }
+    const permission = permissionOf(path, procedure);
     specs.push({
       path,
       type,
@@ -224,8 +265,12 @@ export async function procedureManifest(): Promise<ProcedureSpec[]> {
       // Identity, not shape: the one parser object the tenant builders put first in every
       // chain built on them. `tenants.create` also takes a `tenantId`, and is not scoped.
       tenantScoped: inputs[0] !== undefined && inputs[0] === tenantInput,
+      permission,
       effect,
-      description: { vi: vi[path], en: en[path] },
+      description: {
+        vi: described(vi[path], permission, "vi"),
+        en: described(en[path], permission, "en"),
+      },
     });
   }
   return specs.sort((a, b) => a.path.localeCompare(b.path));

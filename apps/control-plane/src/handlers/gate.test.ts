@@ -503,7 +503,7 @@ describe("a platform administrator can finish what the platform lets them start"
       cookie,
     );
 
-    expect(response.headers.get("location")).toContain("reason=not-admin");
+    expect(response.headers.get("location")).toContain("reason=not-permitted");
   });
 });
 

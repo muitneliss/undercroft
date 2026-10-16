@@ -2,8 +2,9 @@
  * The `seeds` procedures: a tenant's reference tables, which its models read with `ref()`.
  * ADR 0128.
  *
- * Any member may list and read them, as they may read the models built from them; only an admin
- * may save or delete one, because a seed changes what every model reading it builds. Same layer
+ * Any member may list and read them, as they may read the models built from them; only a holder
+ * of `models:write` may save or delete one, because a seed changes what every model reading it
+ * builds. Same layer
  * and rules as the other routers: validate, call one service, decide what its answer means.
  *
  * A table the service refuses is BAD_REQUEST, worded, with the facts an agent acts on --
@@ -28,7 +29,8 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as seeds from "../services/seeds.ts";
 import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
-import { actorOf, refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
+import { requirePermission } from "./permissionGate.ts";
+import { actorOf, refusal, router, tenantProcedure } from "./trpc.ts";
 
 /** The bound a table-level problem names, so its sentence can say how far is too far. */
 const LIMIT_OF: Partial<Record<SeedRefusal["problem"], number>> = {
@@ -78,7 +80,7 @@ export const seedsRouter = router({
    * is BAD_REQUEST naming where; a taken name under `create`, or a model's name, is a CONFLICT.
    * The bounds are the service's, so each refusal is worded rather than a schema's.
    */
-  save: requireRole("admin")
+  save: requirePermission("models:write")
     .input(
       z.object({
         name: SeedName,
@@ -122,7 +124,7 @@ export const seedsRouter = router({
    * seed a model still reads is a CONFLICT naming the models; without a worker nothing can drop
    * the table, so nothing is deleted.
    */
-  delete: requireRole("admin")
+  delete: requirePermission("models:write")
     .input(z.object({ name: SeedName }))
     .mutation(async ({ ctx, input }) => {
       const t = messages(ctx.locale);

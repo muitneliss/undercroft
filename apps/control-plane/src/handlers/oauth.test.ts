@@ -10,7 +10,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { Hono } from "hono";
 
-import { adminStandingIn } from "../services/authz.ts";
+import { standingIn } from "../services/authz.ts";
 import { startConsent } from "../services/oauth.ts";
 import { NO_SUPERADMINS } from "../services/superadmin.ts";
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
@@ -19,6 +19,8 @@ import { registerOAuthRoutes } from "./oauth.ts";
 const TENANT = "CASE-0042";
 const ADMIN = { userId: "", email: "ada@example.test" };
 const MEMBER = { userId: "", email: "bo@example.test" };
+/** Holds `models:write` and `lake:read`, never `sources:manage` (ADR 0139). */
+const BUILDER = { userId: "", email: "cy@example.test" };
 /** Named in UNDERCROFT_SUPERADMINS, and a member of nothing -- which is the whole point. */
 const SUPERADMIN = { userId: "", email: "root@example.test" };
 const SUPERADMINS: ReadonlySet<string> = new Set([SUPERADMIN.email]);
@@ -85,6 +87,7 @@ beforeEach(async () => {
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   ADMIN.userId = await seedUser(ADMIN.email, "admin");
   MEMBER.userId = await seedUser(MEMBER.email, "member");
+  BUILDER.userId = await seedUser(BUILDER.email, "builder");
   // No `tenant_member` row, deliberately: ADR 0013 provisions a superadmin with none, and a
   // fixture that quietly gave them one would test a person who does not exist.
   SUPERADMIN.userId = await seedAppUser(SUPERADMIN.email);
@@ -130,7 +133,7 @@ async function seedUser(email: string, role: string): Promise<string> {
 /**
  * Build the app with a given signed-in caller. `null` is nobody signed in.
  *
- * `adminStanding` is the REAL policy, not a lookup written here. The first version of
+ * `sourcesStanding` is the REAL policy, not a lookup written here. The first version of
  * this helper ran its own `SELECT role FROM app.tenant_member`, which happened to be what
  * the wiring in `server.ts` also did -- so the suite agreed with production about a rule
  * neither of them had right, and stayed green while a superadmin could not finish a consent.
@@ -146,7 +149,8 @@ function appFor(
     google,
     xero,
     worker,
-    adminStanding: (tenantId, who) => adminStandingIn(db, superadmins, { tenantId, ...who }),
+    sourcesStanding: (tenantId, who) =>
+      standingIn(db, superadmins, { tenantId, ...who }, "sources:manage"),
     resolveCaller: () => Promise.resolve(caller),
   });
   return app;
@@ -299,7 +303,19 @@ describe("completing a consent", () => {
 
     const response = await callback(appFor(MEMBER), { state, code: "auth-code" });
 
-    expect(response.headers.get("location")).toContain("reason=not-admin");
+    expect(response.headers.get("location")).toContain("reason=not-permitted");
+    expect(worker.stored).toHaveLength(0);
+  });
+
+  it("a builder is refused: the callback seals a source, which is sources:manage", async () => {
+    // A builder may read the raw lake a source lands, and may still not connect one. The
+    // callback is the one door to `connections.*` with no middleware, so it must ask the same
+    // permission the procedures do rather than any permission the caller happens to hold.
+    const state = await beginConsent();
+
+    const response = await callback(appFor(BUILDER), { state, code: "auth-code" });
+
+    expect(response.headers.get("location")).toContain("reason=not-permitted");
     expect(worker.stored).toHaveLength(0);
   });
 
@@ -307,7 +323,7 @@ describe("completing a consent", () => {
     // The bug this pins: `server.ts` asked `roleFor`, a `tenant_member` lookup, while the
     // button that starts the flow asked `authorityIn`. So the platform administrator -- the
     // one person who can set a fresh deployment up, and who by design is a member of nothing
-    // -- got all the way through Google's dialog and was then refused `not-admin`.
+    // -- got all the way through Google's dialog and was then refused as not an admin.
     const state = await beginConsent();
 
     const response = await callback(appFor(SUPERADMIN, SUPERADMINS), {
@@ -330,7 +346,7 @@ describe("completing a consent", () => {
       code: "auth-code",
     });
 
-    expect(response.headers.get("location")).toContain("reason=not-admin");
+    expect(response.headers.get("location")).toContain("reason=not-permitted");
     expect(worker.stored).toHaveLength(0);
   });
 
@@ -339,7 +355,7 @@ describe("completing a consent", () => {
 
     const response = await callback(appFor(null), { state, code: "auth-code" });
 
-    expect(response.headers.get("location")).toContain("reason=not-admin");
+    expect(response.headers.get("location")).toContain("reason=not-permitted");
     expect(worker.stored).toHaveLength(0);
   });
 

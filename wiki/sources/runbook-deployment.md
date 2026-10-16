@@ -1,13 +1,15 @@
 ---
 title: Runbook Deployment
 type: source
-date: 2026-10-13
+date: 2026-10-16
 tags: []
 source: docs/runbook/deployment.md
 source_path: docs/runbook/deployment.md
-source_hash: 47780556e92dd1d0e6d1ebd5c0f304d2359ec88ef350d0a9639b21e2035f590f
-ingested: 2026-10-13
+source_hash: 21c880ee2f51788ca426e2d9b8659d3e13b73385ee532253075f42cf7378974c
+ingested: 2026-10-16
 ---
+
+# Runbook Deployment
 
 # Runbook Deployment
 

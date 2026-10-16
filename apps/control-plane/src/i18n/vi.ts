@@ -132,6 +132,35 @@ export const vi = {
     action: "Đến Nguồn dữ liệu",
   },
 
+  /**
+   * Each permission in words (ADR 0139), keyed so a refusal can name what is missing. A noun
+   * phrase that completes "cần quyền …", never a role's name: several roles hold most of these.
+   * The keys are camelCase because i18next reads a `:` in a key as a namespace; `index.ts` maps
+   * each permission to its key, typed so a new permission is a `tsc` error until worded here.
+   */
+  permission: {
+    reportsAuthor: "soạn câu hỏi và bảng điều khiển",
+    modelsWrite: "lưu, dựng và xem trước mô hình, macro và bảng tham chiếu",
+    lakeRead: "đọc hồ dữ liệu thô",
+    sourcesManage: "quản lý nguồn dữ liệu",
+    keysManage: "quản lý khoá nạp dữ liệu",
+    catalogueManage: "quản lý catalogue loại tài liệu",
+    peopleManage: "quản lý người dùng",
+    auditRead: "xem nhật ký thao tác của khách hàng",
+    tenantManage: "quản lý khách hàng",
+    rolesManage: "quản lý vai trò",
+  },
+
+  /**
+   * What `procedureManifest` adds to a procedure's sentence when the procedure needs a
+   * permission (ADR 0139): a whole sentence of its own, placed after the first, never a fragment
+   * joined into it. Written once here rather than at the end of sixty sentences, because the
+   * permission it names is read off the router's own middleware.
+   */
+  procedure: {
+    needs: "Cần quyền {{permission}}.",
+  },
+
   error: {
     notInvited:
       "Địa chỉ đó chưa được mời. Hãy đề nghị quản trị viên gửi lời mời, và đăng nhập bằng đúng địa chỉ đã nhận lời mời.",
@@ -142,7 +171,13 @@ export const vi = {
     notMember: "{{email}} không có quyền truy cập khách hàng này.",
     lastAdmin:
       "{{email}} là quản trị viên duy nhất của khách hàng này. Hãy cấp vai trò admin cho người khác trước, để khách hàng không bị bỏ lại mà không còn ai quản lý được quyền truy cập.",
-    requiresRole: "Thao tác này cần vai trò {{role}}.",
+    /**
+     * Names what is missing twice: in words, for the person, and by its key, which is what they
+     * quote to whoever manages access and what an agent matches. Never a role -- a permission is
+     * held by more than one, and naming one would send a builder to ask to be made admin.
+     */
+    requiresPermission:
+      "Thao tác này cần quyền {{label}} ({{permission}}). Hãy nhờ người có quyền people:manage trong khách hàng này cấp cho bạn một vai trò có quyền đó.",
     /**
      * Says what is missing without naming the variable that grants it. An operator reading
      * this cannot fix it themselves -- somebody with access to the deployment's environment

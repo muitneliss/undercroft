@@ -13,13 +13,8 @@
 import { z } from "zod";
 import { listAll, listMine, listTenant } from "../services/audit.ts";
 import { Email } from "./inputs.ts";
-import {
-  authedProcedure,
-  requireRole,
-  router,
-  superadminProcedure,
-  tenantStatusProcedure,
-} from "./trpc.ts";
+import { requirePermission } from "./permissionGate.ts";
+import { authedProcedure, router, superadminProcedure, tenantStatusProcedure } from "./trpc.ts";
 
 /** A page as `runs.list` takes one: rows older than `cursor` (a page's `nextCursor`), at most `limit`. */
 const Page = z.object({
@@ -35,7 +30,7 @@ export const auditRouter = router({
     .input(Page)
     .query(({ ctx, input }) => listMine(ctx.exec, { ...input, userId: ctx.user.userId })),
 
-  tenant: requireRole("admin", tenantStatusProcedure)
+  tenant: requirePermission("audit:read", tenantStatusProcedure)
     .input(Page.extend({ email: Email.optional() }))
     .query(({ ctx, input }) => listTenant(ctx.exec, { ...input, tenantId: ctx.tenantId })),
 

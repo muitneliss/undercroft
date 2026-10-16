@@ -7,6 +7,7 @@
  * `execute`, and descriptions written in English for the model, holds here unchanged.
  */
 
+import { BUILT_IN_ROLES } from "@undercroft/contracts/access";
 import { z } from "zod";
 
 import { CadenceChoice, ResyncChoice } from "./cadenceChoice.ts";
@@ -16,7 +17,7 @@ import { inTenant, type ToolSpec } from "./toolSpec.ts";
 /**
  * The write tier: reversible, cheap, and pulled as a proof the reader must strike.
  *
- * Every one of these is something an admin could already do in two clicks, and every one is
+ * Every one of these is something its permission's holder could already do in two clicks, and every one is
  * reversible in the same two -- a cadence can be set back, a run can be triggered again, an
  * invitation can be revoked. That is what makes them the routine tier: the cost of a wrong one
  * is a minute, not a customer's data.
@@ -69,12 +70,15 @@ export const WRITE_TOOLS = {
   },
   invitePerson: {
     description:
-      "Invite somebody to this customer by email address, at a role. viewer reads, member also " +
-      "authors questions, admin also connects accounts. Sign-in is invitation-only, so this is " +
-      "the only way somebody gains access.",
+      "Invite somebody to this customer by email address, at a role. viewer reads; member also " +
+      "authors questions and dashboards (reports:author); builder also saves, builds and " +
+      "previews models, macros and reference tables (models:write) and reads the raw lake " +
+      "(lake:read); admin holds every permission, including people, sources, ingest keys and " +
+      "the customer itself. Sign-in is invitation-only, so this is the only way somebody gains " +
+      "access.",
     inputSchema: inTenant.extend({
       email: z.string().email(),
-      role: z.enum(["viewer", "member", "admin"]),
+      role: z.enum(BUILT_IN_ROLES),
     }),
     tier: "write",
     plate: "facts",

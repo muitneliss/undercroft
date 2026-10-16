@@ -22,6 +22,7 @@ import { MemoryRouter } from "react-router-dom";
 import "@/i18n/index.ts";
 import { TenantOverview } from "@/routes/TenantOverview.tsx";
 import { useUiStore } from "@/store.ts";
+import { held } from "@/test/access.ts";
 import { connection } from "@/test/fixtures.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -90,7 +91,9 @@ function mount(
             return Promise.resolve(answer(SCHEDULE));
           }
           if (path.endsWith("/tenants.get")) {
-            return Promise.resolve(answer({ tenantId: TENANT, displayName: "Acme", role }));
+            return Promise.resolve(
+              answer({ tenantId: TENANT, displayName: "Acme", role, permissions: held(role) }),
+            );
           }
           const answered = answers[path.slice(path.lastIndexOf("/") + 1)];
           return answered ?? Promise.resolve(refuse(path));

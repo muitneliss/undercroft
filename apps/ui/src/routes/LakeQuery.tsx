@@ -24,6 +24,7 @@ import { useSearchParams } from "react-router-dom";
 import { Errata } from "@/components/Errata.tsx";
 import { LakeConsole } from "@/components/LakeConsole.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { can } from "@/lib/permissions.ts";
 import { parseStream } from "@/lib/lake.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -44,10 +45,10 @@ export function LakeQuery({ tenantId }: { tenantId: string }): React.JSX.Element
       </Errata>
     );
   }
-  if (tenant.data.role !== "admin") {
+  if (!can(tenant.data.permissions, "lake:read")) {
     return (
       <Errata heading={t("lake.consoleRefused")} live={true}>
-        {t("lake.consoleAdminOnly")}
+        {t("lake.consoleNeedsLakeRead")}
       </Errata>
     );
   }

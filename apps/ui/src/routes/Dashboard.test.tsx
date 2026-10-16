@@ -16,6 +16,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import "@/i18n/index.ts";
 import { Dashboard } from "@/routes/Dashboard.tsx";
 import { useUiStore } from "@/store.ts";
+import { held } from "@/test/access.ts";
 import { type Answer, mountRoute } from "@/test/mountRoute.tsx";
 
 const TENANT = "CASE-0042";
@@ -70,7 +71,7 @@ const LAYOUT = {
 
 function served(role: string): Record<string, Answer> {
   return {
-    "tenants.get": () => ({ tenantId: TENANT, displayName: "Acme", role }),
+    "tenants.get": () => ({ tenantId: TENANT, displayName: "Acme", role, permissions: held(role) }),
     "bi.questions.list": () => QUESTIONS,
     "bi.dashboards.get": () => ({
       id: DASHBOARD,

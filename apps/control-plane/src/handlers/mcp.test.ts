@@ -152,8 +152,10 @@ describe("the tools a token is offered", () => {
     const { tools } = await client.listTools();
     await client.close();
 
+    // The procedure's sentence, then the permission its guard declares (ADR 0139): one fact,
+    // read off the router, so the words a client reads cannot name a gate the router lacks.
     expect(tools.find((tool) => tool.name === "runs_trigger")?.description).toBe(
-      en["runs.trigger"],
+      `${en["runs.trigger"]} Needs sources:manage.`,
     );
   });
 });

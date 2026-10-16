@@ -24,6 +24,7 @@ import { ChartGlyph } from "@/components/ChartGlyph.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { can } from "@/lib/permissions.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { wholeList } from "@/lib/listAnswers.ts";
 import { formatCount } from "@/lib/money.ts";
@@ -56,7 +57,7 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
     );
   }
 
-  const canAuthor = tenant.data.role !== "viewer";
+  const canAuthor = can(tenant.data.permissions, "reports:author");
   const base = divisionPath("reports", tenantId);
   const nothing = questions.data.length === 0 && dashboards.data.length === 0;
   const lists = reportLists(search, dashboards.data, questions.data);

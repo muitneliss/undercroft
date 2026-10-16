@@ -64,11 +64,11 @@ again when it changed, for instance when the file was moved. It then counts as C
 
 ## From a count to the records it counts
 
-For an admin, a run's New and Changed figures in the "By entity" table link to the Raw lake,
-opened on that entity's stream and narrowed to that run (`?run=` in the address). The same page
-is `lake records --run-id` (or `lake documents --run-id` for the `documents` entity) over the CLI
-and MCP. A member or viewer sees the same figures with no link, because the records themselves
-are an admin's.
+For a reader who holds `lake:read` -- a builder or an admin -- a run's New and Changed figures
+in the "By entity" table link to the Raw lake, opened on that entity's stream and narrowed to
+that run (`?run=` in the address). The same page is `lake records --run-id` (or
+`lake documents --run-id` for the `documents` entity) over the CLI and MCP. A member or viewer sees the same figures with no link, because reading the records
+themselves needs `lake:read` ([Permissions](permissions.md)).
 
 A record in the raw lake names only the run that last wrote it. So the page lists the records
 this run wrote that no later run has written again, and says how many it does not list:

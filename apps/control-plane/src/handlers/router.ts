@@ -10,14 +10,8 @@ import * as models from "../services/models.ts";
 import * as preferences from "../services/preferences.ts";
 import * as runs from "../services/runs.ts";
 import { MAX_WAIT_SECONDS } from "../services/runWait.ts";
-import {
-  actorOf,
-  authedProcedure,
-  publicProcedure,
-  requireRole,
-  router,
-  tenantProcedure,
-} from "./trpc.ts";
+import { requirePermission } from "./permissionGate.ts";
+import { actorOf, authedProcedure, publicProcedure, router, tenantProcedure } from "./trpc.ts";
 
 import { accountRouter } from "./accountRouter.ts";
 import { auditRouter } from "./auditRouter.ts";
@@ -93,14 +87,14 @@ export const appRouter = router({
   connections: connectionsRouter,
 
   /**
-   * Ingest keys: the credential a script presents to the lake write API. All admin-only --
+   * Ingest keys: the credential a script presents to the lake write API. All `keys:manage` --
    * a key is a standing grant to land data as this customer -- and the token is returned by
    * `mint` once and by nothing else.
    */
   keys: router({
-    list: requireRole("admin").query(({ ctx }) => keys.list(ctx.exec, ctx.tenantId)),
+    list: requirePermission("keys:manage").query(({ ctx }) => keys.list(ctx.exec, ctx.tenantId)),
 
-    mint: requireRole("admin")
+    mint: requirePermission("keys:manage")
       .input(
         z.object({
           label: z.string().trim().min(1).max(80),
@@ -118,7 +112,7 @@ export const appRouter = router({
         }),
       ),
 
-    revoke: requireRole("admin")
+    revoke: requirePermission("keys:manage")
       .input(z.object({ id: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
         const revoked = await keys.revoke(ctx.exec, {
@@ -156,11 +150,11 @@ export const appRouter = router({
 
   dq: router({
     /**
-     * The rows a failed test stored. Admin-only: they are source data, the same rows the
+     * The rows a failed test stored. `lake:read`: they are source data, the same rows the
      * dq schema exists to keep off dashboards. NOT_FOUND for a step that is not this
      * tenant's, BAD_REQUEST for one that stored nothing.
      */
-    failures: requireRole("admin")
+    failures: requirePermission("lake:read")
       .input(
         z.object({
           runId: z.string().min(1),
@@ -287,8 +281,8 @@ export const appRouter = router({
       }),
 
     /**
-     * Run now. Admin-only: starting a read of a customer's accounts is the same authority
-     * as connecting them. The call proxies to the worker's verb allowlist with the same
+     * Run now. `sources:manage`: starting a read of a customer's accounts is the same
+     * authority as connecting them. The call proxies to the worker's verb allowlist with the same
      * bearer token Kestra uses, so the control plane gains no wider privilege than the
      * scheduler.
      *
@@ -297,7 +291,7 @@ export const appRouter = router({
      * BAD_REQUEST. One sentence for all three would send an admin to wait for a service that
      * is fine, on the screen where the run they wanted is already visible.
      */
-    trigger: requireRole("admin")
+    trigger: requirePermission("sources:manage")
       .input(z.object({ source: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.worker === null) {

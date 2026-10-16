@@ -21,13 +21,13 @@ export function ViewHead({
   members,
   invitations,
   tenantId,
-  isAdmin,
+  showsActivity,
 }: {
   address: PeopleAddress;
   members: number;
   invitations: number;
   tenantId: string;
-  isAdmin: boolean;
+  showsActivity: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const labels: Record<PeopleView, string> = {
@@ -39,7 +39,7 @@ export function ViewHead({
   return (
     <>
       <nav aria-label={t("people.viewsLabel")} className="langset">
-        {VIEWS.filter((each) => isAdmin || each !== "activity").map((each) => (
+        {VIEWS.filter((each) => showsActivity || each !== "activity").map((each) => (
           <Link
             key={each}
             className="plate plate--small"

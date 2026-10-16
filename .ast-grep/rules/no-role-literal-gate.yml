@@ -1,0 +1,110 @@
+# Bans deciding on a role's NAME: `role === "admin"`, `tenant.data.role !== "viewer"` and the
+# like, in the browser and the control plane. What a person may do is a permission, decided by
+# Casbin on the server (ADR 0139) and read in the browser through `can(permissions, …)`; a
+# comparison to a role's name is a second, hand-written policy that is wrong the day a builder
+# or a customer's own role exists -- and it renders perfectly while being wrong, which is why
+# it is a gate and not a habit. See .claude/rules/access.md.
+#
+# The pattern is a comparison (`===`, `!==`, `==`, `!=`, either way round) between a built-in
+# role's key, quoted, and an expression whose text names a role -- written as a binary
+# expression with those children rather than as `$A === $B` patterns, because ast-grep checks
+# `constraints` after an `any` has chosen its first matching pattern and does not try the next,
+# so the swapped spelling (`"viewer" !== role`) slipped through. That is narrow on purpose: a
+# chat turn's `role === "user"` is not a tenant role, and the last-admin logic that must name
+# the role it protects (`soleAdmin` in `apps/ui/src/lib/roles.ts`, the guard's SQL in
+# `repos/membership.ts`) does so through `ADMIN_ROLE` or inside a SQL string, neither of which
+# this matches. Tests are exempt by path: a suite seeds and asserts roles by name.
+#
+# Two rules because ast-grep binds one language per rule: `.tsx` parses as `tsx`, `.ts` as
+# `typescript`. Pinned from both sides by scripts/access.test.ts, as is the rule after them,
+# which keeps the browser from reading the built-in grants at all.
+id: no-role-literal-gate-ts
+language: typescript
+severity: error
+message: >-
+  Decide on a permission, never on a role's name: requirePermission(...) on the server,
+  can(permissions, ...) in the browser. See .claude/rules/access.md (ADR 0139).
+files:
+  - "apps/ui/src/**"
+  - "apps/control-plane/src/**"
+ignores:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+rule:
+  kind: binary_expression
+  all:
+    - has:
+        field: operator
+        regex: "^[!=]==?$"
+    - has:
+        any:
+          - kind: string
+          - kind: template_string
+        regex: '^["''`](viewer|member|builder|admin)["''`]$'
+    - has:
+        regex: "(?i)role"
+---
+# Same rule, same reasons -- see no-role-literal-gate-ts above.
+id: no-role-literal-gate-tsx
+language: tsx
+severity: error
+message: >-
+  Decide on a permission, never on a role's name: requirePermission(...) on the server,
+  can(permissions, ...) in the browser. See .claude/rules/access.md (ADR 0139).
+files:
+  - "apps/ui/src/**"
+  - "apps/control-plane/src/**"
+ignores:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+rule:
+  kind: binary_expression
+  all:
+    - has:
+        field: operator
+        regex: "^[!=]==?$"
+    - has:
+        any:
+          - kind: string
+          - kind: template_string
+        regex: '^["''`](viewer|member|builder|admin)["''`]$'
+    - has:
+        regex: "(?i)role"
+---
+# The browser never computes what a role may do (ADR 0139). `BUILT_IN_GRANTS` lives in
+# `@undercroft/contracts/access` so that the server's policy and the fixtures standing in for
+# the server's answer are one table -- `apps/ui/src/test/**` and the suites read it for that --
+# and a screen that read it would hold a copy of the policy that is wrong for every role a
+# customer defines. A screen reads `permissions` off `tenants.get`, through `can()`.
+id: no-role-policy-in-ui-ts
+language: typescript
+severity: error
+message: >-
+  The browser reads what a reader may do from the server's `permissions`, through can();
+  it never computes it from BUILT_IN_GRANTS. See .claude/rules/access.md (ADR 0139).
+files:
+  - "apps/ui/src/**"
+ignores:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "apps/ui/src/test/**"
+rule:
+  kind: identifier
+  regex: "^BUILT_IN_GRANTS$"
+---
+# Same rule, same reasons -- see no-role-policy-in-ui-ts above.
+id: no-role-policy-in-ui-tsx
+language: tsx
+severity: error
+message: >-
+  The browser reads what a reader may do from the server's `permissions`, through can();
+  it never computes it from BUILT_IN_GRANTS. See .claude/rules/access.md (ADR 0139).
+files:
+  - "apps/ui/src/**"
+ignores:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "apps/ui/src/test/**"
+rule:
+  kind: identifier
+  regex: "^BUILT_IN_GRANTS$"

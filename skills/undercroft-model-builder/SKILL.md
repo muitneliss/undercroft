@@ -119,12 +119,13 @@ These hold for the whole workflow. None of them bends because the person is in a
   `lake.summary`, and `bi.questions.list`, `bi.questions.get`, `bi.dashboards.list`,
   `bi.dashboards.get` and `bi.schema`.
 - Running a definition against the built models (`bi.answer`, `bi.compile`) and saving a
-  question or dashboard (`bi.questions.save`, `bi.dashboards.save`) need the `member` role
-  or above.
-- Reading the raw lake (`lake.records`, `lake.documents`, `lake.querySchema`, `lake.query`),
-  saving and building a model (`models.save`, `models.build`), saving a macro
-  (`macros.save`) and saving a seed (`seeds.save`) need the `admin` role.
-- Previewing an unsaved model (`models.preview`) needs the `admin` role and the write grant
+  question or dashboard (`bi.questions.save`, `bi.dashboards.save`) need the `reports:author`
+  permission, which the `member`, `builder` and `admin` roles hold.
+- Reading the raw lake (`lake.records`, `lake.documents`, `lake.querySchema`, `lake.query`,
+  `lake.search`) needs `lake:read`. Saving and building a model (`models.save`,
+  `models.build`), saving a macro (`macros.save`) and saving a seed (`seeds.save`) need
+  `models:write`. The `builder` and `admin` roles hold both; a `member` holds neither.
+- Previewing an unsaved model (`models.preview`) needs `models:write` and the write grant
   below, as `lake.query` does: it saves nothing, but it runs the draft as the login that reads
   the raw lake.
 - Over MCP, `lake.query`, `models.preview`, every save and `models.build` need a connection
@@ -132,7 +133,10 @@ These hold for the whole workflow. None of them bends because the person is in a
   `models.preview` count as writes even though they only read, because each runs SQL somebody
   wrote.
 
-If the person lacks one of these, say so at the start, before the interview. Do not find out
+Read what the person holds from `tenants.get`, whose `permissions` lists their permissions
+in that customer; the `undercroft` skill's `access-control.md` reference has the whole
+catalogue, the built-in roles and what to tell a person a permission is missing for. If the
+person lacks one of these, say so at the start, before the interview. Do not find out
 halfway through. A person who can read but not write can still be helped to the end of
 discovery, and leave with a plan someone else can carry out.
 
@@ -149,7 +153,7 @@ Steps 2 to 7 and 10 to 11 are `references/discovery.md`, which owns their detail
 ### 1. Find the ground
 
 Take the tenant from `tenants.list`. If the person has more than one, ask which. Note what
-the person's role and grant allow (above).
+the person's `permissions` and grant allow (above).
 
 ### 2. Reconnaissance
 
@@ -282,7 +286,7 @@ one, and keep `limit` small.
 - A parent is read as published, which is what a build of this model alone would read. A parent
   that is itself an unsaved draft cannot be previewed with it: save and build it first, with the
   person's yes, or preview each over the saved versions of the others.
-- Without the `admin` role or a write grant (above), skip this step and say so in the next.
+- Without `models:write` or a write grant (above), skip this step and say so in the next.
 
 ### M5. Confirm the save
 

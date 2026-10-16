@@ -20,6 +20,7 @@
  * would be a cycle (and `noImportCycles` is on).
  */
 
+import type { Permission } from "@undercroft/contracts/access";
 import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import {
@@ -140,8 +141,14 @@ function isChatBody(body: unknown): body is ChatBody {
   );
 }
 
-/** Where a reader stands with a customer: their role, a deactivated customer, or nowhere. */
-type Standing = { readonly role: string } | "deactivated" | null;
+/**
+ * Where a reader stands with a customer: their role and its permissions, a deactivated
+ * customer, or nowhere.
+ */
+type Standing =
+  | { readonly role: string; readonly permissions: readonly Permission[] }
+  | "deactivated"
+  | null;
 
 /**
  * Establish that this reader may speak about this customer, and with what authority.
@@ -151,7 +158,9 @@ type Standing = { readonly role: string } | "deactivated" | null;
  * everywhere else. Asking the repo directly here would have been a second copy of that
  * decision, and the one that forgot that a superadmin holds admin without a `tenant_member` row.
  *
- * It also yields the role, which the prompt needs in order to tell the reader what they can do.
+ * It also yields the role and its permissions, which the prompt needs in order to tell the
+ * reader what they can do -- passed through as `tenants.get` answered them, so a role this file
+ * has never heard of (a builder, a customer's own) reaches the model as itself.
  *
  * `deactivated` because `tenants.get` is the one read that still answers on a deactivated
  * customer (ADR 0110) -- that is what it is for -- so this door has to ask the question the
@@ -162,7 +171,9 @@ type Standing = { readonly role: string } | "deactivated" | null;
 async function authority(ctx: Context, tenantId: string): Promise<Standing> {
   try {
     const tenant = await appRouter.createCaller(ctx).tenants.get({ tenantId });
-    return tenant.deactivatedAt === null ? { role: tenant.role } : "deactivated";
+    return tenant.deactivatedAt === null
+      ? { role: tenant.role, permissions: tenant.permissions }
+      : "deactivated";
   } catch {
     return null;
   }
@@ -193,6 +204,7 @@ type Admitted =
       readonly assistant: Assistant;
       readonly body: ChatBody;
       readonly role: string;
+      readonly permissions: readonly Permission[];
     }
   | { readonly ok: false; readonly response: Response };
 
@@ -223,7 +235,7 @@ async function admit(c: HonoContext, deps: AssistantRouteDeps, ctx: Context): Pr
     return { ok: false, response: refusedStanding(c, ctx, held) };
   }
 
-  return { ok: true, assistant, body, role: held.role };
+  return { ok: true, assistant, body, role: held.role, permissions: held.permissions };
 }
 
 /**
@@ -285,7 +297,7 @@ export function registerAssistantRoutes(app: Hono, deps: AssistantRouteDeps): vo
     if (!admitted.ok) {
       return admitted.response;
     }
-    const { assistant, body, role } = admitted;
+    const { assistant, body, role, permissions } = admitted;
     // Narrowed by `admit`, which refuses an anonymous caller before anything else.
     const userId = ctx.user?.userId ?? "";
 
@@ -310,7 +322,8 @@ export function registerAssistantRoutes(app: Hono, deps: AssistantRouteDeps): vo
       facts: {
         locale: ctx.locale,
         tenantId: body.tenantId,
-        role: role === "viewer" || role === "member" || role === "admin" ? role : null,
+        role,
+        permissions,
         superadmin: ctx.superadmin,
         now: nowInSingapore(),
       },

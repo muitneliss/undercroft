@@ -5,11 +5,12 @@
  * invitation; this page is how one comes to exist. Without it a correct sign-in admits
  * nobody without a SQL client, which is not a product.
  *
- * The whole division is admin-only (ADR 0119): reading the roster and the invitations is
- * `requireRole("admin")` on the server, as every write here is, and `Book` never mounts this
- * page for anybody else -- it prints `AdminOnlyNotice` in its place, so a member's browser does
- * not even ask. The `isAdmin` checks below predate that and no longer decide what an ordinary
- * reader sees; like the hiding they do, they are courtesy, not the control. The procedures
+ * The whole division needs `people:manage` (ADR 0119, ADR 0139): reading the roster and the
+ * invitations is `requirePermission("people:manage")` on the server, as every write here is, and
+ * `Book` never mounts this page for anybody else -- it prints `NotPermittedNotice` in its place,
+ * so a member's browser does not even ask. The `canManage` checks below predate that and no
+ * longer decide what an ordinary reader sees; the activity view asks `audit:read`, its own
+ * permission, since that is what `audit.tenant` needs; like the hiding they do, they are courtesy, not the control. The procedures
  * refuse regardless of what the browser renders, and the server alone refuses to leave a
  * customer without an admin.
  *
@@ -28,6 +29,7 @@ import { ActivityLog } from "@/components/ActivityLog.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { InvitePanel, OpenInvitations } from "@/components/Invitations.tsx";
 import { ViewHead } from "@/components/PeopleViews.tsx";
+import { can } from "@/lib/permissions.ts";
 import { Roster } from "@/components/Roster.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { type PeopleAddress, usePeopleAddress } from "@/components/usePeopleAddress.ts";
@@ -97,7 +99,7 @@ function ViewList({
   address,
   roster,
   open,
-  isAdmin,
+  canManage,
   writes,
   tenantId,
   signedInAs,
@@ -105,7 +107,7 @@ function ViewList({
   address: PeopleAddress;
   roster: readonly { userId: string; email: string; role: string }[];
   open: readonly { id: string; email: string; role: string; expiresAt: string }[];
-  isAdmin: boolean;
+  canManage: boolean;
   writes: PeopleMutations;
   tenantId: string;
   signedInAs: string;
@@ -115,7 +117,7 @@ function ViewList({
     return (
       <Roster
         roster={roster}
-        isAdmin={isAdmin}
+        canManage={canManage}
         setRole={writes.setRole}
         remove={writes.remove}
         tenantId={tenantId}
@@ -132,7 +134,7 @@ function ViewList({
       <OpenInvitations
         open={open}
         search={address.search}
-        isAdmin={isAdmin}
+        canManage={canManage}
         revoke={writes.revoke}
         tenantId={tenantId}
         locale={locale}
@@ -144,13 +146,13 @@ function ViewList({
 
 /** The invitation form and the role statements beside it, on the Invitations view. */
 function InviteBand({
-  isAdmin,
+  canManage,
   invite,
   tenantId,
   displayName,
   emailFieldRef,
 }: {
-  isAdmin: boolean;
+  canManage: boolean;
   invite: ReturnType<typeof trpc.people.invite.useMutation>;
   tenantId: string;
   displayName: string;
@@ -163,7 +165,7 @@ function InviteBand({
       <h2 className="head">{t("people.invitationsHead")}</h2>
       <div className="body stack">
         <InvitePanel
-          isAdmin={isAdmin}
+          canManage={canManage}
           invite={invite}
           tenantId={tenantId}
           displayName={displayName}
@@ -211,10 +213,11 @@ export function People({
     );
   }
 
-  const isAdmin = tenant.data?.role === "admin";
+  const canManage = can(tenant.data?.permissions, "people:manage");
+  const readsAudit = can(tenant.data?.permissions, "audit:read");
   const open = invitations.data.filter((i) => i.status === "pending");
   const shown: PeopleAddress =
-    address.view === "activity" && !isAdmin ? { ...address, view: "members" } : address;
+    address.view === "activity" && !readsAudit ? { ...address, view: "members" } : address;
 
   return (
     <div className="sheet">
@@ -229,13 +232,13 @@ export function People({
           members={members.data.length}
           invitations={open.length}
           tenantId={tenantId}
-          isAdmin={isAdmin}
+          showsActivity={readsAudit}
         />
         <ViewList
           address={shown}
           roster={members.data}
           open={open}
-          isAdmin={isAdmin}
+          canManage={canManage}
           writes={writes}
           tenantId={tenantId}
           signedInAs={signedInAs}
@@ -244,7 +247,7 @@ export function People({
 
       {shown.view === "invites" ? (
         <InviteBand
-          isAdmin={isAdmin}
+          canManage={canManage}
           invite={writes.invite}
           tenantId={tenantId}
           displayName={tenant.data?.displayName || tenantId}

@@ -21,16 +21,16 @@ removed.
     so nothing is classified.
   - `unpublishedChanges`: whether the draft differs from that version.
   - `readableDocuments`: how many documents a publish would send to the classifier.
-- `documentKinds.initialise` (admin) draws a first catalogue for a customer that has none. It
-  starts a run and answers with its `runId`; follow it with `runs.get` and `waitSeconds`. It
-  samples about 450 texts, and keeps every generic kind seen in at least 1% of the sample, plus
+- `documentKinds.initialise` (needs `catalogue:manage`, which an admin holds) draws a first
+  catalogue for a customer that has none. It starts a run and answers with its `runId`; follow
+  it with `runs.get` and `waitSeconds`. It samples about 450 texts, and keeps every generic kind seen in at least 1% of the sample, plus
   `other`. Nothing is published. It is refused with `CONFLICT` when a catalogue already exists.
-- `documentKinds.add`, `documentKinds.update` and `documentKinds.remove` (admin) edit the
-  draft. A generic kind needs only its name; a kind of the customer's own also needs a
+- `documentKinds.add`, `documentKinds.update` and `documentKinds.remove` (`catalogue:manage`)
+  edit the draft. A generic kind needs only its name; a kind of the customer's own also needs a
   description that says what sets it apart from the others. `other` cannot be removed. Edits
   cost nothing until they are published.
-- `documentKinds.publish` (admin) makes the draft the version the classifier uses, and **sends
-  every readable document to the classifier again**, billed to the platform. Before you call
+- `documentKinds.publish` (`catalogue:manage`) makes the draft the version the classifier
+  uses, and **sends every readable document to the classifier again**, billed to the platform. Before you call
   it, tell the person how many documents it will send (`readableDocuments` from
   `documentKinds.list`) and wait for their yes to that number. A publish whose draft is
   unchanged makes no new version and answers `changed: false`.
@@ -44,8 +44,8 @@ The web UI has the same catalogue on the Lake division's **Document kinds** page
 
 ## Reading the answers
 
-An admin reads them with `lake.query`, from the view `document_kinds`, one row per live
-document that has been answered:
+Whoever holds `lake:read` (a builder or an admin) reads them with `lake.query`, from the view
+`document_kinds`, one row per live document that has been answered:
 
 | Column               | What it says                                                                                                                                                          |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

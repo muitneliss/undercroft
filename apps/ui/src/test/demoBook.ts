@@ -19,6 +19,7 @@ import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@undercroft/control-plane/router";
 
 import { run } from "@/test/fixtures.ts";
+import { held } from "@/test/access.ts";
 import type { Answers } from "@/test/visual.tsx";
 
 type Out = inferRouterOutputs<AppRouter>;
@@ -40,7 +41,8 @@ const XERO_RERUN = "run-0107";
 
 /** Demo Co., opened by a reader holding `role` in it. */
 export function tenant(role: Role): Out["tenants"]["get"] {
-  return { id: TENANT, displayName: "Demo Co.", role, deactivatedAt: null };
+  const book = { id: TENANT, displayName: "Demo Co.", deactivatedAt: null };
+  return { ...book, role, permissions: held(role) };
 }
 
 function lastRun(id: string, at: string, seen: number): NonNullable<Connection["lastRun"]> {

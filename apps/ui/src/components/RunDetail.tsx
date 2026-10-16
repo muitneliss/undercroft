@@ -43,6 +43,7 @@ import { RunDoors, TargetDoor } from "@/components/RunTarget.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import { StepsTable } from "@/components/StepsTable.tsx";
+import { can } from "@/lib/permissions.ts";
 import { lakeStreamPath, streamOfEntity } from "@/lib/lake.ts";
 import { formatCount, orMissing } from "@/lib/money.ts";
 import { feedEntries, runGauges } from "@/lib/runFeed.ts";
@@ -247,7 +248,7 @@ function RunCounts({
   detail: RunDetailView;
   locale: ReturnType<typeof useUiStore.getState>["locale"];
   tenantId: string;
-  /** Whether the reader may page raw rows: an admin. Courtesy; the server refuses regardless. */
+  /** Whether the reader may page raw rows: `lake:read`. Courtesy; the server refuses regardless. */
   canOpenRows: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -464,7 +465,7 @@ export function RunDetail({
         detail={detail}
         locale={locale}
         tenantId={tenantId}
-        canOpenRows={tenant.data?.role === "admin"}
+        canOpenRows={can(tenant.data?.permissions, "lake:read")}
       />
 
       <RunSteps detail={detail} locale={locale} />

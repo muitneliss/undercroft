@@ -12,7 +12,8 @@
  * The display name is corrected in exactly one place, `DisplayNameForm` at the foot of
  * Sources, and this page links there rather than holding a second copy: two forms for one
  * value are two sets of cache invalidations to keep in step, and they drift. The link is for
- * an admin only, as the form is; the server's `requireRole("admin")` refuses regardless.
+ * a holder of `tenant:manage` only, as the form is; the server's `requirePermission` refuses
+ * regardless.
  */
 
 import { useTranslation } from "react-i18next";
@@ -28,7 +29,7 @@ import {
   type DivisionId,
   divisionPath,
 } from "@/lib/divisions.ts";
-import type { Role } from "@/lib/roles.ts";
+import { can, type Permission } from "@/lib/permissions.ts";
 import { trpc } from "@/trpc.ts";
 
 /**
@@ -51,7 +52,13 @@ const ANSWERS = {
  * name, as its tab on the strip does: the directory says what the book holds, and a door that
  * opens on a notice is not a door.
  */
-function Directory({ tenantId, role }: { tenantId: string; role: Role }): React.JSX.Element {
+function Directory({
+  tenantId,
+  permissions,
+}: {
+  tenantId: string;
+  permissions: readonly Permission[];
+}): React.JSX.Element {
   const { t } = useTranslation();
   return (
     <dl className="access" aria-label={t("tenants.insideLabel", { tenantId })}>
@@ -59,7 +66,7 @@ function Directory({ tenantId, role }: { tenantId: string; role: Role }): React.
         if (div.id === "customers") {
           return [];
         }
-        const closed = closedTo(div, { tenantId, role });
+        const closed = closedTo(div, { tenantId, permissions });
         return [
           <dt key={`${div.id}-name`}>
             {closed === null ? (
@@ -113,7 +120,7 @@ export function Customer({ tenantId }: { tenantId: string }): React.JSX.Element 
           <Link className="plate plate--primary" to={sources}>
             {t("tenants.openSources")}
           </Link>
-          {tenant.data.role === "admin" ? (
+          {can(tenant.data.permissions, "tenant:manage") ? (
             <Link className="plate" to={sources}>
               {t("tenants.renameOnSources")}
             </Link>
@@ -125,7 +132,7 @@ export function Customer({ tenantId }: { tenantId: string }): React.JSX.Element 
 
       <h2 className="head">{t("tenants.insideHead")}</h2>
       <div className="body">
-        <Directory tenantId={tenantId} role={tenant.data.role} />
+        <Directory tenantId={tenantId} permissions={tenant.data.permissions} />
       </div>
     </div>
   );

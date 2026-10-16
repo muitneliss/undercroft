@@ -40,7 +40,8 @@ import { ANSWER_SECONDS } from "./holdOpen.ts";
 import { StepQuery } from "./inputs.ts";
 import { cursorRefusal, listingOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
 import { buildHeld, parentTestsFailing, previewRefused } from "./modelRefusals.ts";
-import { actorOf, refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
+import { requirePermission } from "./permissionGate.ts";
+import { actorOf, refusal, router, tenantProcedure } from "./trpc.ts";
 
 const MS_PER_SECOND = 1000;
 
@@ -92,12 +93,12 @@ export const modelsRouter = router({
 
   /**
    * Store a model. Executes nothing: Build is the worker's verb, chosen separately, so a
-   * saved mistake is a row and not a broken table. Admin-only, like every write that
+   * saved mistake is a row and not a broken table. `models:write`, like every write that
    * changes what a customer's dashboards will show. A name taken by a model under `create`,
    * or by one of the tenant's seeds at all (ADR 0128), is a CONFLICT. `description` left out
    * keeps the stored one and `null` clears it (ADR 0137).
    */
-  save: requireRole("admin")
+  save: requirePermission("models:write")
     .input(
       z.object({
         name: ModelName,
@@ -147,7 +148,7 @@ export const modelsRouter = router({
    * one answer this must never give. A build running and a model another one reads from are
    * CONFLICTs the person can act on; a worker that did not drop is a precondition they cannot.
    */
-  delete: requireRole("admin")
+  delete: requirePermission("models:write")
     .input(z.object({ name: ModelName }))
     .mutation(async ({ ctx, input }) => {
       const t = messages(ctx.locale);
@@ -189,7 +190,7 @@ export const modelsRouter = router({
   /**
    * Build models as one run: `name` for one, or `names` for up to twenty, each `name`, `+name`
    * (with its upstream) or `name+` (with its downstream), as one `dbt build` (issue 442).
-   * Admin-only like save: a build creates the table a dashboard reads.
+   * `models:write` like save: a build creates the table a dashboard reads.
    *
    * It waits by default and answers with what the build did, its steps reported as `runs.get`
    * reports them (the problems unless asked, issue 441). With `wait: false` it answers at once
@@ -203,7 +204,7 @@ export const modelsRouter = router({
    * already running is a CONFLICT naming that run and its start, so it can be waited on; a
    * worker that did not answer is a precondition nobody at the screen can fix.
    */
-  build: requireRole("admin")
+  build: requirePermission("models:write")
     .meta({ holdsOpenSeconds: BUILD_DEADLINE_MS / MS_PER_SECOND + ANSWER_SECONDS })
     .input(
       StepQuery.omit({ stepCursor: true }).extend({
@@ -279,15 +280,17 @@ export const modelsRouter = router({
    * and the worker runs what it compiled, read-only, as the tenant's dbt login. A sample of its
    * rows, or `query` over it, where the model is named `name`. Nothing is saved or built.
    *
-   * ADMIN-ONLY, and a write for a credential's grant, as `lake.query` is: it runs SQL an author
-   * wrote as the login that may read the raw lake, so it reaches exactly what that console does.
+   * `models:write`, and a write for a credential's grant, as `lake.query` is: it runs SQL an
+   * author wrote as the login that may read the raw lake, so it reaches exactly what that console
+   * does -- which is why every built-in role holding `models:write` also holds `lake:read`. ADR
+   * 0132 made it admin-only; ADR 0139 moved it with `save` to the permission.
    * A mutation, as `models.check` is, because a model's SQL does not fit a query string.
    *
    * A model dbt would not compile, and SQL Postgres refused, are BAD_REQUEST quoting dbt or
    * Postgres: the request was the fault, and the sentence is how the author fixes it. A worker
    * that did not answer is a precondition. It holds its request open for the worker's deadline.
    */
-  preview: requireRole("admin")
+  preview: requirePermission("models:write")
     .meta({ holdsOpenSeconds: PREVIEW_DEADLINE_MS / MS_PER_SECOND + ANSWER_SECONDS })
     .input(
       z.object({

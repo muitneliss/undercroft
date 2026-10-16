@@ -18,14 +18,15 @@ import {
 } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
-import { outranks } from "../services/authz.ts";
+import { holds } from "../services/authz.ts";
 import * as bi from "../services/bi.ts";
 import * as questions from "../services/biQuestions.ts";
 import * as biExports from "../services/biExports.ts";
 import { exportPath, exportUrl } from "./exportLink.ts";
 import { listingOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
 import { SchemaFilterInput, schemaOrRefusal } from "./schemaFilter.ts";
-import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
+import { permissionRefusal, requirePermission } from "./permissionGate.ts";
+import { actorOf, router, tenantProcedure } from "./trpc.ts";
 
 /** What an export is of: a saved question, a definition as `bi.answer` takes one, or a model. */
 const ExportSource = z.discriminatedUnion("kind", [
@@ -37,11 +38,11 @@ const ExportSource = z.discriminatedUnion("kind", [
 export const biRouter = router({
   /**
    * Answer a definition -- the builder's or raw SQL -- as the tenant's read-only login,
-   * through the worker. Members and admins author; a viewer's reads come through saved
+   * through the worker. `reports:author` authors (member, builder, admin); a viewer's reads come through saved
    * questions. A query that did not run is BAD_REQUEST carrying Postgres's own sentence,
    * because that sentence is what lets the author fix it; so is a parameter with no value.
    */
-  answer: requireRole("member")
+  answer: requirePermission("reports:author")
     .input(
       z.object({
         definition: QuestionDefinition,
@@ -80,7 +81,7 @@ export const biRouter = router({
     ),
 
   /** What a definition compiles to, for the builder to show beside itself. Pure. */
-  compile: requireRole("member")
+  compile: requirePermission("reports:author")
     .input(z.object({ definition: QuestionDefinition }))
     .query(({ input }) => ({ sql: bi.compileDefinition(input.definition) })),
 
@@ -135,8 +136,8 @@ export const biRouter = router({
         }),
       ),
 
-    /** Store a question. Executes nothing; a member or an admin, never a viewer. */
-    save: requireRole("member")
+    /** Store a question. Executes nothing; needs `reports:author`, which a viewer lacks. */
+    save: requirePermission("reports:author")
       .input(
         z.object({
           id: z.string().uuid().optional(),
@@ -161,7 +162,7 @@ export const biRouter = router({
         return { id: outcome.id };
       }),
 
-    delete: requireRole("member")
+    delete: requirePermission("reports:author")
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         const removed = await questions.removeQuestion(ctx.exec, {
@@ -191,7 +192,7 @@ export const biRouter = router({
         return dashboard;
       }),
 
-    save: requireRole("member")
+    save: requirePermission("reports:author")
       .input(
         z.object({
           id: z.string().uuid().optional(),
@@ -216,7 +217,7 @@ export const biRouter = router({
         return { id: outcome.id };
       }),
 
-    delete: requireRole("member")
+    delete: requirePermission("reports:author")
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         const removed = await bi.removeDashboard(ctx.exec, {
@@ -237,18 +238,16 @@ export const biRouter = router({
      * answered with a link good for fifteen minutes to the person who asked. Everything a
      * procedure decides is decided here -- who may, which SQL -- and the download only finds it.
      * A saved question is any member's to export, as its answer is; a definition or a model is
-     * SQL an author chooses, so a member's. A READ for the grant: it reads, and the row it keeps
+     * SQL an author chooses, so it needs `reports:author` -- checked here rather than by
+     * `requirePermission`, because which it needs depends on the input. A READ for the grant: it reads, and the row it keeps
      * is the asking, not data.
      */
     create: tenantProcedure
       .input(z.object({ source: ExportSource, params: QueryParams.default({}) }))
       .mutation(async ({ ctx, input }) => {
         const t = messages(ctx.locale);
-        if (biExports.exportNeedsMember(input.source.kind) && !outranks(ctx.role, "member")) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: t("error.requiresRole", { role: "member" }),
-          });
+        if (biExports.exportNeedsAuthor(input.source.kind) && !holds(ctx, "reports:author")) {
+          throw permissionRefusal(ctx, "reports:author");
         }
         const outcome = await biExports.createExport(ctx.exec, {
           tenantId: ctx.tenantId,
@@ -274,7 +273,7 @@ export const biRouter = router({
 
     /**
      * One export the caller asked for, while it lives: what it runs and what its file is called.
-     * The download reads it through this procedure, so the tenant's gates, the grant and the role
+     * The download reads it through this procedure, so the tenant's gates, the grant and the permission
      * an export needs are asked again at the moment the rows are taken. Anyone else's export, and
      * an expired one, is NOT_FOUND.
      */
@@ -289,11 +288,8 @@ export const biRouter = router({
         if (found === null) {
           throw new TRPCError({ code: "NOT_FOUND" });
         }
-        if (biExports.exportNeedsMember(found.kind) && !outranks(ctx.role, "member")) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: messages(ctx.locale)("error.requiresRole", { role: "member" }),
-          });
+        if (biExports.exportNeedsAuthor(found.kind) && !holds(ctx, "reports:author")) {
+          throw permissionRefusal(ctx, "reports:author");
         }
         return found;
       }),

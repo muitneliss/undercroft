@@ -21,6 +21,7 @@ import "@/i18n/index.ts";
 import { MISSING } from "@/lib/money.ts";
 import { Models } from "@/routes/Models.tsx";
 import { trpc } from "@/trpc.ts";
+import { held } from "@/test/access.ts";
 
 const TENANT = "CASE-0042";
 const WHEN = "2026-09-30T03:12:53.210Z";
@@ -136,7 +137,12 @@ function mount(url: string): ReturnType<typeof createMemoryRouter> {
           const path = new URL(String(input), "http://localhost").pathname;
           if (path.endsWith("/tenants.get")) {
             return Promise.resolve(
-              answer({ tenantId: TENANT, displayName: "Acme", role: "viewer" }),
+              answer({
+                tenantId: TENANT,
+                displayName: "Acme",
+                role: "viewer",
+                permissions: held("viewer"),
+              }),
             );
           }
           if (path.endsWith("/models.list")) {

@@ -14,6 +14,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import "@/i18n/index.ts";
 import { Opened } from "@/components/Opened.tsx";
 import { TenantOverview } from "@/routes/TenantOverview.tsx";
+import { held } from "@/test/access.ts";
 import { mountRoute } from "@/test/mountRoute.tsx";
 
 const TENANT = "CASE-0042";
@@ -33,7 +34,13 @@ function openSources(role: "admin" | "member", deactivatedAt: string | null) {
       </Opened>
     ),
     answers: {
-      "tenants.get": () => ({ id: TENANT, displayName: "Demo Co.", role, ...state }),
+      "tenants.get": () => ({
+        id: TENANT,
+        displayName: "Demo Co.",
+        role,
+        permissions: held(role),
+        ...state,
+      }),
       "tenants.reactivate": () => {
         state.deactivatedAt = null;
         return { id: TENANT, displayName: "Demo Co.", deactivatedAt: null };

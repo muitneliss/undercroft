@@ -1094,11 +1094,15 @@
     // A catalogue is a list, and its length is how many things the product says. `i18n.md`
     // makes `vi.ts` the source of truth for WHICH KEYS EXIST and the compiler requires `en.ts`
     // to answer every one; splitting either into parts breaks the one property that pairing
-    // rests on, and `i18n.test.tsx` compares the two key sets as whole files.
+    // rests on, and `i18n.test.tsx` compares the two key sets as whole files. The control
+    // plane's pair joined at 321 lines, when ADR 0139 worded each permission there, and
+    // `i18n.test.ts` compares its two key sets the same way.
     {
       "includes": [
         "apps/ui/src/i18n/vi.ts",
         "apps/ui/src/i18n/en.ts",
+        "apps/control-plane/src/i18n/vi.ts",
+        "apps/control-plane/src/i18n/en.ts",
         "packages/contracts/src/bi.ts"
       ],
       "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }

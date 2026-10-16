@@ -15,6 +15,7 @@ import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@undercroft/control-plane/router";
 
 import type { ModelDetail, ModelItem, ModelLineage } from "@/api/types.ts";
+import { held } from "@/test/access.ts";
 import type { Answers } from "@/test/visual.tsx";
 
 type Outputs = inferRouterOutputs<AppRouter>;
@@ -256,7 +257,13 @@ export const LINEAGE: ModelLineage = {
 
 /** The reader, by role, on Demo Co.'s book. */
 export function reader(role: Role): Outputs["tenants"]["get"] {
-  return { id: TENANT, displayName: DISPLAY_NAME, role, deactivatedAt: null };
+  return {
+    id: TENANT,
+    displayName: DISPLAY_NAME,
+    role,
+    permissions: held(role),
+    deactivatedAt: null,
+  };
 }
 
 function nameOf(input: unknown): string | undefined {

@@ -405,3 +405,14 @@
 ## [2026-10-15] ingest | ADR 0137 A Model May Carry Its Author's Description, and the List Says What Each Model Reads
 ## [2026-10-15] ingest | ADR 0138 The Lineage Board Bounds Its Layout
 ## [2026-10-16] ingest | ADR 0140 An Absent Framework's Rules Are Switched Off by Name
+## [2026-10-16] ingest | ADR 0139 Tenant Access Is Casbin Policy
+## [2026-10-16] ingest | Permissions
+## [2026-10-16] ingest | Runbook Sign-In Setup
+## [2026-10-16] ingest | Architecture
+## [2026-10-16] ingest | Runbook Deployment
+## [2026-10-16] ingest | Runbook: Onboarding a new person
+## [2026-10-16] ingest | Runbook Google Ingestion Setup
+## [2026-10-16] ingest | Runbook: Setting the assistant up
+## [2026-10-16] ingest | Runbook: Agent skills
+## [2026-10-16] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-16] ingest | What an ingest run counts

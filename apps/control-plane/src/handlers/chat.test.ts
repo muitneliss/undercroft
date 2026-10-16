@@ -209,6 +209,63 @@ describe("a question is answered", () => {
   });
 });
 
+describe("the model is told who the reader is", () => {
+  /** A reader of CASE-0042 holding `role`, asking through their own context. */
+  async function readerAs(role: string, email: string): Promise<Context> {
+    const { rows } = await db.asSuperuser((su) =>
+      su.query<{ id: string }>("INSERT INTO app.app_user (email) VALUES ($1) RETURNING id", [
+        email,
+      ]),
+    );
+    const userId = rows[0]!.id;
+    await db.asSuperuser((su) =>
+      su.query("INSERT INTO app.tenant_member (tenant_id, user_id, role) VALUES ($1, $2, $3)", [
+        "CASE-0042",
+        userId,
+        role,
+      ]),
+    );
+    return context({ userId, email });
+  }
+
+  it("a builder is told they are one, and what that lets them do (ADR 0139)", async () => {
+    // The handler once narrowed the role to viewer, member or admin, so a builder reached the
+    // model as holding the role "none". The scripted turn answers only a prompt that says
+    // otherwise, so a fact dropped on the way fails here as an unscripted prompt.
+    const builder = await readerAs("builder", "cy@example.test");
+    const app = appWith(
+      [
+        {
+          when: "làm được gì",
+          told:
+            'holds the role "builder" in it, with these permissions there: ' +
+            "lake:read, models:write, reports:author.",
+          reply: [{ say: "Bạn là builder." }],
+        },
+      ],
+      builder,
+    );
+
+    expect(await answer(await ask(app, "Tôi làm được gì ở đây?"))).toBe("Bạn là builder.");
+  });
+
+  it("a viewer is told they hold no permission, rather than nothing at all", async () => {
+    const viewer = await readerAs("viewer", "vi@example.test");
+    const app = appWith(
+      [
+        {
+          when: "làm được gì",
+          told: 'holds the role "viewer" in it, with these permissions there: none.',
+          reply: [{ say: "Bạn chỉ xem được." }],
+        },
+      ],
+      viewer,
+    );
+
+    expect(await answer(await ask(app, "Tôi làm được gì ở đây?"))).toBe("Bạn chỉ xem được.");
+  });
+});
+
 describe("a tool the model calls runs as the reader", () => {
   it("its result reaches the answer, and only a digest comes to rest", async () => {
     const app = appWith([

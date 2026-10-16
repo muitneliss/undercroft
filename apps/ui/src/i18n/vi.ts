@@ -91,14 +91,34 @@ export const vi = {
      * reason, then the notice that stands in for the division. Worded for any such division,
      * which today is People.
      */
-    adminOnlyTitle: "Chỉ quản trị viên của khách hàng này mới mở được",
-    adminOnlyHint: " — chỉ quản trị viên của khách hàng này mới mở được",
-    adminOnlyHead: "Chỉ quản trị viên mới mở được mục {{division}}",
-    adminOnlyLead:
-      "Mục này chỉ dành cho quản trị viên của {{tenantId}}. Vai trò của bạn ở đây là {{role}}.",
-    adminOnlyOwn:
+    notPermittedTitle: "Vai trò của bạn ở khách hàng này không mở được mục này",
+    notPermittedHint: " — vai trò của bạn ở khách hàng này không mở được mục này",
+    notPermittedHead: "Vai trò của bạn không mở được mục {{division}}",
+    notPermittedLead:
+      "Mở mục này cần quyền {{label}} ({{permission}}). Vai trò của bạn ở {{tenantId}} là {{role}}; người có quyền people:manage ở đó có thể cấp cho bạn một vai trò có quyền này.",
+    notPermittedOwn:
       "Những thao tác của chính bạn, ở khách hàng này và mọi khách hàng khác, nằm ở trang tài khoản của bạn.",
-    adminOnlyOwnLink: "Xem hoạt động của bạn",
+    notPermittedOwnLink: "Xem hoạt động của bạn",
+  },
+
+  /**
+   * Each permission in words (ADR 0139), completing "cần quyền …": what `NotPermittedNotice`
+   * names when a division is closed. Keyed camelCase because i18next reads a `:` as a namespace;
+   * `@/lib/permissions.ts` maps each permission to its key, typed so a new one is a `tsc` error
+   * until both languages word it. The control plane words the same permissions for its refusals,
+   * in its own catalogue -- the two are read in different places and are not shared.
+   */
+  permission: {
+    reportsAuthor: "soạn câu hỏi và bảng điều khiển",
+    modelsWrite: "lưu, dựng và xem trước mô hình, macro và bảng tham chiếu",
+    lakeRead: "đọc hồ dữ liệu thô",
+    sourcesManage: "quản lý nguồn dữ liệu",
+    keysManage: "quản lý khoá nạp dữ liệu",
+    catalogueManage: "quản lý catalogue loại tài liệu",
+    peopleManage: "quản lý người dùng",
+    auditRead: "xem nhật ký thao tác của khách hàng",
+    tenantManage: "quản lý khách hàng",
+    rolesManage: "quản lý vai trò",
   },
 
   common: {
@@ -648,7 +668,7 @@ export const vi = {
   /**
    * What a read or write grant reaches, beside the choice on `/consent` and on the token form
    * (`GrantReach`). Each sentence states what the router enforces and nothing more:
-   * `grantAdmits` in `surface.ts` is the ceiling, `requireRole` the role gate read on every call,
+   * `grantAdmits` in `surface.ts` is the ceiling, `requirePermission` the gate read on every call,
    * and `session.setLocale` the one write that is the person's own rather than a customer's. A
    * gate that moves makes a sentence false, so the two change in one commit. What each role may
    * do is not worded here: it is `people.rights*`, said once.
@@ -760,8 +780,8 @@ export const vi = {
      * Said to a reader who followed a pasted address they may not open. It names who can do
      * this rather than only saying that they cannot, so the next step is obvious.
      */
-    consoleAdminOnly:
-      "Chỉ quản trị viên của khách hàng này mới chạy được truy vấn trên hồ dữ liệu thô. Bạn vẫn xem được số lượng đã về ở trang Hồ dữ liệu.",
+    consoleNeedsLakeRead:
+      "Chạy truy vấn trên hồ dữ liệu thô cần quyền đọc hồ dữ liệu thô (lake:read). Bạn vẫn xem được số lượng đã về ở trang Hồ dữ liệu.",
     consoleRows_other: "{{count, number}} dòng",
     consoleRowsFrom_other: "{{count, number}} dòng, từ dòng {{from, number}}",
     consoleRefused: "Truy vấn không chạy được",
@@ -817,7 +837,7 @@ export const vi = {
     colBytes: "Dung lượng",
     browserHead: "Duyệt bản ghi",
     browserLead:
-      "Từng bản ghi đúng như nguồn gửi, chưa qua biến đổi. Chỉ quản trị viên thấy mục này: dữ liệu thô có thể chứa tên và địa chỉ.",
+      "Từng bản ghi đúng như nguồn gửi, chưa qua biến đổi. Cần quyền lake:read: dữ liệu thô có thể chứa tên và địa chỉ.",
     streamLabel: "Luồng dữ liệu",
     chooseStream: "Chọn một luồng dữ liệu",
     streamRecords: "Bản ghi",
@@ -847,8 +867,8 @@ export const vi = {
      * Nói với viewer và member vì sao họ chỉ thấy bảng tổng quan: không có câu này, các mục của
      * quản trị viên chỉ đơn giản là vắng mặt, và đọc như hồ dữ liệu không còn gì thêm.
      */
-    adminOnlyNote:
-      "Bạn xem được bảng tổng quan này. Bản ghi thô, tìm nội dung và truy vấn SQL chỉ dành cho quản trị viên.",
+    needsLakeReadNote:
+      "Bạn xem được bảng tổng quan này. Bản ghi thô, tìm nội dung và truy vấn SQL cần quyền đọc hồ dữ liệu thô (lake:read).",
     noRows: "Luồng này chưa có bản ghi nào.",
 
     /**
@@ -984,16 +1004,20 @@ export const vi = {
     roleLabel: "Vai trò trong khách hàng này",
     /**
      * What each role may do in this customer, one entry per role. Each says what the router's
-     * gates allow and refuse and nothing more (`requireRole` in `apps/control-plane/src/handlers`);
-     * a gate that moves makes its sentence false, so the two change in one commit.
+     * gates allow and refuse and nothing more -- the permissions each built-in role holds
+     * (`BUILT_IN_GRANTS` in `@undercroft/contracts/access`, ADR 0139) read through the procedures
+     * each permission opens; a grant or a gate that moves makes its sentence false, so the two
+     * change in one commit.
      */
     rightsLabel: "Mỗi vai trò được làm gì trong {{tenantId}}",
     rightsViewer:
       "Xem các nguồn đã kết nối, nhật ký chạy, tổng quan hồ dữ liệu thô, các mô hình và macro, và danh mục loại tài liệu; mở và chạy các câu hỏi và bảng điều khiển đã lưu. Không soạn hay lưu được câu hỏi, và không thay đổi được gì khác.",
     rightsMember:
-      "Mọi điều viewer làm được, và thêm: soạn và chạy câu hỏi mới, lưu và xoá câu hỏi và bảng điều khiển. Không kết nối tài khoản, không đọc nội dung hồ dữ liệu thô, không lưu hay dựng mô hình, không xem ai có quyền truy cập, không mời hay gỡ người khác.",
+      "Mọi điều viewer làm được, và thêm: soạn và chạy câu hỏi mới, lưu và xoá câu hỏi và bảng điều khiển. Không đọc nội dung hồ dữ liệu thô, không lưu hay dựng mô hình, không kết nối tài khoản, không xem ai có quyền truy cập, không mời hay gỡ người khác.",
+    rightsBuilder:
+      "Mọi điều member làm được, và thêm: lưu, xoá, dựng và xem trước mô hình, lưu và xoá macro và bảng tham chiếu; đọc, tìm và truy vấn bản ghi và tài liệu trong hồ dữ liệu thô, và các dòng mà kiểm thử chất lượng dữ liệu lưu lại khi thất bại. Không kết nối tài khoản, không tạo khoá nạp dữ liệu, không sửa danh mục loại tài liệu, không xem ai có quyền truy cập, không mời hay gỡ người khác, không đổi tên hay ngừng kích hoạt khách hàng.",
     rightsAdmin:
-      "Mọi điều member làm được, và thêm: kết nối và ngắt tài khoản, chọn phạm vi và tần suất đọc, chạy đồng bộ ngay; đọc, tìm và truy vấn bản ghi và tài liệu trong hồ dữ liệu thô, và các dòng mà kiểm thử chất lượng dữ liệu lưu lại khi thất bại; lưu, xoá và dựng mô hình, lưu và xoá macro; sửa và publish danh mục loại tài liệu; tạo và thu hồi khoá nạp dữ liệu; xem ai có quyền truy cập và ai đang được mời, mời, đổi vai trò, gỡ người dùng và thu hồi lời mời; đọc mọi thao tác trong khách hàng, của bất kỳ ai; đổi tên khách hàng. Thêm khách hàng mới thì chỉ quản trị viên toàn hệ thống làm được.",
+      "Mọi điều builder làm được, và thêm: kết nối và ngắt tài khoản, chọn phạm vi và tần suất đọc, chạy đồng bộ ngay; sửa và publish danh mục loại tài liệu; tạo và thu hồi khoá nạp dữ liệu; xem ai có quyền truy cập và ai đang được mời, mời, đổi vai trò, gỡ người dùng và thu hồi lời mời; đọc mọi thao tác trong khách hàng, của bất kỳ ai; đổi tên, ngừng kích hoạt và kích hoạt lại khách hàng. Thêm khách hàng mới thì chỉ quản trị viên toàn hệ thống làm được.",
     notInvited: "Chưa mời được",
     invitedAndEmailed: "Đã mời {{email}}. Email đã được gửi cho họ.",
     invitedNotEmailedHeading: "Đã mời, nhưng chưa gửi được email",
@@ -1753,7 +1777,7 @@ export const vi = {
     emptyBody:
       "Một mô hình là một câu SELECT trên raw.records, dựng thành bảng trong lược đồ phân tích của khách hàng này. Hãy tạo mô hình đầu tiên từ mẫu bên dưới.",
     emptyBodyViewer:
-      "Một mô hình là một câu SELECT trên raw.records, dựng thành bảng trong lược đồ phân tích của khách hàng này. Quản trị viên có thể tạo mô hình đầu tiên.",
+      "Một mô hình là một câu SELECT trên raw.records, dựng thành bảng trong lược đồ phân tích của khách hàng này. Người có quyền models:write có thể tạo mô hình đầu tiên.",
     /** Always the rows shown against every model, searched or not, as the design counts them. */
     caption_other: "{{shown, number}} / {{count, number}} mô hình",
     colName: "Tên",
@@ -1821,7 +1845,8 @@ export const vi = {
     descriptionLabel: "Mô tả",
     descriptionHint:
       "Tuỳ chọn. Một hai câu về mỗi dòng của mô hình, cho người đọc danh sách, cho trợ lý chọn mô hình và cho dbt. Không dùng dấu ngoặc nhọn { }.",
-    readOnlyNote: "Chỉ quản trị viên mới sửa được mô hình. Bạn đang xem bản đã lưu.",
+    readOnlyNote:
+      "Sửa mô hình cần quyền models:write, mà vai trò của bạn không có. Bạn đang xem bản đã lưu.",
     save: "Lưu",
     saving: "Đang lưu…",
     notSaved: "Chưa lưu được",
@@ -2052,7 +2077,7 @@ export const vi = {
     emptyBody:
       "Một câu hỏi là một truy vấn trên các mô hình đã dựng — dựng bằng biểu mẫu hoặc viết SQL — và cách vẽ nó. Bảng điều khiển ghép nhiều câu hỏi với bộ lọc chung. Hãy đặt câu hỏi đầu tiên.",
     emptyBodyViewer:
-      "Một câu hỏi là một truy vấn trên các mô hình đã dựng và cách vẽ nó. Người có vai trò member hoặc admin có thể đặt câu hỏi đầu tiên.",
+      "Một câu hỏi là một truy vấn trên các mô hình đã dựng và cách vẽ nó. Người có quyền reports:author có thể đặt câu hỏi đầu tiên.",
     searchLabel: "Tìm theo tên",
     searchPlaceholder: "Tên bảng điều khiển hoặc câu hỏi",
     clearSearch: "Xoá tìm kiếm",
@@ -2203,7 +2228,7 @@ export const vi = {
     emptyBody:
       "Thêm một câu hỏi đã lưu; mỗi câu hỏi là một ô trên lưới 12 cột. Bộ lọc ở đầu trang gắn vào tham số của từng câu hỏi.",
     emptyBodyViewer:
-      "Chưa có ô nào trên bảng này. Người có vai trò member hoặc admin có thể thêm câu hỏi.",
+      "Chưa có ô nào trên bảng này. Người có quyền reports:author có thể thêm câu hỏi.",
     filtersHead: "Bộ lọc",
     apply: "Áp dụng",
     clear: "Xoá bộ lọc",

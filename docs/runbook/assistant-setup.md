@@ -83,6 +83,6 @@ Worth knowing before somebody asks for it as a bug:
 | "Trợ lý chưa được cấu hình"                                 | No `UNDERCROFT_ANTHROPIC_API_KEY`.                                                                                                       |
 | It answers but never offers to act                          | No `UNDERCROFT_TYPESAFE_API_KEY`, or the gate is unreachable. Check the boot log's `writes=`.                                            |
 | It says you have not asked for something you just asked for | The gate scored below its threshold. Say it again more plainly; `ASKED_FOR_THRESHOLD` is a starting point and ADR 0029 lists it as open. |
-| A refusal naming a role                                     | The procedure refused, not the assistant. It has exactly your permissions.                                                               |
+| A refusal naming a permission                               | The procedure refused, not the assistant. It has exactly your permissions; someone holding `people:manage` can give you a role with it.  |
 | "Cuộc trò chuyện này đã quá dài"                            | `MAX_TURNS` reached. Clear the conversation.                                                                                             |
 | A figure says the result is not kept                        | Correct, on a reloaded conversation: results are digested rather than stored. Ask again to see it.                                       |

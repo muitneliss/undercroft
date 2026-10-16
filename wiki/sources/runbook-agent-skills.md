@@ -1,13 +1,15 @@
 ---
 title: 'Runbook: Agent skills'
 type: source
-date: 2026-10-13
+date: 2026-10-16
 tags: []
 source: docs/runbook/agent-skills.md
 source_path: docs/runbook/agent-skills.md
-source_hash: cc355f8db39d86171e063a8abf49b49780fbe9ab5fcfb8b8aa202950e21af463
-ingested: 2026-10-13
+source_hash: 9209d9ee994e171e3a4c65ddd54a954a9f889bf646e46caed6a6d294d112c487
+ingested: 2026-10-16
 ---
+
+# Runbook: Agent skills
 
 # Runbook: Agent skills
 

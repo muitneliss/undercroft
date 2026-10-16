@@ -31,13 +31,13 @@ import type { trpc } from "@/trpc.ts";
 function RoleCell({
   member,
   last,
-  isAdmin,
+  canManage,
   setRole,
   tenantId,
 }: {
   member: { email: string; role: string };
   last: boolean;
-  isAdmin: boolean;
+  canManage: boolean;
   setRole: ReturnType<typeof trpc.people.setRole.useMutation>;
   tenantId: string;
 }): React.JSX.Element {
@@ -50,7 +50,7 @@ function RoleCell({
       </td>
     );
   }
-  if (!isAdmin) {
+  if (!canManage) {
     return <td>{member.role}</td>;
   }
   // While this member's change is in flight the select shows the role asked for, not the one
@@ -167,7 +167,7 @@ function RosterTable({
   rows,
   caption,
   last,
-  isAdmin,
+  canManage,
   setRole,
   remove,
   tenantId,
@@ -176,7 +176,7 @@ function RosterTable({
   rows: readonly { userId: string; email: string; role: string }[];
   caption: string;
   last: { userId: string } | null;
-  isAdmin: boolean;
+  canManage: boolean;
   setRole: ReturnType<typeof trpc.people.setRole.useMutation>;
   remove: ReturnType<typeof trpc.people.removeMember.useMutation>;
   tenantId: string;
@@ -192,7 +192,7 @@ function RosterTable({
           <tr>
             <th scope="col">{t("people.colAddress")}</th>
             <th scope="col">{t("people.colRole")}</th>
-            {isAdmin ? <th scope="col">{t("people.colRemove")}</th> : null}
+            {canManage ? <th scope="col">{t("people.colRemove")}</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -211,12 +211,12 @@ function RosterTable({
               <RoleCell
                 member={member}
                 last={member === last}
-                isAdmin={isAdmin}
+                canManage={canManage}
                 setRole={setRole}
                 tenantId={tenantId}
               />
-              {isAdmin && member === last ? <td /> : null}
-              {isAdmin && member !== last ? (
+              {canManage && member === last ? <td /> : null}
+              {canManage && member !== last ? (
                 <RemoveCell email={member.email} remove={remove} tenantId={tenantId} />
               ) : null}
             </tr>
@@ -240,7 +240,7 @@ function RosterTable({
  */
 export function Roster({
   roster,
-  isAdmin,
+  canManage,
   setRole,
   remove,
   tenantId,
@@ -248,7 +248,7 @@ export function Roster({
   signedInAs,
 }: {
   roster: readonly { userId: string; email: string; role: string }[];
-  isAdmin: boolean;
+  canManage: boolean;
   setRole: ReturnType<typeof trpc.people.setRole.useMutation>;
   remove: ReturnType<typeof trpc.people.removeMember.useMutation>;
   tenantId: string;
@@ -275,7 +275,7 @@ export function Roster({
           rows={rows}
           caption={caption}
           last={last}
-          isAdmin={isAdmin}
+          canManage={canManage}
           setRole={setRole}
           remove={remove}
           tenantId={tenantId}

@@ -51,6 +51,7 @@ import {
   failedReturnFrom,
 } from "@/lib/consentFailure.ts";
 import { divisionPath } from "@/lib/divisions.ts";
+import { can } from "@/lib/permissions.ts";
 import { configListed } from "@/lib/listAnswers.ts";
 import { chosenAccount, useUiStore } from "@/store.ts";
 import { type Actions, pendingFor } from "@/lib/sourceActions.ts";
@@ -91,9 +92,9 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
     );
   }
 
-  // Hiding is courtesy; the server refuses regardless. A viewer sees the schedule and no
-  // live buttons, which is the honest rendering of what they may do.
-  const isAdmin = tenant.data.role === "admin";
+  // Hiding is courtesy; the server refuses regardless. Each band asks its own permission (ADR
+  // 0139): without `sources:manage` the schedule shows with no live buttons.
+  const managesSources = can(tenant.data.permissions, "sources:manage");
 
   return (
     <div className="sheet">
@@ -104,13 +105,12 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
       <SourcesBand
         tenantId={tenantId}
         list={connections.data}
-        isAdmin={isAdmin}
+        managesSources={managesSources}
         failedReturn={failedReturnFrom(params)}
       />
 
-      {/* Keys are minted and revoked by admins; a member or viewer is not shown a band they
-          cannot act in, and the server refuses regardless. */}
-      {isAdmin ? (
+      {/* Keys need `keys:manage`; nobody is shown a band they cannot act in. */}
+      {can(tenant.data.permissions, "keys:manage") ? (
         <>
           <div className="band-rule" />
           <h2 className="head">{t("keys.head")}</h2>
@@ -125,7 +125,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
       <h2 className="head">{t("tenants.renameHead")}</h2>
       <div className="body stack">
         <DisplayNameForm
-          canEdit={isAdmin}
+          canEdit={can(tenant.data.permissions, "tenant:manage")}
           displayName={tenant.data.displayName}
           tenantId={tenantId}
         />
@@ -139,7 +139,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
       <h2 className="head">{t("tenants.deactivateHead")}</h2>
       <div className="body stack">
         <DeactivateTenant
-          canEdit={isAdmin}
+          canEdit={can(tenant.data.permissions, "tenant:manage")}
           displayName={tenant.data.displayName}
           tenantId={tenantId}
         />
@@ -158,12 +158,12 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
 function SourcesBand({
   tenantId,
   list,
-  isAdmin,
+  managesSources,
   failedReturn,
 }: {
   tenantId: string;
   list: readonly Connection[];
-  isAdmin: boolean;
+  managesSources: boolean;
   failedReturn: FailedReturn | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -227,7 +227,7 @@ function SourcesBand({
             <SourceCards
               tenantId={tenantId}
               rows={narrowSchedule(list, filter)}
-              canRun={isAdmin}
+              canRun={managesSources}
               actions={actions}
             />
           </>

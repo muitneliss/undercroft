@@ -168,7 +168,10 @@ Failure:
   in full again, off by default) gives the same reasons, or `not-resyncable` for a source
   that reads no list through a change filter, such as HubSpot. A command refused by a token's
   grant is `PERMISSION_DENIED` with `reason: "WRITES_DISABLED"`, the `grant` the token holds
-  (`read`) and the one the command `needs` (`write`).
+  (`read`) and the one the command `needs` (`write`). A command refused because the person
+  lacks a permission in that customer is `PERMISSION_DENIED` with
+  `reason: "PERMISSION_REQUIRED"`, the `permission` it needs and the `tenantId`;
+  `references/access-control.md` says what to tell the person.
 - `traceId` is present when a server answered the refusal: the 32-hex trace id of that
   request. It is opaque and never translated. Quote it in a bug report; the operator uses
   it to find the server's side of the failure. A refusal the CLI made by itself, or a
@@ -190,7 +193,7 @@ No envelope ever holds a cookie, a header, an environment value or a stack trace
 | 3    | `NOT_FOUND`                 | no          | Not there, or not yours to see; deliberately the same answer.                  |
 | 4    | `CONFLICT`                  | no          | The platform's state refused it; the message says which state.                 |
 | 5    | `AUTHENTICATION_REQUIRED`   | no          | Not signed in here, the session ended, the code or the token was refused.      |
-| 6    | `PERMISSION_DENIED`         | no          | Signed in, but your role, or your token's grant, does not allow it.            |
+| 6    | `PERMISSION_DENIED`         | no          | Signed in, but you lack the permission, or your token's grant forbids it.      |
 | 6    | `WRITES_DISABLED`           | no          | This profile does not allow writes, or a one-off `--url` was used.             |
 | 6    | `HUMAN_REQUIRED`            | no          | Only a person at a terminal may do this.                                       |
 | 7    | `NETWORK_ERROR`             | yes         | The server could not be reached, or did not answer as Undercroft.              |
@@ -223,8 +226,9 @@ tRPC's codes map as follows:
 | `destructive` | That, and `--yes` in agent mode.                                                                                                                                                                                           |
 | `local`       | No `allowWrites` and no `--yes`: `auth login` / `logout` / `status`, `config show` / `set-profile` / `use` and `describe`. The `auth` commands still reach the server. `config google` is a procedure (`read`), not local. |
 
-`lake query` and `models preview` are `write` although they change nothing: each runs SQL an
-admin wrote as the login that reads the raw lake, so each takes the same per-profile opt-in.
+`lake query` and `models preview` are `write` although they change nothing: each runs SQL a
+builder or an admin wrote as the login that reads the raw lake, so each takes the same
+per-profile opt-in.
 
 `--dry-run` works on any command that calls a procedure; the `local` commands ignore it. It applies the `allowWrites` check, then stops before any
 call and answers:

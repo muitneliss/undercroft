@@ -1,25 +1,35 @@
 /**
  * `app.tenant_member`: who may see a tenant, and with what authority.
  *
- * Every tenant-scoped request passes through `roleFor`, which makes this the narrowest and
+ * Every tenant-scoped request passes through `accessFor`, which makes this the narrowest and
  * most load-bearing repo in the control plane. Two things it deliberately does NOT do:
  *
  * - it does not decide what a missing row means. `null` comes back, and
  *   `handlers/trpc.ts` turns that into NOT_FOUND rather than FORBIDDEN, because a 403
  *   confirms the tenant exists and turns any tenant endpoint into an enumeration oracle.
  *   The reasoning lives with the decision, one layer up;
- * - it does not rank roles. `ROLE_RANK` is authority, not storage.
+ * - it does not say what a role may do. A role here is a stored key; which permissions it
+ *   holds is `BUILT_IN_GRANTS` (`@undercroft/contracts/access`), and Casbin evaluates them (`services/rbac.ts`, ADR 0139).
+ *
+ * The one place a role key IS a fact about storage is the last-admin guard below, written on the
+ * literal `'admin'` because the check and the write must be one statement.
  *
  * `listForUser` joins `ops.tenant` because the caller wants tenants they are a member of --
  * the membership is the filter, so the query belongs on this side of the join.
  */
 
+import type { BuiltInRole } from "@undercroft/contracts/access";
 import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 
 import { deactivatedAtOf, type Tenant, type TenantRow, toTenant } from "./tenant.ts";
 
-export type Role = "viewer" | "member" | "admin";
+/**
+ * A role a person can be given. The four built-ins in PR 1 (ADR 0139), and the CHECK on the
+ * column agrees (`590_tenant_roles.sql`). What is READ back is typed `string` instead, because a
+ * row is whatever the database holds and a cast to this union would be a promise nothing checked.
+ */
+export type Role = BuiltInRole;
 
 /**
  * A tenant as one member sees it in their list: the tenant, deactivated or not, and their role.
@@ -30,9 +40,9 @@ export interface MemberTenant extends Tenant {
   readonly role: string;
 }
 
-/** A member's standing in one tenant: their role, and whether the tenant is deactivated. */
+/** A member's standing in one tenant: their role key, and whether the tenant is deactivated. */
 export interface MemberAccess {
-  readonly role: Role;
+  readonly role: string;
   readonly deactivatedAt: string | null;
 }
 
@@ -42,32 +52,23 @@ export interface Member {
   readonly role: string;
 }
 
-/** The caller's role in one tenant, or `null` when they are not a member of it. */
-export async function roleFor(
-  exec: SqlExecutor,
-  tenantId: string,
-  userId: string,
-): Promise<Role | null> {
-  const { rows } = await exec.query<{ role: Role }>(
-    "SELECT role FROM app.tenant_member WHERE tenant_id = $1 AND user_id = $2",
-    [tenantId, userId],
-  );
-  return rows[0]?.role ?? null;
-}
-
 /**
  * The caller's role in one tenant and that tenant's state, or `null` when they are not a member.
  *
- * One statement rather than `roleFor` and then a tenant read, because it runs on every
+ * One statement rather than a membership read and then a tenant read, because it runs on every
  * tenant-scoped request and the membership is the filter either way: a non-member learns
  * nothing about the tenant's state, because there is no row to carry it.
+ *
+ * It stays one statement as access grows (ADR 0139): a customer's own roles (PR 2) are a LEFT
+ * JOIN from `m.role` onto the permissions that role holds, here, rather than a second query per
+ * request. What it answers is the input Casbin's projection needs, and nothing it decides.
  */
 export async function accessFor(
   exec: SqlExecutor,
   tenantId: string,
   userId: string,
 ): Promise<MemberAccess | null> {
-  const { rows } = await exec.query<{ role: Role } & Pick<TenantRow, "deactivated_at">>(
+  const { rows } = await exec.query<{ role: string } & Pick<TenantRow, "deactivated_at">>(
     `SELECT m.role, t.deactivated_at
      FROM app.tenant_member m JOIN ops.tenant t ON t.id = m.tenant_id
      WHERE m.tenant_id = $1 AND m.user_id = $2`,

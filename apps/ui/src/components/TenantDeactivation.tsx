@@ -12,13 +12,15 @@
  * person from reading it as a deletion. A fold, never a modal, and no `useState` -- `<details>`
  * holds whether it is open.
  *
- * Hiding either control from a non-admin is courtesy, not the control: `tenants.deactivate` and
- * `tenants.reactivate` are `requireRole("admin")` and refuse whatever the browser rendered.
+ * Hiding either control from a reader without `tenant:manage` is courtesy, not the control:
+ * `tenants.deactivate` and `tenants.reactivate` are `requirePermission("tenant:manage")` and
+ * refuse whatever the browser rendered.
  */
 
 import { useTranslation } from "react-i18next";
 
 import { Errata } from "@/components/Errata.tsx";
+import { can, type Permission } from "@/lib/permissions.ts";
 import { formatDateTime } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -89,15 +91,17 @@ export function DeactivateTenant({
  *
  * In place of, not above: every division's own procedures are refused while the customer is
  * deactivated, so rendering them would fill the page with errors that each say the same thing
- * less clearly than this does. An admin gets Reactivate; anybody else is told who can.
+ * less clearly than this does. A holder of `tenant:manage` gets Reactivate; anybody else is told
+ * who can.
  */
 export function DeactivatedNotice({
   tenantId,
-  role,
+  permissions,
   deactivatedAt,
 }: {
   tenantId: string;
-  role: string;
+  /** What the reader may do here; reactivating is `tenant:manage`. Courtesy, as everywhere. */
+  permissions: readonly Permission[];
   deactivatedAt: string;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -112,7 +116,7 @@ export function DeactivatedNotice({
         <p className="prose prose--lead">
           {t("tenants.deactivatedSince", { when: formatDateTime(deactivatedAt, locale) })}
         </p>
-        {role === "admin" ? (
+        {can(permissions, "tenant:manage") ? (
           <>
             <p className="prose">{t("tenants.deactivatedAdmin")}</p>
             <div className="row">

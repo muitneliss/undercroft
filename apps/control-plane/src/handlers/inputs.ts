@@ -6,11 +6,17 @@
  * others import a sibling for a rule that belongs to none of them in particular.
  */
 
+import { BUILT_IN_ROLES } from "@undercroft/contracts/access";
 import { MAX_STEP_PAGE } from "@undercroft/contracts/runs";
 import { z } from "zod";
 import { STEP_VIEWS } from "../services/stepReport.ts";
 
-export const Role = z.enum(["viewer", "member", "admin"]);
+/**
+ * A role a person can be invited at or given: one of the built-ins (ADR 0139). The database's
+ * CHECK on both role columns names the same four (`590_tenant_roles.sql`), so a key this accepts
+ * is one the row will take, and one it refuses never reaches the statement.
+ */
+export const Role = z.enum(BUILT_IN_ROLES);
 
 /**
  * A tenant reference, as typed into the create form.

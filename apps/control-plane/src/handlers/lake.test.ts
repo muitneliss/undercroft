@@ -239,6 +239,41 @@ describe("the rows one run wrote", () => {
   });
 });
 
+describe("lake.query", () => {
+  it("a builder runs a SELECT over the raw lake, as the tenant's login at the worker (ADR 0139)", async () => {
+    // Issue 481: the person who fixes the models reads the raw lake they are modelled on,
+    // without being made an admin to do it.
+    const builder = await seedMember("b@example.test", "builder");
+    const worker = new InMemoryWorkerClient().answering({
+      columns: [{ name: "n", type: "int8" }],
+      rows: [["1"]],
+      truncated: false,
+    });
+
+    const answered = await caller(builder, "b@example.test", worker).lake.query({
+      tenantId: TENANT,
+      sql: "select count(*) as n from raw.records",
+    });
+
+    expect(answered.rows).toEqual([["1"]]);
+    expect(worker.queries.map((query) => [query.tenantId, query.sql])).toEqual([
+      [TENANT, "select count(*) as n from raw.records"],
+    ]);
+  });
+
+  it("a member is refused before anything reaches the worker", async () => {
+    const member = await seedMember("m@example.test", "member");
+    const worker = new InMemoryWorkerClient();
+
+    const code = await errorCode(() =>
+      caller(member, "m@example.test", worker).lake.query({ tenantId: TENANT, sql: "select 1" }),
+    );
+
+    expect(code).toBe("FORBIDDEN");
+    expect(worker.queries).toEqual([]);
+  });
+});
+
 describe("lake.querySchema", () => {
   it("narrows the raw schema by the rule bi.schema uses, and refuses a table that is not there", async () => {
     const admin = await seedMember("a@example.test", "admin");
