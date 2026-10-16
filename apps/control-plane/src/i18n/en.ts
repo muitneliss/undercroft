@@ -103,6 +103,19 @@ export const en = {
       "{{email}} is this customer's only admin. Make someone else an admin first, so the customer is not left with nobody who can manage access.",
     requiresPermission:
       "This action needs permission to {{label}} ({{permission}}). Ask someone who holds people:manage in this customer for a role that has it.",
+    permissionsNotHeld:
+      "You can only give or take away permissions you hold yourself, and you do not hold {{permissions}}. Ask someone in this customer who holds them to make this change.",
+    noSuchRole: "This customer has no role {{role}}. roles.list shows the roles it has.",
+    builtInRole:
+      "{{role}} is a built-in role: its permissions are the platform's and cannot be changed or deleted. Define a role of your own with the permissions you need.",
+    roleKeyTaken: "There is already a role {{role}}. Edit that role, or choose another key.",
+    roleInUse:
+      "Role {{role}} was not deleted because it is in use. People holding it: {{members}}; open invitations at it: {{invitations}}. Move them to another role and revoke the invitations, then try again.",
+    grantOneSubject:
+      "Name exactly one of role, to grant to a role, or email, to grant to a person.",
+    grantExpiryPassed:
+      "The expiry {{expiresAt}} has already passed, so this grant would never hold. Choose a moment in the future, or leave it out for a grant that does not expire.",
+    noSuchGrant: "This customer has no grant with that id.",
     requiresSuperadmin: "This action requires platform administrator access.",
     writesDisabled:
       "This token may only read, so it cannot do this. Mint a token that may write on the Account page if you mean to allow it.",

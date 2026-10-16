@@ -22,7 +22,9 @@ import { documentKindsRouter } from "./documentKindsRouter.ts";
 import { macrosRouter } from "./macrosRouter.ts";
 import { seedsRouter } from "./seedsRouter.ts";
 import { modelsRouter } from "./modelsRouter.ts";
+import { grantsRouter } from "./grantsRouter.ts";
 import { peopleRouter } from "./peopleRouter.ts";
+import { rolesRouter } from "./rolesRouter.ts";
 import { tenantsRouter } from "./tenantsRouter.ts";
 
 /** The most run ids one `runs.list` takes: "where are these runs now", not a bulk export. */
@@ -136,6 +138,13 @@ export const appRouter = router({
    * not open is a NOT_FOUND.
    */
   people: peopleRouter,
+
+  /**
+   * The roles a customer has, built-in and its own, and the grants of one permission to a role
+   * or a person (ADR 0141). Each change is under the subset rule, in its service.
+   */
+  roles: rolesRouter,
+  grants: grantsRouter,
 
   /** Who did what: a person's own actions, a tenant's for its admin, all for a superadmin. */
   audit: auditRouter,

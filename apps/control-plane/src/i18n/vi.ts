@@ -179,6 +179,26 @@ export const vi = {
     requiresPermission:
       "Thao tác này cần quyền {{label}} ({{permission}}). Hãy nhờ người có quyền people:manage trong khách hàng này cấp cho bạn một vai trò có quyền đó.",
     /**
+     * The subset rule (ADR 0141): a change that would give or take away a permission the caller
+     * does not hold. Names every one by key, which is what they quote and an agent matches.
+     */
+    permissionsNotHeld:
+      "Bạn chỉ trao hoặc thu lại được những quyền chính bạn đang giữ, mà bạn không giữ {{permissions}}. Hãy nhờ một người đang giữ các quyền đó trong khách hàng này làm việc này.",
+    noSuchRole:
+      "Khách hàng này không có vai trò {{role}}. roles.list cho thấy các vai trò khách hàng đang có.",
+    /** Built-ins are code (ADR 0141); the remedy is a role of the customer's own. */
+    builtInRole:
+      "{{role}} là vai trò có sẵn: quyền của nó do nền tảng quy định, không sửa hay xoá được. Hãy tạo một vai trò riêng với những quyền bạn cần.",
+    roleKeyTaken: "Đã có vai trò {{role}}. Hãy sửa vai trò đó, hoặc chọn một mã khác.",
+    /** Two counts in one sentence, each after a colon, so neither needs a plural form. */
+    roleInUse:
+      "Chưa xoá vai trò {{role}} vì vẫn đang được dùng. Số người đang giữ: {{members}}; số lời mời đang mở: {{invitations}}. Hãy chuyển họ sang vai trò khác và thu hồi các lời mời, rồi thử lại.",
+    grantOneSubject:
+      "Hãy nêu đúng một trong hai: role để trao cho một vai trò, hoặc email để trao cho một người.",
+    grantExpiryPassed:
+      "Thời điểm hết hạn {{expiresAt}} đã qua, nên quyền này sẽ không có hiệu lực lúc nào. Hãy chọn một thời điểm trong tương lai, hoặc bỏ trống để trao không thời hạn.",
+    noSuchGrant: "Khách hàng này không có quyền được trao nào với id đó.",
+    /**
      * Says what is missing without naming the variable that grants it. An operator reading
      * this cannot fix it themselves -- somebody with access to the deployment's environment
      * has to -- so the sentence points at a person rather than at a setting.

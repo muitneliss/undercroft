@@ -37,6 +37,7 @@ import type {
   DashboardLayout,
   VisualDefinition,
 } from "@undercroft/contracts/bi";
+import type { Permission } from "@undercroft/contracts/access";
 import type { TestKind } from "@undercroft/contracts/models";
 import { DEFAULT_LOCALE, type Locale } from "@undercroft/core/locale";
 import { create } from "zustand";
@@ -408,11 +409,39 @@ interface UiState {
    */
   kindsPublishArmed: string | null;
   armKindsPublish: (tenantId: string | null) => void;
+  /**
+   * The customer's own role whose permissions are being edited, with the permissions ticked so
+   * far; null when none is (ADR 0141). Seeded from the server's answer when Edit is pressed and
+   * held here until Save or Cancel, because between the two the ticks are nobody's but the
+   * reader's. ONE draft carrying its tenant and key, for the reason `cronDraft` carries its card:
+   * ticks made on one customer's role must never appear on another's. Not persisted.
+   */
+  roleDraft: RoleDraft | null;
+  setRoleDraft: (draft: RoleDraft | null) => void;
+  /** Tick or untick one permission of the draft for this role; another role's draft is left alone. */
+  toggleRolePermission: (tenantId: string, key: string, permission: Permission) => void;
   cronDraft: CronDraft | null;
   /** Hold `cron` as the draft for this card's `schedule`, replacing any other draft. */
   setCronDraft: (tenantId: string, source: string, schedule: CronSchedule, cron: string) => void;
   /** Drop the draft if it is this card's `schedule`'s; any other is left alone. */
   dropCronDraft: (tenantId: string, source: string, schedule: CronSchedule) => void;
+}
+
+/** See `roleDraft`. */
+export interface RoleDraft {
+  readonly tenantId: string;
+  readonly key: string;
+  readonly permissions: readonly Permission[];
+}
+
+/** The permissions ticked for this role of this customer, or `null` when it is not being edited. */
+export function roleDraftFor(
+  state: { readonly roleDraft: RoleDraft | null },
+  tenantId: string,
+  key: string,
+): readonly Permission[] | null {
+  const held = state.roleDraft;
+  return held !== null && held.tenantId === tenantId && held.key === key ? held.permissions : null;
 }
 
 /** Which of a card's two schedules a cron draft is for. See `cronDraft`. */
@@ -460,6 +489,7 @@ export function holdsUnsavedWork(
     | "assistantDraft"
     | "cronDraft"
     | "scopeDraft"
+    | "roleDraft"
     | "lakeSql"
   >,
 ): boolean {
@@ -470,6 +500,7 @@ export function holdsUnsavedWork(
     state.assistantDraft.trim() !== "" ||
     state.cronDraft !== null ||
     state.scopeDraft !== null ||
+    state.roleDraft !== null ||
     Object.values(state.lakeSql).some((sql) => sql.trim() !== "")
   );
 }
@@ -1001,6 +1032,27 @@ function accountSlice(set: Setter): Pick<UiState, "selectedAccount" | "selectAcc
   };
 }
 
+/** A customer's own role being edited. See `roleDraft`. */
+function roleSlice(
+  set: Setter,
+): Pick<UiState, "roleDraft" | "setRoleDraft" | "toggleRolePermission"> {
+  return {
+    roleDraft: null,
+    setRoleDraft: (roleDraft): unknown => set({ roleDraft }),
+    toggleRolePermission: (tenantId, key, permission): unknown =>
+      set((state) => {
+        const held = roleDraftFor(state, tenantId, key);
+        if (held === null) {
+          return {};
+        }
+        const permissions = held.includes(permission)
+          ? held.filter((each) => each !== permission)
+          : [...held, permission];
+        return { roleDraft: { tenantId, key, permissions } };
+      }),
+  };
+}
+
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
@@ -1009,6 +1061,7 @@ export const useUiStore = create<UiState>()(
       ...accountSlice(set),
       ...cronSlice(set),
       ...kindsSlice(set),
+      ...roleSlice(set),
       ...scopeSlice(set),
       ...lakeSlice(set),
       ...modelSlice(set),

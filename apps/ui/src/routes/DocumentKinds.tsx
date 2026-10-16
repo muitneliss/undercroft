@@ -89,7 +89,7 @@ function Uninitialised({
       </button>
     </div>
   ) : (
-    <p className="note">{t("kinds.emptyMember", { tenantId })}</p>
+    <p className="note">{t("kinds.initialiseNeeds", { tenantId })}</p>
   );
   return (
     <>
@@ -219,7 +219,7 @@ export function DocumentKinds({ tenantId }: { tenantId: string }): React.JSX.Ele
 
       {!canManage && kinds.length > 0 ? (
         <div className="body">
-          <p className="note">{t("kinds.adminOnly", { tenantId })}</p>
+          <p className="note">{t("kinds.editNeeds", { tenantId })}</p>
         </div>
       ) : null}
     </div>

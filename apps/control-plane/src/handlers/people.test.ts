@@ -13,6 +13,7 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
+import { PERMISSIONS } from "@undercroft/contracts/access";
 import { DEFAULT_LOCALE, type Locale } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { resolveInvitedUser } from "../services/invite.ts";
@@ -431,6 +432,27 @@ describe("a customer is never left without an admin", () => {
     expect(members).toEqual([
       { userId: expect.any(String), email: "boss@example.test", role: "admin" },
     ]);
+  });
+
+  it("the only admin cannot be moved to a role of the customer's own, though it holds everything", async () => {
+    // ADR 0141: the guard counts holders of `admin`, the one role a customer cannot redefine, so
+    // a custom role holding every permission is still not somebody left to manage access.
+    const api = await admin();
+    await api.roles.save({
+      tenantId: "CASE-0042",
+      key: "everything",
+      label: "Everything",
+      permissions: [...PERMISSIONS],
+      create: true,
+    });
+
+    const code = await errorCode(() =>
+      api.people.setRole({ tenantId: "CASE-0042", email: "boss@example.test", role: "everything" }),
+    );
+
+    expect(code).toBe("CONFLICT");
+    const members = await api.people.members({ tenantId: "CASE-0042" });
+    expect(members.map((m) => m.role)).toEqual(["admin"]);
   });
 
   it("the only admin cannot be removed", async () => {

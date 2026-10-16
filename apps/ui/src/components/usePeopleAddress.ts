@@ -6,11 +6,13 @@
 import { useSearchParams } from "react-router-dom";
 
 /**
- * The four views of the division, in the order the plates print. Activity is the customer's audit
- * log (ADR 0113), which only its admin may read: `audit.tenant` refuses anybody else, so for them
- * the plate is not printed and an address naming it opens Members.
+ * The five views of the division, in the order the plates print. Roles is every role the customer
+ * has and, for a holder of `roles:manage`, their editor; Access is the grants of one permission to
+ * a role or a person (ADR 0141). Activity is the customer's audit log (ADR 0113), which needs
+ * `audit:read`: `audit.tenant` refuses anybody else, so for them the plate is not printed and an
+ * address naming it opens Members.
  */
-export const VIEWS = ["members", "invites", "roles", "activity"] as const;
+export const VIEWS = ["members", "invites", "roles", "access", "activity"] as const;
 export type PeopleView = (typeof VIEWS)[number];
 
 /**

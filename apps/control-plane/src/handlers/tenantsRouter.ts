@@ -68,7 +68,7 @@ export const tenantsRouter = router({
     if (tenant === null) {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
-    return { ...tenant, role: ctx.role, permissions: ctx.permissions };
+    return { ...tenant, role: ctx.role, roleLabel: ctx.roleLabel, permissions: ctx.permissions };
   }),
 
   /**

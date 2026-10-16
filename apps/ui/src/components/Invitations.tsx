@@ -14,7 +14,18 @@ import { Trans, useTranslation } from "react-i18next";
 import { Address } from "@/components/Address.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { StatusLine } from "@/components/StatusLine.tsx";
-import { byAddress, isRole, ROLE_RIGHTS, ROLES } from "@/lib/roles.ts";
+import { PERMISSION_LABELS } from "@/lib/permissions.ts";
+import {
+  byAddress,
+  type ListedRole,
+  ROLES,
+  ROLE_RIGHTS,
+  type RoleOption,
+  roleName,
+  roleNamed,
+  roleOptions,
+} from "@/lib/roles.ts";
+import { useUiStore } from "@/store.ts";
 import { formatDate } from "@/lib/when.ts";
 import type { trpc } from "@/trpc.ts";
 
@@ -62,6 +73,7 @@ function WithdrawCell({
 /** Invitations still open, and the refusal shown when one cannot be withdrawn. */
 export function OpenInvitations({
   open,
+  roles,
   search,
   canManage,
   revoke,
@@ -69,6 +81,7 @@ export function OpenInvitations({
   locale,
 }: {
   open: readonly { id: string; email: string; role: string; expiresAt: string }[];
+  roles: readonly RoleOption[] | undefined;
   search: string;
   canManage: boolean;
   revoke: ReturnType<typeof trpc.people.revokeInvitation.useMutation>;
@@ -103,7 +116,7 @@ export function OpenInvitations({
                   <td className="datum datum--quiet">
                     <Address email={invitation.email} />
                   </td>
-                  <td>{invitation.role}</td>
+                  <td>{roleNamed(invitation.role, roles)}</td>
                   {/* Through `formatDate`, not `toISOString().slice(0, 10)`: that rendered
                     the date in UTC while every other date on the schedule is in Singapore
                     time, so an invitation expiring at 07:00 SGT showed the previous day. */}
@@ -175,21 +188,34 @@ function InviteOutcome({
  * The same sentences, through `ROLE_RIGHTS`, are what `GrantReach` shows beside a token's or a
  * connector's grant for each role the person holds, so this note binds both readers.
  *
- * One catalogue entry per role, never assembled from role names (`i18n.md`), and each states
- * what the router's gates allow and refuse and nothing more, read through the permissions each
- * built-in role holds (ADR 0139): `reports:author` (member, builder, admin) on asking and saving
- * questions and dashboards; `models:write` and `lake:read` (builder, admin) on writing models,
- * macros and reference tables and on reading the raw lake's contents; and the rest -- sources,
- * keys, document kinds, people, the audit log, the customer itself -- an admin's alone. A grant
- * or a gate that moves makes these sentences false, so a change
- * to one is a change to both catalogues in the same commit. No test pins the two together:
- * the sentences are prose, and a check that they match the router would have to parse them.
+ * One catalogue entry per built-in role, never assembled from role names (`i18n.md`), and each
+ * states what the router's gates allow and refuse and nothing more, read through the permissions
+ * each built-in role holds (ADR 0139): `reports:author` (member, builder, admin) on asking and
+ * saving questions and dashboards; `models:write` and `lake:read` (builder, admin) on writing
+ * models, macros and reference tables and on reading the raw lake's contents; and the rest --
+ * sources, keys, document kinds, people, roles, the audit log, the customer itself -- an admin's
+ * alone. A grant or a gate that moves makes these sentences false, so a change to one is a change
+ * to both catalogues in the same commit. No test pins the two together: the sentences are prose,
+ * and a check that they match the router would have to parse them.
+ *
+ * A customer's own role (ADR 0141) has no sentence anybody wrote for it, so it is described by
+ * what the server says it holds: its permissions, each in words, listed in the reader's language.
  *
  * Shown to every reader, not only an admin: a viewer who reads why a plate is absent has been
  * told something true before the server had to refuse them.
  */
-export function RoleRights({ tenantId }: { tenantId: string }): React.JSX.Element {
+export function RoleRights({
+  tenantId,
+  roles,
+}: {
+  tenantId: string;
+  /** The customer's roles; while `roles.list` has not answered, the built-ins alone. */
+  roles: readonly ListedRole[] | undefined;
+}): React.JSX.Element {
   const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
+  const list = new Intl.ListFormat(locale, { type: "conjunction" });
+  const custom = (roles ?? []).filter((role) => !role.builtin);
   return (
     <dl className="access" aria-label={t("people.rightsLabel", { tenantId })}>
       {/* A flat list of pairs rather than a keyed `Fragment`, which Biome cannot resolve
@@ -198,19 +224,33 @@ export function RoleRights({ tenantId }: { tenantId: string }): React.JSX.Elemen
         <dt key={`${role}-role`}>{role}</dt>,
         <dd key={`${role}-rights`}>{t(ROLE_RIGHTS[role])}</dd>,
       ])}
+      {custom.flatMap((role) => [
+        <dt key={`${role.key}-role`}>{roleName(role)}</dt>,
+        <dd key={`${role.key}-rights`}>
+          {role.permissions.length === 0
+            ? t("people.rightsNone")
+            : t("people.rightsCustom", {
+                permissions: list.format(
+                  role.permissions.map((permission) => t(PERMISSION_LABELS[permission])),
+                ),
+              })}
+        </dd>,
+      ])}
     </dl>
   );
 }
 
-/** Inviting somebody, which only an admin of this tenant may do. */
+/** Inviting somebody, which a holder of `people:manage` may do, at any role the customer has. */
 export function InvitePanel({
   canManage,
+  roles,
   invite,
   tenantId,
   displayName,
   emailFieldRef,
 }: {
   canManage: boolean;
+  roles: readonly ListedRole[] | undefined;
   invite: ReturnType<typeof trpc.people.invite.useMutation>;
   tenantId: string;
   displayName: string;
@@ -222,6 +262,7 @@ export function InvitePanel({
   const emailHintId = useId();
   const roleId = useId();
   const roleFieldRef = useRef<HTMLSelectElement>(null);
+  const offered = roleOptions(roles);
   return (
     <>
       {canManage ? (
@@ -230,11 +271,11 @@ export function InvitePanel({
           onSubmit={(event): void => {
             event.preventDefault();
             const email = emailFieldRef.current?.value.trim() ?? "";
-            const role = roleFieldRef.current?.value ?? "viewer";
-            if (email === "") {
+            const role = roleFieldRef.current?.value ?? "";
+            if (email === "" || !offered.some((each) => each.key === role)) {
               return;
             }
-            invite.mutate({ tenantId, email, role: isRole(role) ? role : "viewer" });
+            invite.mutate({ tenantId, email, role });
           }}
         >
           <div className="field">
@@ -272,12 +313,12 @@ export function InvitePanel({
               disabled={invite.isPending}
               defaultValue="viewer"
             >
-              {/* The values as they are, as in the roster's select: what each one grants is
-                the statement beside this form, and a second description here would be one
-                more place for the two to disagree. */}
-              {ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {role}
+              {/* The names as the roster's select gives them: what each one grants is the
+                statement beside this form, and a second description here would be one more
+                place for the two to disagree. */}
+              {offered.map((role) => (
+                <option key={role.key} value={role.key}>
+                  {roleName(role)}
                 </option>
               ))}
             </select>
@@ -301,9 +342,9 @@ export function InvitePanel({
           </div>
         </form>
       ) : (
-        <p className="note">{t("people.adminOnly", { tenantId })}</p>
+        <p className="note">{t("people.inviteNeeds", { tenantId })}</p>
       )}
-      <RoleRights tenantId={tenantId} />
+      <RoleRights tenantId={tenantId} roles={roles} />
     </>
   );
 }

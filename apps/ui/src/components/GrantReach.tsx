@@ -10,9 +10,11 @@
  * than a customer's -- `session.setLocale`.
  *
  * So it reads the person's customers (`tenants.list`) and says, per role they hold, where they
- * hold it and what it lets them do. What a role lets them do is `ROLE_RIGHTS`, the sentences the
- * People division already shows beside the invitation form: one description of a role, never
- * two that a moved gate could leave disagreeing.
+ * hold it and what it lets them do. What a built-in lets them do is `ROLE_RIGHTS`, the sentences
+ * the People division already shows beside the invitation form: one description of a role, never
+ * two that a moved gate could leave disagreeing. A customer's own role (ADR 0141) is named by its
+ * label, with its key, and described by the permissions the server says it holds there -- a role
+ * of one customer is no role of another's, so each is its own line even where two keys match.
  *
  * Decisions:
  *
@@ -30,8 +32,8 @@
 import { useTranslation } from "react-i18next";
 
 import { Skeleton } from "@/components/Skeleton.tsx";
-import type { Permission } from "@/lib/permissions.ts";
-import { ROLE_RIGHTS, ROLES, type Role } from "@/lib/roles.ts";
+import { PERMISSION_LABELS, type Permission } from "@/lib/permissions.ts";
+import { isRole, ROLE_RIGHTS, ROLES, roleName } from "@/lib/roles.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -43,19 +45,52 @@ interface Held {
   readonly id: string;
   readonly displayName: string;
   readonly role: string;
+  readonly roleLabel: string | null;
   readonly permissions: readonly Permission[];
   readonly deactivatedAt: string | null;
 }
 
-/** Each role the person holds in an active customer, with those customers' names, in `ROLES` order. */
-function byRole(held: readonly Held[]): readonly { role: Role; customers: readonly string[] }[] {
+/**
+ * One line of the list: a built-in held in some customers, described by its sentence, or a
+ * customer's own role held in one, described by what it holds there.
+ */
+type Group =
+  | {
+      readonly kind: "built-in";
+      readonly role: (typeof ROLES)[number];
+      readonly customers: string[];
+    }
+  | {
+      readonly kind: "custom";
+      readonly name: string;
+      readonly id: string;
+      readonly permissions: readonly Permission[];
+      readonly customers: string[];
+    };
+
+/**
+ * Each role the person holds in an active customer, with those customers' names: the built-ins in
+ * `ROLES` order, then each customer's own role, one line per customer it is defined in.
+ */
+function byRole(held: readonly Held[]): readonly Group[] {
   const active = held.filter((tenant) => tenant.deactivatedAt === null);
-  return ROLES.map((role) => ({
+  const builtIn: Group[] = ROLES.map((role) => ({
+    kind: "built-in" as const,
     role,
     customers: active
       .filter((tenant) => tenant.role === role)
       .map((tenant) => tenant.displayName || tenant.id),
   })).filter((group) => group.customers.length > 0);
+  const custom: Group[] = active
+    .filter((tenant) => !isRole(tenant.role))
+    .map((tenant) => ({
+      kind: "custom" as const,
+      name: roleName({ key: tenant.role, label: tenant.roleLabel }),
+      id: `${tenant.id}-${tenant.role}`,
+      permissions: tenant.permissions,
+      customers: [tenant.displayName || tenant.id],
+    }));
+  return [...builtIn, ...custom];
 }
 
 /**
@@ -75,16 +110,27 @@ function RoleLines({ held }: { held: readonly Held[] }): React.JSX.Element {
     return <p className="note">{t("grantReach.none")}</p>;
   }
   const list = new Intl.ListFormat(locale, { type: "conjunction" });
+  /** A customer's own role, by what it holds there, as `RoleRights` describes one. */
+  function described(group: { readonly permissions: readonly Permission[] }): string {
+    return group.permissions.length === 0
+      ? t("people.rightsNone")
+      : t("people.rightsCustom", {
+          permissions: list.format(
+            group.permissions.map((permission) => t(PERMISSION_LABELS[permission])),
+          ),
+        });
+  }
   return (
     <>
       <dl className="access" aria-label={t("grantReach.rolesLabel")}>
         {/* Flat pairs, as `RoleRights` lays them: `.access` grids `dt` and `dd` directly. */}
-        {groups.flatMap(({ role, customers }) => {
-          const rest = customers.length - NAMED;
-          const named = customers.slice(0, NAMED);
+        {groups.flatMap((group) => {
+          const rest = group.customers.length - NAMED;
+          const named = group.customers.slice(0, NAMED);
+          const id = group.kind === "built-in" ? group.role : group.id;
           return [
-            <dt key={`${role}-role`}>{role}</dt>,
-            <dd key={`${role}-reach`} className="stack stack--tight">
+            <dt key={`${id}-role`}>{group.kind === "built-in" ? group.role : group.name}</dt>,
+            <dd key={`${id}-reach`} className="stack stack--tight">
               <span>
                 {t("grantReach.heldIn", {
                   customers: list.format(
@@ -92,7 +138,9 @@ function RoleLines({ held }: { held: readonly Held[] }): React.JSX.Element {
                   ),
                 })}
               </span>
-              <span className="field__hint">{t(ROLE_RIGHTS[role])}</span>
+              <span className="field__hint">
+                {group.kind === "built-in" ? t(ROLE_RIGHTS[group.role]) : described(group)}
+              </span>
             </dd>,
           ];
         })}

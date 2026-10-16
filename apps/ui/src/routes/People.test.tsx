@@ -16,12 +16,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpLink } from "@trpc/client";
 import { afterEach, describe, expect, test as it } from "bun:test";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { PERMISSIONS } from "@undercroft/contracts/access";
 import { MemoryRouter } from "react-router-dom";
 
 import { Opened } from "@/components/Opened.tsx";
 import { translatorFor } from "@/i18n/index.ts";
 import { People } from "@/routes/People.tsx";
-import { held } from "@/test/access.ts";
+import { builtInRoles, held } from "@/test/access.ts";
 import { mountRoute } from "@/test/mountRoute.tsx";
 import { trpc } from "@/trpc.ts";
 
@@ -71,6 +72,9 @@ function mount(
                 })),
               ),
             );
+          }
+          if (path.endsWith("/roles.list")) {
+            return Promise.resolve(answer({ roles: builtInRoles(), permissions: PERMISSIONS }));
           }
           if (path.endsWith("/people.revokeInvitation")) {
             withdrawals += 1;
@@ -182,7 +186,7 @@ describe("the view in the address", () => {
 
   it("opens a pasted link on the view it names, and an unknown view on the members", async () => {
     mount(ROSTER, OPEN, "/?view=roles");
-    expect(await screen.findByText(t("people.rightsAdmin"))).toBeDefined();
+    expect(await screen.findByText(t("roleEditor.caption", { count: 4 }))).toBeDefined();
     expect(screen.queryByText("bo@example.test")).toBeNull();
     expect(screen.queryByText("cy@example.test")).toBeNull();
     cleanup();

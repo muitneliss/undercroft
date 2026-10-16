@@ -1,5 +1,6 @@
 /**
- * The built-in roles a person can hold in a customer, as the browser needs to know them.
+ * The roles a person can hold in a customer, as the browser needs to know them: the four
+ * built-ins every customer has, and -- from `roles.list` -- the ones a customer defined (ADR 0141).
  *
  * The values are the ones the API takes and the words every surface prints: `i18n.md` keeps
  * `viewer`, `member`, `builder` and `admin` untranslated in both catalogues, so the roster, the
@@ -20,11 +21,51 @@ import {
   BUILT_IN_ROLES,
   type BuiltInRole,
   isBuiltInRole,
+  type Permission,
 } from "@undercroft/contracts/access";
 import { foldForSearch } from "@/lib/labelIndex.ts";
 
 export const ROLES = BUILT_IN_ROLES;
 export type Role = BuiltInRole;
+
+/** One role as `roles.list` answers it, as far as the browser reads one. */
+export interface ListedRole {
+  readonly key: string;
+  readonly builtin: boolean;
+  /** The customer's name for its own role, never translated; `null` for a built-in. */
+  readonly label: string | null;
+  readonly description: string;
+  readonly permissions: readonly Permission[];
+  readonly members: number;
+  readonly invitations: number;
+}
+
+/** A role as a picker offers it: its key, and the customer's label when it has one. */
+export type RoleOption = Pick<ListedRole, "key" | "label">;
+
+/**
+ * The roles a picker offers: the customer's whole list once `roles.list` has answered, and until
+ * then the four built-ins. Not a guess: every customer has exactly those four
+ * (`600_custom_roles.sql`), so the fallback is a list the server would also give, short of the
+ * customer's own.
+ */
+export function roleOptions(listed: readonly RoleOption[] | undefined): readonly RoleOption[] {
+  return listed ?? ROLES.map((key) => ({ key, label: null }));
+}
+
+/**
+ * How a role is named on screen: a built-in by its key, untranslated (`i18n.md`); a customer's own
+ * by the label it chose, with the key beside it, since the key is what the CLI and an agent type.
+ */
+export function roleName(role: RoleOption): string {
+  return role.label === null ? role.key : `${role.label} (${role.key})`;
+}
+
+/** A role's name by key from the customer's list; the key itself while the list is not here. */
+export function roleNamed(key: string, listed: readonly RoleOption[] | undefined): string {
+  const found = listed?.find((role) => role.key === key);
+  return found === undefined ? key : roleName(found);
+}
 
 /**
  * Each role's catalogue sentence saying what it may do, keyed by the role so a fourth role is a
@@ -43,6 +84,7 @@ export const ROLE_RIGHTS = {
   admin: "people.rightsAdmin",
 } as const satisfies Record<Role, string>;
 
+/** Whether a string is one of the built-ins: the customer index's filter offers only those. */
 export function isRole(value: string): value is Role {
   return isBuiltInRole(value);
 }

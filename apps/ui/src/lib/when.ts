@@ -322,3 +322,27 @@ export function formatDuration(startedAt: string, endedAt: string | null, locale
   }
   return durationFormat(locale, "hour").format(ms / HOUR_MS);
 }
+
+/** A calendar day as a date input gives it: `2026-10-31`. */
+const CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/u;
+
+/**
+ * The last second of a calendar day in the schedule zone, as an ISO instant with its offset --
+ * how "until the 31st" is sent for a grant's expiry (ADR 0141). In the zone every date here is
+ * printed in, so the day a reader picked is the day the list then shows; the offset is asked of
+ * `Intl` for that day rather than written down, so the zone stays named once.
+ *
+ * `null` for a value that is not a calendar day, rather than a guessed instant.
+ */
+export function endOfScheduleDay(day: string): string | null {
+  if (!CALENDAR_DAY.test(day) || parse(`${day}T00:00:00Z`) === null) {
+    return null;
+  }
+  const noon = new Date(`${day}T12:00:00Z`);
+  const named = new Intl.DateTimeFormat("en-US", { timeZone: ZONE, timeZoneName: "longOffset" })
+    .formatToParts(noon)
+    .find((part) => part.type === "timeZoneName")?.value;
+  // `GMT+08:00`, or a bare `GMT` for a zone at UTC itself.
+  const offset = named === undefined || named === "GMT" ? "Z" : named.slice("GMT".length);
+  return new Date(`${day}T23:59:59${offset}`).toISOString();
+}

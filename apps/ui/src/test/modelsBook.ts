@@ -261,6 +261,7 @@ export function reader(role: Role): Outputs["tenants"]["get"] {
     id: TENANT,
     displayName: DISPLAY_NAME,
     role,
+    roleLabel: null,
     permissions: held(role),
     deactivatedAt: null,
   };

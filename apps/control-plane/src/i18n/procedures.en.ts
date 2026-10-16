@@ -49,6 +49,18 @@ export const procedureSentences: SentenceTable = {
   "people.revokeInvitation": "Withdraw an open invitation.",
   "people.setRole": "Change the role a member holds; never the last admin's.",
   "people.removeMember": "End a member's access; never the last admin's.",
+  "roles.list":
+    "Every role in the customer -- the four built-ins, then its own -- with the permissions each holds, how many people hold it and how many open invitations name it, and the permission catalogue. names or match to narrow by key.",
+  "roles.get": "One role by key: its label, description, permissions and how many hold it.",
+  "roles.save":
+    "Define a role, or change one the customer defined: key, label, description and permissions from the catalogue. create refuses a key in use; identical content answers unchanged: true. Built-in roles cannot be saved, and you may give or take away only permissions you hold yourself.",
+  "roles.delete":
+    "Delete a role the customer defined, with every grant to it. Refused while anyone holds it or an open invitation names it, for a built-in, and for a role holding a permission you do not hold.",
+  "grants.list":
+    "The grants in the customer -- one permission given to a role or a person, with its expiry -- expired ones included and marked. role or email to narrow to one subject.",
+  "grants.save":
+    "Give one permission to a role (role) or a member (email), standing or until expiresAt. Saving the same grant again moves its expiry. You may grant only a permission you hold yourself.",
+  "grants.delete": "Take one grant away, by id. Only a grant of a permission you hold yourself.",
   "audit.mine":
     "Your own actions, newest first: what you did, through which door, and how it ended.",
   "audit.tenant": "Every action taken in the customer, by anyone, newest first.",

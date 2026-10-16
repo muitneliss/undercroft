@@ -7,7 +7,7 @@
  * `execute`, and descriptions written in English for the model, holds here unchanged.
  */
 
-import { BUILT_IN_ROLES } from "@undercroft/contracts/access";
+import { MAX_ROLE_KEY_CHARS, ROLE_KEY } from "@undercroft/contracts/access";
 import { z } from "zod";
 
 import { CadenceChoice, ResyncChoice } from "./cadenceChoice.ts";
@@ -70,15 +70,17 @@ export const WRITE_TOOLS = {
   },
   invitePerson: {
     description:
-      "Invite somebody to this customer by email address, at a role. viewer reads; member also " +
-      "authors questions and dashboards (reports:author); builder also saves, builds and " +
-      "previews models, macros and reference tables (models:write) and reads the raw lake " +
-      "(lake:read); admin holds every permission, including people, sources, ingest keys and " +
-      "the customer itself. Sign-in is invitation-only, so this is the only way somebody gains " +
-      "access.",
+      "Invite somebody to this customer by email address, at a role, by its key. The built-ins: " +
+      "viewer reads; member also authors questions and dashboards (reports:author); builder " +
+      "also saves, builds and previews models, macros and reference tables (models:write) and " +
+      "reads the raw lake (lake:read); admin holds every permission, including people, sources, " +
+      "ingest keys and the customer itself. The customer may also have roles of its own, with " +
+      "keys and permissions roles.list shows -- read it rather than guessing from a key. The " +
+      "reader may invite only at a role holding nothing they lack themselves. Sign-in is " +
+      "invitation-only, so this is the only way somebody gains access.",
     inputSchema: inTenant.extend({
       email: z.string().email(),
-      role: z.enum(BUILT_IN_ROLES),
+      role: z.string().min(1).max(MAX_ROLE_KEY_CHARS).regex(ROLE_KEY),
     }),
     tier: "write",
     plate: "facts",

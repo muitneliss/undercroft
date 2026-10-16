@@ -717,11 +717,15 @@ Every door into the router goes through the same base procedures in
   established but the caller's permissions in that tenant lack the one the procedure needs; the
   refusal names the permission and carries `{ reason: "PERMISSION_REQUIRED", permission }`. A
   role is a set of permissions: `viewer` holds none, `member` `reports:author`, `builder` that
-  plus `models:write` and `lake:read`, and `admin` every permission. Casbin decides, over a policy
-  projected per request from `app.tenant_member` and the built-in grants
+  plus `models:write` and `lake:read`, and `admin` every permission; a customer may define its own
+  roles (`app.access_role`) and grant one permission to a role or a person, standing or until a
+  moment (`app.access_grant`). Casbin decides, over a policy projected per request from
+  `app.tenant_member`, the custom role, the grants in force and the built-in grants
   (`packages/contracts/src/access.ts`, `services/rbac.ts`); the catalogue and what each
   permission covers are in [the permissions reference](reference/permissions.md), the reasoning
-  in [ADR 0139](adr/0139-tenant-access-is-casbin-policy.md). Superadmins are named in
+  in [ADR 0139](adr/0139-tenant-access-is-casbin-policy.md) and
+  [ADR 0141](adr/0141-custom-roles-and-grants-under-the-subset-rule.md). A change to who holds
+  what passes the subset rule: nobody gives, grants or takes away a permission they do not hold. Superadmins are named in
   `UNDERCROFT_SUPERADMINS` and hold admin in every existing tenant
   ([ADR 0013](adr/0013-superadmins-named-in-the-environment.md)).
 - `account.*` is session-only, so no token can mint another token.

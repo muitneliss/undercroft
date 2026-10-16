@@ -58,8 +58,10 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
 - **Multi-tenant.** Per-tenant credentials sealed with AES-256-GCM, and a control-plane
   UI where someone connects their own accounts. Each tenant's rows are fenced by row-level
   security, and what each of its people may do is a set of
-  [permissions](docs/reference/permissions.md) their role holds: viewer, member, builder or
-  admin. An admin invites, changes a role and removes a member, but never the last admin.
+  [permissions](docs/reference/permissions.md): those their role holds -- viewer, member,
+  builder, admin, or a role the customer defines -- and any granted to them, standing or until a
+  date. Nobody gives a permission they do not hold, and the last admin is never removed;
+  [access control](docs/runbook/access-control.md) is the how-to.
 - **Anything can ingest.** A REST lake API means a shell script or an orchestrator can
   land data too — through the same create-only, content-addressed path.
 - **Documents, not only records.** Gmail and Drive are first-party collectors, because a
@@ -93,7 +95,8 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
   widgets in the chat.
 - **Skills that teach an agent the workflows.** One family, installed with `npx skills` or
   served by `/mcp` itself, works over either door. The model builder interviews the person,
-  checks the SQL before it saves, and asks before it builds.
+  checks the SQL before it saves, and asks before it builds; the access-control skill turns
+  "let Lan read the raw data until month end" into the smallest role or grant, and asks first.
 
 ## Installing it
 
@@ -161,6 +164,7 @@ its ADR, and what exactly it accepts lives in a reference page.
   - Getting started: [onboarding a new person](docs/runbook/onboarding.md)
   - Using it: [the CLI](docs/runbook/cli.md), [connecting an agent over MCP](docs/runbook/mcp-setup.md),
     [agent skills](docs/runbook/agent-skills.md)
+  - Managing who may do what: [roles and grants](docs/runbook/access-control.md)
   - Setting it up: [sign-in](docs/runbook/sign-in-setup.md),
     [the assistant](docs/runbook/assistant-setup.md),
     [Google ingestion](docs/runbook/google-ingestion-setup.md), [Xero](docs/runbook/xero-setup.md),

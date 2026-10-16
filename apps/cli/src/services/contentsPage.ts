@@ -59,6 +59,8 @@ const PLACE = {
   biExports: "contents",
   tenants: "contents",
   people: "contents",
+  roles: "contents",
+  grants: "contents",
   audit: "contents",
   keys: "contents",
   auth: "appendix",

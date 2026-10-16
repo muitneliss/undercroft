@@ -42,7 +42,7 @@ const XERO_RERUN = "run-0107";
 /** Demo Co., opened by a reader holding `role` in it. */
 export function tenant(role: Role): Out["tenants"]["get"] {
   const book = { id: TENANT, displayName: "Demo Co.", deactivatedAt: null };
-  return { ...book, role, permissions: held(role) };
+  return { ...book, role, roleLabel: null, permissions: held(role) };
 }
 
 function lastRun(id: string, at: string, seen: number): NonNullable<Connection["lastRun"]> {

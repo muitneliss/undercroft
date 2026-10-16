@@ -8,7 +8,15 @@
  * Every outcome is a VALUE, not an exception: `invite` reports `already-member` and
  * `not-created` the same way it reports success, `setRole` and `removeMember` report
  * `not-member` and `last-admin`, and `revokeInvitation` answers `false` when there was nothing
- * open to withdraw. The handler turns those into CONFLICT and NOT_FOUND. That is what makes this callable from a future CLI or backfill without
+ * open to withdraw.
+ *
+ * **The subset rule** (ADR 0141). A role is a customer's own or a built-in, named by key, and a
+ * caller may invite someone at it, give it, or take a person's access away only when they hold
+ * every permission involved: what the role confers (its permissions and the grants in force to
+ * it), what the person's old role conferred, or -- for a removal -- everything the person holds.
+ * Otherwise `people:manage` alone would hand out `keys:manage` by inviting at a role holding it.
+ * `held` is the caller's own permissions, passed in from the request's context; `not-held`
+ * names what they lack. The handler turns those into CONFLICT and NOT_FOUND. That is what makes this callable from a future CLI or backfill without
  * catching tRPC errors.
  *
  * No invitation token is ever returned or sent. `app.invitation.token_sha256` exists for a
@@ -21,6 +29,7 @@ import { type EmailMessage, type Locale, postEmailLeaf } from "@undercroft/core"
 import { hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { messages } from "../i18n/index.ts";
+import type { Permission } from "@undercroft/contracts/access";
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import * as invitations from "../repos/invitation.ts";
 import {
@@ -32,6 +41,7 @@ import {
   type Role,
   roleForEmail,
 } from "../repos/membership.ts";
+import { conferredBy, heldByMember, lacking } from "./authz.ts";
 
 export type { Member } from "../repos/membership.ts";
 export type Invitation = invitations.InvitationRow;
@@ -39,8 +49,16 @@ export type Invitation = invitations.InvitationRow;
 /** How long an invitation stays open. Long enough to be acted on, short enough to expire. */
 const INVITATION_DAYS = 7;
 
+/** Refusals the subset rule and a role key share, for every change that names a role. */
+export type RoleRefusal =
+  /** The customer has no role with that key. */
+  | { readonly ok: false; readonly reason: "no-such-role" }
+  /** The caller lacks these, which the change would give or take away. */
+  | { readonly ok: false; readonly reason: "not-held"; readonly lacking: readonly Permission[] };
+
 export type InviteResult =
   | { readonly ok: true; readonly id: string; readonly notified: boolean }
+  | RoleRefusal
   /** The address already has access. `role` is what it already holds, for the message. */
   | { readonly ok: false; readonly reason: "already-member"; readonly role: string }
   /** The insert returned no row. Not expected; reported rather than assumed away. */
@@ -127,13 +145,22 @@ export async function invite(
     tenantId: string;
     email: string;
     role: string;
+    held: readonly Permission[];
     actor: Actor;
     notify: (email: string, tenantId: string) => Promise<boolean>;
   },
 ): Promise<InviteResult> {
-  const held = await roleForEmail(exec, input.tenantId, input.email);
-  if (held !== null) {
-    return { ok: false, reason: "already-member", role: held };
+  const conferred = await conferredBy(exec, input.tenantId, input.role);
+  if (conferred === null) {
+    return { ok: false, reason: "no-such-role" };
+  }
+  const beyond = lacking(input.held, conferred);
+  if (beyond.length > 0) {
+    return { ok: false, reason: "not-held", lacking: beyond };
+  }
+  const current = await roleForEmail(exec, input.tenantId, input.email);
+  if (current !== null) {
+    return { ok: false, reason: "already-member", role: current };
   }
 
   const id = await invitations.create(exec, {
@@ -166,7 +193,8 @@ export type MembershipResult =
   /** The address holds no role in this tenant: nothing to change or remove. */
   | { readonly ok: false; readonly reason: "not-member" }
   /** It is the tenant's last admin, and the change would leave the customer with none. */
-  | { readonly ok: false; readonly reason: "last-admin" };
+  | { readonly ok: false; readonly reason: "last-admin" }
+  | RoleRefusal;
 
 /**
  * Turn what the statement found into an outcome, and record the ones that happened.
@@ -205,8 +233,21 @@ async function settle(
  */
 export async function setRole(
   exec: SqlExecutor,
-  input: { tenantId: string; email: string; role: Role; actor: Actor },
+  input: { tenantId: string; email: string; role: Role; held: readonly Permission[]; actor: Actor },
 ): Promise<MembershipResult> {
+  const conferred = await conferredBy(exec, input.tenantId, input.role);
+  if (conferred === null) {
+    return { ok: false, reason: "no-such-role" };
+  }
+  const current = await roleForEmail(exec, input.tenantId, input.email);
+  if (current === null) {
+    return { ok: false, reason: "not-member" };
+  }
+  const before = (await conferredBy(exec, input.tenantId, current)) ?? [];
+  const beyond = lacking(input.held, [...before, ...conferred]);
+  if (beyond.length > 0) {
+    return { ok: false, reason: "not-held", lacking: beyond };
+  }
   const change = await changeRole(exec, input.tenantId, input.email, input.role);
   return await settle(exec, change, {
     tenantId: input.tenantId,
@@ -225,11 +266,21 @@ export async function setRole(
  * audit trail, the second is the record of how they came to have access.
  *
  * An admin may remove themselves while another admin remains, for the reason `setRole` gives.
+ * A grant to the person goes with their membership (`600_custom_roles.sql`), which is why the
+ * subset rule weighs everything they hold rather than only their role.
  */
 export async function removeMember(
   exec: SqlExecutor,
-  input: { tenantId: string; email: string; actor: Actor },
+  input: { tenantId: string; email: string; held: readonly Permission[]; actor: Actor },
 ): Promise<MembershipResult> {
+  const holds = await heldByMember(exec, input.tenantId, input.email);
+  if (holds === null) {
+    return { ok: false, reason: "not-member" };
+  }
+  const beyond = lacking(input.held, holds);
+  if (beyond.length > 0) {
+    return { ok: false, reason: "not-held", lacking: beyond };
+  }
   const change = await deleteMembership(exec, input.tenantId, input.email);
   return await settle(exec, change, {
     tenantId: input.tenantId,

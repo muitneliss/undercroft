@@ -21,7 +21,8 @@
  */
 
 /**
- * The roles every customer has, in order of how much each holds. The values are the words every
+ * The roles every customer has, in order of how much each holds. A customer may define more of its
+ * own (ADR 0141), stored in its tables; these four are code, and cannot be changed or deleted. The values are the words every
  * surface prints, untranslated in both languages (`.claude/rules/i18n.md`).
  *
  * `builder` is ADR 0139's: the person who fixes the dbt project -- models, macros, reference
@@ -30,6 +31,16 @@
  */
 export const BUILT_IN_ROLES = ["viewer", "member", "builder", "admin"] as const;
 export type BuiltInRole = (typeof BUILT_IN_ROLES)[number];
+
+/**
+ * The shape of every role key, a built-in's or one a customer defines (ADR 0141): a lowercase
+ * identifier of at most `MAX_ROLE_KEY_CHARS`. Never a colon, because a Casbin subject for a
+ * person is `user:<uuid>` and a role key must never read as one. The database's CHECK on
+ * `app.access_role.key` says the same (`600_custom_roles.sql`); this is the copy every door
+ * validates with before a request reaches it.
+ */
+export const ROLE_KEY = /^[a-z][a-z0-9_]*$/u;
+export const MAX_ROLE_KEY_CHARS = 63;
 
 /**
  * The role the last-admin guard protects. Named once, because the guard is the one place a role
@@ -90,4 +101,9 @@ export function isBuiltInRole(value: string): value is BuiltInRole {
 
 export function isPermission(value: string): value is Permission {
   return PERMISSION_SET.has(value);
+}
+
+/** Whether a string has the shape of a role key; whether a customer HAS it is the server's. */
+export function isRoleKey(value: string): boolean {
+  return value.length <= MAX_ROLE_KEY_CHARS && ROLE_KEY.test(value);
 }

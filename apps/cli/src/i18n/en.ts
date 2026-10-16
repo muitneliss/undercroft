@@ -28,6 +28,10 @@ export const en = {
     seeds: "The customer's small reference tables (dbt seeds), which models read with ref().",
     documentKinds: "The customer's catalogue of document kinds.",
     people: "Who has access, and invitations.",
+    roles:
+      "The roles a customer has, built-in and its own, and the permissions each holds; changing one needs roles:manage.",
+    grants:
+      "One permission given to a role or a person, standing or until a moment; reading them needs people:manage.",
     audit:
       "Who did what: your own actions, a customer's for whoever holds audit:read there, everything for a superadmin.",
     runs: "Runs.",

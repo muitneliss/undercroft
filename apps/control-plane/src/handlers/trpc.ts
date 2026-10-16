@@ -463,6 +463,7 @@ export const tenantStatusProcedure = authedProcedure
       ctx: {
         ...ctx,
         role: access.role,
+        roleLabel: access.roleLabel,
         permissions: access.permissions,
         deactivatedAt: access.deactivatedAt,
         tenantId: input.tenantId,
