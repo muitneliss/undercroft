@@ -21,6 +21,24 @@ describe("realSpawn", () => {
       timeoutMs: 10_000,
     });
 
-    expect(result).toEqual({ exitCode: 0, stdout: "answer", stderr: "remark" });
+    expect(result).toEqual({
+      exitCode: 0,
+      stdout: "answer",
+      stderr: "remark",
+      timedOut: false,
+    });
+  });
+
+  it("says when its own deadline is what stopped the child, so a kill is not mistaken for a crash", async () => {
+    // `exec` so the shell is replaced by the sleeper: the kill must reach the process that
+    // holds the pipes open, or the read waits out the thirty seconds.
+    const result = await realSpawn(["/bin/sh", "-c", "exec sleep 30"], {
+      cwd: tmpdir(),
+      env: {},
+      timeoutMs: 100,
+    });
+
+    expect(result.timedOut).toBe(true);
+    expect(result.exitCode).not.toBe(0);
   });
 });

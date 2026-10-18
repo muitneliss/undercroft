@@ -412,7 +412,9 @@ subprocess, connected as that tenant's dbt login
 ([ADR 0007](adr/0007-dbt-runs-as-a-subprocess-in-the-worker.md)), with an allowlisted
 environment, so a model's `env_var()` reads none of the worker's secrets. Models materialise as
 tables in `staging_slug`, which the BI login cannot reach, and test failures are stored in
-`dq_slug`. After the build the worker promotes into `analytics_slug`, in one transaction as the
+`dq_slug`. The login checks every 5 s that its client is still connected, so a build stopped at its
+deadline does not leave its statements running and holding locks
+([ADR 0146](adr/0146-a-dbt-login-s-statement-ends-with-its-client.md)). After the build the worker promotes into `analytics_slug`, in one transaction as the
 same login, only the models and seeds that built, whose own tests passed (a `warn` does not block)
 and whose parents in the build were promoted too; each step records whether it was. A model that
 was held back keeps serving its last passing version, and a first build that fails publishes

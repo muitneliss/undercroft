@@ -166,6 +166,26 @@ BEGIN
     EXECUTE format('ALTER ROLE %I SET statement_timeout = %L', v_bi, '15s');
     EXECUTE format('ALTER ROLE %I SET default_transaction_read_only = on', v_bi);
 
+    -- A STATEMENT ENDS WITH ITS CLIENT, for the build login (ADR 0146, issue 490). A build's
+    -- deadline kills dbt, not the statements it sent: Postgres checks that a client is still
+    -- there only when the backend next touches the socket, so a backend whose dbt is gone ran
+    -- its `CREATE TABLE AS` to the end and held its locks, every later build that loads the
+    -- same seed waited on the TRUNCATE and died at its own deadline, and left one more orphan.
+    -- With the check, the backend notices the closed connection within five seconds and
+    -- aborts, releasing the locks. PgBouncer closes the server connection when its client
+    -- leaves while the server is not idle (ADR 0088), so the socket the check reads really
+    -- is closed. It also covers a worker that died mid-build, which no cleanup in the worker
+    -- could.
+    -- NOT a `statement_timeout` on the role: a scheduled build legitimately runs for thirty
+    -- minutes and an editor build for two, and one role-wide number cannot be both. NOT the
+    -- worker terminating backends after a deadline: that needs `pg_signal_backend` or another
+    -- SECURITY DEFINER hook, cannot tell one run's backends from another's (dbt sets no
+    -- per-run application_name), and does nothing when the worker itself is what died.
+    -- Unconditional like the BI settings above: `ALTER ROLE ... SET` writes
+    -- `pg_db_role_setting`, not the role's own row, so it does not race the password
+    -- rotation the CONNECTION LIMIT guard is about (ADR 0087).
+    EXECUTE format('ALTER ROLE %I SET client_connection_check_interval = %L', v_dbt, '5s');
+
     -- The customer's scope logins (ADR 0142): the ones nobody uses any more dropped, and every
     -- other one's grants -- and, since ADR 0143, its column grants and row policies -- restated
     -- by the body below as it stands today, for the reason this file exists: a scope login made
