@@ -115,6 +115,18 @@ tasks:
       # glob, for the reason installer-upload lists its files: a stray file is never published.
       - bun run desktop:release {{.DIR}} --upload {{.TAG}}
 
+  blog:
+    desc: >-
+      Build the blog and publish apps/blog/dist to the Cloudflare Pages project undercroft-blog,
+      served at blog.undercroft.lowbit.link (ADR 0145). Needs CLOUDFLARE_API_TOKEN and
+      CLOUDFLARE_ACCOUNT_ID.
+    cmds:
+      # Not a Dokploy deploy and not a release: the blog is outside the product (ADR 0089), so a
+      # merge publishes it and nothing waits for a tag. Building first means a stale dist/ is
+      # never what gets uploaded.
+      - task: :build:blog
+      - bun run deploy:blog
+
   release:
     desc: "The full manual deploy sequence from docs/runbook/deployment.md. Usage: task cd:release TAG=v1.2.3"
     requires:

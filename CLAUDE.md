@@ -269,8 +269,8 @@ by design, and only a local `task ci:verify` gates a merge — see the runbook's
 mode", and `task cd:outage-off` to end it.
 
 The blog is the one exception, and it is not part of the product: `apps/blog` is a static Astro
-site on GitHub Pages at `blog.undercroft.lowbit.link`, published by `blog.yml` on a merge to
-`main` rather than by a release (ADR 0089). How to write a post is in `apps/blog/WRITING.md`.
+site on Cloudflare Pages at `blog.undercroft.lowbit.link`, published by `task cd:blog` -- which
+`blog.yml` runs on a merge to `main` -- rather than by a release (ADR 0089, ADR 0145). How to write a post is in `apps/blog/WRITING.md`.
 
 Every request is traced and answers with an `x-trace-id`, exported to the host's shared
 `otel-lgtm` stack when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (ADR 0058). `task obs:*`, driven by

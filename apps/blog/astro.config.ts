@@ -2,7 +2,7 @@ import sitemap from "@astrojs/sitemap";
 import { defineConfig } from "astro/config";
 import { SITE_URL } from "./src/site.ts";
 
-// Static output only: GitHub Pages serves files, so nothing here may need a server at request
+// Static output only: Cloudflare Pages serves files (ADR 0145), so nothing here may need a server at request
 // time. Vietnamese is the default locale and unprefixed, matching the product (i18n.md);
 // English lives under /en/. A post's two languages are paired by `translationKey`, not by
 // path, so each can carry the slug its own readers search for.
