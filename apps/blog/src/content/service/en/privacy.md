@@ -1,7 +1,7 @@
 ---
 title: "Privacy policy"
 description: "How the hosted Undercroft service collects, uses, stores, shares and deletes your data, including data it reads from Gmail and Google Drive."
-updated: 2026-10-10
+updated: 2026-10-18
 ---
 
 This policy covers the hosted Undercroft service at [undercroft.lowbit.link](https://undercroft.lowbit.link) and this blog. The service is operated by multnelis ("we", "us"). You can reach us at [contact@multnelis.org](mailto:contact@multnelis.org).
@@ -18,11 +18,11 @@ Undercroft is a data platform for organisations. Each organisation is a separate
 
 **Data from Google, when an administrator connects it.** An administrator of a workspace may connect a Gmail mailbox or a Google Drive account. Google shows them a consent screen listing what we ask for, and nothing is read until they approve it.
 
-- **Gmail (read-only).** We read the messages in the labels the administrator chooses, and only those labels. For each message we keep the sender, recipients, subject, date and message identifiers, the message body, and attachments of the file types the administrator chooses.
-- **Google Drive (read-only).** We read the files in the folders the administrator chooses in Google's file picker, and the text inside those files. Scanned documents and images are converted to text by software running on our own servers.
-- **The connected account.** We record which Google account gave consent, its email address and Google's account identifier, so that a later reconnection stays tied to the same account.
+- **Gmail (read-only, the `gmail.readonly` permission).** We read the messages in the labels the administrator chooses, and only those labels. For each message we keep the sender, recipients, subject, date and message identifiers, the message body, and attachments of the file types the administrator chooses.
+- **Google Drive (read-only, the `drive.readonly` permission).** We read the files in the folders the administrator chooses in Google's file picker, and the text inside those files. The picker itself uses the `drive.file` permission, only to return the identifiers of what the administrator chose. Scanned documents and images are converted to text by software running on our own servers.
+- **The connected account.** Through the `openid` and `email` permissions we record which Google account gave consent, its email address and Google's account identifier, so that a later reconnection stays tied to the same account.
 
-We never send, modify, label or delete email, and we never create, modify or delete files in Google Drive.
+We never send, modify, label or delete email, and we never create, modify or delete files in Google Drive. [What the app is](/en/app/) explains, in plain terms, what each Google permission is used for.
 
 **Data from other sources** an administrator connects, such as Xero or HubSpot, is read the same way: read-only, and limited to what the administrator chooses.
 
@@ -50,6 +50,8 @@ Two features send content to an outside provider. Both are off until the operato
 - **Document classification.** When an administrator publishes a list of document kinds for their workspace, the text of each document, which may include email and file text, is sent to TypeSafe to decide which kind it is.
 
 These providers receive content only to return that result to the workspace. We do not use Google user data, and do not allow these providers to use it, to develop, improve or train generalised artificial intelligence or machine learning models.
+
+Neither feature, and no other part of the service, uses Google user data to create, edit or generate images, video, audio or any other synthetic media.
 
 ## Google user data and Limited Use
 

@@ -78,15 +78,31 @@ above. Every link must sit on an authorised domain and open without signing in:
 | Field                        | Value on the hosted service                        |
 | ---------------------------- | -------------------------------------------------- |
 | App logo                     | `apps/ui/public/apple-touch-icon.png` (square PNG) |
-| Application home page        | `https://blog.undercroft.lowbit.link/en/`          |
+| Application home page        | `https://blog.undercroft.lowbit.link/en/app/`      |
 | Application privacy policy   | `https://blog.undercroft.lowbit.link/en/privacy/`  |
 | Application terms of service | `https://blog.undercroft.lowbit.link/en/terms/`    |
 | Authorised domains           | `lowbit.link`                                      |
 
-The home page is the blog, not the product, because the product's root is a sign-in screen,
-which a reviewer cannot read past. The privacy policy and terms are the blog's
-`src/content/legal/`. The privacy policy carries Google's Limited Use statement, and it names
-every provider that can receive Google user data. Change it in the same change that adds one.
+The home page is the blog's app page, not the product's root and not the blog's index. The
+product's root is a JavaScript page that opens in Vietnamese and leads with signing in, and a
+reviewer reported it as "behind a login page" that "does not explain the purpose of your app".
+The blog's index is a list of articles. The app page is static English HTML that says what the
+app does, what each Google permission is used for, and that Google data never trains a model
+or makes an image, and it links the privacy policy and terms. The product's public home links
+the same three pages from its "Your Google data, read-only" section.
+
+All three live in the blog's `src/content/service/`. The privacy policy carries Google's Limited
+Use statement and names every provider that can receive Google user data. The app page and the
+privacy policy both name every scope in step 3. Change them in the same change that adds a
+scope or a provider, then publish with `task cd:blog`.
+
+**Verify the domain before you submit.** Google refuses a home page on a domain the project's
+owner has not proved is theirs ("is not registered to you"). In
+[Google Search Console](https://search.google.com/search-console), add a **Domain** property for
+`lowbit.link`. It covers every subdomain. Google then shows a `google-site-verification=…` TXT
+record: add it at the root of the `lowbit.link` zone in Cloudflare and press **Verify**. Use the
+Google account that owns the Cloud project. Wait 24 hours after verifying before you ask for
+review again.
 
 **Google Auth Platform** → **Audience** → **Publish app**, so the publishing status reads
 **In production**. While it reads **Testing**, Google lets every refresh token live **seven

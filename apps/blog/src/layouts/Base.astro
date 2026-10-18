@@ -18,7 +18,7 @@ import {
   REPO_URL,
   STRINGS,
   langPrefix,
-  legalPath,
+  servicePath,
 } from "../site.ts";
 import { type JsonLd, jsonLdText } from "../structuredData.ts";
 import "../styles/blog.css";
@@ -133,8 +133,9 @@ const home = `${langPrefix(lang)}/`;
     <footer class="colophon">
       <span>{s.footer}</span>
       <a class="colophon__mail" href={`mailto:${CONTACT_EMAIL}`} aria-label={s.contact}>{CONTACT_EMAIL}</a>
-      <a href={legalPath(lang, "privacy")}>{s.privacy}</a>
-      <a href={legalPath(lang, "terms")}>{s.terms}</a>
+      <a href={servicePath(lang, "app")}>{s.about}</a>
+      <a href={servicePath(lang, "privacy")}>{s.privacy}</a>
+      <a href={servicePath(lang, "terms")}>{s.terms}</a>
       <a href={`${home}rss.xml`}>{s.rss}</a>
       <a href={REPO_URL}>GitHub</a>
     </footer>
