@@ -12,7 +12,7 @@ roles and grants [ADR 0141](../adr/0141-custom-roles-and-grants-under-the-subset
 reach [ADR 0142](../adr/0142-object-reach-and-scope-logins.md), and for row and column rules
 [ADR 0143](../adr/0143-row-and-column-rules-on-model-grants.md), and for the read permissions
 behind Sources, the Journal, the Lake and Models
-[ADR 0146](../adr/0146-each-division-reads-under-its-own-permission.md). How to define a role or
+[ADR 0147](../adr/0147-each-division-reads-under-its-own-permission.md). How to define a role or
 grant a permission is [the access-control runbook](../runbook/access-control.md).
 
 A procedure not listed below is open to every member of the customer, a viewer included, or is not

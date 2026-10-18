@@ -5,7 +5,7 @@
  * division is a decision about the wheel (`@/lib/divisions`) that a catalogue does not need to
  * make; the lake's index keeps a door to it, as it does to the console.
  *
- * Whoever reads the Lake may read it (`lake:read`, ADR 0146): which kinds exist, where each came
+ * Whoever reads the Lake may read it (`lake:read`, ADR 0147): which kinds exist, where each came
  * from and how much of the sample it was. Only a holder of `catalogue:manage` may change it,
  * initialise it or publish it, and the server refuses everyone else regardless -- hiding the
  * controls is the honest rendering of what the reader may do.

@@ -1,7 +1,7 @@
 /**
  * The ledger over tRPC: who may read it, and what a run looks like from the interface.
  *
- * Its readers are builders: the ledger needs `runs:read` (ADR 0146), which a builder holds and a
+ * Its readers are builders: the ledger needs `runs:read` (ADR 0147), which a builder holds and a
  * viewer or a member does not -- that refusal is pinned with the other divisions' in
  * `authz.test.ts` -- and a builder still lacks the `sources:manage` that starting a run needs.
  */

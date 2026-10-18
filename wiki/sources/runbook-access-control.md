@@ -5,13 +5,13 @@ date: 2026-10-18
 tags: []
 source: docs/runbook/access-control.md
 source_path: docs/runbook/access-control.md
-source_hash: 963590f8487da2de2b55889b37b2563019e88f32283bb0a53a37212f28ae2807
+source_hash: 3d42511aae73e9fdf8211612aafd3a343fc890cf888299edb361a5ba389b9bf5
 ingested: 2026-10-18
 ---
 
 # Runbook: Access control
 
-How a customer defines roles of its own, grants one permission or reading one thing to a role or a person -- on a model, only some of its rows or not some of its columns -- makes a grant expire, checks what someone can see, and takes access away -- in the web UI, the CLI and over MCP (`docs/runbook/access-control.md`). Why: [[ADR 0139 Tenant Access Is Casbin Policy]], [[ADR 0141 Custom Roles and Grants Under the Subset Rule]], [[ADR 0142 Object Reach and Scope Logins]], [[ADR 0143 Row and Column Rules on Model Grants]], [[ADR 0146 Each Division Reads Under Its Own Permission]]; syntax and bounds: [[Permissions]].
+How a customer defines roles of its own, grants one permission or reading one thing to a role or a person -- on a model, only some of its rows or not some of its columns -- makes a grant expire, checks what someone can see, and takes access away -- in the web UI, the CLI and over MCP (`docs/runbook/access-control.md`). Why: [[ADR 0139 Tenant Access Is Casbin Policy]], [[ADR 0141 Custom Roles and Grants Under the Subset Rule]], [[ADR 0142 Object Reach and Scope Logins]], [[ADR 0143 Row and Column Rules on Model Grants]], [[ADR 0147 Each Division Reads Under Its Own Permission]]; syntax and bounds: [[Permissions]].
 
 **Before you start.** Defining roles and grants needs `roles:manage`; reading grants and giving roles needs `people:manage`. The subset rule: you give or take away only permissions you hold and what you can read yourself -- someone reading only `fct_sales` cannot grant `model:*` nor invite at a built-in role. A built-in role reads everything; a role of the customer's own reads only what is granted (`model:…`, `raw:…`, `report:…`, or the wholes); roles defined before the change were given all three wholes. **What a role opens:** a role with no permission opens Customers and Reports alone, as a viewer does; Sources, the Journal, the Raw lake and Models each open on their own read permission (`sources:read`, `runs:read`, `lake:read`, `models:read`) in the browser, CLI and MCP alike. Reading a model's rows through Reports needs none of them, only a grant on the model.
 

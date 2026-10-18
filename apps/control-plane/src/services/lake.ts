@@ -5,7 +5,7 @@
  * when the newest was seen -- and carries nothing a person wrote; it is the honest answer to
  * "did anything land". The rows are the source's payloads verbatim, which for a CRM is names
  * and addresses and for a mailbox is whatever the mail said. Both are a holder of `lake:read`'s,
- * decided in the handler's gate (ADR 0139, and for the summary ADR 0146: which streams a
+ * decided in the handler's gate (ADR 0139, and for the summary ADR 0147: which streams a
  * customer lands, and how much of each, is not every member's either).
  *
  * Nothing here decides a status code. `records` for a stream that has nothing returns an

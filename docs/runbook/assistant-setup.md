@@ -60,7 +60,7 @@ Then, signed in as an admin on a customer:
    strike it, and confirm the run appears.
 4. Sign in as a **viewer** and ask for the same run, or how the sources are doing. Both are
    refused, in the viewer's language, by the procedure itself: starting a run needs
-   `sources:manage`, and reading the sources `sources:read` (ADR 0146).
+   `sources:manage`, and reading the sources `sources:read` (ADR 0147).
 
 ## What it will not do
 

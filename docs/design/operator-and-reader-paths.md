@@ -90,7 +90,7 @@ Everything else is new UI over what the server already returns: a result's `trun
   whole output. That number is the run's own count (`ops.run_entity`) less the records that
   still name the run; it is never estimated.
 - For a member or viewer the same counts are plain figures, with no link.
-- Since this contract, and outside it: ADR 0146 (#487) closed the Journal, Sources, the Raw lake
+- Since this contract, and outside it: ADR 0147 (#487) closed the Journal, Sources, the Raw lake
   and Models to a member and a viewer, each division opening on a read permission of its own. The
   plain figures above are now what a role of the customer's own sees that reads the Journal
   (`runs:read`) without `lake:read`.

@@ -4,7 +4,7 @@
  * Its own file for the reason `biRouter` and `modelsRouter` have theirs -- `router.ts` is the
  * table of contents, not the procedures -- and because the authority here is worth reading in
  * one place: every procedure needs `lake:read` (builder and admin, ADR 0139), the summary
- * included since ADR 0146 -- which streams a customer lands, and how much of each, is the
+ * included since ADR 0147 -- which streams a customer lands, and how much of each, is the
  * division's first screen, and the division is `lake:read`'s.
  *
  * Since ADR 0142 each is narrowed to the raw streams the reader REACHES -- `raw:*` for every
@@ -34,7 +34,7 @@ import { router } from "./trpc.ts";
 export const lakeRouter = router({
   /**
    * What has landed, per stream: counts and freshness, nothing a person wrote. `lake:read`, as
-   * the rest of the division is (ADR 0146).
+   * the rest of the division is (ADR 0147).
    */
   summary: requirePermission("lake:read").query(({ ctx, input }) =>
     lake.summary(ctx.exec, input.tenantId, ctx.reach),

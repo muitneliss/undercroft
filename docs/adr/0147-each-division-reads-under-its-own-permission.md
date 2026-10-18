@@ -1,4 +1,4 @@
-# 146. Each division of a book reads under its own permission
+# 147. Each division of a book reads under its own permission
 
 - Status: Accepted
 - Date: 2026-10-18

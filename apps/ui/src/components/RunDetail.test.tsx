@@ -195,7 +195,7 @@ describe("the scope a run read with", () => {
 
 describe("what a run acted on", () => {
   // Read by a builder where the account is named by its address: naming it reads the customer's
-  // connections, which need `sources:read` (ADR 0146). Without it the account is its source id.
+  // connections, which need `sources:read` (ADR 0147). Without it the account is its source id.
   it("is, for an ingest, its account, opened on the Sources leaf with that account on show", async () => {
     mount("builder", gmailRun({ source: SECOND }), { accounts: TWO_MAILBOXES });
 

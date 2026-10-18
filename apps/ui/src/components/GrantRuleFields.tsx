@@ -6,7 +6,7 @@
  * The columns are the server's: `models.get` answers what the model's last build found (less any
  * the reader cannot see themselves), `seeds.get` what a reference table declares. A model never
  * built has none, and the form says so rather than offer a rule nothing could check. Both need
- * `models:read` (ADR 0146), so for a reader without it nothing is asked and no rule is offered:
+ * `models:read` (ADR 0147), so for a reader without it nothing is asked and no rule is offered:
  * the grant is of the whole model, which the subset rule still weighs. Whether the
  * rule is narrower than what the reader reaches is the server's subset rule; the form offers, the
  * server decides.

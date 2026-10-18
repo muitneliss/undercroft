@@ -1,6 +1,6 @@
 /**
  * The Lake division over tRPC: every read of it is a holder of `lake:read`'s -- a builder's and an
- * admin's -- the summary included since ADR 0146, whose refusal of a viewer is pinned with the
+ * admin's -- the summary included since ADR 0147, whose refusal of a viewer is pinned with the
  * other divisions' in `authz.test.ts`.
  *
  * The guard is pinned from both sides -- a member is refused, an admin is answered -- because

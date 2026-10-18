@@ -30,7 +30,7 @@ import { isWithin, type ModelLimit, type Narrowing } from "./rowRules.ts";
  * `builder` is ADR 0139's: the person who fixes the dbt project -- models, macros, reference
  * tables, the raw lake they read -- without the people, the sources, the keys or the customer
  * itself, which stay an admin's (issue 481). A builder READS the sources and the runs, because
- * a model is fixed by seeing what was read and what the last build did (ADR 0146); connecting
+ * a model is fixed by seeing what was read and what the last build did (ADR 0147); connecting
  * and running them stays `sources:manage`.
  */
 export const BUILT_IN_ROLES = ["viewer", "member", "builder", "admin"] as const;
@@ -58,7 +58,7 @@ export const ADMIN_ROLE = "admin" satisfies BuiltInRole;
  * that changes or reveals more than any member may see declares exactly one of these.
  *
  * The three `:read` beside a write -- `models:read`, `runs:read`, `sources:read` -- each open one
- * division of the book and the procedures behind it, for every door at once (ADR 0146): what a
+ * division of the book and the procedures behind it, for every door at once (ADR 0147): what a
  * customer's dbt project says, what its runs did, and what it connects are not every member's to
  * read. `lake:read` is the Lake's. Reports, and the member-wide reads beside it, need none.
  *

@@ -48,7 +48,7 @@ describe("divisionPath", () => {
 describe("closedTo", () => {
   const people = division("people");
 
-  it("closes to each built-in role the divisions whose permission it lacks (ADR 0119, 0139, 0146)", () => {
+  it("closes to each built-in role the divisions whose permission it lacks (ADR 0119, 0139, 0147)", () => {
     function closedFor(role: "viewer" | "member" | "builder" | "admin"): string[] {
       return DIVISIONS.filter(
         (d) => closedTo(d, { tenantId: "CASE-0042", permissions: held(role) }) !== null,

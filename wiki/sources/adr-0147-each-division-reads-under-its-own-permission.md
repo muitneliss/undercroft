@@ -1,15 +1,15 @@
 ---
-title: ADR 0146 Each Division Reads Under Its Own Permission
+title: ADR 0147 Each Division Reads Under Its Own Permission
 type: source
 date: 2026-10-18
 tags: []
-source: docs/adr/0146-each-division-reads-under-its-own-permission.md
-source_path: docs/adr/0146-each-division-reads-under-its-own-permission.md
-source_hash: fe3422f48e12f4987c219829684a8a6527032117aac517aab7f0d345b699325d
+source: docs/adr/0147-each-division-reads-under-its-own-permission.md
+source_path: docs/adr/0147-each-division-reads-under-its-own-permission.md
+source_hash: 550f237cb3beec1f8a54847cf27f2edf17ae11b5da23cf80eaf21669588c1173
 ingested: 2026-10-18
 ---
 
-# ADR 0146 Each Division Reads Under Its Own Permission
+# ADR 0147 Each Division Reads Under Its Own Permission
 
 Extends [[ADR 0139 Tenant Access Is Casbin Policy]], whose `requires` on a division only People used, and applies [[ADR 0119 Who Has Access to a Customer Is Read by Its Admin Alone]] to four more divisions: hiding a tab closes nothing, because the CLI, `/mcp` and the assistant call the router, so the gate is on the procedure and the tab only says so. Supersedes in part [[ADR 0086 A Tenant Writes Its Own Macros]] (`macros.list/get/check`), [[ADR 0092 Lineage Draws Only Declared Relations]] (`models.lineage`), [[ADR 0128 A Tenant Keeps Its Own Reference Tables, Typed by Its Author and Loaded by the Build That Reads Them]] (`seeds.list/get`) and [[ADR 0085 A Document Is Classified Into Its Tenants Own Catalogue Of Kinds]] (`documentKinds.list`), all of which were open to any member. Reports, reach ([[ADR 0142 Object Reach and Scope Logins]]) and row and column rules ([[ADR 0143 Row and Column Rules on Model Grants]]) are unchanged.
 

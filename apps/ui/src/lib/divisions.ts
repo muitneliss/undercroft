@@ -18,7 +18,7 @@
  * until a customer is chosen. A division that `requires` a permission opens only
  * for a reader who holds it in that customer -- ADR 0119 closed People to anyone
  * but an admin, ADR 0139 restated that as the permission its procedures need, and
- * ADR 0146 gave Sources, the Journal, the Lake and Models one each, so a reader of
+ * ADR 0147 gave Sources, the Journal, the Lake and Models one each, so a reader of
  * Reports alone opens Customers and Reports. Either way they render face-down
  * rather than being hidden, because a division that vanishes teaches nobody that
  * it exists. `closedTo` is the one place both rules are read.
@@ -189,7 +189,7 @@ export function divisionPath(id: DivisionId, tenantId: string | undefined): stri
 /**
  * Where "Open" opens a customer's book for this reader: the first division in ring order that is
  * open to them. That is Sources, where `/tenants/:tenantId` has always opened a book, for every
- * reader who may read it; a reader of Reports alone (ADR 0146) opens at Reports instead of onto a
+ * reader who may read it; a reader of Reports alone (ADR 0147) opens at Reports instead of onto a
  * notice. Permissions not yet known open at Sources, for the reason `closedTo` gives.
  */
 export function bookPath(tenantId: string, permissions: readonly Permission[] | undefined): string {

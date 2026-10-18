@@ -3,7 +3,7 @@
  *
  * The index first -- what landed, per stream, as counts and instants -- and under it the rows
  * themselves, which for a CRM are names and for a mailbox are whatever the mail said. All of it
- * is `lake:read`'s, the summary included since ADR 0146, so the division `requires` it and `Book`
+ * is `lake:read`'s, the summary included since ADR 0147, so the division `requires` it and `Book`
  * never mounts this leaf for a reader without it: there is no lesser Lake to draw for them.
  *
  * THE CONSOLE IS A DOOR ON THIS LEAF RATHER THAN A BAND ON IT. It used to be the fourth
@@ -86,7 +86,7 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
       <div className="body stack">
         <p className="prose">{t("lake.kindsLead", { tenantId })}</p>
         {/* A door, as the console's is: the catalogue is a page of this division, readable by
-            whoever reads the division (ADR 0146), so it is offered over an empty lake too. */}
+            whoever reads the division (ADR 0147), so it is offered over an empty lake too. */}
         <div className="row">
           <Link className="plate" to={kindsPath(tenantId)}>
             {t("lake.kindsOpen")}

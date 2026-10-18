@@ -2,7 +2,7 @@
  * The `macros` procedures: a tenant's own dbt macros. ADR 0086.
  *
  * A holder of `models:read` may read and check them, as they may read and check models (ADR
- * 0146); only a holder of `models:write` may save or delete one, because a macro changes what
+ * 0147); only a holder of `models:write` may save or delete one, because a macro changes what
  * every model calling it builds. Same layer
  * and rules as the other routers: validate, call one service, decide what its answer means.
  */

@@ -3,7 +3,7 @@
  * ADR 0128.
  *
  * A holder of `models:read` may list and read them, as they may read the models built from them
- * (ADR 0146); only a holder of `models:write` may save or delete one, because a seed changes what
+ * (ADR 0147); only a holder of `models:write` may save or delete one, because a seed changes what
  * every model reading it builds. Same layer
  * and rules as the other routers: validate, call one service, decide what its answer means.
  *

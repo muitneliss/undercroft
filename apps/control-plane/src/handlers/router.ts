@@ -194,7 +194,7 @@ export const appRouter = router({
 
   runs: router({
     /**
-     * The ledger, newest first. `runs:read`, as every read of the Journal is (ADR 0146): a run
+     * The ledger, newest first. `runs:read`, as every read of the Journal is (ADR 0147): a run
      * names the accounts a customer reads and what each read returned, which a reader of its
      * Reports does not need. Whether a run happened is the question the division exists to
      * answer, so the permission opens the division and every read behind it at once.

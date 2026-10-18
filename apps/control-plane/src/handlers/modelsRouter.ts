@@ -44,7 +44,7 @@ import { requirePermission, requireWholeReach } from "./permissionGate.ts";
 import { actorOf, refusal, router } from "./trpc.ts";
 
 const MS_PER_SECOND = 1000;
-/** Every read of the dbt project: its division opens on `models:read` (ADR 0146). */
+/** Every read of the dbt project: its division opens on `models:read` (ADR 0147). */
 const readsProject = requirePermission("models:read");
 /**
  * The longest lineage `name` worth reading: a model's name, or a source table as
@@ -324,7 +324,7 @@ export const modelsRouter = router({
   /**
    * What each model declares it reads: other models by `ref()`, raw lake tables by
    * `source()`, through any macro it calls. `models:read`, with `list`, since it is read from
-   * the same models (ADR 0146). Declared relations only (ADR 0092): a model whose upstream its
+   * the same models (ADR 0147). Declared relations only (ADR 0092): a model whose upstream its
    * text cannot show carries why, and a ref to a deleted model stays as a missing dependency.
    *
    * With a `name`, only the part around that node, which is what an agent asking "what reads

@@ -311,7 +311,7 @@ says how.
 Sources, the Journal, the Raw lake and Models open only for someone who holds that division's read
 permission -- `sources:read`, `runs:read`, `lake:read`, `models:read` -- which a builder and an
 admin hold and a viewer and a member do not; through every door, the server refuses the reads
-behind them to anyone else (ADR 0146). The People page opens only for someone who holds
+behind them to anyone else (ADR 0147). The People page opens only for someone who holds
 `people:manage` in the customer (an admin, or a role of the customer's own that holds it), and
 the roster and the open invitations are refused to anyone else through every door, the CLI and
 MCP included (ADR 0119). A `viewer`, `member` or `builder` who opens it finds a note in its place

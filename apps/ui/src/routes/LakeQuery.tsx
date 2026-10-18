@@ -13,7 +13,7 @@
  *
  * WHO MAY OPEN IT is a holder of `lake:read`, because the console answers with rows -- which for
  * a CRM are names and for a mailbox are whatever the mail said. The Lake division requires that
- * permission (ADR 0146), so `Book` closes this page to anyone else before it mounts; the check
+ * permission (ADR 0147), so `Book` closes this page to anyone else before it mounts; the check
  * below says the same for the moment the reader's permissions are known only here, and the
  * server refuses regardless.
  */

@@ -10,7 +10,7 @@ works this way is [ADR 0139](../adr/0139-tenant-access-is-casbin-policy.md),
 [ADR 0141](../adr/0141-custom-roles-and-grants-under-the-subset-rule.md),
 [ADR 0142](../adr/0142-object-reach-and-scope-logins.md),
 [ADR 0143](../adr/0143-row-and-column-rules-on-model-grants.md) and
-[ADR 0146](../adr/0146-each-division-reads-under-its-own-permission.md).
+[ADR 0147](../adr/0147-each-division-reads-under-its-own-permission.md).
 
 ## Before you start
 

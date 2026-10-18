@@ -92,7 +92,7 @@ afterEach(async () => {
 
 describe("editing the catalogue", () => {
   it("a reader of the lake reads it but may not change it", async () => {
-    // A builder holds `lake:read`, which reading the catalogue needs (ADR 0146), and not
+    // A builder holds `lake:read`, which reading the catalogue needs (ADR 0147), and not
     // `catalogue:manage`.
     const builder = await seedMember("b@example.test", "builder");
 

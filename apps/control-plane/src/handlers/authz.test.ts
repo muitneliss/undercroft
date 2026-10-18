@@ -375,7 +375,7 @@ describe("the router's permissions", () => {
 });
 
 /**
- * ADR 0146: a reader of Reports alone opens Customers and Reports, and the server says so at every
+ * ADR 0147: a reader of Reports alone opens Customers and Reports, and the server says so at every
  * door. Sources, the Journal, the Lake and Models each open on a permission, and every procedure
  * behind them names one -- read off the running router, so a read somebody adds to one of these
  * namespaces on bare `tenantProcedure` fails here rather than reaching every viewer through the

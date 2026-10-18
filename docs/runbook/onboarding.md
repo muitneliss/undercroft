@@ -19,7 +19,7 @@ khách hàng, bằng đúng địa chỉ email họ sẽ dùng, và chọn vai t
 | `admin`   | như trên, và kết nối nguồn, tạo khoá nạp dữ liệu, mời và quản lý người khác |
 
 `viewer` và `member` chỉ mở được mục Khách hàng và Báo cáo; Nguồn dữ liệu, Nhật ký, Hồ dữ liệu
-thô và Mô hình cần quyền đọc riêng của từng mục (ADR 0146). Người muốn dựng model cần vai trò
+thô và Mô hình cần quyền đọc riêng của từng mục (ADR 0147). Người muốn dựng model cần vai trò
 `builder` (các quyền `models:read`, `models:write`, `lake:read`, `runs:read`, `sources:read`) hoặc `admin`;
 không cần là `admin` chỉ để sửa model. Mỗi vai trò là một tập quyền, liệt kê ở
 [Permissions](../reference/permissions.md). Khách hàng cũng có thể tạo vai trò riêng, hoặc trao
@@ -92,7 +92,7 @@ the exact email address they will use, and picks a role:
 | `admin`   | all of that, and connect sources, mint ingest keys, invite and manage people                       |
 
 A `viewer` and a `member` open Customers and Reports only; Sources, the Journal, the Raw lake and
-Models each need a read permission of their own (ADR 0146). Building models needs `builder` (the
+Models each need a read permission of their own (ADR 0147). Building models needs `builder` (the
 `models:read`, `models:write`, `lake:read`, `runs:read` and `sources:read` permissions) or `admin`;
 nobody has to be made `admin` only to fix models. Each role is a set of permissions, listed in
 [Permissions](../reference/permissions.md). A customer can also define roles of its own, or grant

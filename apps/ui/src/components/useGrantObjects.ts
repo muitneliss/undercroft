@@ -9,7 +9,7 @@
  * rule on the server is the control. `GrantObjects.tsx` draws what this gathers.
  *
  * The models and reference tables are listed only for a reader who holds `models:read`, and the
- * streams only for one who holds `lake:read` (ADR 0146): a person may manage roles without
+ * streams only for one who holds `lake:read` (ADR 0147): a person may manage roles without
  * reading the dbt project or the lake. For them those lists are empty rather than refused, and
  * the form still offers what remains -- the wildcards they reach, the reports, a typed name.
  */

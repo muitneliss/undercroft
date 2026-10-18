@@ -383,7 +383,7 @@ the current tab stands proud and its selection is a punched hole at the label's 
 division that cannot open renders face-down: a diagonal hatch of board back with the reason in
 its accessible name. The reason is either that no customer is chosen, or that the reader lacks
 the permission the division requires in that customer -- People's `people:manage` (ADR 0119,
-ADR 0139), or the read permission of Sources, the Journal, the Lake or Models (ADR 0146); the
+ADR 0139), or the read permission of Sources, the Journal, the Lake or Models (ADR 0147); the
 board is the same.
 The whole leaf turns 5° about its spine in four frames when the division or the customer
 changes, and does not turn for a panel hinging open inside a section.

@@ -2,7 +2,7 @@
  * The customer's connections, as a page outside Sources reads them: to name which mailbox of two
  * a run or a stream came from, and to say when the first run comes.
  *
- * `connections.list` needs `sources:read` (ADR 0146), while the Journal and the Lake open on
+ * `connections.list` needs `sources:read` (ADR 0147), while the Journal and the Lake open on
  * `runs:read` and `lake:read`, so a reader of a customer's own role may hold one and not the
  * other. For that reader this asks nothing and answers empty -- which is exactly what each page
  * draws before the list arrives: an account named by its source id, no schedule to quote --

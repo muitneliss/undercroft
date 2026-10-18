@@ -112,7 +112,7 @@ describe("a bound tool carries the caller's authority, not the assistant's", () 
   });
 
   it("a reader of their own customer's sources is answered", async () => {
-    // A builder holds `sources:read` (ADR 0146); a member does not, and is refused it by name.
+    // A builder holds `sources:read` (ADR 0147); a member does not, and is refused it by name.
     const user = await seedMember("builder@example.test", "builder");
     const answered = await call(context(user), "sourceStatus", { tenantId: "CASE-0042" });
     expect(Array.isArray(answered)).toBe(true);

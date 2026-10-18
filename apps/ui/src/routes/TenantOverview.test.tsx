@@ -72,7 +72,7 @@ function precondition(message: string): Response {
 }
 
 /**
- * The page as `role` sees it. A builder -- who reads the sources (ADR 0146) and does not manage
+ * The page as `role` sees it. A builder -- who reads the sources (ADR 0147) and does not manage
  * them -- gets the schedule and no plate that would act on it; an
  * admin's actions are answered from `answers`, by procedure, which the test settles when it
  * chooses. Any other procedure is refused.

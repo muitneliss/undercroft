@@ -128,7 +128,7 @@ function answer(data: unknown): Response {
 /**
  * Mounts the division at `url` for a reader of the project who may not write it -- a customer's
  * own role holding `models:read` alone, since every built-in that reads models writes them too
- * (ADR 0146); returns the router, to press Back with.
+ * (ADR 0147); returns the router, to press Back with.
  */
 function mount(url: string): ReturnType<typeof createMemoryRouter> {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

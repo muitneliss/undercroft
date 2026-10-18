@@ -4,7 +4,7 @@
  * In the Customers division, at `/tenants/:tenantId/about`, and reached from the customer
  * list by the customer's name; `Open` beside the name opens the book at Sources, which is what
  * `/tenants/:tenantId` has always done -- or, for a reader Sources is closed to, at the first
- * division open to them (`bookPath`, ADR 0146).
+ * division open to them (`bookPath`, ADR 0147).
  *
  * It prints only what `tenants.get` answers -- the name, the ID and the reader's role. The
  * customer's creation date is in the database but not in that answer, and a page that printed

@@ -1,7 +1,7 @@
 /**
  * The `documentKinds` procedures: a tenant's catalogue of document kinds. ADR 0085.
  *
- * A holder of `lake:read` may read the catalogue and what publishing it would cost (ADR 0146): it
+ * A holder of `lake:read` may read the catalogue and what publishing it would cost (ADR 0147): it
  * counts the documents in the raw lake by kind, and the web shows it as a page of the Lake
  * division, which is `lake:read`'s. Only a holder of `catalogue:manage` may change it or publish
  * it, because a publish sends every text to the classifier again. Same layer and

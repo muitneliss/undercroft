@@ -323,7 +323,7 @@ describe("only a holder of people:manage opens it (ADR 0119, ADR 0139)", () => {
     await screen.findByRole("heading", {
       name: t("nav.notPermittedHead", { division: t("nav.people") }),
     });
-    // People is one of five tabs face-down to a member (ADR 0146); find it by its name.
+    // People is one of five tabs face-down to a member (ADR 0147); find it by its name.
     const tab = within(strip)
       .getAllByTitle(t("nav.notPermittedTitle"))
       .find((closed) => closed.textContent === `${t("nav.people")}${t("nav.notPermittedHint")}`);

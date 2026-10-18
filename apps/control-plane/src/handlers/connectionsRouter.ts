@@ -40,7 +40,7 @@ export const connectionsRouter = router({
    * chose, counted. `include: ["config"]` adds every chosen name, which the scope picker reads.
    * `names` are sources, as every per-connection procedure takes them.
    *
-   * `sources:read`, with `get` (ADR 0146): what a customer connects, how often it reads and what
+   * `sources:read`, with `get` (ADR 0147): what a customer connects, how often it reads and what
    * each scope chose is the Sources division, which is not every member's. Changing any of it
    * stays `sources:manage`.
    */

@@ -88,7 +88,7 @@ export const vi = {
     lockedHint: " — hãy chọn một khách hàng trước",
     /**
      * A division the reader's permissions in the open customer do not open (ADR 0119, ADR 0139,
-     * ADR 0146): the face-down tab's reason, then the notice that stands in for the division.
+     * ADR 0147): the face-down tab's reason, then the notice that stands in for the division.
      * Worded for any such division -- Sources, the Journal, the Lake, Models, People -- with the
      * division and the permission it requires interpolated.
      */
@@ -1093,7 +1093,7 @@ export const vi = {
     colHolders: "Đang dùng",
     colChange: "Thay đổi",
     builtIn: "Có sẵn",
-    /** A role holding no permission reads only what needs none: the saved reports (ADR 0146). */
+    /** A role holding no permission reads only what needs none: the saved reports (ADR 0147). */
     noPermissions: "Không có quyền nào ngoài việc xem các báo cáo đã lưu.",
     /** Two counts, each after a colon, so neither needs a plural form. */
     holders: "Người giữ: {{members, number}} · Lời mời đang mở: {{invitations, number}}",

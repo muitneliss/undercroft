@@ -5,13 +5,13 @@ date: 2026-10-18
 tags: []
 source: docs/reference/permissions.md
 source_path: docs/reference/permissions.md
-source_hash: 06de550b2fa0c4bf757ba391642f0ea70e52f191ca6e48501458d09810508db0
+source_hash: 3a259ef198e161ad484c6b58e5824b5fc566a8899ecb5873927dabd1d18965aa
 ingested: 2026-10-18
 ---
 
 # Permissions
 
-The reference for what a person may do and read in a customer (`docs/reference/permissions.md`), from [[ADR 0139 Tenant Access Is Casbin Policy]], [[ADR 0141 Custom Roles and Grants Under the Subset Rule]], [[ADR 0142 Object Reach and Scope Logins]] [[ADR 0143 Row and Column Rules on Model Grants]] and [[ADR 0146 Each Division Reads Under Its Own Permission]]. A role is a named set of permissions; every customer has four built-in roles and may define its own; a grant gives one permission, or reading one object, to a role or a member, standing or until a moment. `tenants.get` and each `tenants.list` row answer with the caller's `permissions`; `grants.reach` answers permissions and reach; `scopes.preview` answers what that comes to, model by model. The how-to is [[Runbook: Access control]].
+The reference for what a person may do and read in a customer (`docs/reference/permissions.md`), from [[ADR 0139 Tenant Access Is Casbin Policy]], [[ADR 0141 Custom Roles and Grants Under the Subset Rule]], [[ADR 0142 Object Reach and Scope Logins]] [[ADR 0143 Row and Column Rules on Model Grants]] and [[ADR 0147 Each Division Reads Under Its Own Permission]]. A role is a named set of permissions; every customer has four built-in roles and may define its own; a grant gives one permission, or reading one object, to a role or a member, standing or until a moment. `tenants.get` and each `tenants.list` row answer with the caller's `permissions`; `grants.reach` answers permissions and reach; `scopes.preview` answers what that comes to, model by model. The how-to is [[Runbook: Access control]].
 
 **Built-in roles.** `viewer` holds none; `member` holds `reports:author`; `builder` holds `reports:author`, `models:read`, `models:write`, `lake:read`, `runs:read` and `sources:read`; `admin` holds every permission, including any added later. A platform superadmin holds `admin` in every customer that exists. Every built-in reaches the whole customer, and is never narrowed by a rule. A viewer and a member open Customers and Reports and no other division: Sources needs `sources:read`, the Journal `runs:read`, the Lake `lake:read`, Models `models:read`, People `people:manage`. Open to every member: the reads of Reports (`bi.runQuestion`, `bi.questions.list/get/answer`, `bi.dashboards.list/get`, `bi.schema`, exporting a saved question), `roles.list/get`, `tenants.get`, and `grants.reach` and `scopes.preview` about oneself.
 
