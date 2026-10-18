@@ -11,11 +11,11 @@
  * So the console takes the leaf and the leaf takes the window (`fill`), and the index keeps a
  * door to it. What this route owns is only that: the frame, and who may open it.
  *
- * WHO MAY OPEN IT is an admin, because the console answers with rows -- which for a CRM are
- * names and for a mailbox are whatever the mail said. The server refuses everyone else
- * regardless; refusing here as well is the honest rendering of what the reader may do, and it
- * means a member who follows a pasted address is told so rather than shown an editor that
- * answers every press with a refusal.
+ * WHO MAY OPEN IT is a holder of `lake:read`, because the console answers with rows -- which for
+ * a CRM are names and for a mailbox are whatever the mail said. The Lake division requires that
+ * permission (ADR 0146), so `Book` closes this page to anyone else before it mounts; the check
+ * below says the same for the moment the reader's permissions are known only here, and the
+ * server refuses regardless.
  */
 
 import { useTranslation } from "react-i18next";

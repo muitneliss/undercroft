@@ -14,7 +14,7 @@ import * as connections from "../services/connections.ts";
 import { providerName } from "../services/oauthProviders.ts";
 import { isChoiceRefusal } from "../services/scopeChoices.ts";
 import { requirePermission } from "./permissionGate.ts";
-import { actorOf, router, tenantProcedure } from "./trpc.ts";
+import { actorOf, router } from "./trpc.ts";
 import { tokenRefusalKey } from "./answers.ts";
 import { browseRefusal, cutRefusal } from "./browseRefusal.ts";
 import { listedOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
@@ -39,8 +39,12 @@ export const connectionsRouter = router({
    * The tenant's connections as cards: status, schedule, last run, and how much each scope
    * chose, counted. `include: ["config"]` adds every chosen name, which the scope picker reads.
    * `names` are sources, as every per-connection procedure takes them.
+   *
+   * `sources:read`, with `get` (ADR 0146): what a customer connects, how often it reads and what
+   * each scope chose is the Sources division, which is not every member's. Changing any of it
+   * stays `sources:manage`.
    */
-  list: tenantProcedure
+  list: requirePermission("sources:read")
     .input(
       z.object({
         ...NameFilterInput,
@@ -57,7 +61,7 @@ export const connectionsRouter = router({
       ),
     ),
 
-  get: tenantProcedure
+  get: requirePermission("sources:read")
     .input(z.object({ source: z.string().min(1) }))
     .query(({ ctx, input }) => connections.get(ctx.exec, input.tenantId, input.source)),
 

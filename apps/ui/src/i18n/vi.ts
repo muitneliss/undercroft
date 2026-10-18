@@ -87,9 +87,10 @@ export const vi = {
     /** Read to a screen reader after the tab's own label, hence the leading dash. */
     lockedHint: " — hãy chọn một khách hàng trước",
     /**
-     * A division only an admin of the open customer may open (ADR 0119): the face-down tab's
-     * reason, then the notice that stands in for the division. Worded for any such division,
-     * which today is People.
+     * A division the reader's permissions in the open customer do not open (ADR 0119, ADR 0139,
+     * ADR 0146): the face-down tab's reason, then the notice that stands in for the division.
+     * Worded for any such division -- Sources, the Journal, the Lake, Models, People -- with the
+     * division and the permission it requires interpolated.
      */
     notPermittedTitle: "Vai trò của bạn ở khách hàng này không mở được mục này",
     notPermittedHint: " — vai trò của bạn ở khách hàng này không mở được mục này",
@@ -110,8 +111,11 @@ export const vi = {
    */
   permission: {
     reportsAuthor: "soạn câu hỏi và bảng điều khiển",
+    modelsRead: "đọc mô hình, macro và bảng tham chiếu",
     modelsWrite: "lưu, dựng và xem trước mô hình, macro và bảng tham chiếu",
     lakeRead: "đọc hồ dữ liệu thô",
+    runsRead: "xem nhật ký các lần chạy",
+    sourcesRead: "xem nguồn dữ liệu và cấu hình của chúng",
     sourcesManage: "quản lý nguồn dữ liệu",
     keysManage: "quản lý khoá nạp dữ liệu",
     catalogueManage: "quản lý catalogue loại tài liệu",
@@ -798,7 +802,7 @@ export const vi = {
      * this rather than only saying that they cannot, so the next step is obvious.
      */
     consoleNeedsLakeRead:
-      "Chạy truy vấn trên hồ dữ liệu thô cần quyền đọc hồ dữ liệu thô (lake:read). Bạn vẫn xem được số lượng đã về ở trang Hồ dữ liệu.",
+      "Chạy truy vấn trên hồ dữ liệu thô cần quyền đọc hồ dữ liệu thô (lake:read).",
     consoleRows_other: "{{count, number}} dòng",
     consoleRowsFrom_other: "{{count, number}} dòng, từ dòng {{from, number}}",
     consoleRefused: "Truy vấn không chạy được",
@@ -884,8 +888,6 @@ export const vi = {
      * Nói với viewer và member vì sao họ chỉ thấy bảng tổng quan: không có câu này, các mục của
      * quản trị viên chỉ đơn giản là vắng mặt, và đọc như hồ dữ liệu không còn gì thêm.
      */
-    needsLakeReadNote:
-      "Bạn xem được bảng tổng quan này. Bản ghi thô, tìm nội dung và truy vấn SQL cần quyền đọc hồ dữ liệu thô (lake:read).",
     noRows: "Luồng này chưa có bản ghi nào.",
 
     /**
@@ -1030,16 +1032,16 @@ export const vi = {
      */
     rightsLabel: "Mỗi vai trò được làm gì trong {{tenantId}}",
     rightsViewer:
-      "Xem các nguồn đã kết nối, nhật ký chạy, tổng quan hồ dữ liệu thô, các mô hình và macro, và danh mục loại tài liệu; mở và chạy các câu hỏi và bảng điều khiển đã lưu. Không soạn hay lưu được câu hỏi, và không thay đổi được gì khác.",
+      "Mở và chạy các câu hỏi và bảng điều khiển đã lưu trong Báo cáo. Không xem được nguồn dữ liệu, nhật ký chạy, hồ dữ liệu thô hay các mô hình, không soạn hay lưu được câu hỏi, và không thay đổi được gì khác.",
     rightsMember:
-      "Mọi điều viewer làm được, và thêm: soạn và chạy câu hỏi mới, lưu và xoá câu hỏi và bảng điều khiển. Không đọc nội dung hồ dữ liệu thô, không lưu hay dựng mô hình, không kết nối tài khoản, không xem ai có quyền truy cập, không mời hay gỡ người khác.",
+      "Mọi điều viewer làm được, và thêm: soạn và chạy câu hỏi mới, lưu và xoá câu hỏi và bảng điều khiển. Không xem được nguồn dữ liệu, nhật ký chạy, hồ dữ liệu thô hay các mô hình, không kết nối tài khoản, không xem ai có quyền truy cập, không mời hay gỡ người khác.",
     rightsBuilder:
-      "Mọi điều member làm được, và thêm: lưu, xoá, dựng và xem trước mô hình, lưu và xoá macro và bảng tham chiếu; đọc, tìm và truy vấn bản ghi và tài liệu trong hồ dữ liệu thô, và các dòng mà kiểm thử chất lượng dữ liệu lưu lại khi thất bại. Không kết nối tài khoản, không tạo khoá nạp dữ liệu, không sửa danh mục loại tài liệu, không xem ai có quyền truy cập, không mời hay gỡ người khác, không đổi tên hay ngừng kích hoạt khách hàng.",
+      "Mọi điều member làm được, và thêm: xem các nguồn đã kết nối, nhật ký chạy và danh mục loại tài liệu; đọc, lưu, xoá, dựng và xem trước mô hình, đọc, lưu và xoá macro và bảng tham chiếu; đọc, tìm và truy vấn tổng quan, bản ghi và tài liệu trong hồ dữ liệu thô, và các dòng mà kiểm thử chất lượng dữ liệu lưu lại khi thất bại. Không kết nối tài khoản, không tạo khoá nạp dữ liệu, không sửa danh mục loại tài liệu, không xem ai có quyền truy cập, không mời hay gỡ người khác, không đổi tên hay ngừng kích hoạt khách hàng.",
     rightsAdmin:
       "Mọi điều builder làm được, và thêm: kết nối và ngắt tài khoản, chọn phạm vi và tần suất đọc, chạy đồng bộ ngay; sửa và publish danh mục loại tài liệu; tạo và thu hồi khoá nạp dữ liệu; xem ai có quyền truy cập và ai đang được mời, mời, đổi vai trò, gỡ người dùng và thu hồi lời mời; đọc mọi thao tác trong khách hàng, của bất kỳ ai; đổi tên, ngừng kích hoạt và kích hoạt lại khách hàng. Thêm khách hàng mới thì chỉ quản trị viên toàn hệ thống làm được.",
     /** A customer's own role beside the invitation form: what it holds, by permission. */
     rightsCustom: "Các quyền: {{permissions}}.",
-    rightsNone: "Không có quyền nào ngoài việc xem.",
+    rightsNone: "Không có quyền nào ngoài việc xem các báo cáo đã lưu.",
     notInvited: "Chưa mời được",
     invitedAndEmailed: "Đã mời {{email}}. Email đã được gửi cho họ.",
     invitedNotEmailedHeading: "Đã mời, nhưng chưa gửi được email",
@@ -1091,8 +1093,8 @@ export const vi = {
     colHolders: "Đang dùng",
     colChange: "Thay đổi",
     builtIn: "Có sẵn",
-    /** A role holding no permission still reads everything any member may read. */
-    noPermissions: "Không có quyền nào ngoài việc xem.",
+    /** A role holding no permission reads only what needs none: the saved reports (ADR 0146). */
+    noPermissions: "Không có quyền nào ngoài việc xem các báo cáo đã lưu.",
     /** Two counts, each after a colon, so neither needs a plural form. */
     holders: "Người giữ: {{members, number}} · Lời mời đang mở: {{invitations, number}}",
     edit: "Sửa quyền…",

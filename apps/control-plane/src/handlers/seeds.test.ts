@@ -113,16 +113,16 @@ afterEach(async () => {
 });
 
 describe("seeds.save", () => {
-  it("an admin saves a table, and any member lists it without cells and reads it back exactly", async () => {
+  it("an admin saves a table, and a reader of the project lists it without cells and reads it back exactly", async () => {
     const admin = await seedMember("a@example.test", "admin");
-    const viewer = await seedMember("v@example.test", "viewer");
+    const reader = await seedMember("r@example.test", "builder");
 
     expect(await caller(admin, "a@example.test").seeds.save({ ...GROUPS, create: true })).toEqual({
       ok: true,
       unchanged: false,
     });
 
-    const as = caller(viewer, "v@example.test");
+    const as = caller(reader, "r@example.test");
     const listed = await as.seeds.list({ tenantId: TENANT });
     expect(listed.map(({ name, columnCount, rowCount }) => [name, columnCount, rowCount])).toEqual([
       ["account_groups", 4, 3],

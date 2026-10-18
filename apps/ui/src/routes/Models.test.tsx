@@ -21,7 +21,6 @@ import "@/i18n/index.ts";
 import { MISSING } from "@/lib/money.ts";
 import { Models } from "@/routes/Models.tsx";
 import { trpc } from "@/trpc.ts";
-import { held } from "@/test/access.ts";
 
 const TENANT = "CASE-0042";
 const WHEN = "2026-09-30T03:12:53.210Z";
@@ -126,7 +125,11 @@ function answer(data: unknown): Response {
   return Response.json({ result: { data } });
 }
 
-/** Mounts the division at `url` as a viewer; returns the router, to press Back with. */
+/**
+ * Mounts the division at `url` for a reader of the project who may not write it -- a customer's
+ * own role holding `models:read` alone, since every built-in that reads models writes them too
+ * (ADR 0146); returns the router, to press Back with.
+ */
 function mount(url: string): ReturnType<typeof createMemoryRouter> {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const client = trpc.createClient({
@@ -140,8 +143,8 @@ function mount(url: string): ReturnType<typeof createMemoryRouter> {
               answer({
                 tenantId: TENANT,
                 displayName: "Acme",
-                role: "viewer",
-                permissions: held("viewer"),
+                role: "analyst",
+                permissions: ["models:read"],
               }),
             );
           }

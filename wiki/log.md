@@ -446,3 +446,11 @@
 ## [2026-10-18] ingest | ADR 0145 The Blog Moves to Cloudflare Pages
 ## [2026-10-18] ingest | Runbook Google Ingestion Setup
 ## [2026-10-18] ingest | Runbook Google Ingestion Setup
+## [2026-10-18] ingest | ADR 0146 Each Division Reads Under Its Own Permission
+## [2026-10-18] ingest | Permissions
+## [2026-10-18] ingest | Design: Operator and reader paths
+## [2026-10-18] ingest | What an ingest run counts
+## [2026-10-18] ingest | Runbook: Access control
+## [2026-10-18] ingest | Runbook: Setting the assistant up
+## [2026-10-18] ingest | Runbook: Onboarding a new person
+## [2026-10-18] ingest | Runbook Sign-In Setup

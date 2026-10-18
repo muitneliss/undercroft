@@ -82,6 +82,19 @@ async function errorCode(fn: () => Promise<unknown>): Promise<string> {
   }
 }
 
+/** The refusal's code and the permission it names, or `NO_ERROR`. */
+async function lacking(fn: () => Promise<unknown>): Promise<string> {
+  try {
+    await fn();
+    return "NO_ERROR";
+  } catch (error) {
+    if (!(error instanceof TRPCError)) {
+      return "UNKNOWN";
+    }
+    return `${error.code}:${refusalFacts(error)?.permission ?? ""}`;
+  }
+}
+
 beforeEach(async () => {
   db = await createMigratedTestDatabase();
   // Every statement runs as the control plane does, fixtures included: `undercroft_app`
@@ -227,11 +240,14 @@ describe("what each built-in role holds", () => {
     "catalogue:manage",
     "keys:manage",
     "lake:read",
+    "models:read",
     "models:write",
     "people:manage",
     "reports:author",
     "roles:manage",
+    "runs:read",
     "sources:manage",
+    "sources:read",
     "tenant:manage",
   ];
 
@@ -249,7 +265,14 @@ describe("what each built-in role holds", () => {
     expect(held).toEqual({
       viewer: [],
       member: ["reports:author"],
-      builder: ["lake:read", "models:write", "reports:author"],
+      builder: [
+        "lake:read",
+        "models:read",
+        "models:write",
+        "reports:author",
+        "runs:read",
+        "sources:read",
+      ],
       admin: EVERY,
     });
     expect(listed).toEqual(held);
@@ -276,19 +299,6 @@ describe("a builder", () => {
     const user = await seedUser("builder@example.test");
     await seedMembership("CASE-1", user, "builder");
     return caller({ userId: user, email: "builder@example.test" });
-  }
-
-  /** The refusal's code and the permission it names, or `NO_ERROR`. */
-  async function lacking(fn: () => Promise<unknown>): Promise<string> {
-    try {
-      await fn();
-      return "NO_ERROR";
-    } catch (error) {
-      if (!(error instanceof TRPCError)) {
-        return "UNKNOWN";
-      }
-      return `${error.code}:${refusalFacts(error)?.permission ?? ""}`;
-    }
   }
 
   it("is refused people, sources, keys, runs and the customer, each naming what it lacks", async () => {
@@ -347,7 +357,7 @@ describe("the router's permissions", () => {
   it("are described where every caller outside the browser reads a procedure", async () => {
     const specs = await procedureManifest();
     const save = specs.find((spec) => spec.path === "models.save");
-    const list = specs.find((spec) => spec.path === "models.list");
+    const list = specs.find((spec) => spec.path === "roles.list");
 
     expect(save?.permission).toBe("models:write");
     // Writing a model changes what the build login runs, which reads every model and the whole
@@ -361,6 +371,65 @@ describe("the router's permissions", () => {
     // The quiet side: a read any member may make names no permission and no reach.
     expect(list?.permission).toBeNull();
     expect(list?.description.en).not.toContain("Needs");
+  });
+});
+
+/**
+ * ADR 0146: a reader of Reports alone opens Customers and Reports, and the server says so at every
+ * door. Sources, the Journal, the Lake and Models each open on a permission, and every procedure
+ * behind them names one -- read off the running router, so a read somebody adds to one of these
+ * namespaces on bare `tenantProcedure` fails here rather than reaching every viewer through the
+ * CLI, MCP and the assistant, which never see a tab.
+ */
+describe("the divisions a reader of Reports does not open", () => {
+  /** Each division's namespaces, and the permission its reads need. */
+  const DIVISION_READS: readonly (readonly [readonly string[], Permission])[] = [
+    [["connections"], "sources:read"],
+    [["runs"], "runs:read"],
+    [["lake", "documentKinds", "dq"], "lake:read"],
+    [["models", "macros", "seeds"], "models:read"],
+  ];
+
+  it("leave no procedure behind them open to every member", async () => {
+    const behind = new Set(DIVISION_READS.flatMap(([namespaces]) => namespaces));
+    const open = (await procedureManifest())
+      .filter(
+        (spec) =>
+          spec.tenantScoped &&
+          behind.has(spec.path.split(".")[0] ?? "") &&
+          spec.permission === null,
+      )
+      .map((spec) => spec.path);
+
+    expect(open).toEqual([]);
+  });
+
+  it("refuse a viewer each one's reads by name, and answer a builder", async () => {
+    const tenantId = "CASE-1";
+    async function reads(role: Role): Promise<Record<string, string>> {
+      const user = await seedUser(`${role}@example.test`);
+      await seedMembership(tenantId, user, role);
+      const reader = caller({ userId: user, email: `${role}@example.test` });
+      return {
+        sources: await lacking(() => reader.connections.list({ tenantId })),
+        journal: await lacking(() => reader.runs.list({ tenantId })),
+        lake: await lacking(() => reader.lake.summary({ tenantId })),
+        models: await lacking(() => reader.models.list({ tenantId })),
+      };
+    }
+
+    expect(await reads("viewer")).toEqual({
+      sources: "FORBIDDEN:sources:read",
+      journal: "FORBIDDEN:runs:read",
+      lake: "FORBIDDEN:lake:read",
+      models: "FORBIDDEN:models:read",
+    });
+    expect(await reads("builder")).toEqual({
+      sources: "NO_ERROR",
+      journal: "NO_ERROR",
+      lake: "NO_ERROR",
+      models: "NO_ERROR",
+    });
   });
 });
 
@@ -608,13 +677,11 @@ describe("a deactivated customer", () => {
   it("refuses a member's tenant procedure by name, and answered it before", async () => {
     const member = await seeded("member");
     const admin = await seeded("admin");
-    expect(await errorCode(() => member.connections.list({ tenantId: "CASE-0001" }))).toBe(
-      "NO_ERROR",
-    );
+    expect(await errorCode(() => member.roles.list({ tenantId: "CASE-0001" }))).toBe("NO_ERROR");
 
     await admin.tenants.deactivate({ tenantId: "CASE-0001" });
 
-    expect(await refusedWith(() => member.connections.list({ tenantId: "CASE-0001" }))).toBe(
+    expect(await refusedWith(() => member.roles.list({ tenantId: "CASE-0001" }))).toBe(
       "PRECONDITION_FAILED:TENANT_DEACTIVATED",
     );
   });
@@ -686,9 +753,7 @@ describe("a deactivated customer", () => {
     const reactivated = await admin.tenants.reactivate({ tenantId: "CASE-0001" });
 
     expect(reactivated.deactivatedAt).toBeNull();
-    expect(await errorCode(() => member.connections.list({ tenantId: "CASE-0001" }))).toBe(
-      "NO_ERROR",
-    );
+    expect(await errorCode(() => member.roles.list({ tenantId: "CASE-0001" }))).toBe("NO_ERROR");
     const { rows } = await db.query<{ action: string; actor: string }>(
       "SELECT action, actor FROM ops.audit_log WHERE tenant_id = 'CASE-0001' ORDER BY id",
     );

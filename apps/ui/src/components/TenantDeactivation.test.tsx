@@ -23,7 +23,7 @@ const WHEN = "2026-10-01T02:00:00.000Z";
 afterEach(cleanup);
 
 /** The Sources division of CASE-0042, read by `role`, deactivated at `deactivatedAt`. */
-function openSources(role: "admin" | "member", deactivatedAt: string | null) {
+function openSources(role: "admin" | "builder", deactivatedAt: string | null) {
   const state = { deactivatedAt };
   const mounted = mountRoute({
     pattern: "/tenants/:tenantId",
@@ -55,7 +55,7 @@ function openSources(role: "admin" | "member", deactivatedAt: string | null) {
 
 describe("a deactivated customer's book", () => {
   it("shows the notice in place of the division, which asks the server nothing", async () => {
-    const { received } = openSources("member", WHEN);
+    const { received } = openSources("builder", WHEN);
 
     await screen.findByRole("heading", { name: "Khách hàng này đã ngừng kích hoạt" });
     expect(screen.getByText(/Hãy đề nghị một quản trị viên/u)).toBeDefined();
@@ -74,7 +74,7 @@ describe("a deactivated customer's book", () => {
   });
 
   it("is the division itself for a customer in use", async () => {
-    const { received } = openSources("member", null);
+    const { received } = openSources("builder", null);
 
     await screen.findByRole("heading", { name: "Nguồn dữ liệu" });
     await waitFor(() => {

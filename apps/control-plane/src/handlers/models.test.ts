@@ -144,17 +144,17 @@ describe("models.save", () => {
     expect(full.sql).toBe("select 1");
   });
 
-  it("an admin saves, and any member then reads it back", async () => {
+  it("an admin saves, and a reader of the project then reads it back", async () => {
     const admin = await seedMember("a@example.test", "admin");
-    const viewer = await seedMember("v@example.test", "viewer");
+    const reader = await seedMember("r@example.test", "builder");
 
     await caller(admin, "a@example.test").models.save({ ...DRAFT, create: true });
 
     const listed = wholeList(
-      await caller(viewer, "v@example.test").models.list({ tenantId: TENANT }),
+      await caller(reader, "r@example.test").models.list({ tenantId: TENANT }),
     );
     expect(listed.map((m) => m.name)).toEqual(["stg_deals"]);
-    const full = await caller(viewer, "v@example.test").models.get({
+    const full = await caller(reader, "r@example.test").models.get({
       tenantId: TENANT,
       name: "stg_deals",
     });
@@ -553,9 +553,9 @@ describe("models.build", () => {
     expect(whole.steps).toHaveLength(4);
   });
 
-  it("the reference names the platform's source and its macros for any member", async () => {
-    const viewer = await seedMember("v@example.test", "viewer");
-    const reference = await caller(viewer, "v@example.test").models.reference({ tenantId: TENANT });
+  it("the reference names the platform's source and its macros for a reader of the project", async () => {
+    const reader = await seedMember("r@example.test", "builder");
+    const reference = await caller(reader, "r@example.test").models.reference({ tenantId: TENANT });
     if ("parts" in reference) {
       throw new Error("asked for no parts, answered with some");
     }
@@ -803,9 +803,9 @@ describe("dq.failures", () => {
 describe("models.check", () => {
   const RECORDS = "select source_record_id from {{ source('undercroft', 'records') }}";
 
-  it("any member may check, and hears each finding in their own language", async () => {
-    const viewer = await seedMember("v@example.test", "viewer");
-    const checked = await caller(viewer, "v@example.test", "en").models.check({
+  it("a reader of the project may check, and hears each finding in their own language", async () => {
+    const reader = await seedMember("r@example.test", "builder");
+    const checked = await caller(reader, "r@example.test", "en").models.check({
       tenantId: TENANT,
       name: "stg_deals",
       sql: `${RECORDS};`,
@@ -822,10 +822,10 @@ describe("models.check", () => {
   });
 
   it("Vietnamese by default, and never the English sentence", async () => {
-    const viewer = await seedMember("v@example.test", "viewer");
+    const reader = await seedMember("r@example.test", "builder");
     const input = { tenantId: TENANT, name: "stg_deals", sql: "select 1;", tests: { columns: {} } };
-    const vi = await caller(viewer, "v@example.test").models.check(input);
-    const en = await caller(viewer, "v@example.test", "en").models.check(input);
+    const vi = await caller(reader, "r@example.test").models.check(input);
+    const en = await caller(reader, "r@example.test", "en").models.check(input);
 
     expect(vi.findings[0]?.message).not.toBe(en.findings[0]?.message);
   });
@@ -845,8 +845,8 @@ describe("models.check", () => {
   });
 
   it("a read-only credential may check: it changes nothing", async () => {
-    const viewer = await seedMember("v@example.test", "viewer");
-    const checked = await caller(viewer, "v@example.test", "vi", { grant: "read" }).models.check({
+    const reader = await seedMember("r@example.test", "builder");
+    const checked = await caller(reader, "r@example.test", "vi", { grant: "read" }).models.check({
       tenantId: TENANT,
       name: "stg_deals",
       sql: "select 1 as one",
@@ -996,9 +996,9 @@ describe("models.delete", () => {
 });
 
 describe("models.lineage", () => {
-  it("a viewer reads what the saved models and macros declare, missing refs kept", async () => {
+  it("a reader of the project reads what the saved models and macros declare, missing refs kept", async () => {
     const admin = await seedMember("a@example.test", "admin");
-    const viewer = await seedMember("v@example.test", "viewer");
+    const reader = await seedMember("r@example.test", "builder");
     const api = caller(admin, "a@example.test");
     await api.macros.save({
       tenantId: TENANT,
@@ -1015,7 +1015,7 @@ describe("models.lineage", () => {
       create: true,
     });
 
-    const graph = await caller(viewer, "v@example.test").models.lineage({ tenantId: TENANT });
+    const graph = await caller(reader, "r@example.test").models.lineage({ tenantId: TENANT });
     expect(graph.edges).toEqual([
       { from: "model:stg_deals", to: "model:mart", via: null },
       { from: "missing:stg_gone", to: "model:mart", via: null },

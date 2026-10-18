@@ -107,8 +107,9 @@ catalogue in the `undercroft` skill's `access-control.md` reference. Three reque
 change each ends in:
 
 - **"Cho Minh sửa model" -- let Minh edit models.** Editing models is `models:write`, and Minh
-  will read the raw lake they are built over, `lake:read`. The built-in `builder` holds both
-  (and `reports:author`), and nothing else. Plan: `people.setRole` with `role: "builder"` for
+  will read the raw lake they are built over, `lake:read`. The built-in `builder` holds both,
+  with `reports:author` and the reads a model is fixed by -- `models:read`, `runs:read`,
+  `sources:read` -- and nothing that manages people, sources, keys or the customer. Plan: `people.setRole` with `role: "builder"` for
   Minh's address.
 - **"Tạo vai trò Kế toán chỉ xem báo cáo và đọc raw" -- an Accountant role that views reports
   and reads the raw lake.** Viewing reports needs no permission; reading raw is `lake:read`.

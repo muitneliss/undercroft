@@ -58,8 +58,9 @@ Then, signed in as an admin on a customer:
 3. Ask for a change ("Chạy đồng bộ Xero ngay"). A **proof** appears — one sentence, the
    arguments, two plates. Discard it and confirm in Journal that nothing ran. Ask again,
    strike it, and confirm the run appears.
-4. Sign in as a **viewer** and ask for the same run. It is refused, in the viewer's language,
-   by the procedure itself.
+4. Sign in as a **viewer** and ask for the same run, or how the sources are doing. Both are
+   refused, in the viewer's language, by the procedure itself: starting a run needs
+   `sources:manage`, and reading the sources `sources:read` (ADR 0146).
 
 ## What it will not do
 

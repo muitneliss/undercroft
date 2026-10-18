@@ -5,9 +5,10 @@
  * division is a decision about the wheel (`@/lib/divisions`) that a catalogue does not need to
  * make; the lake's index keeps a door to it, as it does to the console.
  *
- * Any member may read it: which kinds exist, where each came from and how much of the sample it
- * was. Only an admin may change it, initialise it or publish it, and the server refuses everyone
- * else regardless -- hiding the controls is the honest rendering of what the reader may do.
+ * Whoever reads the Lake may read it (`lake:read`, ADR 0146): which kinds exist, where each came
+ * from and how much of the sample it was. Only a holder of `catalogue:manage` may change it,
+ * initialise it or publish it, and the server refuses everyone else regardless -- hiding the
+ * controls is the honest rendering of what the reader may do.
  *
  * AN INITIALISE IS A RUN, not an answer. It returns a run id at once and the kinds appear when
  * that run closes, so the list is polled while the page knows one is going and the catalogue is

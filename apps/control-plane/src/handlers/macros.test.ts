@@ -102,13 +102,13 @@ afterEach(async () => {
 });
 
 describe("macros.save", () => {
-  it("an admin saves one macro, and any member lists it with what it is for", async () => {
+  it("an admin saves one macro, and a reader of the project lists it with what it is for", async () => {
     const admin = await seedMember("a@example.test", "admin");
-    const viewer = await seedMember("v@example.test", "viewer");
+    const reader = await seedMember("r@example.test", "builder");
 
     await caller(admin, "a@example.test").macros.save(NORMALISE);
 
-    const listed = whole(await caller(viewer, "v@example.test").macros.list({ tenantId: TENANT }));
+    const listed = whole(await caller(reader, "r@example.test").macros.list({ tenantId: TENANT }));
     expect(listed.map((m) => [m.name, m.description, m.params])).toEqual([
       ["normalise_name", "Upper-cases a name and squeezes its spaces.", ["value"]],
     ]);

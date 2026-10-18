@@ -111,8 +111,9 @@ describe("a bound tool carries the caller's authority, not the assistant's", () 
     await db.close();
   });
 
-  it("a member reading their own customer's sources is answered", async () => {
-    const user = await seedMember("member@example.test", "member");
+  it("a reader of their own customer's sources is answered", async () => {
+    // A builder holds `sources:read` (ADR 0146); a member does not, and is refused it by name.
+    const user = await seedMember("builder@example.test", "builder");
     const answered = await call(context(user), "sourceStatus", { tenantId: "CASE-0042" });
     expect(Array.isArray(answered)).toBe(true);
   });
@@ -175,7 +176,8 @@ describe("a bound tool tells the model what it needs", () => {
     // the sentence with it (ADR 0139).
     expect(String(tools.searchLake?.description).endsWith(" Needs lake:read.")).toBe(true);
     expect(String(tools.invitePerson?.description).endsWith(" Needs people:manage.")).toBe(true);
-    expect(String(tools.sourceStatus?.description)).not.toContain("Needs");
+    expect(String(tools.sourceStatus?.description).endsWith(" Needs sources:read.")).toBe(true);
+    expect(String(tools.listQuestions?.description)).not.toContain("Needs");
   });
 });
 

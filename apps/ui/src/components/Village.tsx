@@ -29,6 +29,7 @@ import { Vector3 } from "three";
 import type { Connection, RunDetail, RunView } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { useAccounts } from "@/components/useAccounts.ts";
 import { customerPagePath, division, divisionPath } from "@/lib/divisions.ts";
 import { MISSING } from "@/lib/money.ts";
 import { describeRun, EVERY_STEP, journalPath, sourceLabel } from "@/lib/runs.ts";
@@ -70,7 +71,7 @@ export function Village({ tenantId }: { tenantId: string }): React.JSX.Element {
           : IDLE_POLL_MS,
     },
   );
-  const connections = trpc.connections.list.useQuery({ tenantId });
+  const accounts = useAccounts(tenantId);
   const items = runs.data?.items ?? [];
   const running = items.filter((run) => run.status === "running");
   const feeds = trpc.useQueries((query) =>
@@ -103,18 +104,11 @@ export function Village({ tenantId }: { tenantId: string }): React.JSX.Element {
     runs: items,
     events: new Map(running.map((run, at) => [run.id, feeds[at]?.data ?? []])),
     lastBuild: lastBuildId === null ? null : (lastBuild.data ?? null),
-    connections: connections.data ?? [],
+    connections: accounts,
   });
   const known = lastBuild.data === undefined ? items : [...items, lastBuild.data];
 
-  return (
-    <VillageBoard
-      tenantId={tenantId}
-      scene={scene}
-      runs={known}
-      accounts={connections.data ?? []}
-    />
-  );
+  return <VillageBoard tenantId={tenantId} scene={scene} runs={known} accounts={accounts} />;
 }
 
 /**

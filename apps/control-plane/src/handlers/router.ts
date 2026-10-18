@@ -11,7 +11,7 @@ import * as preferences from "../services/preferences.ts";
 import * as runs from "../services/runs.ts";
 import { MAX_WAIT_SECONDS } from "../services/runWait.ts";
 import { requirePermission, requireWholeReach } from "./permissionGate.ts";
-import { actorOf, authedProcedure, publicProcedure, router, tenantProcedure } from "./trpc.ts";
+import { actorOf, authedProcedure, publicProcedure, router } from "./trpc.ts";
 
 import { accountRouter } from "./accountRouter.ts";
 import { auditRouter } from "./auditRouter.ts";
@@ -194,16 +194,17 @@ export const appRouter = router({
 
   runs: router({
     /**
-     * The ledger, newest first. Any member of the tenant may read it: whether a run happened
-     * is the question the whole division exists to answer, and hiding it from a viewer would
-     * hide the one thing they came to look at.
+     * The ledger, newest first. `runs:read`, as every read of the Journal is (ADR 0146): a run
+     * names the accounts a customer reads and what each read returned, which a reader of its
+     * Reports does not need. Whether a run happened is the question the division exists to
+     * answer, so the permission opens the division and every read behind it at once.
      *
      * Every filter is optional and narrows (issue 439): `source` to one account's runs (ADR
      * 0043) -- what a source card opens, in the same 64 characters `lake.records` allows a source
      * -- and the rest to what an agent would otherwise list everything to find. They combine
      * with each other and with the cursor, and an empty page is "nothing matched".
      */
-    list: tenantProcedure
+    list: requirePermission("runs:read")
       .input(
         z.object({
           limit: z.number().int().min(1).max(100).default(50),
@@ -252,7 +253,7 @@ export const appRouter = router({
      * A run that is not this tenant's is NOT_FOUND, not FORBIDDEN, for the reason
      * `tenantProcedure` gives: the id must not confirm that another customer's run exists.
      */
-    get: tenantProcedure
+    get: requirePermission("runs:read")
       .meta({ holdsOpenSeconds: MAX_WAIT_SECONDS + ANSWER_SECONDS })
       .input(
         StepQuery.extend({
@@ -279,10 +280,10 @@ export const appRouter = router({
      * couple of seconds while a run is live and re-reading the refusals and the dbt steps
      * at that rate would be a page of unchanged rows each time.
      *
-     * Any member may read it, like the ledger above it: it carries counts, enumerations and
-     * opaque provider ids, which is the same category of fact as the row itself.
+     * `runs:read`, like the ledger above it: it carries counts, enumerations and opaque provider
+     * ids, which is the same category of fact as the row itself.
      */
-    events: tenantProcedure
+    events: requirePermission("runs:read")
       .input(z.object({ runId: z.string().min(1) }))
       .query(async ({ ctx, input }) => {
         const feed = await runs.events(ctx.exec, input.tenantId, input.runId);

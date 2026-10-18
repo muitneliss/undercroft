@@ -15,14 +15,17 @@ import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { StatusMark } from "@/components/StatusMark.tsx";
-import { customerPagePath } from "@/lib/divisions.ts";
+import { bookPath, customerPagePath } from "@/lib/divisions.ts";
 import { foldForSearch } from "@/lib/labelIndex.ts";
+import type { Permission } from "@/lib/permissions.ts";
 import { isRole, ROLES } from "@/lib/roles.ts";
 
 interface Customer {
   readonly id: string;
   readonly displayName: string;
   readonly role: string;
+  /** What the reader may do there, as the server said it: which division Open lands on. */
+  readonly permissions: readonly Permission[];
   /** Set for a deactivated customer, which stays in the list, marked (ADR 0110). */
   readonly deactivatedAt: string | null;
 }
@@ -148,7 +151,7 @@ function CustomerTable({ visible }: { visible: readonly Customer[] }): React.JSX
               <td>
                 <Link
                   className="plate plate--small"
-                  to={`/tenants/${encodeURIComponent(customer.id)}`}
+                  to={bookPath(encodeURIComponent(customer.id), customer.permissions)}
                   aria-label={t("tenants.openNamed", {
                     name: customer.displayName || customer.id,
                   })}

@@ -239,7 +239,7 @@ describe("the model is told who the reader is", () => {
           when: "làm được gì",
           told:
             'holds the role "builder" in it, with these permissions there: ' +
-            "lake:read, models:write, reports:author.",
+            "lake:read, models:read, models:write, reports:author, runs:read, sources:read.",
           reply: [{ say: "Bạn là builder." }],
         },
       ],

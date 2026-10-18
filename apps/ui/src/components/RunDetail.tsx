@@ -41,6 +41,7 @@ import { RunFlow } from "@/components/RunFlow.tsx";
 import { RunProgress } from "@/components/RunProgress.tsx";
 import { RunDoors, TargetDoor } from "@/components/RunTarget.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { useAccounts } from "@/components/useAccounts.ts";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import { StepsTable } from "@/components/StepsTable.tsx";
 import { can } from "@/lib/permissions.ts";
@@ -403,10 +404,10 @@ export function RunDetail({
   );
   // Whose leaf this is, for the counts' doors. Cached from the book's own head.
   const tenant = trpc.tenants.get.useQuery({ tenantId });
-  // Which mailbox of two the target is (`sourceLabel`). The same cached query the ledger around
-  // this leaf already made, so it costs no request; while it is missing the target is named by
-  // the account's id, which is ugly but true.
-  const accounts = trpc.connections.list.useQuery({ tenantId }).data ?? [];
+  // Which mailbox of two the target is (`sourceLabel`). The same cached answer the ledger around
+  // this leaf already has, so it costs no request; while it is missing -- or the reader may not
+  // read the sources -- the target is named by the account's id, which is ugly but true.
+  const accounts = useAccounts(tenantId);
   // The feed is read on its own and faster: it is the part that changes while somebody is
   // watching, where the detail beside it only changes when the run ends.
   const running = run.data?.status === "running";

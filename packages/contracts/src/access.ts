@@ -29,7 +29,9 @@ import { isWithin, type ModelLimit, type Narrowing } from "./rowRules.ts";
  *
  * `builder` is ADR 0139's: the person who fixes the dbt project -- models, macros, reference
  * tables, the raw lake they read -- without the people, the sources, the keys or the customer
- * itself, which stay an admin's (issue 481).
+ * itself, which stay an admin's (issue 481). A builder READS the sources and the runs, because
+ * a model is fixed by seeing what was read and what the last build did (ADR 0146); connecting
+ * and running them stays `sources:manage`.
  */
 export const BUILT_IN_ROLES = ["viewer", "member", "builder", "admin"] as const;
 export type BuiltInRole = (typeof BUILT_IN_ROLES)[number];
@@ -55,6 +57,11 @@ export const ADMIN_ROLE = "admin" satisfies BuiltInRole;
  * Every permission the platform checks, as `area:action`. A procedure past `tenantProcedure`
  * that changes or reveals more than any member may see declares exactly one of these.
  *
+ * The three `:read` beside a write -- `models:read`, `runs:read`, `sources:read` -- each open one
+ * division of the book and the procedures behind it, for every door at once (ADR 0146): what a
+ * customer's dbt project says, what its runs did, and what it connects are not every member's to
+ * read. `lake:read` is the Lake's. Reports, and the member-wide reads beside it, need none.
+ *
  * A permission is added here together with its words in both catalogues,
  * `docs/reference/permissions.md` and `skills/undercroft/references/access-control.md`
  * (`.claude/rules/access.md`); the compiler then demands the rest, because each catalogue's
@@ -62,8 +69,11 @@ export const ADMIN_ROLE = "admin" satisfies BuiltInRole;
  */
 export const PERMISSIONS = [
   "reports:author",
+  "models:read",
   "models:write",
   "lake:read",
+  "runs:read",
+  "sources:read",
   "sources:manage",
   "keys:manage",
   "catalogue:manage",
@@ -90,7 +100,14 @@ export type Permission = (typeof PERMISSIONS)[number];
 export const BUILT_IN_GRANTS: Readonly<Record<BuiltInRole, readonly Permission[]>> = {
   viewer: [],
   member: ["reports:author"],
-  builder: ["reports:author", "models:write", "lake:read"],
+  builder: [
+    "reports:author",
+    "models:read",
+    "models:write",
+    "lake:read",
+    "runs:read",
+    "sources:read",
+  ],
   admin: PERMISSIONS,
 };
 

@@ -294,12 +294,12 @@ SELECT email, accepted_at FROM app.invitation;
 
 Open the tenant → **People**. Enter an address, pick a role, send.
 
-| Role      | Can                                                                                                                        |
-| --------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `viewer`  | look                                                                                                                       |
-| `member`  | look, and author questions and dashboards                                                                                  |
-| `builder` | that, plus edit, preview and build models, macros and reference tables, and browse and query the raw lake                  |
-| `admin`   | all of it, plus connect accounts, run a sync, mint ingest keys, edit the document kinds, see who has access, manage people |
+| Role      | Can                                                                                                                                                 |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `viewer`  | read the saved reports                                                                                                                              |
+| `member`  | that, and author questions and dashboards                                                                                                           |
+| `builder` | that, plus read the sources and the journal of runs, edit, preview and build models, macros and reference tables, and browse and query the raw lake |
+| `admin`   | all of it, plus connect accounts, run a sync, mint ingest keys, edit the document kinds, see who has access, manage people                          |
 
 Each role is a set of permissions, and the server checks the permission, not the role's name;
 [the permissions reference](../reference/permissions.md) lists every permission, what it covers
@@ -308,8 +308,11 @@ permission to a role or a person, with or without an expiry (ADR 0141), and let 
 own read only some models, raw streams and reports (ADR 0142): [access control](access-control.md)
 says how.
 
-The People page opens only for someone who holds `people:manage` in the customer (an admin, or a
-role of the customer's own that holds it), and
+Sources, the Journal, the Raw lake and Models open only for someone who holds that division's read
+permission -- `sources:read`, `runs:read`, `lake:read`, `models:read` -- which a builder and an
+admin hold and a viewer and a member do not; through every door, the server refuses the reads
+behind them to anyone else (ADR 0146). The People page opens only for someone who holds
+`people:manage` in the customer (an admin, or a role of the customer's own that holds it), and
 the roster and the open invitations are refused to anyone else through every door, the CLI and
 MCP included (ADR 0119). A `viewer`, `member` or `builder` who opens it finds a note in its place
 that points them at their own activity on the account page.

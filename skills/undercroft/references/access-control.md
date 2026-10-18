@@ -12,8 +12,11 @@ with `PERMISSION_DENIED`.
 | Permission         | What it covers                                                                                                                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `reports:author`   | Running a definition against the built models (`bi.answer`, `bi.compile`), saving and deleting questions and dashboards, and exporting a definition or a model.                                              |
+| `models:read`      | Reading the dbt project: `models.list`, `models.get`, `models.revision`, `models.check`, `models.lineage`, `models.reference`, `macros.list`, `macros.get`, `macros.check`, `seeds.list`, `seeds.get`.       |
 | `models:write`     | Saving, deleting, building and previewing models (`models.save`, `models.build`, `models.preview`), and saving and deleting macros and seeds (reference tables).                                             |
-| `lake:read`        | Reading the raw lake: `lake.records`, `lake.documents`, `lake.query`, `lake.search`, `lake.querySchema`, and the rows a failed test stored (`dq.failures`).                                                  |
+| `lake:read`        | Reading the raw lake: `lake.summary`, `lake.records`, `lake.documents`, `lake.query`, `lake.search`, `lake.querySchema`, the rows a failed test stored (`dq.failures`), and `documentKinds.list`.            |
+| `runs:read`        | Reading the run history: `runs.list`, `runs.get`, `runs.events`.                                                                                                                                             |
+| `sources:read`     | Reading the connected sources, their schedules and what each reads: `connections.list`, `connections.get`.                                                                                                   |
 | `sources:manage`   | Connecting, scoping, scheduling and disconnecting sources (`connections.startOAuth`, `connections.setScope`, ...), and starting a source's read (`runs.trigger`).                                            |
 | `keys:manage`      | Listing, minting and revoking ingest keys (`keys.list`, `keys.mint`, `keys.revoke`).                                                                                                                         |
 | `catalogue:manage` | Editing, initialising and publishing the catalogue of document kinds (`documentKinds.add`, `documentKinds.publish`, ...).                                                                                    |
@@ -23,10 +26,10 @@ with `PERMISSION_DENIED`.
 | `roles:manage`     | Defining, changing and deleting the customer's own roles (`roles.save`, `roles.delete`), and giving and taking away grants (`grants.save`, `grants.delete`).                                                 |
 
 An operation not covered above is open to every member of the customer, a viewer included:
-listing and reading models, macros, seeds, questions and dashboards, `models.check`,
-`lake.summary`, `runs.list`, answering a saved question and exporting it, reading the roles
-(`roles.list`, `roles.get`), and reading what you yourself hold and reach (`grants.reach`,
-`scopes.preview`). Every list and read is narrowed to what the person reaches (below).
+listing and reading questions and dashboards, the analytics schema (`bi.schema`), answering a
+saved question and exporting it, reading the roles (`roles.list`, `roles.get`), and reading what
+you yourself hold and reach (`grants.reach`, `scopes.preview`). Every list and read is narrowed
+to what the person reaches (below).
 
 Every operation's description, in `undercroft describe` and in your MCP tool list, ends with
 the permission it needs ("Needs models:write.", in Vietnamese "Cần quyền models:write."), and --
@@ -41,8 +44,11 @@ Every customer has four.
 | Permission         | viewer | member | builder | admin |
 | ------------------ | :----: | :----: | :-----: | :---: |
 | `reports:author`   |        |   ✓    |    ✓    |   ✓   |
+| `models:read`      |        |        |    ✓    |   ✓   |
 | `models:write`     |        |        |    ✓    |   ✓   |
 | `lake:read`        |        |        |    ✓    |   ✓   |
+| `runs:read`        |        |        |    ✓    |   ✓   |
+| `sources:read`     |        |        |    ✓    |   ✓   |
 | `sources:manage`   |        |        |         |   ✓   |
 | `keys:manage`      |        |        |         |   ✓   |
 | `catalogue:manage` |        |        |         |   ✓   |
@@ -51,16 +57,17 @@ Every customer has four.
 | `tenant:manage`    |        |        |         |   ✓   |
 | `roles:manage`     |        |        |         |   ✓   |
 
-- **viewer** reads reports and what the customer has built, and changes nothing.
-- **member** also writes and saves reports.
-- **builder** also writes, previews and builds models, macros and seeds, and reads the raw lake
-  they are written over. A builder does not manage people, sources, keys, the document-kind
-  catalogue or the customer.
+- **viewer** reads the customer's saved reports, and changes nothing. It does not read the
+  sources, the run history, the raw lake or the models.
+- **member** also writes and saves reports, and reads no more than a viewer does besides.
+- **builder** also reads the sources and the run history, reads, writes, previews and builds
+  models, macros and seeds, and reads the raw lake they are written over. A builder does not
+  manage people, sources, keys, the document-kind catalogue or the customer.
 - **admin** holds every permission, including any added later. A platform administrator holds
   admin in every customer.
 
 **Every built-in role reaches the whole customer**: every model and reference table, the whole
-raw lake, every report. A viewer reaches the raw lake and lacks `lake:read`, so cannot page it.
+raw lake, every report. A viewer reaches the raw lake and lacks `lake:read`, so cannot read it.
 
 The four built-ins are the platform's: they cannot be changed or deleted, and every customer has
 them.

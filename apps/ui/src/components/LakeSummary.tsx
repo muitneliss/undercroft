@@ -1,7 +1,7 @@
 /**
  * What has landed, printed: one line per stream of records and one per source of
  * documents, with counts and the newest observation. This is the Lake division's answer to
- * "did anything come in", readable by every member because it carries no payload.
+ * "did anything come in": counts and instants, never a payload.
  *
  * A customer with nothing landed gets an unprinted leaf that says when the first run comes,
  * from the same schedule the journal reads, rather than two empty tables. Tombstones are a
@@ -15,7 +15,7 @@
  * #139). Where there are refusals the row also unfolds WHY, in place, through the same
  * `RefusalRollup` a run's leaf uses -- so benign and actionable are decided in one place
  * (`refusalReasons.ts`) and drawn one way. It unfolds reasons and counts only: which documents
- * they were is an admin's, and this index is every member's.
+ * they were is the documents page's, and this is an index.
  *
  * Presentational: values in, a leaf out. The route fetches; this prints. The one thing it
  * keeps is which source's refusals are unfolded, and that is the store's (`state.md`).

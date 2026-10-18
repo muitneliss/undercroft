@@ -174,7 +174,12 @@ describe("roles.list", () => {
     ).toEqual([
       ["viewer", true, [], 1],
       ["member", true, ["reports:author"], 0],
-      ["builder", true, ["reports:author", "models:write", "lake:read"], 0],
+      [
+        "builder",
+        true,
+        ["reports:author", "models:read", "models:write", "lake:read", "runs:read", "sources:read"],
+        0,
+      ],
       ["admin", true, answer.permissions, 1],
       ["accountant", false, ["reports:author", "lake:read"], 1],
     ]);

@@ -34,6 +34,7 @@ import { Errata } from "@/components/Errata.tsx";
 import { RunDetail } from "@/components/RunDetail.tsx";
 import { RunRow } from "@/components/RunRow.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { useAccounts } from "@/components/useAccounts.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import {
   type AccountName,
@@ -130,8 +131,8 @@ function Ledger({ tenantId }: { tenantId: string }): React.JSX.Element {
     },
   );
   // When the first run comes, for the empty state, and which mailbox a filtered source is, for
-  // a tenant with two. Cached from the Sources leaf.
-  const connections = trpc.connections.list.useQuery({ tenantId });
+  // a tenant with two -- for a reader who may read the sources (`useAccounts`).
+  const accounts = useAccounts(tenantId);
 
   if (runs.isPending) {
     return <Skeleton rows={6} />;
@@ -145,7 +146,6 @@ function Ledger({ tenantId }: { tenantId: string }): React.JSX.Element {
   }
 
   const items = runs.data.pages.flatMap((page) => page.items);
-  const accounts = connections.data ?? [];
   // A deep link to a run older than the pages loaded so far still opens it: the leaf is
   // drawn above the table rather than inside a row it cannot find.
   const openElsewhere = openId !== null && !items.some((run) => run.id === openId);
@@ -388,8 +388,8 @@ function RunTable({
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
   // Which mailbox a run read, for a tenant with more than one (`sourceLabel`). The same cached
-  // query the page above already made, so asking for it here costs no request.
-  const accounts = trpc.connections.list.useQuery({ tenantId }).data ?? [];
+  // answer the page above already has, so asking for it here costs no request.
+  const accounts = useAccounts(tenantId);
 
   // In a scroller, so at a phone's width the eight columns scroll rather than being cut off at
   // the leaf's edge, and the open run's leaf stays in view (`.table-scroll` in index.css).

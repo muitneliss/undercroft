@@ -1,5 +1,7 @@
 /**
- * The Lake division over tRPC: the summary is every member's, the rows are an admin's.
+ * The Lake division over tRPC: every read of it is a holder of `lake:read`'s -- a builder's and an
+ * admin's -- the summary included since ADR 0146, whose refusal of a viewer is pinned with the
+ * other divisions' in `authz.test.ts`.
  *
  * The guard is pinned from both sides -- a member is refused, an admin is answered -- because
  * a gate with only the refusing case can be satisfied by a procedure that refuses everyone.
@@ -91,9 +93,9 @@ afterEach(async () => {
 });
 
 describe("lake.summary", () => {
-  it("a viewer reads what landed: counts, never a payload", async () => {
-    const viewer = await seedMember("v@example.test", "viewer");
-    const got = await caller(viewer, "v@example.test").lake.summary({ tenantId: TENANT });
+  it("a builder reads what landed: counts, never a payload", async () => {
+    const builder = await seedMember("b@example.test", "builder");
+    const got = await caller(builder, "b@example.test").lake.summary({ tenantId: TENANT });
 
     expect(got.records.map((s) => [s.entity, s.records])).toEqual([["deals", 1]]);
     expect(JSON.stringify(got)).not.toContain("Acme");

@@ -10,19 +10,27 @@ in force to that role and to them -- and `tenants.get` answers with the permissi
 built this way is [ADR 0139](../adr/0139-tenant-access-is-casbin-policy.md), for a customer's own
 roles and grants [ADR 0141](../adr/0141-custom-roles-and-grants-under-the-subset-rule.md), and for
 reach [ADR 0142](../adr/0142-object-reach-and-scope-logins.md), and for row and column rules
-[ADR 0143](../adr/0143-row-and-column-rules-on-model-grants.md). How to define a role or grant a
-permission is [the access-control runbook](../runbook/access-control.md).
+[ADR 0143](../adr/0143-row-and-column-rules-on-model-grants.md), and for the read permissions
+behind Sources, the Journal, the Lake and Models
+[ADR 0146](../adr/0146-each-division-reads-under-its-own-permission.md). How to define a role or
+grant a permission is [the access-control runbook](../runbook/access-control.md).
 
-A procedure not listed below is open to every member of the customer, a viewer included --
-`roles.list` and `roles.get` among them -- or is not scoped to a customer at all.
+A procedure not listed below is open to every member of the customer, a viewer included, or is not
+scoped to a customer at all. Those are the reads of Reports (`bi.runQuestion`,
+`bi.questions.list`, `bi.questions.get`, `bi.questions.answer`, `bi.dashboards.list`,
+`bi.dashboards.get`, `bi.schema`, and exporting a saved question), `roles.list` and `roles.get`,
+`tenants.get`, and `grants.reach` and `scopes.preview` about oneself.
 
 ## The built-in roles
 
 | Permission         | viewer | member | builder | admin |
 | ------------------ | :----: | :----: | :-----: | :---: |
 | `reports:author`   |        |   ✓    |    ✓    |   ✓   |
+| `models:read`      |        |        |    ✓    |   ✓   |
 | `models:write`     |        |        |    ✓    |   ✓   |
 | `lake:read`        |        |        |    ✓    |   ✓   |
+| `runs:read`        |        |        |    ✓    |   ✓   |
+| `sources:read`     |        |        |    ✓    |   ✓   |
 | `sources:manage`   |        |        |         |   ✓   |
 | `keys:manage`      |        |        |         |   ✓   |
 | `catalogue:manage` |        |        |         |   ✓   |
@@ -34,7 +42,9 @@ A procedure not listed below is open to every member of the customer, a viewer i
 `admin` holds every permission there is, including any added later. A platform superadmin holds
 `admin` in every customer that exists, with no membership. The four built-ins cannot be saved or
 deleted. **Every built-in role reaches the whole customer**: every model and reference table, the
-whole raw lake, every report.
+whole raw lake, every report. A viewer and a member open Customers and Reports and no other
+division of a customer's book: Sources needs `sources:read`, the Journal `runs:read`, the Lake
+`lake:read`, Models `models:read`, and People `people:manage`.
 
 ## A customer's own roles and grants
 
@@ -144,8 +154,11 @@ what the role or the member reaches and by the object a grant names. `model:*` i
 | Permission         | Procedures                                                                                                                                                                                                                                       |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `reports:author`   | `bi.answer`, `bi.compile`, `bi.questions.save`, `bi.questions.delete`, `bi.dashboards.save`, `bi.dashboards.delete`; `bi.exports.create` and `bi.exports.get` for a definition or a model (exporting a saved question needs no permission)       |
+| `models:read`      | `models.list`, `models.get`, `models.revision`, `models.check`, `models.lineage`, `models.reference`, `macros.list`, `macros.get`, `macros.check`, `seeds.list`, `seeds.get`                                                                     |
 | `models:write`     | `models.save`, `models.delete`, `models.build`, `models.preview`, `macros.save`, `macros.delete`, `seeds.save`, `seeds.delete`                                                                                                                   |
-| `lake:read`        | `lake.records`, `lake.documents`, `lake.query`, `lake.search`, `lake.querySchema`, `dq.failures`                                                                                                                                                 |
+| `lake:read`        | `lake.summary`, `lake.records`, `lake.documents`, `lake.query`, `lake.search`, `lake.querySchema`, `dq.failures`, `documentKinds.list`                                                                                                           |
+| `runs:read`        | `runs.list`, `runs.get`, `runs.events`                                                                                                                                                                                                           |
+| `sources:read`     | `connections.list`, `connections.get`                                                                                                                                                                                                            |
 | `sources:manage`   | `connections.startOAuth`, `connections.browseScope`, `connections.setScope`, `connections.setToken`, `connections.setCadence`, `connections.setResync`, `connections.disconnect`, `runs.trigger`, and finishing a source's OAuth consent         |
 | `keys:manage`      | `keys.list`, `keys.mint`, `keys.revoke`                                                                                                                                                                                                          |
 | `catalogue:manage` | `documentKinds.add`, `documentKinds.update`, `documentKinds.remove`, `documentKinds.initialise`, `documentKinds.publish`                                                                                                                         |

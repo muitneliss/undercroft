@@ -113,16 +113,18 @@ These hold for the whole workflow. None of them bends because the person is in a
 
 ## Who can do what
 
-- Anyone who can see the customer may run `models.list`, `models.get`, `models.reference`,
-  `models.revision`, `models.check` and `models.lineage`, `macros.list`, `macros.get` and
-  `macros.check`, `seeds.list` and `seeds.get`,
-  `lake.summary`, and `bi.questions.list`, `bi.questions.get`, `bi.dashboards.list`,
-  `bi.dashboards.get` and `bi.schema`.
+- Anyone who can see the customer may run `bi.questions.list`, `bi.questions.get`,
+  `bi.dashboards.list`, `bi.dashboards.get` and `bi.schema`.
+- Reading the dbt project -- `models.list`, `models.get`, `models.reference`, `models.revision`,
+  `models.check` and `models.lineage`, `macros.list`, `macros.get` and `macros.check`,
+  `seeds.list` and `seeds.get` -- needs `models:read`, and the runs a build leaves (`runs.list`,
+  `runs.get`) need `runs:read`. The `builder` and `admin` roles hold both; a `viewer` or a
+  `member` holds neither, and is refused before any reconnaissance can start.
 - Running a definition against the built models (`bi.answer`, `bi.compile`) and saving a
   question or dashboard (`bi.questions.save`, `bi.dashboards.save`) need the `reports:author`
   permission, which the `member`, `builder` and `admin` roles hold.
-- Reading the raw lake (`lake.records`, `lake.documents`, `lake.querySchema`, `lake.query`,
-  `lake.search`) needs `lake:read`. Saving and building a model (`models.save`,
+- Reading the raw lake (`lake.summary`, `lake.records`, `lake.documents`, `lake.querySchema`,
+  `lake.query`, `lake.search`) needs `lake:read`. Saving and building a model (`models.save`,
   `models.build`), saving a macro (`macros.save`) and saving a seed (`seeds.save`) need
   `models:write`. The `builder` and `admin` roles hold both; a `member` holds neither.
 - Previewing an unsaved model (`models.preview`) needs `models:write` and the write grant

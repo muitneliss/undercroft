@@ -7,6 +7,11 @@
  * and a wildcard only when `grants.reach` says the reader reaches the whole of it. The browser
  * computes no reach of its own; offering only what a person holds is a courtesy, and the subset
  * rule on the server is the control. `GrantObjects.tsx` draws what this gathers.
+ *
+ * The models and reference tables are listed only for a reader who holds `models:read`, and the
+ * streams only for one who holds `lake:read` (ADR 0146): a person may manage roles without
+ * reading the dbt project or the lake. For them those lists are empty rather than refused, and
+ * the form still offers what remains -- the wildcards they reach, the reports, a typed name.
  */
 
 import {
@@ -21,6 +26,7 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 import { wholeList } from "@/lib/listAnswers.ts";
+import { can } from "@/lib/permissions.ts";
 import { trpc } from "@/trpc.ts";
 
 /** One object the form may offer: its object as a grant spells it, and how a reader names it. */
@@ -109,9 +115,11 @@ function reportOptions(
 export function useGrantObjects(tenantId: string): GrantObjects {
   const { t } = useTranslation();
   const reach = trpc.grants.reach.useQuery({ tenantId });
-  const models = trpc.models.list.useQuery({ tenantId }, { select: wholeList });
-  const seeds = trpc.seeds.list.useQuery({ tenantId });
-  const lake = trpc.lake.summary.useQuery({ tenantId });
+  const permissions = trpc.tenants.get.useQuery({ tenantId }).data?.permissions;
+  const readsModels = { enabled: can(permissions, "models:read") };
+  const models = trpc.models.list.useQuery({ tenantId }, { ...readsModels, select: wholeList });
+  const seeds = trpc.seeds.list.useQuery({ tenantId }, readsModels);
+  const lake = trpc.lake.summary.useQuery({ tenantId }, { enabled: can(permissions, "lake:read") });
   const questions = trpc.bi.questions.list.useQuery({ tenantId }, { select: wholeList });
   const dashboards = trpc.bi.dashboards.list.useQuery({ tenantId });
 

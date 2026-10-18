@@ -2,9 +2,9 @@
  * The `seeds` procedures: a tenant's reference tables, which its models read with `ref()`.
  * ADR 0128.
  *
- * Any member may list and read them, as they may read the models built from them; only a holder
- * of `models:write` may save or delete one, because a seed changes what every model reading it
- * builds. Same layer
+ * A holder of `models:read` may list and read them, as they may read the models built from them
+ * (ADR 0146); only a holder of `models:write` may save or delete one, because a seed changes what
+ * every model reading it builds. Same layer
  * and rules as the other routers: validate, call one service, decide what its answer means.
  *
  * A table the service refuses is BAD_REQUEST, worded, with the facts an agent acts on --
@@ -29,8 +29,8 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as seeds from "../services/seeds.ts";
 import { listedOrRefusal, NameFilterInput } from "./listInputs.ts";
-import { requireWholeReach } from "./permissionGate.ts";
-import { actorOf, refusal, router, tenantProcedure } from "./trpc.ts";
+import { requirePermission, requireWholeReach } from "./permissionGate.ts";
+import { actorOf, refusal, router } from "./trpc.ts";
 
 /** The bound a table-level problem names, so its sentence can say how far is too far. */
 const LIMIT_OF: Partial<Record<SeedRefusal["problem"], number>> = {
@@ -60,19 +60,21 @@ export const seedsRouter = router({
    * The tenant's seeds: names, sizes and the hash of each one's content, no cells -- so a reader
    * can choose one to `ref()`, or tell whether its copy is current. `get` has the cells.
    */
-  list: tenantProcedure
+  list: requirePermission("models:read")
     .input(z.object(NameFilterInput))
     .query(async ({ ctx, input }) =>
       listedOrRefusal(ctx.locale, await seeds.list(ctx.exec, input.tenantId, ctx.reach, input)),
     ),
 
-  get: tenantProcedure.input(z.object({ name: SeedName })).query(async ({ ctx, input }) => {
-    const seed = await seeds.get(ctx.exec, input.tenantId, input.name, ctx.reach);
-    if (seed === null) {
-      throw new TRPCError({ code: "NOT_FOUND" });
-    }
-    return seed;
-  }),
+  get: requirePermission("models:read")
+    .input(z.object({ name: SeedName }))
+    .query(async ({ ctx, input }) => {
+      const seed = await seeds.get(ctx.exec, input.tenantId, input.name, ctx.reach);
+      if (seed === null) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      return seed;
+    }),
 
   /**
    * Store a seed: its typed columns and its rows, every cell a string or null. Loads nothing --

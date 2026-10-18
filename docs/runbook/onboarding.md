@@ -13,12 +13,14 @@ khách hàng, bằng đúng địa chỉ email họ sẽ dùng, và chọn vai t
 
 | Vai trò   | Làm được                                                                    |
 | --------- | --------------------------------------------------------------------------- |
-| `viewer`  | xem nguồn, lần chạy, model, báo cáo                                         |
-| `member`  | như trên, và lưu câu hỏi báo cáo, dashboard                                 |
-| `builder` | như trên, và đọc raw lake, lưu và dựng model, macro, bảng tham chiếu        |
+| `viewer`  | xem báo cáo                                                                 |
+| `member`  | như trên, và soạn, lưu câu hỏi báo cáo, dashboard                           |
+| `builder` | như trên, và xem nguồn, lần chạy, raw lake, đọc, lưu và dựng model, macro   |
 | `admin`   | như trên, và kết nối nguồn, tạo khoá nạp dữ liệu, mời và quản lý người khác |
 
-Người muốn dựng model cần vai trò `builder` (quyền `models:write` và `lake:read`) hoặc `admin`;
+`viewer` và `member` chỉ mở được mục Khách hàng và Báo cáo; Nguồn dữ liệu, Nhật ký, Hồ dữ liệu
+thô và Mô hình cần quyền đọc riêng của từng mục (ADR 0146). Người muốn dựng model cần vai trò
+`builder` (các quyền `models:read`, `models:write`, `lake:read`, `runs:read`, `sources:read`) hoặc `admin`;
 không cần là `admin` chỉ để sửa model. Mỗi vai trò là một tập quyền, liệt kê ở
 [Permissions](../reference/permissions.md). Khách hàng cũng có thể tạo vai trò riêng, hoặc trao
 thêm một quyền cho một người, có thời hạn hay không: xem [Access control](access-control.md). Nếu hệ thống chưa có ai để mời người đầu tiên, xem
@@ -82,14 +84,16 @@ Ba thói quen tốt:
 Sign-in is invite-only. An admin invites the person from the customer's **People** page, with
 the exact email address they will use, and picks a role:
 
-| Role      | Can                                                                          |
-| --------- | ---------------------------------------------------------------------------- |
-| `viewer`  | see sources, runs, models and reports                                        |
-| `member`  | all of that, and save report questions and dashboards                        |
-| `builder` | all of that, and read the raw lake, save and build models, macros and seeds  |
-| `admin`   | all of that, and connect sources, mint ingest keys, invite and manage people |
+| Role      | Can                                                                                                |
+| --------- | -------------------------------------------------------------------------------------------------- |
+| `viewer`  | see reports                                                                                        |
+| `member`  | all of that, and write and save report questions and dashboards                                    |
+| `builder` | all of that, and see sources, runs and the raw lake; read, save and build models, macros and seeds |
+| `admin`   | all of that, and connect sources, mint ingest keys, invite and manage people                       |
 
-Building models needs `builder` (the `models:write` and `lake:read` permissions) or `admin`;
+A `viewer` and a `member` open Customers and Reports only; Sources, the Journal, the Raw lake and
+Models each need a read permission of their own (ADR 0146). Building models needs `builder` (the
+`models:read`, `models:write`, `lake:read`, `runs:read` and `sources:read` permissions) or `admin`;
 nobody has to be made `admin` only to fix models. Each role is a set of permissions, listed in
 [Permissions](../reference/permissions.md). A customer can also define roles of its own, or grant
 one more permission to one person, with or without an expiry: see

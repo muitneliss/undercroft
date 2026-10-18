@@ -40,11 +40,12 @@ import { ANSWER_SECONDS } from "./holdOpen.ts";
 import { StepQuery } from "./inputs.ts";
 import { cursorRefusal, listingOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
 import { buildHeld, parentTestsFailing, previewRefused } from "./modelRefusals.ts";
-import { requireWholeReach } from "./permissionGate.ts";
-import { actorOf, refusal, router, tenantProcedure } from "./trpc.ts";
+import { requirePermission, requireWholeReach } from "./permissionGate.ts";
+import { actorOf, refusal, router } from "./trpc.ts";
 
 const MS_PER_SECOND = 1000;
-
+/** Every read of the dbt project: its division opens on `models:read` (ADR 0146). */
+const readsProject = requirePermission("models:read");
 /**
  * The longest lineage `name` worth reading: a model's name, or a source table as
  * `schema.table`. Generous, since a missing dependency is named as its author wrote it.
@@ -54,11 +55,11 @@ const MAX_LINEAGE_NAME_CHARS = 255;
 export const modelsRouter = router({
   /**
    * The tenant's models with their last build: names, descriptions, hashes and column counts,
-   * no SQL. Any member may read what is built for them. `include: ["columns"]` adds each build's
+   * no SQL, narrowed to the models the reader reaches. `include: ["columns"]` adds each build's
    * columns, `["dependsOn"]` what each declares it reads (ADR 0137). `limit` or `cursor` answers
    * a page, `{ items, nextCursor }`, rather than the array (ADR 0133).
    */
-  list: tenantProcedure
+  list: readsProject
     .input(
       z.object({
         ...NameFilterInput,
@@ -81,9 +82,9 @@ export const modelsRouter = router({
    * One hash per kind of authored content -- models, macros, questions -- and one over all of
    * them, so a client learns whether anything changed without reading any of it (ADR 0127).
    */
-  revision: tenantProcedure.query(({ ctx, input }) => revision(ctx.exec, input.tenantId)),
+  revision: readsProject.query(({ ctx, input }) => revision(ctx.exec, input.tenantId)),
 
-  get: tenantProcedure.input(z.object({ name: ModelName })).query(async ({ ctx, input }) => {
+  get: readsProject.input(z.object({ name: ModelName })).query(async ({ ctx, input }) => {
     const model = await models.get(ctx.exec, input.tenantId, input.name, ctx.reach);
     if (model === null) {
       throw new TRPCError({ code: "NOT_FOUND" });
@@ -251,12 +252,12 @@ export const modelsRouter = router({
     }),
 
   /**
-   * Check a model's SQL, running nothing. Any member may: it tells an author about a mistake
-   * while it is still text, and the model-builder skill runs it before every save. Advisory,
-   * never a gate on `save` -- the editor's promise is that a saved mistake is a row, not a
-   * broken table. Each finding and each thing it could not verify comes back worded.
+   * Check a model's SQL, running nothing: `models:read`, which its findings name the project by,
+   * and not `models:write`. It tells an author about a mistake while it is still text, and the
+   * model-builder skill runs it before every save. Advisory, never a gate on `save` -- a saved
+   * mistake is a row, not a broken table. Each finding and each unverified thing comes back worded.
    */
-  check: tenantProcedure
+  check: readsProject
     .input(
       z.object({
         name: ModelName,
@@ -322,9 +323,9 @@ export const modelsRouter = router({
 
   /**
    * What each model declares it reads: other models by `ref()`, raw lake tables by
-   * `source()`, through any macro it calls. Any member may, as they may read the models it is
-   * read from. Declared relations only (ADR 0092): a model whose upstream its text cannot
-   * show carries why, and a ref to a deleted model stays as a missing dependency.
+   * `source()`, through any macro it calls. `models:read`, with `list`, since it is read from
+   * the same models (ADR 0146). Declared relations only (ADR 0092): a model whose upstream its
+   * text cannot show carries why, and a ref to a deleted model stays as a missing dependency.
    *
    * With a `name`, only the part around that node, which is what an agent asking "what reads
    * this model" needs; the whole graph of a large tenant overflowed every client it was sent
@@ -334,7 +335,7 @@ export const modelsRouter = router({
    * `limit` or `cursor` answers that part a page at a time: at most `limit` nodes and `limit`
    * edges, with `nextCursor` (ADR 0133). The browser draws the graph whole and never asks.
    */
-  lineage: tenantProcedure
+  lineage: readsProject
     .input(
       z.object({
         name: z.string().min(1).max(MAX_LINEAGE_NAME_CHARS).optional(),
@@ -369,7 +370,7 @@ export const modelsRouter = router({
    * with them, only those, marked with what was asked -- the platform's two parts are the same
    * text on every call, so an agent asks for `tenantMacros` alone.
    */
-  reference: tenantProcedure
+  reference: readsProject
     .input(z.object({ parts: z.array(z.enum(REFERENCE_PARTS)).min(1).optional() }))
     .query(
       async ({ ctx, input }): Promise<Reference | ReferenceParts> =>

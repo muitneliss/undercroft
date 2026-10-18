@@ -1,9 +1,9 @@
 /**
  * The `macros` procedures: a tenant's own dbt macros. ADR 0086.
  *
- * Any member may read and check them, as they may read and check models; only a holder of
- * `models:write` may save or delete one, because a macro changes what every model calling it
- * builds. Same layer
+ * A holder of `models:read` may read and check them, as they may read and check models (ADR
+ * 0146); only a holder of `models:write` may save or delete one, because a macro changes what
+ * every model calling it builds. Same layer
  * and rules as the other routers: validate, call one service, decide what its answer means.
  */
 
@@ -15,8 +15,8 @@ import { messages } from "../i18n/index.ts";
 import * as macros from "../services/macros.ts";
 import { findingSentence, wordCheck } from "./checkWords.ts";
 import { listingOrRefusal, NameFilterInput, PageInput } from "./listInputs.ts";
-import { requireWholeReach } from "./permissionGate.ts";
-import { actorOf, router, tenantProcedure } from "./trpc.ts";
+import { requirePermission, requireWholeReach } from "./permissionGate.ts";
+import { actorOf, router } from "./trpc.ts";
 
 const definition = z.string().max(MAX_MACRO_SQL_BYTES);
 
@@ -26,7 +26,7 @@ export const macrosRouter = router({
    * choose one to reuse or tell its copy is current. No definitions: `get` has one. `limit` or
    * `cursor` answers a page, `{ items, nextCursor }`, rather than the array (ADR 0133).
    */
-  list: tenantProcedure
+  list: requirePermission("models:read")
     .input(z.object({ ...NameFilterInput, ...PageInput }))
     .query(async ({ ctx, input }) =>
       listingOrRefusal(
@@ -36,19 +36,21 @@ export const macrosRouter = router({
       ),
     ),
 
-  get: tenantProcedure.input(z.object({ name: MacroName })).query(async ({ ctx, input }) => {
-    const macro = await macros.get(ctx.exec, input.tenantId, input.name);
-    if (macro === null) {
-      throw new TRPCError({ code: "NOT_FOUND" });
-    }
-    return macro;
-  }),
+  get: requirePermission("models:read")
+    .input(z.object({ name: MacroName }))
+    .query(async ({ ctx, input }) => {
+      const macro = await macros.get(ctx.exec, input.tenantId, input.name);
+      if (macro === null) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      return macro;
+    }),
 
   /**
    * Check a macro's definition, running nothing, as `models.check` checks a model. A POST
    * because a definition does not fit a query string.
    */
-  check: tenantProcedure
+  check: requirePermission("models:read")
     .input(z.object({ name: MacroName, sql: definition }))
     .mutation(async ({ ctx, input }) => {
       const checked = await macros.check(ctx.exec, {
