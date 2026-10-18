@@ -252,6 +252,14 @@ export const vi = {
     workflowDecideTitle: "Quyết định bước tiếp theo",
     workflowDecideBody:
       "Bạn nhận được kết quả có dữ liệu để kiểm tra, hoặc câu trả lời rõ ràng rằng chưa có bằng chứng. Nếu cần thay đổi, hãy cấp quyền đọc và ghi riêng.",
+    googleTitle: "Dữ liệu Google của bạn, chỉ đọc.",
+    googleBody:
+      "Khi quản trị viên kết nối Gmail hoặc Google Drive, Undercroft chỉ đọc những nhãn thư và thư mục họ chọn, giữ một bản sao trong kho dữ liệu riêng của không gian làm việc, và trích xuất văn bản để không gian làm việc tìm kiếm và dựng báo cáo. Ứng dụng không bao giờ gửi, sửa hay xoá thư hoặc tệp.",
+    googleNever:
+      "Dữ liệu Google không bao giờ bị bán, dùng cho quảng cáo, dùng để huấn luyện mô hình AI, hay dùng để tạo hình ảnh hoặc bất kỳ nội dung tổng hợp nào. Việc sử dụng tuân thủ Google API Services User Data Policy, bao gồm các yêu cầu Limited Use.",
+    googleAbout: "Ứng dụng làm gì với dữ liệu Google",
+    privacy: "Chính sách quyền riêng tư",
+    terms: "Điều khoản dịch vụ",
     startTitle: "Một nơi để bắt đầu.",
     startBody:
       "Mỗi khách hàng có một không gian riêng cho nguồn dữ liệu, các lần chạy và báo cáo. Đăng nhập để mở những hồ sơ bạn được cấp quyền.",

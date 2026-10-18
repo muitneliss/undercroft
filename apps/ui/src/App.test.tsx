@@ -24,17 +24,25 @@ import { App } from "@/App.tsx";
 // For its side effect as much as for `translatorFor`: `useTranslation` resolves against the
 // module-level i18next singleton, and without it every key renders as itself. See `@/i18n`.
 import { translatorFor } from "@/i18n/index.ts";
+import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
 const SIGNED_IN_AS = "ops@example.test";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useUiStore.setState({ locale: "vi" });
+});
 
 /** The one procedure this suite models, in the envelope tRPC reads. */
 function answerSessionMe(): Response {
   return Response.json({
     result: { data: { userId: "user-1", email: SIGNED_IN_AS, superadmin: false } },
   });
+}
+
+function hrefOf(name: string): string | null {
+  return screen.getByRole("link", { name }).getAttribute("href");
 }
 
 /** Anything else: a refusal the caller sees as a failed query, never invented data. */
@@ -207,6 +215,30 @@ describe("the public and signed-in home", () => {
     fireEvent.click(screen.getByRole("link", { name: t("landing.openWorkspace") }));
     expect((await screen.findByLabelText(t("signIn.emailLabel"))).getAttribute("type")).toBe(
       "email",
+    );
+  });
+
+  it("tells a public visitor what it reads from Google, and links the pages in their language", async () => {
+    // Google's brand verification reads this page signed out: it must say what the app does
+    // with Google data and link the privacy policy and terms (docs/runbook/google-ingestion-setup.md).
+    renderAt("/", {});
+    const t = translatorFor("vi");
+    expect((await screen.findByRole("heading", { name: t("landing.googleTitle") })).tagName).toBe(
+      "H2",
+    );
+    expect(hrefOf(t("landing.googleAbout"))).toBe("https://blog.undercroft.lowbit.link/app/");
+    expect(hrefOf(t("landing.privacy"))).toBe("https://blog.undercroft.lowbit.link/privacy/");
+    expect(hrefOf(t("landing.terms"))).toBe("https://blog.undercroft.lowbit.link/terms/");
+  });
+
+  it("links the English pages to a reader who chose English", async () => {
+    useUiStore.setState({ locale: "en" });
+    renderAt("/", {});
+    const t = translatorFor("en");
+    const privacy = await screen.findByRole("link", { name: t("landing.privacy") });
+    expect(privacy.getAttribute("href")).toBe("https://blog.undercroft.lowbit.link/en/privacy/");
+    expect(screen.getByRole("link", { name: t("landing.googleAbout") }).getAttribute("href")).toBe(
+      "https://blog.undercroft.lowbit.link/en/app/",
     );
   });
 

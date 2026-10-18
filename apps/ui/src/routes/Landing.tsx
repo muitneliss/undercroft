@@ -9,6 +9,7 @@ import { Mark } from "@/components/Mark.tsx";
 import { usePageLamp } from "@/components/usePageLamp.ts";
 import { useVaultFilm, type VaultRefs } from "@/components/useVaultFilm.ts";
 import { CONTACT_EMAIL } from "@/lib/contact.ts";
+import { servicePageUrl } from "@/lib/servicePages.ts";
 import { STAGES, STEPS, type StepId } from "@/lib/vault/model.ts";
 import type { VaultWords } from "@/lib/vault/runtime.ts";
 import { useUiStore } from "@/store.ts";
@@ -91,6 +92,31 @@ function McpWorkflow(): React.JSX.Element {
           </li>
         ))}
       </ol>
+    </section>
+  );
+}
+
+/**
+ * What the app reads from Google and what it never does with it, with the three pages that say
+ * so in full. Google's brand verification reads this page signed out and needs the purpose, the
+ * privacy policy and the terms reachable from it (docs/runbook/google-ingestion-setup.md).
+ */
+function GoogleData(): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
+  const titleId = useId();
+  return (
+    <section className="landing__agent" aria-labelledby={titleId}>
+      <h2 id={titleId}>{t("landing.googleTitle")}</h2>
+      <div>
+        <p>{t("landing.googleBody")}</p>
+        <p>{t("landing.googleNever")}</p>
+        <p className="landing__google-links">
+          <a href={servicePageUrl(locale, "app")}>{t("landing.googleAbout")}</a>
+          <a href={servicePageUrl(locale, "privacy")}>{t("landing.privacy")}</a>
+          <a href={servicePageUrl(locale, "terms")}>{t("landing.terms")}</a>
+        </p>
+      </div>
     </section>
   );
 }
@@ -198,6 +224,7 @@ export function Landing(): React.JSX.Element {
             </div>
           </section>
           <McpWorkflow />
+          <GoogleData />
           <section className="landing__start" aria-labelledby={startId}>
             <h2 id={startId}>{t("landing.startTitle")}</h2>
             <p>{t("landing.startBody")}</p>

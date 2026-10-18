@@ -444,3 +444,5 @@
 ## [2026-10-18] ingest | Runbook Google Ingestion Setup
 ## [2026-10-18] ingest | ADR 0145 The Blog Moves to Cloudflare Pages
 ## [2026-10-18] ingest | ADR 0145 The Blog Moves to Cloudflare Pages
+## [2026-10-18] ingest | Runbook Google Ingestion Setup
+## [2026-10-18] ingest | Runbook Google Ingestion Setup

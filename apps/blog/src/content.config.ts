@@ -32,14 +32,14 @@ const posts = defineCollection({
 });
 
 /**
- * The hosted service's privacy policy and terms, `src/content/legal/<lang>/<page>.md`. They
- * live here because Google's OAuth verification needs both at a public address on the
- * service's authorised domain, linked from its home page, and the blog is the one public,
- * signed-out page on `lowbit.link`. `updated` is printed on the page: a policy without the date
- * it took effect cannot be held to.
+ * The hosted service's own pages, `src/content/service/<lang>/<page>.md`: what the app is, its
+ * privacy policy and its terms. They live here because Google's OAuth verification needs all
+ * three at a public address on the service's authorised domain, readable without signing in,
+ * and the blog is the one public, static site on `lowbit.link`. `updated` is printed on the
+ * page: a policy without the date it took effect cannot be held to.
  */
-const legal = defineCollection({
-  loader: glob({ pattern: "{vi,en}/{privacy,terms}.md", base: "./src/content/legal" }),
+const service = defineCollection({
+  loader: glob({ pattern: "{vi,en}/{app,privacy,terms}.md", base: "./src/content/service" }),
   schema: z.object({
     title: z.string().min(5).max(70),
     description: z.string().min(80).max(170),
@@ -47,4 +47,4 @@ const legal = defineCollection({
   }),
 });
 
-export const collections = { posts, legal };
+export const collections = { posts, service };

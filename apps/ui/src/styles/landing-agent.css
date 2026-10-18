@@ -34,6 +34,13 @@
     text-underline-offset: 0.2em;
   }
 
+  /* The Google data section shares this layout; its three page links share one line and wrap. */
+  .landing__agent .landing__google-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--s-5);
+  }
+
   @media (max-width: 760px) {
     .landing__agent {
       grid-template-columns: minmax(0, 1fr);

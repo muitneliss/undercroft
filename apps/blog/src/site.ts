@@ -31,11 +31,14 @@ export function langPrefix(lang: Lang): string {
   return lang === DEFAULT_LANG ? "" : `/${lang}`;
 }
 
-/** The hosted service's legal pages, one per name per language (`src/content/legal`). */
-export const LEGAL_PAGES = ["privacy", "terms"] as const;
-export type LegalPageName = (typeof LEGAL_PAGES)[number];
+/**
+ * The hosted service's own pages, one per name per language (`src/content/service`): `app` is
+ * the home page Google's OAuth verification is given, the other two its legal pages.
+ */
+export const SERVICE_PAGES = ["app", "privacy", "terms"] as const;
+export type ServicePageName = (typeof SERVICE_PAGES)[number];
 
-export function legalPath(lang: Lang, page: LegalPageName): string {
+export function servicePath(lang: Lang, page: ServicePageName): string {
   return `${langPrefix(lang)}/${page}/`;
 }
 
@@ -70,7 +73,8 @@ export const STRINGS = {
     contact: `Liên hệ: ${CONTACT_EMAIL}`,
     privacy: "Chính sách quyền riêng tư",
     terms: "Điều khoản dịch vụ",
-    legalUpdated: "Cập nhật ngày",
+    about: "Về ứng dụng Undercroft",
+    updated: "Cập nhật ngày",
     dateLocale: "vi-VN",
   },
   en: {
@@ -103,7 +107,8 @@ export const STRINGS = {
     contact: `Contact: ${CONTACT_EMAIL}`,
     privacy: "Privacy policy",
     terms: "Terms of service",
-    legalUpdated: "Last updated",
+    about: "About the Undercroft app",
+    updated: "Last updated",
     dateLocale: "en-GB",
   },
 } as const satisfies Record<Lang, Record<string, unknown>>;

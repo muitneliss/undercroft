@@ -1,7 +1,7 @@
 ---
 title: "Chính sách quyền riêng tư"
 description: "Cách dịch vụ Undercroft thu thập, sử dụng, lưu trữ, chia sẻ và xoá dữ liệu của bạn, bao gồm dữ liệu đọc từ Gmail và Google Drive."
-updated: 2026-10-10
+updated: 2026-10-18
 ---
 
 Chính sách này áp dụng cho dịch vụ Undercroft được vận hành tại [undercroft.lowbit.link](https://undercroft.lowbit.link) và blog này. Dịch vụ do multnelis ("chúng tôi") vận hành. Bạn có thể liên hệ với chúng tôi qua [contact@multnelis.org](mailto:contact@multnelis.org).
@@ -20,11 +20,11 @@ Undercroft là data platform dành cho tổ chức. Mỗi tổ chức là một 
 
 **Dữ liệu từ Google, khi quản trị viên kết nối.** Quản trị viên của một workspace có thể kết nối một hộp thư Gmail hoặc một tài khoản Google Drive. Google hiển thị màn hình xin quyền liệt kê những gì chúng tôi yêu cầu, và không có gì được đọc cho đến khi quản trị viên đồng ý.
 
-- **Gmail (chỉ đọc).** Chúng tôi đọc các thư trong những nhãn mà quản trị viên chọn, và chỉ những nhãn đó. Với mỗi thư, chúng tôi lưu người gửi, người nhận, tiêu đề, ngày gửi, mã định danh thư, nội dung thư, và các tệp đính kèm thuộc những loại tệp quản trị viên chọn.
-- **Google Drive (chỉ đọc).** Chúng tôi đọc các tệp trong những thư mục quản trị viên chọn qua trình chọn tệp của Google, và nội dung chữ trong các tệp đó. Tài liệu scan và hình ảnh được chuyển thành chữ (OCR) bằng phần mềm chạy trên máy chủ của chính chúng tôi.
-- **Tài khoản đã kết nối.** Chúng tôi ghi lại tài khoản Google nào đã đồng ý, địa chỉ email và mã tài khoản Google của nó, để lần kết nối lại sau vẫn gắn với đúng tài khoản đó.
+- **Gmail (chỉ đọc, quyền `gmail.readonly`).** Chúng tôi đọc các thư trong những nhãn mà quản trị viên chọn, và chỉ những nhãn đó. Với mỗi thư, chúng tôi lưu người gửi, người nhận, tiêu đề, ngày gửi, mã định danh thư, nội dung thư, và các tệp đính kèm thuộc những loại tệp quản trị viên chọn.
+- **Google Drive (chỉ đọc, quyền `drive.readonly`).** Chúng tôi đọc các tệp trong những thư mục quản trị viên chọn qua trình chọn tệp của Google, và nội dung chữ trong các tệp đó. Bản thân trình chọn tệp dùng quyền `drive.file`, chỉ để trả về mã định danh của những gì quản trị viên chọn. Tài liệu scan và hình ảnh được chuyển thành chữ (OCR) bằng phần mềm chạy trên máy chủ của chính chúng tôi.
+- **Tài khoản đã kết nối.** Qua quyền `openid` và `email`, chúng tôi ghi lại tài khoản Google nào đã đồng ý, địa chỉ email và mã tài khoản Google của nó, để lần kết nối lại sau vẫn gắn với đúng tài khoản đó.
 
-Chúng tôi không bao giờ gửi, sửa, gắn nhãn hay xoá email, và không bao giờ tạo, sửa hay xoá tệp trên Google Drive.
+Chúng tôi không bao giờ gửi, sửa, gắn nhãn hay xoá email, và không bao giờ tạo, sửa hay xoá tệp trên Google Drive. [Trang giới thiệu ứng dụng](/app/) giải thích bằng lời thường từng quyền Google được dùng để làm gì.
 
 **Dữ liệu từ các nguồn khác** mà quản trị viên kết nối, như Xero hoặc HubSpot, được đọc theo cùng cách: chỉ đọc, và chỉ trong phạm vi quản trị viên chọn.
 
@@ -52,6 +52,8 @@ Hai tính năng gửi nội dung tới nhà cung cấp bên ngoài. Cả hai đ�
 - **Phân loại tài liệu.** Khi quản trị viên công bố danh sách loại tài liệu cho workspace, nội dung chữ của từng tài liệu, có thể gồm nội dung email và tệp, được gửi tới TypeSafe để xác định tài liệu thuộc loại nào.
 
 Các nhà cung cấp này chỉ nhận nội dung để trả kết quả đó về cho workspace. Chúng tôi không dùng dữ liệu người dùng Google, và không cho phép các nhà cung cấp này dùng nó, để phát triển, cải thiện hay huấn luyện các mô hình AI hoặc machine learning tổng quát.
+
+Không tính năng nào kể trên, và không phần nào khác của dịch vụ, dùng dữ liệu người dùng Google để tạo, sửa hay sinh hình ảnh, video, âm thanh hay bất kỳ nội dung tổng hợp nào.
 
 ## Dữ liệu người dùng Google và Limited Use
 

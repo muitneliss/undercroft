@@ -180,6 +180,14 @@ export const en = {
     workflowDecideTitle: "Choose the next step",
     workflowDecideBody:
       "You receive data to inspect, or a clear answer that there is no evidence yet. If a change is needed, grant read-and-write access separately.",
+    googleTitle: "Your Google data, read-only.",
+    googleBody:
+      "When an administrator connects Gmail or Google Drive, Undercroft reads only the labels and folders they choose, keeps a copy in the workspace's own data store, and extracts the text so the workspace can search it and build reports. It never sends, changes or deletes mail or files.",
+    googleNever:
+      "Google data is never sold, used for advertising, used to train AI models, or used to create images or any other synthetic media. Its use adheres to the Google API Services User Data Policy, including the Limited Use requirements.",
+    googleAbout: "What the app does with Google data",
+    privacy: "Privacy policy",
+    terms: "Terms of service",
     startTitle: "One place to begin.",
     startBody:
       "Every customer has a separate workspace for sources, runs and reports. Sign in to open the customers you have access to.",
