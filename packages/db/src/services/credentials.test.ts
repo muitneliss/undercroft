@@ -84,6 +84,67 @@ describe("accessToken refreshes and writes the rotated token back", () => {
     expect(stored.refreshToken).toBe("refresh-2");
   });
 
+  it("a refresh of Google's unrotated token keeps the grant end its consent recorded", async () => {
+    // A Google project in Testing states its refresh token's end at consent and never again;
+    // the hourly refresh spends the same token, so wiping the date would disarm the warning.
+    await db.asSuperuser((tx) =>
+      upsertConnection(tx, { tenantId: "CASE-1", source: "drive", status: "connected" }),
+    );
+    const now = new Date("2026-01-01T00:00:00Z");
+    const grantEnd = "2026-01-08T00:00:00.000Z";
+    await writeCredential(
+      db,
+      "CASE-1",
+      "drive",
+      cred({ expiresAt: new Date(now.getTime() + 60_000).toISOString() }),
+      { env, grantExpiresAt: grantEnd },
+    );
+
+    function refresher(old: string): Promise<Credential> {
+      return Promise.resolve({
+        accessToken: "access-2",
+        refreshToken: old,
+        expiresAt: new Date(now.getTime() + 3_600_000).toISOString(),
+      });
+    }
+    await accessToken(db, "CASE-1", "drive", { refresher, now, env });
+
+    expect(await grantEndOf("drive")).toBe(grantEnd);
+  });
+
+  it("a refresh of Xero's rotated token moves the grant end sixty days out", async () => {
+    const now = new Date("2026-01-01T00:00:00Z");
+    await writeCredential(
+      db,
+      "CASE-1",
+      "xero",
+      cred({ expiresAt: new Date(now.getTime() + 60_000).toISOString() }),
+      { env, grantExpiresAt: "2026-01-08T00:00:00.000Z" },
+    );
+
+    function refresher(): Promise<Credential> {
+      return Promise.resolve({
+        accessToken: "access-2",
+        refreshToken: "refresh-2",
+        expiresAt: new Date(now.getTime() + 3_600_000).toISOString(),
+      });
+    }
+    await accessToken(db, "CASE-1", "xero", { refresher, now, env });
+
+    expect(await grantEndOf("xero")).toBe("2026-03-02T00:00:00.000Z");
+  });
+
+  async function grantEndOf(source: string): Promise<string | null> {
+    const { rows } = await db.asSuperuser((tx) =>
+      tx.query<{ grant_expires_at: Date | null }>(
+        "SELECT grant_expires_at FROM app.connection_secret WHERE tenant_id = 'CASE-1' AND source = $1",
+        [source],
+      ),
+    );
+    const end = rows[0]?.grant_expires_at ?? null;
+    return end === null ? null : new Date(end).toISOString();
+  }
+
   it("an expired token with no refresher marks the connection expired and raises", async () => {
     const now = new Date("2026-01-01T00:00:00Z");
     const expired = new Date(now.getTime() + 60_000).toISOString();

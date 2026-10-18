@@ -142,6 +142,33 @@ describe("storing a credential", () => {
     expect(stored.refreshToken).toBe("rt");
   });
 
+  it("a refresh token's stated end is the grant's end; a reconsent that states none clears it", async () => {
+    // A Google project still in Testing: the token response said when the refresh token
+    // dies, and that is the date the week-ahead warning is armed on.
+    const stated = "2099-01-08T00:00:00.000Z";
+    await post("/v1/connections/credential", {
+      ...VALID,
+      credential: { ...CREDENTIAL, refreshExpiresAt: stated },
+    });
+    expect(await grantEnd()).toBe(stated);
+
+    // Reconnected after the project was published: Google no longer dates the token, and a
+    // date kept from the old one would warn about an end that will not come.
+    await post("/v1/connections/credential", VALID);
+    expect(await grantEnd()).toBeNull();
+  });
+
+  async function grantEnd(): Promise<string | null> {
+    const { rows } = await db.asSuperuser((tx) =>
+      tx.query<{ grant_expires_at: Date | null }>(
+        "SELECT grant_expires_at FROM app.connection_secret WHERE tenant_id = $1",
+        [TENANT],
+      ),
+    );
+    const end = rows[0]?.grant_expires_at ?? null;
+    return end === null ? null : new Date(end).toISOString();
+  }
+
   it("an unknown tenant is a 404 and leaves no credential behind", async () => {
     const response = await post("/v1/connections/credential", { ...VALID, tenantId: "CASE-9999" });
 

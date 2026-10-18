@@ -1,15 +1,13 @@
 ---
 title: Runbook Google Ingestion Setup
 type: source
-date: 2026-10-16
+date: 2026-10-18
 tags: []
 source: docs/runbook/google-ingestion-setup.md
 source_path: docs/runbook/google-ingestion-setup.md
-source_hash: 8923266104c76f3a505592f30647010be33471b0ea26cd7142cc9cb79e1d6e73
-ingested: 2026-10-16
+source_hash: 10184e28d0de20bf22bceb1f5368ee3caea9b45e4e072d333d55ccde8d226940
+ingested: 2026-10-18
 ---
-
-# Runbook Google Ingestion Setup
 
 # Runbook Google Ingestion Setup
 
@@ -24,3 +22,5 @@ Running an ingest is a plate, not a `curl`: a holder of `sources:manage` (an adm
 Several accounts: "Add another account" on the card opens Google's account chooser and gives the chosen account a connection of its own, with its own mark, scope, schedule, last run and actions ([[ADR 0043 A Second Mailbox Is a Second Source]]). The first account keeps the source `gmail`/`drive`; each further one is `gmail.<account key>`. A dbt model filtering `source = 'gmail'` sees only the first mailbox; filter `source LIKE 'gmail.%'` too, or use the shipped `{{ gmail_letters() }}` macro, which folds cross-mailbox copies on the RFC 5322 Message-ID. Reconnect is pinned to its account: completing it as another Google account is refused as `reason=account-mismatch`; `reason=account-unidentified` means Google named no account, or the first account never recorded one. A failed callback returns to the tenant's Sources page with `connect=failed&reason=…`: `declined` is a cancel at Google's screen, `scope-declined` an unticked permission, `not-permitted` a session that does not hold `sources:manage` in that tenant (an admin does), `bad-state` a consent over 15 minutes old or opened twice, and `worker-refused` an unreachable worker or a mismatched trigger token. A source's card offers Run now, Change what syncs and Disconnect per account.
 
 Before verification, the consent screen's Branding is filled with links that open without signing in, on the authorised domain `lowbit.link`: the logo is `apps/ui/public/apple-touch-icon.png`, the home page is the blog (`https://blog.undercroft.lowbit.link/en/`) because the product's root is a sign-in screen a reviewer cannot read past, and the privacy policy and terms are the blog's `/en/privacy/` and `/en/terms/`, written in `apps/blog/src/content/legal/`. The privacy policy carries Google's Limited Use statement and names every provider that can receive Google user data, so a change that adds one changes it too.
+
+Publish the consent screen (Google Auth Platform, Audience, Publish app) so it reads In production. While it reads Testing, Google lets every refresh token live seven days from consent. After that every Gmail and Drive run fails with "was refused by the provider when refreshed", the card reads "Cần cấp lại quyền" (needs reconnecting), and a reconnect only buys another week. Publishing does not wait for verification: an unverified app in production keeps the 100-user cap and the interstitial, and its refresh tokens stop expiring. A token issued during Testing keeps its seven days, so each Google connection is reconnected once after publishing. A deployment still in Testing shows it: Google states each refresh token's end, the platform records it as the grant's end, and every administrator of the customer gets the "access is about to expire" email straight after each consent ([[ADR 0144 A Refresh Token's Stated End Is the Grant's End]]).

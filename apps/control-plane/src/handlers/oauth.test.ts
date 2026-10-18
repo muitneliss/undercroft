@@ -241,6 +241,43 @@ describe("completing a consent", () => {
     expect(JSON.stringify(audit[0]?.detail)).not.toContain("ops@acme.test");
   });
 
+  it("a refresh token Google says will lapse is sealed with the moment it lapses", async () => {
+    // A project whose consent screen is still in Testing gets refresh tokens that die after
+    // seven days, and Google says so in `refresh_token_expires_in`. Carried to the worker, it
+    // becomes the grant's end and the week-ahead warning, instead of a "reconnect" out of the
+    // blue a week later.
+    const sevenDays = 604_799;
+    tokenResponse = {
+      status: 200,
+      body: {
+        access_token: "at",
+        refresh_token: "rt",
+        expires_in: 3599,
+        refresh_token_expires_in: sevenDays,
+        scope: "https://www.googleapis.com/auth/gmail.readonly",
+        id_token: ID_TOKEN,
+      },
+    };
+    const state = await beginConsent();
+    const before = Date.now();
+
+    await callback(appFor(ADMIN), { state, code: "auth-code" });
+
+    const stated = worker.stored[0]?.credential.refreshExpiresAt;
+    expect(typeof stated).toBe("string");
+    const lapses = new Date(stated ?? "").getTime();
+    expect(lapses).toBeGreaterThanOrEqual(before + sevenDays * 1000);
+    expect(lapses).toBeLessThanOrEqual(Date.now() + sevenDays * 1000);
+  });
+
+  it("a refresh token Google gives no end is sealed with none, never a guessed one", async () => {
+    const state = await beginConsent();
+
+    await callback(appFor(ADMIN), { state, code: "auth-code" });
+
+    expect(worker.stored[0]?.credential.refreshExpiresAt ?? null).toBeNull();
+  });
+
   it("a consent that withheld the scope it asked for seals nothing", async () => {
     // Google's screen lets a person untick one permission and press Allow anyway, and what
     // comes back is a perfectly valid token for a grant that can read nothing. Sealed, it

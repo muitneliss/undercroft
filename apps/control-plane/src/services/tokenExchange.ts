@@ -18,6 +18,8 @@ export interface Exchanged {
   readonly accessToken: string;
   readonly refreshToken: string;
   readonly expiresAt: string | null;
+  /** When the refresh token dies, where the provider says (`refresh_token_expires_in`). */
+  readonly refreshExpiresAt: string | null;
   readonly scope: string;
   /** The provider's opaque subject, or `""` where the provider names nobody (Xero). */
   readonly sub: string;
@@ -76,10 +78,10 @@ export async function exchangeCode(
     return {
       accessToken,
       refreshToken: typeof body.refresh_token === "string" ? body.refresh_token : "",
-      expiresAt:
-        typeof body.expires_in === "number"
-          ? new Date(Date.now() + body.expires_in * MS_PER_SECOND).toISOString()
-          : null,
+      expiresAt: secondsFromNow(body.expires_in),
+      // Google sends it for a project still in Testing, whose refresh tokens die in seven days
+      // whatever we do; absent, the token has no end Google will tell us.
+      refreshExpiresAt: secondsFromNow(body.refresh_token_expires_in),
       scope: typeof body.scope === "string" ? body.scope : "",
       sub: identity.sub,
       email: identity.email,
@@ -87,6 +89,14 @@ export async function exchangeCode(
   } catch {
     return null;
   }
+}
+
+/** A token response's seconds-count as an instant, or `null` when it gave none. */
+function secondsFromNow(seconds: unknown): string | null {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds)) {
+    return null;
+  }
+  return new Date(Date.now() + seconds * MS_PER_SECOND).toISOString();
 }
 
 /**

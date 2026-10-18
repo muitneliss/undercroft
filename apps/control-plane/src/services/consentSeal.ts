@@ -7,12 +7,26 @@
  * audit under it.
  */
 
+import type { CredentialInput } from "@undercroft/contracts";
 import { writeConnectionDetail } from "@undercroft/db/repos";
 
 import { record as recordAudit } from "../repos/auditLog.ts";
 import { resolveFor } from "./accountResolution.ts";
 import type { CompleteDeps, CompleteOutcome } from "./oauth.ts";
-import type { exchangeCode } from "./tokenExchange.ts";
+import type { Exchanged, exchangeCode } from "./tokenExchange.ts";
+
+/**
+ * The tokens the worker seals, and nothing of who consented: the address and `sub` travel
+ * beside the credential, never inside the ciphertext.
+ */
+function credentialOf(exchanged: Exchanged): CredentialInput {
+  return {
+    accessToken: exchanged.accessToken,
+    refreshToken: exchanged.refreshToken,
+    expiresAt: exchanged.expiresAt,
+    refreshExpiresAt: exchanged.refreshExpiresAt,
+  };
+}
 
 /**
  * Everything after the consent is known good: seal the credential, label the card, audit it.
@@ -43,11 +57,7 @@ async function sealAndRecord(
     // names nobody here; its organisation id is recorded when the admin chooses one.
     externalAccountId: exchanged.sub,
     scope: exchanged.scope,
-    credential: {
-      accessToken: exchanged.accessToken,
-      refreshToken: exchanged.refreshToken,
-      expiresAt: exchanged.expiresAt,
-    },
+    credential: credentialOf(exchanged),
   });
   if (!stored.ok) {
     return {
