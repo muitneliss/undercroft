@@ -31,6 +31,7 @@ import { runTransform, type Spawn, type SpawnOptions, type TransformDeps } from 
 const TENANT = "CASE-1";
 const DATABASE = { host: "db.internal", port: 5432, dbname: "undercroft" };
 const EXITED_2 = /exited 2/u;
+const PAST_DEADLINE = /deadline/u;
 
 let db: TestDatabase;
 let workDir: string;
@@ -250,6 +251,22 @@ describe("runTransform", () => {
       ),
     ).rejects.toThrow(EXITED_2);
     expect(existsSync(seen.cwd)).toBe(false);
+  });
+
+  it("a build the deadline stopped raises naming the deadline, not a bare exit code", async () => {
+    await expect(
+      runTransform(
+        deps(() =>
+          Promise.resolve({
+            exitCode: 143,
+            stdout: "Running with dbt",
+            stderr: "",
+            timedOut: true,
+          }),
+        ),
+        { tenantId: TENANT, timeoutMs: 5000 },
+      ),
+    ).rejects.toThrow(PAST_DEADLINE);
   });
 
   it("dbt sees the tenant's macros, and none of the worker's secrets: a model's env_var() cannot read them", async () => {

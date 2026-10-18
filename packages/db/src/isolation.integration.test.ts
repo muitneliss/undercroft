@@ -273,7 +273,119 @@ describe.skipIf(!ENABLED)("a tenant's login through the pooler (ADR 0088)", () =
       await end();
     }
   });
+
+  // Issue 490, ADR 0146. A build's deadline SIGTERMs dbt, which leaves the statement it sent
+  // running in its backend, holding its locks, so the next build's seed TRUNCATE waits on it and
+  // dies at its own deadline. Faithful to production: the client is a separate process logged in
+  // through the pooler, and it is killed rather than closed politely.
+  it("ends a long statement, and frees its lock, once its client process is killed", async () => {
+    const { exec, end } = await prepared();
+    const login = "undercroft_dbt_case_itest";
+    const table = "staging_case_itest.orphan_490";
+    const env = composeEnv();
+    const child = Bun.spawn([process.execPath, "-e", ORPHANING_CLIENT], {
+      cwd: import.meta.dirname,
+      env: {
+        ORPHAN_HOST: "127.0.0.1",
+        ORPHAN_PORT: env.UNDERCROFT_PORT_PGBOUNCER ?? "16432",
+        ORPHAN_DB: env.UNDERCROFT_PG_DB ?? "undercroft",
+        ORPHAN_USER: login,
+        ORPHAN_PASSWORD: await rotateTenantPassword(exec, TENANT, "dbt", HOUR_MS),
+        ORPHAN_TABLE: table,
+      },
+      stdout: "ignore",
+      stderr: "pipe",
+    });
+    try {
+      await pollUntil(
+        exec,
+        async () => (await sleepers(exec, login)) > 0,
+        async () =>
+          `${login} never started its statement; its client ${
+            child.exitCode === null ? "is still running" : await new Response(child.stderr).text()
+          }`,
+      );
+      child.kill("SIGTERM");
+      await child.exited;
+
+      await pollUntil(
+        exec,
+        async () => (await sleepers(exec, login)) === 0,
+        () =>
+          Promise.resolve(
+            `${login}'s statement outlived its killed client by 20 s: client_connection_check_interval is not in force`,
+          ),
+      );
+      const admin = new pg.Client(connection().admin);
+      await admin.connect();
+      try {
+        await admin.query("BEGIN");
+        // NOWAIT: a lock the orphan still held raises here rather than waiting for it.
+        await admin.query(`LOCK TABLE ${table} IN ACCESS EXCLUSIVE MODE NOWAIT`);
+        await admin.query("ROLLBACK");
+      } finally {
+        await admin.end();
+      }
+    } finally {
+      child.kill("SIGKILL");
+      await exec.query(
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = $1",
+        [login],
+      );
+      await exec.exec(`DROP TABLE IF EXISTS ${table}`);
+      await end();
+    }
+    // Longer than Bun's ten seconds: the setting is checked every five, and the wait for it is
+    // bounded at twenty so a miss fails with its own message rather than a bare timeout.
+  }, 60_000);
 });
+
+/**
+ * The client of the test above, run as its own process with the tenant's dbt login: it makes a
+ * table, takes an exclusive lock on it and then sits in a ten-minute statement, as a model's
+ * `CREATE TABLE AS` does. Written out here, not in a fixture file, so the test reads whole.
+ */
+const ORPHANING_CLIENT = `
+const { default: pg } = await import("pg");
+const e = process.env;
+const client = new pg.Client({
+  host: e.ORPHAN_HOST,
+  port: Number.parseInt(e.ORPHAN_PORT, 10),
+  database: e.ORPHAN_DB,
+  user: e.ORPHAN_USER,
+  password: e.ORPHAN_PASSWORD,
+});
+await client.connect();
+await client.query(\`CREATE TABLE IF NOT EXISTS \${e.ORPHAN_TABLE} (id int)\`);
+await client.query("BEGIN");
+await client.query(\`LOCK TABLE \${e.ORPHAN_TABLE} IN ACCESS EXCLUSIVE MODE\`);
+await client.query("SELECT pg_sleep(600)");
+`;
+
+/** How many of `user`'s backends are in the ten-minute sleep of `ORPHANING_CLIENT`. */
+async function sleepers(exec: ReturnType<typeof asExecutor>, user: string): Promise<number> {
+  const { rows } = await exec.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM pg_stat_activity
+     WHERE usename = $1 AND state = 'active' AND query LIKE '%pg_sleep(600)%'`,
+    [user],
+  );
+  return rows[0]?.n ?? 0;
+}
+
+/** Ask `ready` every 50 ms for at most twenty seconds; fail with what `failure` says. */
+async function pollUntil(
+  exec: ReturnType<typeof asExecutor>,
+  ready: () => Promise<boolean>,
+  failure: () => Promise<string>,
+): Promise<void> {
+  for (let tries = 0; tries < 400; tries += 1) {
+    if (await ready()) {
+      return;
+    }
+    await exec.query("SELECT pg_sleep(0.05)");
+  }
+  throw new Error(await failure());
+}
 
 /** Wait until a backend of `user` is waiting on a lock: at most ten seconds, asked every 50 ms. */
 async function blockedOnLock(exec: ReturnType<typeof asExecutor>, user: string): Promise<void> {

@@ -399,6 +399,34 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
     ]);
   });
 
+  // Issue 490, ADR 0146: a build's deadline kills dbt, not its statements. Without this setting
+  // a backend whose client is gone runs to the end holding its locks, and the next build that
+  // loads the same seed waits on them and dies too. A tenant created before the setting existed
+  // has to get it when it is re-provisioned, not only the ones made after.
+  it("a tenant's dbt login is set to notice a vanished client, and re-provisioning restores that", async () => {
+    async function settings(login: string) {
+      const { rows } = await db.query<{ setconfig: string[] }>(
+        `SELECT s.setconfig FROM pg_db_role_setting s JOIN pg_roles r ON r.oid = s.setrole
+          WHERE r.rolname = $1`,
+        [login],
+      );
+      return rows.flatMap((row) => row.setconfig);
+    }
+    expect(await settings("undercroft_dbt_case_0042")).toContain(
+      "client_connection_check_interval=5s",
+    );
+
+    await db.exec("ALTER ROLE undercroft_dbt_case_0042 RESET client_connection_check_interval");
+    expect(await settings("undercroft_dbt_case_0042")).not.toContain(
+      "client_connection_check_interval=5s",
+    );
+    await db.query("SELECT ops.provision_tenant('CASE-0042')");
+
+    expect(await settings("undercroft_dbt_case_0042")).toContain(
+      "client_connection_check_interval=5s",
+    );
+  });
+
   // ADR 0088: PgBouncer asks this, as the worker, at every tenant client login. It may learn a
   // live tenant login's secret and nothing else -- not a platform role's, not an expired one's.
   it("the pooler learns a live tenant login's secret and no other", async () => {

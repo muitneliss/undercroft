@@ -21,7 +21,8 @@
  *    A build that runs for half an hour is a build that has hung, and the previous tables keep
  *    serving -- stale, not wrong.
  * 4. **Read `run_results.json`** into steps for the ledger, one per model, test or seed, each
- *    test attributed to the model it tests from `manifest.json` (ADR 0129). A
+ *    test attributed to the model it tests from `manifest.json` (ADR 0129). A build the
+ *    deadline stopped raises first, whatever it left (`SpawnResult.timedOut`). A
  *    non-zero exit with results is a build that ran and found something wrong, reported step
  *    by step; a non-zero exit with no results is dbt stopping before its first model, and that
  *    raises with dbt's own statement of why (`causeOf`).
@@ -79,6 +80,12 @@ export interface SpawnResult {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
+  /**
+   * True only when the spawner's own deadline stopped the child. A fake that does not model a
+   * deadline omits it. Without it a build killed at its deadline is a bare `exited 143` that
+   * a reader cannot tell from a crash (issue 490).
+   */
+  readonly timedOut?: boolean;
 }
 
 export type Spawn = (cmd: readonly string[], options: SpawnOptions) => Promise<SpawnResult>;
@@ -143,14 +150,18 @@ export async function realSpawn(
     stdout: "pipe",
     stderr: "pipe",
   });
-  const deadline = setTimeout(() => proc.kill(), options.timeoutMs);
+  let timedOut = false;
+  const deadline = setTimeout(() => {
+    timedOut = true;
+    proc.kill();
+  }, options.timeoutMs);
   try {
     const [stdout, stderr] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),
     ]);
     const exitCode = await proc.exited;
-    return { exitCode, stdout, stderr };
+    return { exitCode, stdout, stderr, timedOut };
   } finally {
     clearTimeout(deadline);
   }
@@ -276,12 +287,26 @@ async function spawnDbt(
       : ["--select", ...input.select]),
   ];
   const timeoutMs = input.timeoutMs ?? deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const { exitCode, stdout, stderr } = await deps.sessions.withPassword(
+  const { exitCode, stdout, stderr, timedOut } = await deps.sessions.withPassword(
     { tenantId: input.tenantId, kind: "dbt" },
     timeoutMs,
     (password) => spawn(cmd, { cwd: dir, env: childEnv(deps.env, password), timeoutMs }),
   );
-  return { exitCode, output: `${stdout}\n${stderr}` };
+  const output = `${stdout}\n${stderr}`;
+  // Its own sentence, whatever results it left: a build stopped at its deadline is neither a
+  // crash nor a finding, and "exited 143" names neither (issue 490, ADR 0146). Whole seconds,
+  // because an editor build's deadline is what its turn left of 120 s.
+  if (timedOut === true) {
+    const seconds = String(Math.round(timeoutMs / 1000));
+    throw new ConnectorError(
+      "dbt",
+      "build",
+      0,
+      `dbt build ran past its ${seconds}-second deadline and was stopped`,
+      { cause: new Error(causeOf(output)) },
+    );
+  }
+  return { exitCode, output };
 }
 
 /**
