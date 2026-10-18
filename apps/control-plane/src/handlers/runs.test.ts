@@ -1,5 +1,9 @@
 /**
  * The ledger over tRPC: who may read it, and what a run looks like from the interface.
+ *
+ * Its readers are builders: the ledger needs `runs:read` (ADR 0147), which a builder holds and a
+ * viewer or a member does not -- that refusal is pinned with the other divisions' in
+ * `authz.test.ts` -- and a builder still lacks the `sources:manage` that starting a run needs.
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
@@ -144,8 +148,8 @@ describe("runs.list", () => {
       });
       await closeRun(db, id, { status, testsFailed });
     }
-    const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
-    const { runs } = caller(viewer, "v@example.test");
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
+    const { runs } = caller(reader, "b@example.test");
 
     const { items } = await runs.list({ tenantId: "CASE-0042", limit: 10 });
     expect(Object.fromEntries(items.map((r) => [r.id, [r.status, r.verdict]]))).toEqual({
@@ -159,9 +163,9 @@ describe("runs.list", () => {
     expect([one.status, one.testsFailed, one.verdict]).toEqual(["ok", 2, "tests-failing"]);
   });
 
-  it("a viewer reads the tenant's ledger, newest first, with entities and counts", async () => {
-    const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
-    const page = await caller(viewer, "v@example.test").runs.list({ tenantId: "CASE-0042" });
+  it("a reader of the journal reads the tenant's ledger, newest first, with entities and counts", async () => {
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
+    const page = await caller(reader, "b@example.test").runs.list({ tenantId: "CASE-0042" });
 
     // Exact, so it also proves CASE-0043's `r-other` is not in it.
     expect(page.items.map((r) => r.id)).toEqual(["r-running", "r-ok"]);
@@ -187,8 +191,8 @@ describe("runs.list narrowed to one account", () => {
     ] as const) {
       await openRun(db, { id, tenantId, source, verb: "ingest", trigger: "schedule" });
     }
-    const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
-    const { runs } = caller(viewer, "v@example.test");
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
+    const { runs } = caller(reader, "b@example.test");
 
     const first = await runs.list({ tenantId: "CASE-0042", source: "gmail" });
     const second = await runs.list({ tenantId: "CASE-0042", source: "gmail.3fa9c1d2e0ab" });
@@ -200,8 +204,8 @@ describe("runs.list narrowed to one account", () => {
 
 describe("runs.list narrowed by what it is asked", () => {
   it("passes every filter to the ledger, so a run in progress is one call away", async () => {
-    const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
-    const { runs } = caller(viewer, "v@example.test");
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
+    const { runs } = caller(reader, "b@example.test");
 
     const running = await runs.list({ tenantId: "CASE-0042", status: "running" });
     const manualIngests = await runs.list({
@@ -218,8 +222,8 @@ describe("runs.list narrowed by what it is asked", () => {
   });
 
   it("refuses more than 50 ids, or a time that is not an instant, before reading anything", async () => {
-    const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
-    const { runs } = caller(viewer, "v@example.test");
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
+    const { runs } = caller(reader, "b@example.test");
     const ids = Array.from({ length: 51 }, (_, at) => `r-${at}`);
 
     expect(await errorCode(() => runs.list({ tenantId: "CASE-0042", ids }))).toBe("BAD_REQUEST");
@@ -253,9 +257,9 @@ describe("the scope a run read with", () => {
     // What the collector asks as it starts reading (`google/collect.ts`).
     await scopeForRun(db, { runId: "r-mail", tenantId: "CASE-0042", source: "gmail" });
     await chooseLabels(["Statements"]);
-    const member = await seedMember("m@example.test", "member", "CASE-0042");
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
 
-    const run = await caller(member, "m@example.test").runs.get({
+    const run = await caller(reader, "b@example.test").runs.get({
       tenantId: "CASE-0042",
       runId: "r-mail",
     });
@@ -272,9 +276,9 @@ describe("the scope a run read with", () => {
       source: "hubspot",
       selectionJson: JSON.stringify({ properties: { companies: ["annualrevenue"] } }),
     });
-    const member = await seedMember("m@example.test", "member", "CASE-0042");
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
 
-    const run = await caller(member, "m@example.test").runs.get({
+    const run = await caller(reader, "b@example.test").runs.get({
       tenantId: "CASE-0042",
       runId: "r-ok",
     });
@@ -285,8 +289,8 @@ describe("the scope a run read with", () => {
 
 describe("runs.get", () => {
   it("returns the run with its refusals and their reasons", async () => {
-    const member = await seedMember("m@example.test", "member", "CASE-0042");
-    const run = await caller(member, "m@example.test").runs.get({
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
+    const run = await caller(reader, "b@example.test").runs.get({
       tenantId: "CASE-0042",
       runId: "r-ok",
     });
@@ -307,8 +311,8 @@ describe("runs.get", () => {
            ('r-ok', 'test.shop.not_null_orders_total', 'test', 'not_null_orders_total', 'fail')`,
       ),
     );
-    const member = await seedMember("m@example.test", "member", "CASE-0042");
-    const { runs } = caller(member, "m@example.test");
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
+    const { runs } = caller(reader, "b@example.test");
 
     const problems = await runs.get({ tenantId: "CASE-0042", runId: "r-ok" });
     const all = await runs.get({ tenantId: "CASE-0042", runId: "r-ok", steps: "all" });
@@ -327,8 +331,8 @@ describe("runs.get", () => {
   });
 
   it("waits for a run to settle, and answers with the verdict it then has", async () => {
-    const member = await seedMember("m@example.test", "member", "CASE-0042");
-    const answer = caller(member, "m@example.test").runs.get({
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
+    const answer = caller(reader, "b@example.test").runs.get({
       tenantId: "CASE-0042",
       runId: "r-running",
       waitSeconds: 10,
@@ -344,10 +348,10 @@ describe("runs.get", () => {
   });
 
   it("refuses a wait longer than 50 seconds, before waiting at all", async () => {
-    const member = await seedMember("m@example.test", "member", "CASE-0042");
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
     expect(
       await errorCode(() =>
-        caller(member, "m@example.test").runs.get({
+        caller(reader, "b@example.test").runs.get({
           tenantId: "CASE-0042",
           runId: "r-running",
           waitSeconds: 51,
@@ -357,10 +361,10 @@ describe("runs.get", () => {
   });
 
   it("a run of another tenant is NOT_FOUND, never FORBIDDEN", async () => {
-    const member = await seedMember("m@example.test", "member", "CASE-0042");
+    const reader = await seedMember("b@example.test", "builder", "CASE-0042");
     expect(
       await errorCode(() =>
-        caller(member, "m@example.test").runs.get({ tenantId: "CASE-0042", runId: "r-other" }),
+        caller(reader, "b@example.test").runs.get({ tenantId: "CASE-0042", runId: "r-other" }),
       ),
     ).toBe("NOT_FOUND");
   });

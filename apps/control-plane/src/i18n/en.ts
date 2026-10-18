@@ -77,8 +77,11 @@ export const en = {
 
   permission: {
     reportsAuthor: "author questions and dashboards",
+    modelsRead: "read models, macros and reference tables",
     modelsWrite: "save, build and preview models, macros and reference tables",
     lakeRead: "read the raw lake",
+    runsRead: "read the journal of runs",
+    sourcesRead: "read sources and their settings",
     sourcesManage: "manage sources",
     keysManage: "manage ingest keys",
     catalogueManage: "manage the document-kind catalogue",

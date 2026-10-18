@@ -17,10 +17,11 @@
  * `scoped` divisions are sections of one customer's book and cannot be opened
  * until a customer is chosen. A division that `requires` a permission opens only
  * for a reader who holds it in that customer -- ADR 0119 closed People to anyone
- * but an admin, and ADR 0139 restated that as the permission its procedures need.
- * Either way they render face-down rather than being hidden, because a division
- * that vanishes teaches nobody that it exists. `closedTo` is the one place both
- * rules are read.
+ * but an admin, ADR 0139 restated that as the permission its procedures need, and
+ * ADR 0147 gave Sources, the Journal, the Lake and Models one each, so a reader of
+ * Reports alone opens Customers and Reports. Either way they render face-down
+ * rather than being hidden, because a division that vanishes teaches nobody that
+ * it exists. `closedTo` is the one place both rules are read.
  */
 
 import { can, type Permission } from "@/lib/permissions.ts";
@@ -74,7 +75,7 @@ export const DIVISIONS: readonly Division[] = [
     hue: "#eda600",
     extent: 4,
     scoped: true,
-    requires: null,
+    requires: "sources:read",
   },
   {
     id: "journal",
@@ -82,16 +83,23 @@ export const DIVISIONS: readonly Division[] = [
     hue: "#3e782b",
     extent: 3,
     scoped: true,
-    requires: null,
+    requires: "runs:read",
   },
-  { id: "lake", labelKey: "nav.lake", hue: "#0f7673", extent: 3, scoped: true, requires: null },
+  {
+    id: "lake",
+    labelKey: "nav.lake",
+    hue: "#0f7673",
+    extent: 3,
+    scoped: true,
+    requires: "lake:read",
+  },
   {
     id: "models",
     labelKey: "nav.models",
     hue: "#634cb0",
     extent: 3,
     scoped: true,
-    requires: null,
+    requires: "models:read",
   },
   {
     id: "reports",
@@ -176,6 +184,18 @@ export function divisionPath(id: DivisionId, tenantId: string | undefined): stri
     return "/tenants";
   }
   return id === "sources" ? `/tenants/${tenantId}` : `/tenants/${tenantId}/${id}`;
+}
+
+/**
+ * Where "Open" opens a customer's book for this reader: the first division in ring order that is
+ * open to them. That is Sources, where `/tenants/:tenantId` has always opened a book, for every
+ * reader who may read it; a reader of Reports alone (ADR 0147) opens at Reports instead of onto a
+ * notice. Permissions not yet known open at Sources, for the reason `closedTo` gives.
+ */
+export function bookPath(tenantId: string, permissions: readonly Permission[] | undefined): string {
+  const reader = { tenantId, permissions };
+  const first = DIVISIONS.find((div) => div.scoped && closedTo(div, reader) === null);
+  return divisionPath(first?.id ?? "sources", tenantId);
 }
 
 /**

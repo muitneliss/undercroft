@@ -497,7 +497,8 @@ describe("scopes.preview", () => {
 describe("what a narrowed reader is told", () => {
   async function staff(worker: WorkerClient | null = null) {
     const admin = await as("admin@example.test", "admin");
-    await defineRole(admin, "staff", ["reports:author"]);
+    // `models:read` for the model's own reads, `reports:author` for its answers (ADR 0147).
+    await defineRole(admin, "staff", ["reports:author", "models:read"]);
     await admin.grants.save({
       tenantId: TENANT,
       role: "staff",

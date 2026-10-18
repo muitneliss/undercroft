@@ -140,8 +140,11 @@ export const vi = {
    */
   permission: {
     reportsAuthor: "soạn câu hỏi và bảng điều khiển",
+    modelsRead: "đọc mô hình, macro và bảng tham chiếu",
     modelsWrite: "lưu, dựng và xem trước mô hình, macro và bảng tham chiếu",
     lakeRead: "đọc hồ dữ liệu thô",
+    runsRead: "xem nhật ký các lần chạy",
+    sourcesRead: "xem nguồn dữ liệu và cấu hình của chúng",
     sourcesManage: "quản lý nguồn dữ liệu",
     keysManage: "quản lý khoá nạp dữ liệu",
     catalogueManage: "quản lý catalogue loại tài liệu",

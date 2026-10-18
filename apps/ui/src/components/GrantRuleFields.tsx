@@ -5,7 +5,9 @@
  *
  * The columns are the server's: `models.get` answers what the model's last build found (less any
  * the reader cannot see themselves), `seeds.get` what a reference table declares. A model never
- * built has none, and the form says so rather than offer a rule nothing could check. Whether the
+ * built has none, and the form says so rather than offer a rule nothing could check. Both need
+ * `models:read` (ADR 0147), so for a reader without it nothing is asked and no rule is offered:
+ * the grant is of the whole model, which the subset rule still weighs. Whether the
  * rule is narrower than what the reader reaches is the server's subset rule; the form offers, the
  * server decides.
  *
@@ -17,13 +19,16 @@ import { ROW_OPS } from "@undercroft/contracts/rowRules";
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
+import { can } from "@/lib/permissions.ts";
 import { grantDraftFor, type RuleConditionDraft, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
 /** The columns of the model or reference table `name`, as the server answers them. */
 function useColumns(tenantId: string, name: string, seed: boolean): readonly string[] | undefined {
-  const model = trpc.models.get.useQuery({ tenantId, name }, { enabled: !seed });
-  const table = trpc.seeds.get.useQuery({ tenantId, name }, { enabled: seed });
+  const permissions = trpc.tenants.get.useQuery({ tenantId }).data?.permissions;
+  const readsModels = can(permissions, "models:read");
+  const model = trpc.models.get.useQuery({ tenantId, name }, { enabled: readsModels && !seed });
+  const table = trpc.seeds.get.useQuery({ tenantId, name }, { enabled: readsModels && seed });
   if (seed) {
     return table.data?.columns.map((column) => column.name);
   }

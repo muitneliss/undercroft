@@ -1,13 +1,12 @@
 /**
- * The raw lake as the Lake division reads it: a summary for every member, the rows for an
- * admin.
+ * The raw lake as the Lake division reads it: a summary, and the rows.
  *
- * Two readers, two levels of exposure. The summary is counts and instants per stream --
- * how many deals, when the newest was seen -- and carries nothing a person wrote, so any
- * member of the tenant may read it; it is the honest answer to "did anything land". The
- * rows are the source's payloads verbatim, which for a CRM is names and addresses and for
- * a mailbox is whatever the mail said; that is admin-only (D11), decided in the handler's
- * role gate and stated here so the two files agree on why.
+ * Two levels of exposure. The summary is counts and instants per stream -- how many deals,
+ * when the newest was seen -- and carries nothing a person wrote; it is the honest answer to
+ * "did anything land". The rows are the source's payloads verbatim, which for a CRM is names
+ * and addresses and for a mailbox is whatever the mail said. Both are a holder of `lake:read`'s,
+ * decided in the handler's gate (ADR 0139, and for the summary ADR 0147: which streams a
+ * customer lands, and how much of each, is not every member's either).
  *
  * Nothing here decides a status code. `records` for a stream that has nothing returns an
  * empty page, which is what it is: absence, not an error.

@@ -12,7 +12,7 @@ removed.
 
 ## The catalogue
 
-- `documentKinds.list` (any member) answers with:
+- `documentKinds.list` (needs `lake:read`, which a builder and an admin hold) answers with:
   - `kinds`: the catalogue's DRAFT. Each kind has its `description` (the one sentence the
     classifier reads), its `origin` (`initialised`, `generic` or `admin`) and its
     `sampleShare`, the share of the sample it was seen in when the catalogue was initialised.

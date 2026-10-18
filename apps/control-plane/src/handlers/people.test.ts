@@ -296,7 +296,7 @@ describe("a builder can be invited and given", () => {
     const tenant = await signedIn.tenants.get({ tenantId: "CASE-0042" });
     expect([tenant.role, tenant.permissions]).toEqual([
       "builder",
-      ["lake:read", "models:write", "reports:author"],
+      ["lake:read", "models:read", "models:write", "reports:author", "runs:read", "sources:read"],
     ]);
   });
 

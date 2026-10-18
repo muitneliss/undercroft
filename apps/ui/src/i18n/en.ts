@@ -61,8 +61,11 @@ export const en = {
 
   permission: {
     reportsAuthor: "author questions and dashboards",
+    modelsRead: "read models, macros and reference tables",
     modelsWrite: "save, build and preview models, macros and reference tables",
     lakeRead: "read the raw lake",
+    runsRead: "read the journal of runs",
+    sourcesRead: "read sources and their settings",
     sourcesManage: "manage sources",
     keysManage: "manage ingest keys",
     catalogueManage: "manage the document-kind catalogue",
@@ -631,7 +634,7 @@ export const en = {
       "Every readable document is classified against the catalogue of document kinds of {{tenantId}}: invoices, contracts, statements… See and edit the catalogue here.",
     kindsOpen: "Open the document kinds",
     consoleNeedsLakeRead:
-      "Running queries over the raw lake needs permission to read it (lake:read). The counts of what has landed are still yours to read on the Raw lake page.",
+      "Running queries over the raw lake needs permission to read it (lake:read).",
     consoleRows_one: "{{count, number}} row",
     consoleRows_other: "{{count, number}} rows",
     consoleRowsFrom_one: "{{count, number}} row, from row {{from, number}}",
@@ -706,8 +709,6 @@ export const en = {
     payloadCopied: "Original string copied.",
     copyBlocked:
       "The browser blocked the clipboard. Select the payload above and copy it by hand; no data was changed.",
-    needsLakeReadNote:
-      "You can read this summary. Raw records, content search and the SQL console need permission to read the raw lake (lake:read).",
     noRows: "This stream has no records yet.",
 
     runRows: "Only the rows that still carry {{runId}}.",
@@ -843,15 +844,15 @@ export const en = {
     roleLabel: "Role in this customer",
     rightsLabel: "What each role may do in {{tenantId}}",
     rightsViewer:
-      "Sees the connected sources, the run journal, the raw lake's summary, the models and macros, and the document kinds; opens and runs saved questions and dashboards. Cannot write or save a question, or change anything else.",
+      "Opens and runs the saved questions and dashboards in Reports. Does not see the sources, the run journal, the raw lake or the models, and cannot write or save a question or change anything else.",
     rightsMember:
-      "Everything a viewer may do, and also: writes and runs new questions, saves and deletes questions and dashboards. Does not read the raw lake's contents, save or build models, connect accounts, see who has access, or invite or remove anyone.",
+      "Everything a viewer may do, and also: writes and runs new questions, saves and deletes questions and dashboards. Does not see the sources, the run journal, the raw lake or the models, connect accounts, see who has access, or invite or remove anyone.",
     rightsBuilder:
-      "Everything a member may do, and also: saves, deletes, builds and previews models, saves and deletes macros and reference tables; reads, searches and queries the raw lake's records and documents, and the rows a failed data-quality test stored. Does not connect accounts, mint ingest keys, edit the document kinds, see who has access, invite or remove anyone, or rename or deactivate the customer.",
+      "Everything a member may do, and also: sees the connected sources, the run journal and the document kinds; reads, saves, deletes, builds and previews models, and reads, saves and deletes macros and reference tables; reads, searches and queries the raw lake's summary, records and documents, and the rows a failed data-quality test stored. Does not connect accounts, mint ingest keys, edit the document kinds, see who has access, invite or remove anyone, or rename or deactivate the customer.",
     rightsAdmin:
       "Everything a builder may do, and also: connects and disconnects accounts, chooses what they read and how often, starts a sync now; edits and publishes the document kinds; mints and revokes ingest keys; sees who has access and who is invited, invites people, changes their role, removes them and withdraws invitations; reads everything done in the customer, by anyone; renames, deactivates and reactivates the customer. Adding a new customer is for platform administrators only.",
     rightsCustom: "Permissions: {{permissions}}.",
-    rightsNone: "No permission beyond reading.",
+    rightsNone: "No permission beyond reading the saved reports.",
     notInvited: "Not invited",
     invitedAndEmailed: "Invited {{email}}. They have been emailed.",
     invitedNotEmailedHeading: "Invited, but not emailed",
@@ -895,7 +896,7 @@ export const en = {
     colHolders: "In use",
     colChange: "Change",
     builtIn: "Built-in",
-    noPermissions: "No permission beyond reading.",
+    noPermissions: "No permission beyond reading the saved reports.",
     holders: "Holding it: {{members, number}} · Open invitations: {{invitations, number}}",
     edit: "Edit permissions…",
     permissionsFor: "Permissions of {{role}}",

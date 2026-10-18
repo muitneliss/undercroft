@@ -2,8 +2,9 @@
  * One customer's own page: what the book is, and a door to each of its divisions.
  *
  * In the Customers division, at `/tenants/:tenantId/about`, and reached from the customer
- * list by the customer's name; `Open` beside the name still opens the book at Sources, which
- * is what `/tenants/:tenantId` has always done.
+ * list by the customer's name; `Open` beside the name opens the book at Sources, which is what
+ * `/tenants/:tenantId` has always done -- or, for a reader Sources is closed to, at the first
+ * division open to them (`bookPath`, ADR 0147).
  *
  * It prints only what `tenants.get` answers -- the name, the ID and the reader's role. The
  * customer's creation date is in the database but not in that answer, and a page that printed
@@ -13,7 +14,8 @@
  * Sources, and this page links there rather than holding a second copy: two forms for one
  * value are two sets of cache invalidations to keep in step, and they drift. The link is for
  * a holder of `tenant:manage` only, as the form is; the server's `requirePermission` refuses
- * regardless.
+ * regardless. Both doors to Sources are offered only to a reader Sources is open to: one that
+ * opened on a notice would be no door.
  */
 
 import { useTranslation } from "react-i18next";
@@ -27,6 +29,7 @@ import {
   closedTo,
   DIVISIONS,
   type DivisionId,
+  division,
   divisionPath,
 } from "@/lib/divisions.ts";
 import { can, type Permission } from "@/lib/permissions.ts";
@@ -102,6 +105,8 @@ export function Customer({ tenantId }: { tenantId: string }): React.JSX.Element 
 
   const name = tenant.data.displayName || tenantId;
   const sources = divisionPath("sources", tenantId);
+  const { permissions } = tenant.data;
+  const readsSources = closedTo(division("sources"), { tenantId, permissions }) === null;
 
   return (
     <div className="sheet">
@@ -116,23 +121,25 @@ export function Customer({ tenantId }: { tenantId: string }): React.JSX.Element 
           <Fact label={t("tenants.colReference")}>{tenantId}</Fact>
           <Fact label={t("tenants.colRole")}>{tenant.data.role}</Fact>
         </Facts>
-        <div className="row">
-          <Link className="plate plate--primary" to={sources}>
-            {t("tenants.openSources")}
-          </Link>
-          {can(tenant.data.permissions, "tenant:manage") ? (
-            <Link className="plate" to={sources}>
-              {t("tenants.renameOnSources")}
+        {readsSources ? (
+          <div className="row">
+            <Link className="plate plate--primary" to={sources}>
+              {t("tenants.openSources")}
             </Link>
-          ) : null}
-        </div>
+            {can(permissions, "tenant:manage") ? (
+              <Link className="plate" to={sources}>
+                {t("tenants.renameOnSources")}
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="band-rule" />
 
       <h2 className="head">{t("tenants.insideHead")}</h2>
       <div className="body">
-        <Directory tenantId={tenantId} permissions={tenant.data.permissions} />
+        <Directory tenantId={tenantId} permissions={permissions} />
       </div>
     </div>
   );

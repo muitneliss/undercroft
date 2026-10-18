@@ -36,8 +36,11 @@ export function can(
  */
 export const PERMISSION_LABELS = {
   "reports:author": "permission.reportsAuthor",
+  "models:read": "permission.modelsRead",
   "models:write": "permission.modelsWrite",
   "lake:read": "permission.lakeRead",
+  "runs:read": "permission.runsRead",
+  "sources:read": "permission.sourcesRead",
   "sources:manage": "permission.sourcesManage",
   "keys:manage": "permission.keysManage",
   "catalogue:manage": "permission.catalogueManage",

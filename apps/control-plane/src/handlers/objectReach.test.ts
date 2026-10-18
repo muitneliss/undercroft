@@ -140,7 +140,7 @@ async function saveQuestion(name: string): Promise<string> {
 
 describe("models and reference tables", () => {
   it("a role granted one model lists and reads that one, and the rest are not there", async () => {
-    const sales = await holding("sales", [], ["model:fct_sales"]);
+    const sales = await holding("sales", ["models:read"], ["model:fct_sales"]);
 
     const listed = await sales.models.list({ tenantId: TENANT });
     const other = await refused(() => sales.models.get({ tenantId: TENANT, name: "fct_costs" }));
@@ -159,15 +159,15 @@ describe("models and reference tables", () => {
   });
 
   it("a built-in role reads every model and reference table, as before", async () => {
-    const viewer = await as("v@example.test", "viewer");
+    const builder = await as("b@example.test", "builder");
 
-    const listed = await viewer.models.list({ tenantId: TENANT });
+    const listed = await builder.models.list({ tenantId: TENANT });
 
     expect(Array.isArray(listed) ? listed.map((model) => model.name) : null).toEqual([
       "fct_costs",
       "fct_sales",
     ]);
-    expect((await viewer.seeds.list({ tenantId: TENANT })).map((seed) => seed.name)).toEqual([
+    expect((await builder.seeds.list({ tenantId: TENANT })).map((seed) => seed.name)).toEqual([
       "fx_rates",
     ]);
   });
@@ -199,7 +199,7 @@ describe("models and reference tables", () => {
       sql: "select * from {{ ref('fct_costs') }}",
       tests: { columns: {} },
     });
-    const sales = await holding("sales", [], ["model:fct_sales"]);
+    const sales = await holding("sales", ["models:read"], ["model:fct_sales"]);
 
     const graph = await sales.models.lineage({ tenantId: TENANT });
     const whole = await admin.models.lineage({ tenantId: TENANT });

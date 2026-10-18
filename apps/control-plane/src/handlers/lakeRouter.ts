@@ -2,9 +2,10 @@
  * The raw lake division's API: what landed, the rows themselves, and a reader's own SQL.
  *
  * Its own file for the reason `biRouter` and `modelsRouter` have theirs -- `router.ts` is the
- * table of contents, not the procedures -- and because the three tiers of authority here are
- * worth reading in one place: a summary every member may see, and rows and a console only a
- * holder of `lake:read` may page or write (builder and admin, ADR 0139).
+ * table of contents, not the procedures -- and because the authority here is worth reading in
+ * one place: every procedure needs `lake:read` (builder and admin, ADR 0139), the summary
+ * included since ADR 0147 -- which streams a customer lands, and how much of each, is the
+ * division's first screen, and the division is `lake:read`'s.
  *
  * Since ADR 0142 each is narrowed to the raw streams the reader REACHES -- `raw:*` for every
  * built-in role, only what is granted for a customer's own -- and the console needs the whole of
@@ -28,14 +29,14 @@ import * as lake from "../services/lake.ts";
 import { notRun } from "./answers.ts";
 import { SchemaFilterInput, schemaOrRefusal } from "./schemaFilter.ts";
 import { requirePermission, requireWholeReach } from "./permissionGate.ts";
-import { router, tenantProcedure } from "./trpc.ts";
+import { router } from "./trpc.ts";
 
 export const lakeRouter = router({
   /**
-   * What has landed, per stream: counts and freshness, nothing a person wrote. Every
-   * member may read it; it is the Lake division's first screen.
+   * What has landed, per stream: counts and freshness, nothing a person wrote. `lake:read`, as
+   * the rest of the division is (ADR 0147).
    */
-  summary: tenantProcedure.query(({ ctx, input }) =>
+  summary: requirePermission("lake:read").query(({ ctx, input }) =>
     lake.summary(ctx.exec, input.tenantId, ctx.reach),
   ),
 

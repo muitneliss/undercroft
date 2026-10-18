@@ -1,11 +1,10 @@
 /**
  * The raw lake division: what has actually landed.
  *
- * The index is for everyone: what landed, per stream, as counts and instants, because "did
- * anything come in" is a question every member of a customer is entitled to have answered.
- * Everything under it is for an admin -- the rows themselves, which for a CRM are names and
- * for a mailbox are whatever the mail said. The server refuses those to anyone else; hiding
- * them here is courtesy, and the honest rendering of what the reader may do.
+ * The index first -- what landed, per stream, as counts and instants -- and under it the rows
+ * themselves, which for a CRM are names and for a mailbox are whatever the mail said. All of it
+ * is `lake:read`'s, the summary included since ADR 0147, so the division `requires` it and `Book`
+ * never mounts this leaf for a reader without it: there is no lesser Lake to draw for them.
  *
  * THE CONSOLE IS A DOOR ON THIS LEAF RATHER THAN A BAND ON IT. It used to be the fourth
  * band, and a band is as tall as the page has left over: an editor too short to write a join
@@ -13,8 +12,8 @@
  * and the plate that opens it carries whichever stream this index has open, so the gesture
  * that used to end in a seeded editor three bands down still ends in that stream's rows.
  *
- * The browser and the search are their own chunks, loaded only when an admin opens this
- * leaf: a member reading a count never downloads the code that pages through payloads.
+ * The browser and the search are their own chunks, loaded only once there is something landed
+ * to page through: a customer with an empty lake never downloads the code that reads payloads.
  */
 
 import { lazy, Suspense } from "react";
@@ -25,7 +24,7 @@ import { Errata } from "@/components/Errata.tsx";
 import { ArrowRight } from "@/components/Icon.tsx";
 import { LakeSummary } from "@/components/LakeSummary.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
-import { can } from "@/lib/permissions.ts";
+import { useAccounts } from "@/components/useAccounts.ts";
 import { kindsPath } from "@/lib/documentKinds.ts";
 import { consolePath, type LakeStream, parseStream, streamParams, streamsOf } from "@/lib/lake.ts";
 import { useUiStore } from "@/store.ts";
@@ -35,7 +34,7 @@ const LakeBrowser = lazy(() =>
   import("@/components/LakeBrowser.tsx").then((module) => ({ default: module.LakeBrowser })),
 );
 
-// Its own chunk, for the same reason: the fold table is a hundred characters a member never needs.
+// Its own chunk, for the same reason: the fold table is a hundred characters an empty lake never needs.
 const LakeSearch = lazy(() =>
   import("@/components/LakeSearch.tsx").then((module) => ({ default: module.LakeSearch })),
 );
@@ -45,15 +44,14 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
   const locale = useUiStore((state) => state.locale);
   const [params] = useSearchParams();
   const summary = trpc.lake.summary.useQuery({ tenantId });
-  const tenant = trpc.tenants.get.useQuery({ tenantId });
   // When the first run comes, for the empty leaf, and which mailbox a stream came from, for a
-  // tenant with more than one. Cached from the Sources leaf.
-  const connections = trpc.connections.list.useQuery({ tenantId });
+  // tenant with more than one -- for a reader who may read the sources (`useAccounts`).
+  const accounts = useAccounts(tenantId);
 
-  if (summary.isPending || tenant.isPending) {
+  if (summary.isPending) {
     return <Skeleton rows={5} />;
   }
-  if (summary.isError || tenant.isError) {
+  if (summary.isError) {
     return (
       <Errata heading={t("common.notLoaded")} live={true}>
         {t("lake.notLoaded", { tenantId })}
@@ -61,7 +59,6 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
     );
   }
 
-  const readsLake = can(tenant.data.permissions, "lake:read");
   const streams = streamsOf(summary.data);
   const open = parseStream(params);
 
@@ -74,36 +71,22 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
         <LakeSummary
           tenantId={tenantId}
           summary={summary.data}
-          connections={connections.data ?? []}
+          connections={accounts}
           locale={locale}
           openStream={open}
-          // The index doubles as the way in, but only for the reader the server would let
-          // through. A reader without `lake:read` sees the same counts with no links: the facts
-          // are theirs, the payload is not, and a link that answered 403 would be a promise this
-          // leaf breaks.
-          {...(readsLake
-            ? {
-                hrefFor: (stream: LakeStream): string =>
-                  `?${new URLSearchParams(streamParams(stream)).toString()}`,
-              }
-            : {})}
+          // The index doubles as the way in to each stream's rows.
+          hrefFor={(stream: LakeStream): string =>
+            `?${new URLSearchParams(streamParams(stream)).toString()}`
+          }
         />
-        {/* Why the index is all a reader without `lake:read` gets. Without it the bands a
-            holder reads below are simply absent, which reads as a lake with nothing more in it
-            rather than one whose rows need a permission. Only once there is something landed to
-            be kept from them: over an empty lake the sentence would promise rows that do not
-            exist. */}
-        {!readsLake && streams.length > 0 ? (
-          <p className="note">{t("lake.needsLakeReadNote")}</p>
-        ) : null}
       </div>
 
       <div className="band-rule" />
       <h2 className="head">{t("lake.kindsHead")}</h2>
       <div className="body stack">
         <p className="prose">{t("lake.kindsLead", { tenantId })}</p>
-        {/* A door, as the console's is: the catalogue is a page of this division, and every
-            member may read it, so the door is not behind the `lake:read` check below. */}
+        {/* A door, as the console's is: the catalogue is a page of this division, readable by
+            whoever reads the division (ADR 0147), so it is offered over an empty lake too. */}
         <div className="row">
           <Link className="plate" to={kindsPath(tenantId)}>
             {t("lake.kindsOpen")}
@@ -112,7 +95,7 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
         </div>
       </div>
 
-      {readsLake && streams.length > 0 ? (
+      {streams.length > 0 ? (
         <>
           <div className="band-rule" />
           <h2 className="head">{t("lake.browserHead")}</h2>

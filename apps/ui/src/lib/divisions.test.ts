@@ -7,7 +7,7 @@ import { describe, expect, test as it } from "bun:test";
 
 import { held } from "@/test/access.ts";
 
-import { closedTo, DIVISIONS, division, divisionPath } from "./divisions.ts";
+import { bookPath, closedTo, DIVISIONS, division, divisionPath } from "./divisions.ts";
 
 /** `--errata` in index.css. Held out of the wheel so the slip is the only thing wearing it. */
 const ERRATA = "#cf2f16";
@@ -48,16 +48,25 @@ describe("divisionPath", () => {
 describe("closedTo", () => {
   const people = division("people");
 
-  it("closes People to whoever lacks people:manage, and to nobody else (ADR 0119, ADR 0139)", () => {
-    const closed = (["viewer", "member", "builder", "admin"] as const).map((role) =>
-      closedTo(people, { tenantId: "CASE-0042", permissions: held(role) }),
-    );
-    expect(closed).toEqual(["not-permitted", "not-permitted", "not-permitted", null]);
-    expect(
-      DIVISIONS.filter(
-        (d) => closedTo(d, { tenantId: "CASE-0042", permissions: held("viewer") }) !== null,
-      ),
-    ).toEqual([people]);
+  it("closes to each built-in role the divisions whose permission it lacks (ADR 0119, 0139, 0147)", () => {
+    function closedFor(role: "viewer" | "member" | "builder" | "admin"): string[] {
+      return DIVISIONS.filter(
+        (d) => closedTo(d, { tenantId: "CASE-0042", permissions: held(role) }) !== null,
+      ).map((d) => d.id);
+    }
+    const readsReportsAlone = ["sources", "journal", "lake", "models", "people"];
+
+    expect({
+      viewer: closedFor("viewer"),
+      member: closedFor("member"),
+      builder: closedFor("builder"),
+      admin: closedFor("admin"),
+    }).toEqual({
+      viewer: readsReportsAlone,
+      member: readsReportsAlone,
+      builder: ["people"],
+      admin: [],
+    });
   });
 
   it("opens People to a reader holding people:manage whatever their role is called", () => {
@@ -68,5 +77,14 @@ describe("closedTo", () => {
 
   it("closes nothing on permissions it does not know yet, so an admin's tab never turns over on a guess", () => {
     expect(closedTo(people, { tenantId: "CASE-0042", permissions: undefined })).toBeNull();
+  });
+});
+
+describe("bookPath", () => {
+  it("opens a book at Sources for its reader, and a reader of Reports alone at Reports", () => {
+    expect(bookPath("CASE-0042", held("builder"))).toBe("/tenants/CASE-0042");
+    expect(bookPath("CASE-0042", held("viewer"))).toBe("/tenants/CASE-0042/reports");
+    // Not known yet: Sources, as ever, rather than a guess that would send an admin elsewhere.
+    expect(bookPath("CASE-0042", undefined)).toBe("/tenants/CASE-0042");
   });
 });

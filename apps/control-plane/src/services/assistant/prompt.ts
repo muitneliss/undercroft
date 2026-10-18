@@ -197,7 +197,8 @@ export function systemPrompt(facts: PromptFacts): string {
         "which one they mean rather than picking for them."
       : `The reader has ${facts.tenantId} open and holds the role "${facts.role ?? "none"}" ` +
         `in it, with these permissions there: ${held(facts.permissions)}. The permissions that ` +
-        `exist are ${PERMISSIONS.join(", ")}; any member may read without one. Pass tenantId ` +
+        `exist are ${PERMISSIONS.join(", ")}; reading the saved reports needs none, and reading ` +
+        "the sources, the runs, the raw lake or the models needs its own. Pass tenantId " +
         `"${facts.tenantId}" unless they name another customer.` +
         (facts.scope === null ? "" : ` ${seen(facts.scope)}`);
 

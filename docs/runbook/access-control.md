@@ -8,8 +8,9 @@ takes access away -- in the web UI, with the CLI, and over MCP. What each permis
 object syntax and every bound are the [permissions reference](../reference/permissions.md); why it
 works this way is [ADR 0139](../adr/0139-tenant-access-is-casbin-policy.md),
 [ADR 0141](../adr/0141-custom-roles-and-grants-under-the-subset-rule.md),
-[ADR 0142](../adr/0142-object-reach-and-scope-logins.md) and
-[ADR 0143](../adr/0143-row-and-column-rules-on-model-grants.md).
+[ADR 0142](../adr/0142-object-reach-and-scope-logins.md),
+[ADR 0143](../adr/0143-row-and-column-rules-on-model-grants.md) and
+[ADR 0147](../adr/0147-each-division-reads-under-its-own-permission.md).
 
 ## Before you start
 
@@ -25,6 +26,12 @@ works this way is [ADR 0139](../adr/0139-tenant-access-is-casbin-policy.md),
   `raw:hubspot/deals`, a report, or the whole of one with `model:*`, `raw:*`, `report:*` -- and a
   grant to one person adds to whatever their role reads. Roles defined before this release were
   given all three wholes, so they read what they did.
+- **What a role opens.** A role holding no permission opens Customers and Reports alone, as a
+  `viewer` does. Sources, the Journal, the Raw lake and Models each open on a read permission of
+  their own -- `sources:read`, `runs:read`, `lake:read`, `models:read` -- in the browser, the CLI
+  and MCP alike, so a role meant to follow the runs holds `runs:read`, and one meant to read the
+  dbt project `models:read`. Reading a model's rows through Reports needs none of them: a grant on
+  the model is enough.
 - **Choose the smallest change.** A role the customer already has, if one holds exactly what the
   person needs; a grant, for one more permission or one for a while; a new role, when several
   people need the same set.
@@ -73,8 +80,9 @@ permission to the same subject again moves its expiry rather than adding a secon
 
 On **Grants**, under **Grant a permission**, the second select also lists what can be read:
 **Read the whole** (every model, the whole raw lake, every report -- offered only if you read the
-whole of it yourself), each model and reference table, each raw source and stream, and each
-question and dashboard. Choose one and press **Grant**, as for a permission.
+whole of it yourself), each model and reference table (listed if you hold `models:read`), each raw
+source and stream (listed if you hold `lake:read`), and each question and dashboard. Choose one
+and press **Grant**, as for a permission.
 
 To let the Sales department see only the model `fct_sales` and the dashboard built on it: define
 a role `sales` with no permissions, grant it `fct_sales`, grant it the dashboard and each of its
@@ -84,7 +92,8 @@ shows **not granted**; a question over a model they were not granted is refused 
 ### Let someone read only some rows, or not some columns
 
 A grant on one model or reference table can say how much of it it gives. Choose the model under
-**Grant a permission**, and the form offers its columns, as its last build found them:
+**Grant a permission**, and the form offers its columns, as its last build found them -- if you
+hold `models:read`, which reading them needs:
 
 1. **Only rows where**: press **Add a condition**, choose a column, **equals** or **is one of**, and
    type the value -- one to a line for **is one of**. A row must meet every condition. A value is

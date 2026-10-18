@@ -20,8 +20,8 @@
  *
  * TWO READERS, ONE BAND. A run's leaf passes the run's own rollup and the records behind it; the
  * lake's index passes a document source's CURRENT refusals (`raw.document_text`) and no records
- * at all, because a source's reasons are every member's to read and its document ids are an
- * admin's. With no records a reason is a row, not a control, and nothing unfolds -- which is
+ * at all, because the index counts a source's reasons and its document ids are the documents
+ * page's. With no records a reason is a row, not a control, and nothing unfolds -- which is
  * the component's own rule below, not a second mode of it.
  *
  * WHAT IT DOES NOT SHOW: a filename, ever. `pii.md` keeps names a human wrote out of Postgres

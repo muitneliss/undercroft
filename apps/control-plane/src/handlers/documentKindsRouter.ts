@@ -1,8 +1,10 @@
 /**
  * The `documentKinds` procedures: a tenant's catalogue of document kinds. ADR 0085.
  *
- * Any member may read the catalogue and what publishing it would cost; only a holder of
- * `catalogue:manage` may change it or publish it, because a publish sends every text to the classifier again. Same layer and
+ * A holder of `lake:read` may read the catalogue and what publishing it would cost (ADR 0147): it
+ * counts the documents in the raw lake by kind, and the web shows it as a page of the Lake
+ * division, which is `lake:read`'s. Only a holder of `catalogue:manage` may change it or publish
+ * it, because a publish sends every text to the classifier again. Same layer and
  * rules as the other routers: validate, call one service, decide what its answer means.
  */
 
@@ -13,10 +15,12 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as documentKinds from "../services/documentKinds.ts";
 import { requirePermission } from "./permissionGate.ts";
-import { actorOf, router, tenantProcedure } from "./trpc.ts";
+import { actorOf, router } from "./trpc.ts";
 
 export const documentKindsRouter = router({
-  list: tenantProcedure.query(({ ctx, input }) => documentKinds.list(ctx.exec, input.tenantId)),
+  list: requirePermission("lake:read").query(({ ctx, input }) =>
+    documentKinds.list(ctx.exec, input.tenantId),
+  ),
 
   add: requirePermission("catalogue:manage")
     .input(z.object({ kind: DocumentKindName, description: DocumentKindDescription.optional() }))

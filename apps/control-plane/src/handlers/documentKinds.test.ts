@@ -91,15 +91,17 @@ afterEach(async () => {
 });
 
 describe("editing the catalogue", () => {
-  it("a member reads it but may not change it", async () => {
-    const member = await seedMember("m@example.test", "member");
+  it("a reader of the lake reads it but may not change it", async () => {
+    // A builder holds `lake:read`, which reading the catalogue needs (ADR 0147), and not
+    // `catalogue:manage`.
+    const builder = await seedMember("b@example.test", "builder");
 
     const got = await refusal(() =>
-      caller(member, "m@example.test").add({ tenantId: TENANT, kind: "invoice" }),
+      caller(builder, "b@example.test").add({ tenantId: TENANT, kind: "invoice" }),
     );
 
     expect(got.code).toBe("FORBIDDEN");
-    expect((await caller(member, "m@example.test").list({ tenantId: TENANT })).kinds).toEqual([]);
+    expect((await caller(builder, "b@example.test").list({ tenantId: TENANT })).kinds).toEqual([]);
   });
 
   it("a generic kind added without a description takes the generic catalogue's", async () => {

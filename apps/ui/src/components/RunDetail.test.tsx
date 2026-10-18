@@ -194,8 +194,10 @@ describe("the scope a run read with", () => {
 });
 
 describe("what a run acted on", () => {
+  // Read by a builder where the account is named by its address: naming it reads the customer's
+  // connections, which need `sources:read` (ADR 0147). Without it the account is its source id.
   it("is, for an ingest, its account, opened on the Sources leaf with that account on show", async () => {
-    mount("member", gmailRun({ source: SECOND }), { accounts: TWO_MAILBOXES });
+    mount("builder", gmailRun({ source: SECOND }), { accounts: TWO_MAILBOXES });
 
     const target = await screen.findByRole("link", { name: "Gmail · billing@acme.test" });
     expect(target.getAttribute("href")).toBe(`/tenants/${TENANT}`);
@@ -205,14 +207,14 @@ describe("what a run acted on", () => {
   });
 
   it("leads, for an ingest, to that account's other runs, keeping this one open", async () => {
-    mount("member", gmailRun({ source: SECOND }), { accounts: TWO_MAILBOXES });
+    mount("builder", gmailRun({ source: SECOND }), { accounts: TWO_MAILBOXES });
 
     const plate = await screen.findByRole("link", { name: "Các lần chạy khác của tài khoản này" });
     expect(plate.getAttribute("href")).toBe(`/tenants/${TENANT}/journal/run-1?source=${SECOND}`);
   });
 
   it("offers no other runs on a ledger already narrowed to that account", async () => {
-    mount("member", gmailRun({ source: SECOND }), {
+    mount("builder", gmailRun({ source: SECOND }), {
       accounts: TWO_MAILBOXES,
       address: `/tenants/${TENANT}/journal/run-1?source=${SECOND}`,
     });
