@@ -446,3 +446,5 @@
 ## [2026-10-18] ingest | ADR 0145 The Blog Moves to Cloudflare Pages
 ## [2026-10-18] ingest | Runbook Google Ingestion Setup
 ## [2026-10-18] ingest | Runbook Google Ingestion Setup
+## [2026-10-18] ingest | ADR 0146 A dbt Login's Statement Ends With Its Client
+## [2026-10-18] ingest | Architecture
