@@ -139,7 +139,9 @@ export async function storeCredential(
       },
       {
         ...(deps.env === undefined ? {} : { env: deps.env }),
-        grantExpiresAt: grantExpiryFor(input.source),
+        grantExpiresAt: grantExpiryFor(input.source, {
+          stated: input.credential.refreshExpiresAt ?? null,
+        }),
       },
     );
     return true;

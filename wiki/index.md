@@ -147,6 +147,7 @@
 - [ADR 0141 Custom Roles and Grants Under the Subset Rule](sources/adr-0141-custom-roles-and-grants-under-the-subset-rule.md)
 - [ADR 0142 Object Reach and Scope Logins](sources/adr-0142-object-reach-and-scope-logins.md)
 - [ADR 0143 Row and Column Rules on Model Grants](sources/adr-0143-row-and-column-rules-on-model-grants.md)
+- [ADR 0144 A Refresh Token's Stated End Is the Grant's End](sources/adr-0144-a-refresh-token-s-stated-end-is-the-grant-s-end.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

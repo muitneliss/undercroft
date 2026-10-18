@@ -439,3 +439,6 @@
 ## [2026-10-16] ingest | Permissions
 ## [2026-10-16] ingest | Architecture
 ## [2026-10-16] ingest | ADR 0143 Row and Column Rules on Model Grants
+## [2026-10-18] ingest | ADR 0144 A Refresh Token's Stated End Is the Grant's End
+## [2026-10-18] ingest | ADR 0144 A Refresh Token's Stated End Is the Grant's End
+## [2026-10-18] ingest | Runbook Google Ingestion Setup

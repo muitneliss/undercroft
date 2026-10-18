@@ -334,18 +334,21 @@ export async function setStatus(
  * is kept in the clear beside the ciphertext for the same reason `expires_at` is: "which
  * grants are about to lapse" has to be a query. A new grant end clears `warned_at`, so a
  * grant renewed after a warning is warned about again when it next approaches its end.
+ * `"unchanged"` keeps the end already stored, and its warning with it: a refresh that handed
+ * back the same refresh token has told us nothing new about when that token dies.
  */
 export async function writeCredential(
   exec: SqlExecutor,
   tenantId: string,
   source: string,
   credential: Credential,
-  opts: { env?: NodeJS.ProcessEnv; grantExpiresAt?: string | null } = {},
+  opts: { env?: NodeJS.ProcessEnv; grantExpiresAt?: string | null | "unchanged" } = {},
 ): Promise<void> {
   const sealed = seal(
     credentialToJson(credential),
     opts.env === undefined ? {} : { env: opts.env },
   );
+  const keep = opts.grantExpiresAt === "unchanged";
   await exec.query(
     `INSERT INTO app.connection_secret
        (tenant_id, source, ciphertext, key_version, expires_at, grant_expires_at, updated_at)
@@ -354,9 +357,11 @@ export async function writeCredential(
        ciphertext       = EXCLUDED.ciphertext,
        key_version      = EXCLUDED.key_version,
        expires_at       = EXCLUDED.expires_at,
-       grant_expires_at = EXCLUDED.grant_expires_at,
+       grant_expires_at = CASE WHEN $7::boolean
+         THEN app.connection_secret.grant_expires_at ELSE EXCLUDED.grant_expires_at END,
        warned_at        = CASE
-         WHEN EXCLUDED.grant_expires_at IS DISTINCT FROM app.connection_secret.grant_expires_at
+         WHEN NOT $7::boolean
+          AND EXCLUDED.grant_expires_at IS DISTINCT FROM app.connection_secret.grant_expires_at
          THEN NULL ELSE app.connection_secret.warned_at END,
        updated_at       = now()`,
     [
@@ -365,7 +370,8 @@ export async function writeCredential(
       Buffer.from(sealed.blob),
       sealed.keyVersion,
       credential.expiresAt,
-      opts.grantExpiresAt ?? null,
+      keep ? null : (opts.grantExpiresAt ?? null),
+      keep,
     ],
   );
 }
