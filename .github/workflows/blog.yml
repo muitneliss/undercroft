@@ -1,6 +1,7 @@
-# The blog (apps/blog) is static files on GitHub Pages at blog.undercroft.lowbit.link.
+# The blog (apps/blog) is static files on Cloudflare Pages at blog.undercroft.lowbit.link (ADR 0145).
 #
-# A pull request that touches the blog gets the build as its check; a merge to main publishes.
+# A pull request that touches the blog gets the build as its check; a merge to main publishes,
+# through `task cd:blog` -- the command a person runs for a manual publish.
 # Unlike release.yml, a plain push ships here, because a post changes no running code and
 # should not wait for an unrelated release. docs/adr/0089 records the trade.
 #
@@ -34,6 +35,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -45,21 +47,24 @@ jobs:
       - uses: go-task/setup-task@v2
       - run: bun install --frozen-lockfile
       - run: task build:blog
-      - if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: apps/blog/dist
 
+  # cd:blog builds before it uploads, so main needs no separate build job.
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: build
     runs-on: ubuntu-24.04
     permissions:
-      pages: write
-      id-token: write
+      contents: read
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: blog
+      url: https://blog.undercroft.lowbit.link
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v5
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: go-task/setup-task@v2
+      - run: bun install --frozen-lockfile
+      - run: task cd:blog
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

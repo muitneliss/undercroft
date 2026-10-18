@@ -8,7 +8,7 @@ tasks:
       - bun run build:ui
 
   blog:
-    desc: Check and build the static blog (apps/blog) into apps/blog/dist -- what GitHub Pages serves.
+    desc: Check and build the static blog (apps/blog) into apps/blog/dist -- what Cloudflare Pages serves.
     cmds:
       - bun run build:blog
 
