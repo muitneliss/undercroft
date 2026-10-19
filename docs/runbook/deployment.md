@@ -58,8 +58,7 @@ server file will not survive a deploy.
 **Automatically, on a release.** Merge the release-please PR → `version` bumps, a tag is cut
 → the images build → `deploy.yml` runs `task cd:preflight → cd:deploy → cd:verify →
 cd:smoke` (each wrapping `scripts/dokploy.ts`). See ADR 0008 and ADR 0023. Nothing else
-deploys; a plain push to `main` ships nothing. (Except while
-[Actions outage mode](#actions-outage-mode) is on, when every push does — ADR 0136.)
+deploys; a plain push to `main` ships nothing.
 
 release-please opens that PR as a **GitHub App**, not as `github-actions[bot]`. Since June
 2026 GitHub holds every workflow run on a PR the default token authored behind "requires
@@ -98,57 +97,6 @@ Or all four in sequence, the same way `deploy.yml` does: `task cd:release TAG=v1
 The API is the only channel for a change. SSH is for reading state, never making one: a
 direct edit on the host is drift the next deploy silently reverts.
 
-### Actions outage mode
-
-**Temporary, ADR 0136.** While GitHub Actions has no minutes (until 2026-11-01), no workflow
-runs: no CI, no release, no image build, no deploy. In this mode Dokploy deploys every push to
-`main` itself, building `worker` and `control-plane` on the host from the clone, through the
-override `deploy/compose/docker-compose.server.build.yml` layered on the server file.
-
-**Turn it on, and off**, with the same three env vars as above and `gh` signed in as someone
-with admin on the repository:
-
-```bash
-task cd:outage-on    # autoDeploy on + watch paths, build command, workflows disabled, push webhook
-task cd:outage-off   # all four undone, then preflight -- which must pass
-```
-
-Both are safe to re-run. Neither prints the webhook URL: it carries the panel's refresh token.
-Switching on deploys nothing by itself; the next push to `main` that touches a watched path
-does, or `task cd:deploy TAG=main` deploys `main` now (the tag is only the deployment's title).
-
-While it is on, **`task cd:preflight` fails by design**: auto deploy is on and the command
-builds. `task cd:verify` does not apply either — there is no published image to compare with.
-
-**Merging meanwhile.** Nothing checks a pull request, so the person merging does:
-
-1. On the branch, `task ci:verify`, and for a change under `deploy/`, `task ci:compose-check`.
-2. Squash-merge. If the change touches `apps/**`, `packages/**`, `deploy/**`, `flows/**`,
-   `specs/**`, `skills/**`, `package.json` or `bun.lock`, the push is a production deploy.
-
-**Watching a push deploy:**
-
-```bash
-task cd:status    # the stack's status and the newest deployment's
-task cd:logs      # that deployment's log: the clone, both image builds, then `up --wait`
-task cd:smoke     # https://undercroft.lowbit.link/api/health
-```
-
-A deploy that fails its build or `--wait` leaves the running containers as they were.
-
-**Rolling back.** Revert the commit on `main`; the revert deploys like any push. To go back to
-the last published release instead, leave the mode, then deploy it:
-
-```bash
-task cd:outage-off
-task cd:release TAG=v1.76.0
-```
-
-Turning the mode back on after that rebuilds `main` at its next watched push.
-
-**Ending it**, after the minutes reset: `task cd:outage-off`, then the pull request ADR 0136's
-Exit lists.
-
 ### What `preflight` proves
 
 Four things, before anything is queued:
@@ -157,9 +105,7 @@ Four things, before anything is queued:
    `git@github.com:muitneliss/undercroft.git` at `main`, cloned over SSH with the panel's
    read-only deploy key because the repository is private (ADR 0121), compose path
    `deploy/compose/docker-compose.server.yml`, with **auto deploy off** — on, it would roll
-   out every push to `main` while images change only on a release. (Actions outage mode turns
-   it on deliberately, and this check fails until `task cd:outage-off`; see
-   [Actions outage mode](#actions-outage-mode).)
+   out every push to `main` while images change only on a release.
 2. **`main` carries the same file as this checkout.** The host clones `main`'s head at deploy
    time, not the release's commit. A change to the file merged while the release's images
    were building would otherwise ship beside images that predate it; `preflight` refuses,
@@ -167,8 +113,7 @@ Four things, before anything is queued:
    blank lines are forgiven, nothing else is.
 3. **The file names published images.** At least one service runs a
    `ghcr.io/muitneliss/undercroft-*` image; the host deploys what a release published, and
-   never builds. (Except in [Actions outage mode](#actions-outage-mode), ADR 0136, where an
-   override layered on this file builds.)
+   never builds.
 4. **The stored command** carries `--env-file deploy/compose/.env`,
    `-f deploy/compose/docker-compose.server.yml`, `--pull always`, `--wait`, `--wait-timeout`
    and `--remove-orphans`. Dokploy runs it from the clone's root and writes `.env` beside the

@@ -151,6 +151,7 @@
 - [ADR 0145 The Blog Moves to Cloudflare Pages](sources/adr-0145-the-blog-moves-to-cloudflare-pages.md)
 - [ADR 0146 A dbt Login's Statement Ends With Its Client](sources/adr-0146-a-dbt-login-s-statement-ends-with-its-client.md)
 - [ADR 0147 Each Division Reads Under Its Own Permission](sources/adr-0147-each-division-reads-under-its-own-permission.md)
+- [ADR 0148 The Actions Outage Mode Ends](sources/adr-0148-the-actions-outage-mode-ends.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

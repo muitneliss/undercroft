@@ -10,11 +10,6 @@
  * or a branch whose file moved past the release. Each gets a test that it fires, one that
  * everything right passes, and one pins what the comparison deliberately forgives.
  *
- * `outage off` (ADR 0136, temporary) is the switch back from building on the host, and the
- * one way it can fail quietly is a panel left in a state the next release's `preflight`
- * refuses -- found on the release day rather than the day it was switched. So one test: from
- * the outage record, off ends with a `preflight` that passes.
- *
  * The fetcher below REFUSES a URL nobody recorded rather than answering a default. A fake
  * that always answers would make `verify` pass against requests it never should have sent --
  * which is exactly the bug in "compare `latest` to `latest`" that the release-tag argument
@@ -26,12 +21,9 @@ import { expect, test as it } from "bun:test";
 import {
   type Config,
   type Deps,
-  type GitHub,
   oneShotServices,
-  outageOff,
   preflight,
   type Rollout,
-  storedCommand,
   verify,
 } from "./dokploy.ts";
 
@@ -92,21 +84,17 @@ interface Recorder {
   readonly lines: string[];
 }
 
-/** A route that answers from state it keeps, for a panel that remembers what it was sent. */
-type Handler = (init: RequestInit | undefined) => unknown;
-
 function recorder(recorded: Record<string, unknown>): Recorder {
   const lines: string[] = [];
   const deps: Deps = {
-    fetch: (input: string, init?: RequestInit) => {
-      const route = recorded[input];
-      if (route === undefined) {
+    fetch: (input: string) => {
+      const body = recorded[input];
+      if (body === undefined) {
         const known = Object.keys(recorded).join("\n  ");
         return Promise.reject(
           new Error(`no recorded response for ${input}\nrecorded:\n  ${known}`),
         );
       }
-      const body = typeof route === "function" ? (route as Handler)(init) : route;
       // A file is served as its bytes, the way GitHub's raw media type serves it.
       const text = typeof body === "string" ? body : JSON.stringify(body);
       return Promise.resolve(new Response(text, { status: 200 }));
@@ -275,67 +263,6 @@ it("preflight forgives line endings and trailing blank lines, which YAML does no
   await preflight(CFG, deps, checkedOut);
 
   expect(lines).toContain("preflight ok");
-});
-
-/** A repository's workflows and webhooks, held in memory and changed the way GitHub would. */
-function repository(hooks: { id: number; url: string }[]): GitHub & {
-  readonly disabled: Set<string>;
-} {
-  const disabled = new Set<string>(["ci.yml", "deploy.yml"]);
-  return {
-    disabled,
-    setWorkflow: (file, enabled) => {
-      if (enabled) {
-        disabled.delete(file);
-      } else {
-        disabled.add(file);
-      }
-      return Promise.resolve();
-    },
-    hooks: () => Promise.resolve([...hooks]),
-    addPushHook: (url) => {
-      hooks.push({ id: hooks.length + 1, url });
-      return Promise.resolve();
-    },
-    removeHook: (id) => {
-      hooks.splice(
-        hooks.findIndex((hook) => hook.id === id),
-        1,
-      );
-      return Promise.resolve();
-    },
-  };
-}
-
-it("outage off leaves a panel that preflight passes, and removes only the deploy webhook", async () => {
-  // The panel as `outage on` leaves it: building on push, from both compose files.
-  const panel: Record<string, unknown> = {
-    ...PANEL,
-    autoDeploy: true,
-    watchPaths: ["apps/**"],
-    command: storedCommand("undercroft-test", "outage"),
-    refreshToken: "refresh-secret",
-  };
-  const hooks = [
-    { id: 7, url: `${ENDPOINT}/deploy/compose/refresh-secret` },
-    { id: 8, url: "https://chat.example.test/hooks/unrelated" },
-  ];
-  const github = repository(hooks);
-  const { deps, lines } = recorder({
-    ...routes(),
-    [`${ENDPOINT}/compose.one?composeId=compose-1`]: () => panel,
-    [`${ENDPOINT}/compose.update`]: ((init) => {
-      Object.assign(panel, JSON.parse(String(init?.body)));
-      return true;
-    }) satisfies Handler,
-  });
-
-  await outageOff(CFG, deps, github, { expected: COMPOSE, githubToken: "" });
-
-  expect(lines).toContain("preflight ok");
-  expect(panel.watchPaths).toBeNull();
-  expect(hooks.map((hook) => hook.id)).toEqual([8]);
-  expect([...github.disabled]).toEqual([]);
 });
 
 it("oneShotServices names what the compose file declares runs to completion", () => {
