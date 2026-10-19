@@ -263,11 +263,6 @@ rollout landed rather than trusting Dokploy's `done`. A manual deploy or rollbac
 `.claude/rules/deployment.md`, `.claude/rules/tooling.md`, `docs/runbook/deployment.md`, and
 ADR 0008.
 
-**Until GitHub Actions minutes reset on 2026-11-01 this is suspended by ADR 0136:** no workflow
-runs, every watched push to `main` is built on the host and deployed, `task cd:preflight` fails
-by design, and only a local `task ci:verify` gates a merge — see the runbook's "Actions outage
-mode", and `task cd:outage-off` to end it.
-
 The blog is the one exception, and it is not part of the product: `apps/blog` is a static Astro
 site on Cloudflare Pages at `blog.undercroft.lowbit.link`, published by `task cd:blog` -- which
 `blog.yml` runs on a merge to `main` -- rather than by a release (ADR 0089, ADR 0145). How to write a post is in `apps/blog/WRITING.md`.

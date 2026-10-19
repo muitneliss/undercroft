@@ -465,3 +465,5 @@
 ## [2026-10-18] ingest | Runbook: Onboarding a new person
 ## [2026-10-18] ingest | Runbook Sign-In Setup
 ## [2026-10-18] remove | ADR 0146 Each Division Reads Under Its Own Permission
+## [2026-10-19] ingest | Runbook Deployment
+## [2026-10-19] ingest | ADR 0148 The Actions Outage Mode Ends
