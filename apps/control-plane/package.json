@@ -39,7 +39,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.14.6",
+    "@happy-dom/global-registrator": "21.0.3",
     "@modelcontextprotocol/client": "2.3.1"
   }
 }
