@@ -6,6 +6,8 @@
 
 export const SITE_URL = "https://blog.undercroft.lowbit.link";
 export const PRODUCT_URL = "https://undercroft.lowbit.link";
+/** Kanna, the partner product the footer credits; the same address `apps/ui` links. */
+export const KANNA_URL = "https://kanna-wiki.lowbit.link";
 export const REPO_URL = "https://github.com/muitneliss/undercroft";
 /** The address multnelis answers at, the same one multnelis.org prints. */
 export const CONTACT_EMAIL = "contact@multnelis.org";
@@ -71,6 +73,7 @@ export const STRINGS = {
     rss: "RSS",
     footer: "Undercroft · mã nguồn mở theo giấy phép MIT",
     contact: `Liên hệ: ${CONTACT_EMAIL}`,
+    partner: "Đối tác của Kanna",
     privacy: "Chính sách quyền riêng tư",
     terms: "Điều khoản dịch vụ",
     about: "Về ứng dụng Undercroft",
@@ -105,6 +108,7 @@ export const STRINGS = {
     rss: "RSS",
     footer: "Undercroft · open source under the MIT licence",
     contact: `Contact: ${CONTACT_EMAIL}`,
+    partner: "A Kanna partner",
     privacy: "Privacy policy",
     terms: "Terms of service",
     about: "About the Undercroft app",

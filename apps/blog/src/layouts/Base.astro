@@ -13,6 +13,7 @@ import cover from "../assets/cover.png";
 import {
   CONTACT_EMAIL,
   DEFAULT_LANG,
+  KANNA_URL,
   type Lang,
   PRODUCT_URL,
   REPO_URL,
@@ -138,6 +139,7 @@ const home = `${langPrefix(lang)}/`;
       <a href={servicePath(lang, "terms")}>{s.terms}</a>
       <a href={`${home}rss.xml`}>{s.rss}</a>
       <a href={REPO_URL}>GitHub</a>
+      <a href={KANNA_URL}>{s.partner}</a>
     </footer>
   </body>
 </html>

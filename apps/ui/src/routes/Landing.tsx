@@ -1,6 +1,6 @@
 /** The public title page; the sign-in and customer routes remain the working book. */
 import { useId, useMemo, useRef } from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { Colophon } from "@/components/Colophon.tsx";
@@ -9,6 +9,7 @@ import { Mark } from "@/components/Mark.tsx";
 import { usePageLamp } from "@/components/usePageLamp.ts";
 import { useVaultFilm, type VaultRefs } from "@/components/useVaultFilm.ts";
 import { CONTACT_EMAIL } from "@/lib/contact.ts";
+import { KANNA_URL } from "@/lib/partner.ts";
 import { servicePageUrl } from "@/lib/servicePages.ts";
 import { STAGES, STEPS, type StepId } from "@/lib/vault/model.ts";
 import type { VaultWords } from "@/lib/vault/runtime.ts";
@@ -122,6 +123,15 @@ function GoogleData(): React.JSX.Element {
 }
 
 /**
+ * The partner's name as a link, inside the agent section's sentence about it. `Trans` hands it
+ * the name out of that sentence, so where the name falls is each language's own choice rather
+ * than a fragment glued on in code.
+ */
+function KannaLink({ children }: { children?: React.ReactNode }): React.JSX.Element {
+  return <a href={KANNA_URL}>{children}</a>;
+}
+
+/**
  * The reader's stop for the film. Its label stays put and `aria-pressed` says whether it is
  * held, so a screen reader hears one control with a state rather than two controls by turns.
  */
@@ -220,6 +230,9 @@ export function Landing(): React.JSX.Element {
             <div>
               <p>{t("landing.agentBody")}</p>
               <p>{t("landing.agentDetail")}</p>
+              <p className="landing__partner">
+                <Trans i18nKey="landing.agentPartner" components={{ kanna: <KannaLink /> }} />
+              </p>
               <a href={MCP_SETUP}>{t("landing.agentDocs")}</a>
             </div>
           </section>

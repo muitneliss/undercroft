@@ -17,15 +17,20 @@
  * word beside it is what makes the line mean something to a screen reader, which would
  * otherwise read a bare version number with nothing to attach it to.
  *
- * The contact address closes the line, as it closes multnelis.org's and the blog's: the
- * foot is where a reader looks for who answers, and the colophon is the one foot every
- * page shares. It is a link, so it is set apart at the far end rather than between the
- * label and the tag it names.
+ * The far end of the line holds its two links, kept together and set apart from the label
+ * and the tag it names: first the credit to Kanna, the partner product, then the contact
+ * address, which closes the line as it closes multnelis.org's and the blog's -- the foot is
+ * where a reader looks for who answers, and the colophon is the one foot every page shares.
+ *
+ * The credit opens a new tab. This foot sits under every signed-in leaf, a model half
+ * written among them, and a footnote must not be the thing that navigates a reader away
+ * from unsaved work. `noopener` because the page it opens is not ours to hand a window to.
  */
 
 import { useTranslation } from "react-i18next";
 
 import { CONTACT_EMAIL } from "@/lib/contact.ts";
+import { KANNA_URL } from "@/lib/partner.ts";
 import { RELEASE } from "@/lib/release.ts";
 
 export function Colophon(): React.JSX.Element {
@@ -35,9 +40,14 @@ export function Colophon(): React.JSX.Element {
     <footer className="colophon">
       <span className="label">{t("app.release")}</span>
       <span className="datum">{RELEASE}</span>
-      <span className="colophon__contact">
-        <span className="label">{t("app.contact")}</span>
-        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+      <span className="colophon__end">
+        <a href={KANNA_URL} rel="noopener" target="_blank">
+          {t("app.partner")}
+        </a>
+        <span className="colophon__contact">
+          <span className="label">{t("app.contact")}</span>
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+        </span>
       </span>
     </footer>
   );
