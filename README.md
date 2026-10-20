@@ -36,6 +36,9 @@ you can drop and rebuild.
 
 **Status: pre-alpha.** Under active construction; nothing is stable yet.
 
+Undercroft is a partner of [Kanna](https://github.com/cuongtranba/kanna), a self-hosted web UI
+for the Claude Code and Codex agents.
+
 ## What it does
 
 Connect your accounts, declare what to pull in YAML, and write your own SQL on top.

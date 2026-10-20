@@ -44,6 +44,11 @@ export const vi = {
     /** Labels the contact address at the far end of the colophon. */
     contact: "Liên hệ",
     /**
+     * The colophon's credit, the whole of which is the link to Kanna. Kanna is a product's
+     * name and stays as it is in every language.
+     */
+    partner: "Đối tác của Kanna",
+    /**
      * A tab running a release the server has replaced. "Is now live" rather than "new":
      * after a rollback the live release is the older one, and the tab is just as stale.
      */
@@ -241,6 +246,13 @@ export const vi = {
       "Claude và các máy khách MCP khác có thể dùng Undercroft thay mặt bạn, với cùng quyền truy cập hồ sơ và giới hạn quyền như trong không gian làm việc.",
     agentDetail:
       "Kết nối qua OAuth hoặc token cá nhân trên trang tài khoản. Bạn chọn quyền chỉ đọc hoặc đọc và ghi, và có thể thu hồi quyền bất cứ lúc nào.",
+    /**
+     * One sentence, with the product's name as the link (`<kanna>`), so the two languages can
+     * put the name where their own word order wants it. OAuth because that is how Kanna does
+     * connect: it is an MCP client that signs its person in (docs/adr/0062).
+     */
+    agentPartner:
+      "Đối tác của chúng tôi, <kanna>Kanna</kanna>, giao diện web tự lưu trữ cho các tác tử Claude Code và Codex, kết nối với Undercroft qua MCP bằng OAuth.",
     agentDocs: "Kết nối tác tử qua MCP",
     workflowTitle: "Một quy trình, từ đầu đến cuối.",
     workflowLead:

@@ -1161,14 +1161,24 @@
     font-size: var(--t-micro);
   }
 
-  /* Pushed to the far end of the rule, so the one link at the foot does not sit between
-   the label and the tag it names; on a narrow leaf it wraps to its own line. */
+  /* Pushed to the far end of the rule, so the links at the foot do not sit between the
+   label and the tag it names; on a narrow leaf the pair wraps to its own line, and if even
+   that is too narrow the contact goes under the credit, both still flush right. The wider
+   gap between the two is what keeps the credit from reading as the contact's label. */
+  .colophon__end {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: baseline;
+    gap: var(--s-2) var(--s-5);
+    margin-left: auto;
+    font-size: var(--t-micro);
+  }
+
   .colophon__contact {
     display: inline-flex;
     align-items: baseline;
     gap: var(--s-3);
-    margin-left: auto;
-    font-size: var(--t-micro);
   }
 
   /* -- prose ------------------------------------------------------------------- */

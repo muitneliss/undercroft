@@ -55,3 +55,11 @@ it("offers the contact address as a link that opens a mail to it", () => {
   const link = screen.getByRole("link", { name: "contact@multnelis.org" });
   expect(link.getAttribute("href")).toBe("mailto:contact@multnelis.org");
 });
+
+it("credits Kanna as a partner, linking to where Kanna is described", () => {
+  render(<Colophon />);
+
+  // The address is written out rather than imported: the constant is what this pins.
+  const link = screen.getByRole("link", { name: "Đối tác của Kanna" });
+  expect(link.getAttribute("href")).toBe("https://kanna-wiki.lowbit.link");
+});

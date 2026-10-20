@@ -22,6 +22,7 @@ export const en = {
     signingOut: "Signing out…",
     release: "Version",
     contact: "Contact",
+    partner: "A Kanna partner",
     releaseLive: "Version {{release}} is now live. Reload the page to use it.",
     reload: "Reload",
     staleChunk: "This page belongs to a newer release",
@@ -168,6 +169,8 @@ export const en = {
       "Claude and other MCP clients can use Undercroft on your behalf, with the same customer access and permission boundaries as your workspace.",
     agentDetail:
       "Connect through OAuth or a personal token on your account page. Choose read-only or read-and-write access, and revoke access whenever you need to.",
+    agentPartner:
+      "Our partner <kanna>Kanna</kanna>, a self-hosted web interface for the Claude Code and Codex agents, connects to Undercroft over MCP with OAuth.",
     agentDocs: "Connect an agent over MCP",
     workflowTitle: "One workflow, end to end.",
     workflowLead:
