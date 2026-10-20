@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.78.0](https://github.com/muitneliss/undercroft/compare/v1.77.0...v1.78.0) (2026-10-20)
+
+
+### Features
+
+* **ui:** credit Kanna as a partner on the app, home page, blog and README ([#502](https://github.com/muitneliss/undercroft/issues/502)) ([18d2271](https://github.com/muitneliss/undercroft/commit/18d22717b074411c4c918aa4e6c75935b2e40683))
+
 ## [1.77.0](https://github.com/muitneliss/undercroft/compare/v1.76.0...v1.77.0) (2026-10-19)
 
 
