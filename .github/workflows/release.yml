@@ -30,6 +30,16 @@ permissions: {}
 jobs:
   release-please:
     runs-on: ubuntu-24.04
+    # One release-please at a time, never cancelled midway. Two pushes in quick succession
+    # once raced: the older run was still rewriting the release PR when it was merged, so it
+    # opened a second PR on the same branch with the old version in its title and body. A later
+    # run moved that branch to the next version but left the body, which is where release-please
+    # reads the version from on merge -- so the merge tried to re-cut the previous tag and
+    # failed `already_exists`. Queued, a newer push supersedes one still waiting, which is
+    # safe: any run finds a merged `autorelease: pending` PR and tags it.
+    concurrency:
+      group: release-please
+      cancel-in-progress: false
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
