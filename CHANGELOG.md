@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.77.0](https://github.com/muitneliss/undercroft/compare/v1.76.0...v1.77.0) (2026-10-19)
+
+
+### Features
+
+* **access:** a customer's own roles and grants, under the subset rule (ADR 0141) ([#486](https://github.com/muitneliss/undercroft/issues/486)) ([13e3e52](https://github.com/muitneliss/undercroft/commit/13e3e52bc91bc37b4326b9641c1237151b9269d2))
+* **access:** grants on models, raw streams and reports, enforced by scope logins (ADR 0142) ([#488](https://github.com/muitneliss/undercroft/issues/488)) ([4b5567f](https://github.com/muitneliss/undercroft/commit/4b5567f5c8f26dc7fdd9081817cd7eb92cad41cd))
+* **access:** row and column rules on model grants, enforced by row security (ADR 0143) ([#489](https://github.com/muitneliss/undercroft/issues/489)) ([1a25d11](https://github.com/muitneliss/undercroft/commit/1a25d115609dac67cc0a24119f33431478dad402))
+* **access:** tenant access is Casbin policy, with a builder role (ADR 0139) ([#485](https://github.com/muitneliss/undercroft/issues/485)) ([d231610](https://github.com/muitneliss/undercroft/commit/d23161006550cd04c71dcd8a98cf871887dcb00e))
+* **cli:** sign in with a personal access token for unattended runs (ADR 0134) ([#472](https://github.com/muitneliss/undercroft/issues/472)) ([ae49490](https://github.com/muitneliss/undercroft/commit/ae494908e5347d926729b142956fd1f1ef682157)), closes [#467](https://github.com/muitneliss/undercroft/issues/467)
+* **connections:** a Google refresh token's stated end arms the grant warning (ADR 0144) ([#491](https://github.com/muitneliss/undercroft/issues/491)) ([6f836b9](https://github.com/muitneliss/undercroft/commit/6f836b98fd567d9a01433e5a66cf8561e33aa261))
+* **google:** a public app page and a Google data section, for Google's brand verification ([#493](https://github.com/muitneliss/undercroft/issues/493)) ([cb4d972](https://github.com/muitneliss/undercroft/commit/cb4d972ad5d03ae954c233c0ac8f4ab3174a5973))
+* **lists:** page models.list, macros.list, bi.questions.list and models.lineage after an item (ADR 0133) ([#471](https://github.com/muitneliss/undercroft/issues/471)) ([a6e9f5e](https://github.com/muitneliss/undercroft/commit/a6e9f5ee36915008eb55f018ffe4c7a4fcfda597)), closes [#468](https://github.com/muitneliss/undercroft/issues/468)
+* **models:** an optional description per model, and models.list answers what each reads (ADR 0137) ([#479](https://github.com/muitneliss/undercroft/issues/479)) ([7aac71d](https://github.com/muitneliss/undercroft/commit/7aac71df27b9397205c730e4bae525de49dc439b))
+* **models:** preview an unsaved model's SQL read-only, refs on published tables (ADR 0132) ([#469](https://github.com/muitneliss/undercroft/issues/469)) ([812dcbc](https://github.com/muitneliss/undercroft/commit/812dcbced9e5a687c2f95cf49d39cba16e3805eb)), closes [#466](https://github.com/muitneliss/undercroft/issues/466)
+
+
+### Bug Fixes
+
+* **access:** each division reads under its own permission (ADR 0147) ([#495](https://github.com/muitneliss/undercroft/issues/495)) ([7e0ad6d](https://github.com/muitneliss/undercroft/commit/7e0ad6dbd1fbc1f6050c2140cd84b1261a1812cd))
+* **blog:** publish on Cloudflare Pages, since GitHub Pages stopped serving the private repo (ADR 0145) ([#492](https://github.com/muitneliss/undercroft/issues/492)) ([80d31f4](https://github.com/muitneliss/undercroft/commit/80d31f44954e377774f73fa15f03ad8066bfb97f))
+* **cli:** install the CLI from the instance, which serves its own build (ADR 0135) ([#473](https://github.com/muitneliss/undercroft/issues/473)) ([3fad1f7](https://github.com/muitneliss/undercroft/commit/3fad1f71efba00259548be3986dd15f662eef1cd))
+* **lineage:** bound the board's layout so a large project no longer hangs on its skeleton (ADR 0138) ([#480](https://github.com/muitneliss/undercroft/issues/480)) ([78d9668](https://github.com/muitneliss/undercroft/commit/78d966824c79ad843acb283c3d410133c0ec4f3b))
+* **test:** run the suite on half the cores, so a loaded machine no longer times out its hooks ([#484](https://github.com/muitneliss/undercroft/issues/484)) ([5c6a879](https://github.com/muitneliss/undercroft/commit/5c6a8792aa631115b5ca8062c8007d3e95ed7ad8))
+* **toolchain:** make the gate green on the [#477](https://github.com/muitneliss/undercroft/issues/477) dependency bump without pinning back (ADR 0140) ([#483](https://github.com/muitneliss/undercroft/issues/483)) ([85d8ac2](https://github.com/muitneliss/undercroft/commit/85d8ac2a2733fac9f03df6498cbdfa9e84d37d54))
+* **transform:** a dbt statement ends when its build is stopped, and the run says it hit the deadline (ADR 0146) ([#494](https://github.com/muitneliss/undercroft/issues/494)) ([088ae18](https://github.com/muitneliss/undercroft/commit/088ae18c0cccb803b344a5e2f60f07e3eb474390)), closes [#490](https://github.com/muitneliss/undercroft/issues/490)
+
 ## [1.76.0](https://github.com/muitneliss/undercroft/compare/v1.75.2...v1.76.0) (2026-10-13)
 
 
