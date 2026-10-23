@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.79.0](https://github.com/muitneliss/undercroft/compare/v1.78.0...v1.79.0) (2026-10-23)
+
+
+### Features
+
+* **alerts:** email a tenant's admins once when a source's grant lapses ([#506](https://github.com/muitneliss/undercroft/issues/506)) ([908ebc6](https://github.com/muitneliss/undercroft/commit/908ebc6a1f55e6def67a75b5204fade525b4bfbd))
+* **ui:** show times in the viewer's own zone ([#504](https://github.com/muitneliss/undercroft/issues/504)) ([0f3cf7b](https://github.com/muitneliss/undercroft/commit/0f3cf7bfbe16ce8a21368c1170b39b58fe61e015))
+
 ## [1.78.0](https://github.com/muitneliss/undercroft/compare/v1.77.0...v1.78.0) (2026-10-20)
 
 
