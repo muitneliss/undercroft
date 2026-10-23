@@ -470,3 +470,6 @@
 ## [2026-10-23] ingest | Design: The Village, the Journal Drawn as People at Work
 ## [2026-10-23] ingest | ADR 0149 Times Are Shown in the Viewer's Zone
 ## [2026-10-23] ingest | Runbook: Access control
+## [2026-10-23] ingest | ADR 0150 A Lapsed Grant Is Emailed Once Per Lapse
+## [2026-10-23] ingest | Architecture
+## [2026-10-23] ingest | Runbook Deployment

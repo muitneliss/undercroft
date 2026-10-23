@@ -810,8 +810,10 @@ A connection's cadence is `hourly`, `every_6h`, `daily`, `paused` or a custom fi
 could fire more often than the 5 minute tick is refused.
 
 The control plane runs its own 60 second tick for alerts. It emails a tenant's admins about a
-failed run, a grant about to lapse, or an ingest key about to expire, each at most once. It can
-also post failure and recovery cards to the operators' Lark group.
+failed run, a grant about to lapse, a grant that has lapsed, or an ingest key about to expire,
+each at most once. A lapsed grant is told once per lapse, and a run that failed on it gets no
+failed-run email of its own ([ADR 0150](adr/0150-a-lapsed-grant-is-emailed-once-per-lapse.md)).
+It can also post failure and recovery cards to the operators' Lark group.
 
 ## Observability
 

@@ -153,6 +153,7 @@
 - [ADR 0147 Each Division Reads Under Its Own Permission](sources/adr-0147-each-division-reads-under-its-own-permission.md)
 - [ADR 0148 The Actions Outage Mode Ends](sources/adr-0148-the-actions-outage-mode-ends.md)
 - [ADR 0149 Times Are Shown in the Viewer's Zone](sources/adr-0149-times-are-shown-in-the-viewer-s-zone.md)
+- [ADR 0150 A Lapsed Grant Is Emailed Once Per Lapse](sources/adr-0150-a-lapsed-grant-is-emailed-once-per-lapse.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

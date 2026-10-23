@@ -10,6 +10,7 @@
 export {
   type Cadence,
   claimExpiringGrants,
+  claimLapsedGrants,
   type Connection,
   type ConnectionDetail,
   ConnectionRegistryError,
@@ -19,6 +20,8 @@ export {
   type DueCandidate,
   type ExpiringGrant,
   getConnection,
+  grantLapsed,
+  type LapsedGrant,
   type LastRun,
   listConnections,
   listConnectionViews,

@@ -328,6 +328,18 @@ export async function setStatus(
 }
 
 /**
+ * Whether the connection aliased `c` has LAPSED: the provider refused its grant, or it could not
+ * be refreshed, and nothing will read until a person consents again. One fragment, so the
+ * notice's claim, the failed-run email it replaces and the re-arm in `writeCredential` cannot
+ * disagree about which connections that is (ADR 0150).
+ *
+ * `expired` alone, although the card shows `error` with the same "reconnect" (`presentStatus`):
+ * nothing writes `error` today, and the notice says the grant has lapsed or been withdrawn --
+ * words a provider fault, which is what `error` would mean, does not earn.
+ */
+const LAPSED = "c.status = 'expired'";
+
+/**
  * Seal and store a credential.
  *
  * `grantExpiresAt` is when the GRANT lapses -- `services/grantExpiry.ts` decides it -- and it
@@ -336,6 +348,13 @@ export async function setStatus(
  * grant renewed after a warning is warned about again when it next approaches its end.
  * `"unchanged"` keeps the end already stored, and its warning with it: a refresh that handed
  * back the same refresh token has told us nothing new about when that token dies.
+ *
+ * A credential written for a connection that is not lapsed clears `lapse_told_at`, so the next
+ * lapse is told again. A reconnect is that write: `storeCredential` records `connected` before
+ * it seals, in the same transaction. A REFRESH that succeeds while the connection still reads
+ * `expired` -- a browse in a process that has the refresher, after a run in one that had none
+ * marked it -- keeps the marker, or the next tick would tell a lapse already told and still
+ * standing.
  */
 export async function writeCredential(
   exec: SqlExecutor,
@@ -363,6 +382,10 @@ export async function writeCredential(
          WHEN NOT $7::boolean
           AND EXCLUDED.grant_expires_at IS DISTINCT FROM app.connection_secret.grant_expires_at
          THEN NULL ELSE app.connection_secret.warned_at END,
+       lapse_told_at    = CASE WHEN EXISTS (
+           SELECT 1 FROM ops.connection c
+           WHERE c.tenant_id = EXCLUDED.tenant_id AND c.source = EXCLUDED.source AND ${LAPSED})
+         THEN app.connection_secret.lapse_told_at ELSE NULL END,
        updated_at       = now()`,
     [
       tenantId,
@@ -411,6 +434,47 @@ export async function claimExpiringGrants(
     source: row.source,
     grantExpiresAt: new Date(row.grant_expires_at).toISOString(),
   }));
+}
+
+/** A grant the provider refused, as its notice names it. */
+export interface LapsedGrant {
+  readonly tenantId: string;
+  readonly source: string;
+}
+
+/**
+ * Claim every lapsed connection whose admins have not been told it lapsed.
+ *
+ * One UPDATE that marks and returns, like {@link claimExpiringGrants}: a second tick, or a
+ * second replica, finds nothing. A connection lapsed before the marker existed is claimed on
+ * the first tick -- nobody had been told -- and a lapse after a reconnect is claimed again,
+ * because `writeCredential` cleared the marker. A connection with no credential row has never
+ * completed a consent, so it has no grant to lapse and is not claimed.
+ */
+export async function claimLapsedGrants(exec: SqlExecutor): Promise<LapsedGrant[]> {
+  const { rows } = await exec.query<{ tenant_id: string; source: string }>(
+    `UPDATE app.connection_secret s SET lapse_told_at = now()
+     FROM ops.connection c
+     WHERE c.tenant_id = s.tenant_id AND c.source = s.source AND ${LAPSED}
+       AND s.lapse_told_at IS NULL
+     RETURNING s.tenant_id, s.source`,
+  );
+  return rows
+    .map((row) => ({ tenantId: row.tenant_id, source: row.source }))
+    .sort((a, b) => `${a.tenantId}/${a.source}`.localeCompare(`${b.tenantId}/${b.source}`));
+}
+
+/** Whether a source's grant has lapsed -- the question {@link claimLapsedGrants} claims on. */
+export async function grantLapsed(
+  exec: SqlExecutor,
+  tenantId: string,
+  source: string,
+): Promise<boolean> {
+  const { rows } = await exec.query<{ lapsed: boolean }>(
+    `SELECT ${LAPSED} AS lapsed FROM ops.connection c WHERE c.tenant_id = $1 AND c.source = $2`,
+    [tenantId, source],
+  );
+  return rows[0]?.lapsed === true;
 }
 
 /**

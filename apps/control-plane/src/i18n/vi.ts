@@ -3,7 +3,7 @@
  *
  * Small, and it should stay small. Almost nothing this server produces is read by a human:
  * the API answers a TypeScript client in codes and shapes. What is here is the exception --
- * five emails, and the handful of refusals whose message reaches a browser verbatim.
+ * six emails, and the handful of refusals whose message reaches a browser verbatim.
  *
  * Mirrors `apps/ui/src/i18n/vi.ts` in shape and rules but not in content, deliberately. A
  * shared catalogue would put the UI's several hundred keys into the server bundle so that
@@ -122,6 +122,18 @@ export const vi = {
     subject: "Quyền truy cập {{source}} của {{tenantId}} sắp hết hạn",
     heading: "Quyền truy cập sắp hết hạn",
     lead: "Hãy kết nối lại nguồn này trước lúc đó để việc đồng bộ không bị gián đoạn.",
+    action: "Kết nối lại",
+  },
+
+  /**
+   * A grant the provider refused (ADR 0150). The heading is the card's own mark and the lead its
+   * own sentence (`grantState.lapsedDetail` in the UI), so the inbox and the screen it links to
+   * say one thing. It also stands in for the failed-run email of a run that failed on the lapse.
+   */
+  grantLapsed: {
+    subject: "Quyền truy cập {{source}} của {{tenantId}} đã hết hiệu lực",
+    heading: "Cần cấp lại quyền",
+    lead: "Quyền truy cập đã cấp nay đã hết hiệu lực hoặc bị thu hồi, nên việc đồng bộ nguồn này đã dừng. Không có dữ liệu nào bị mất — kết nối lại sẽ tiếp tục từ lần đồng bộ gần nhất.",
     action: "Kết nối lại",
   },
 

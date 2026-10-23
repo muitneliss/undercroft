@@ -1,6 +1,6 @@
 /**
- * What an admin is told, as an email: a run that failed, a grant about to lapse, a key about
- * to expire.
+ * What an admin is told, as an email: a run that failed, a grant about to lapse, a grant that
+ * has lapsed, a key about to expire.
  *
  * Pure: composing is a decision, sending is transport, and `alerts.ts` decides who is sent
  * what and when. Each message is written in its recipient's own language.
@@ -100,6 +100,54 @@ export function grantExpiringMessage(
       {
         kind: "plate",
         label: t("grantExpiring.action"),
+        href: `${input.publicUrl}/tenants/${input.tenantId}`,
+      },
+    ],
+  });
+}
+
+/**
+ * What an admin is told when a provider refused a grant: it has lapsed, nothing was lost, and
+ * reconnecting resumes from the last sync -- the card's own words. No errata slip: that is the
+ * failed run's, and this message replaces the failed-run email for a lapse rather than
+ * correcting anything. No date either, because no provider says when a grant was withdrawn;
+ * what we know is only when we found out.
+ */
+export function grantLapsedMessage(
+  to: Recipient,
+  input: {
+    tenantId: string;
+    source: string;
+    publicUrl: string;
+    /** The mailbox or Drive account that lapsed, where the source may hold several. */
+    account?: string;
+  },
+): EmailMessage {
+  const t = messages(to.locale);
+  const account = input.account ?? "";
+  return postEmailLeaf(to.email, {
+    locale: to.locale,
+    subject: t("grantLapsed.subject", {
+      source: sourceName(input.source),
+      tenantId: input.tenantId,
+    }),
+    runningHead: input.tenantId,
+    heading: t("grantLapsed.heading"),
+    lead: t("grantLapsed.lead"),
+    colophon: t("email.colophon"),
+    blocks: [
+      {
+        kind: "schedule",
+        rows: [
+          { label: t("email.source"), value: sourceName(input.source) },
+          ...(account === "" ? [] : [{ label: t("email.account"), value: account }]),
+          { label: t("email.customer"), value: input.tenantId },
+        ],
+      },
+      {
+        kind: "plate",
+        label: t("grantLapsed.action"),
+        // The customer's sources, where the lapsed card carries its reconnect button.
         href: `${input.publicUrl}/tenants/${input.tenantId}`,
       },
     ],

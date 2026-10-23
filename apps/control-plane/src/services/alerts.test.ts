@@ -8,7 +8,14 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { DEFAULT_LOCALE, InMemoryEmailSender, type LarkNotice } from "@undercroft/core";
-import { closeRun, openRun, upsertConnection, writeCredential } from "@undercroft/db/repos";
+import {
+  closeRun,
+  openRun,
+  setStatus,
+  upsertConnection,
+  writeConnectionDetail,
+  writeCredential,
+} from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { appRouter } from "../handlers/router.ts";
@@ -367,6 +374,97 @@ describe("an expiring grant", () => {
 
     expect((await runAlerts(deps())).grants).toBe(0);
     expect(email.sent).toHaveLength(0);
+  });
+});
+
+describe("a lapsed grant", () => {
+  /** A consent, as `storeCredential` records one: the connection first, then its credential. */
+  async function consent(source: string, accessToken = "at"): Promise<void> {
+    await upsertConnection(db, { tenantId: TENANT, source, status: "connected" });
+    await refresh(source, accessToken);
+  }
+
+  /** A credential written with no new consent behind it, as a successful refresh writes one. */
+  async function refresh(source: string, accessToken: string): Promise<void> {
+    await db.asSuperuser((tx) =>
+      writeCredential(
+        tx,
+        TENANT,
+        source,
+        { accessToken, refreshToken: "rt", expiresAt: null },
+        { env: ENV },
+      ),
+    );
+  }
+
+  /** What the worker records when the provider refuses the grant (`resolveToken`). */
+  async function lapse(source: string): Promise<void> {
+    await setStatus(db, TENANT, source, "expired");
+  }
+
+  it("is told once to every admin, in each one's language, naming the account and the way back", async () => {
+    await seedAdmin("ada@example.test", "vi");
+    await seedAdmin("bob@example.test", "en");
+    await consent("gmail");
+    await writeConnectionDetail(db, {
+      tenantId: TENANT,
+      source: "gmail",
+      accountLabel: "ops@acme.example.test",
+    });
+    await lapse("gmail");
+
+    const summary = await runAlerts(deps());
+    const again = await runAlerts(deps());
+
+    expect(summary).toMatchObject({ lapses: 1, undeliverable: 0 });
+    expect(again.lapses).toBe(0);
+    expect(email.sent.map((m) => [m.to, m.subject])).toEqual([
+      ["ada@example.test", "Quyền truy cập Gmail của CASE-0042 đã hết hiệu lực"],
+      ["bob@example.test", "CASE-0042's Gmail access has lapsed"],
+    ]);
+    const [vi, en] = email.sent;
+    expect(vi?.text).toContain("Không có dữ liệu nào bị mất");
+    expect(en?.text).toContain("ops@acme.example.test");
+    expect(en?.text).toContain(`${PUBLIC_URL}/tenants/CASE-0042`);
+  });
+
+  it("is told again after a reconnect lapses, but not after a refresh while it is still lapsed", async () => {
+    await seedAdmin("bob@example.test", "en");
+    await consent("xero");
+    await lapse("xero");
+    expect((await runAlerts(deps())).lapses).toBe(1);
+
+    // A refresh that succeeds while the card still says "reconnect" is no reconnect.
+    await refresh("xero", "at-refreshed");
+    expect((await runAlerts(deps())).lapses).toBe(0);
+
+    await consent("xero", "at-reconsented");
+    expect((await runAlerts(deps())).lapses).toBe(0);
+    await lapse("xero");
+    expect((await runAlerts(deps())).lapses).toBe(1);
+    expect(email.sent).toHaveLength(2);
+  });
+
+  it("replaces the failed-run email of the run that found it; the operators' card still posts", async () => {
+    await seedAdmin("bob@example.test", "en");
+    await consent("gmail");
+    await consent("hubspot");
+    await lapse("gmail");
+    await failedRun("r-gmail", "gmail", "Google answered 400 invalid_grant");
+    await failedRun("r-hubspot", "hubspot");
+
+    const summary = await runAlerts(deps({ lark: larkGroup }));
+
+    expect(summary).toMatchObject({ failures: 2, lapses: 1 });
+    // The connected source's failure is still emailed; the lapsed one's is the lapse notice.
+    expect(email.sent.map((m) => m.subject)).toEqual([
+      "The HubSpot sync for CASE-0042 failed",
+      "CASE-0042's Gmail access has lapsed",
+    ]);
+    expect(cards.map((c) => c.title)).toEqual([
+      "❌ Đồng bộ Gmail cho CASE-0042 không thành công",
+      "❌ Đồng bộ HubSpot cho CASE-0042 không thành công",
+    ]);
   });
 });
 
