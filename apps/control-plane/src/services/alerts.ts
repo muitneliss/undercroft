@@ -1,11 +1,16 @@
 /**
  * Telling a customer's administrators when something needs a person.
  *
- * Three notices, each sent at most once: a run that failed, a grant about to lapse, and an
- * ingest key about to expire. "At most once" is a property of the claim, not of this
- * module -- each repo claims its rows with one UPDATE that marks and returns, so a second
- * tick or a second replica finds nothing to send. What is decided here is who is told, on
- * which channel; the words are `alertEmails.ts`'s and `syncCards.ts`'s.
+ * Four notices, each sent at most once: a run that failed, a grant about to lapse, a grant
+ * that has lapsed, and an ingest key about to expire. "At most once" is a property of the
+ * claim, not of this module -- each repo claims its rows with one UPDATE that marks and
+ * returns, so a second tick or a second replica finds nothing to send. What is decided here is
+ * who is told, on which channel; the words are `alertEmails.ts`'s and `syncCards.ts`'s.
+ *
+ * A lapse is told once per lapse (ADR 0150): the claim marks the credential, and a reconnect's
+ * new credential clears the mark. A run that failed BECAUSE its grant lapsed sends no
+ * failed-run email -- the lapse notice is that email, in words an admin can act on -- while its
+ * card still goes to the operators' Lark group.
  *
  * A failure is told to the tenant's admins in each one's own language; a tenant with no
  * admin falls back to the platform's superadmins, in the default language, because the
@@ -23,7 +28,7 @@
  * sync status across every customer, and a red card with no green one after it would read as
  * a sync still down. The recovery is Lark's alone: an admin was told the data would not change
  * until a later run succeeded, and that later run is visible on the screen they were linked
- * to. Either channel may be absent. What only email carries -- grants and keys -- is not
+ * to. Either channel may be absent. What only email carries -- grants, lapses and keys -- is not
  * claimed without email, since a claim with nobody told is a notice lost.
  *
  * A notice about a DEACTIVATED customer (ADR 0110) is claimed and withheld, on every channel,
@@ -47,13 +52,20 @@ import {
   claimExpiringGrants,
   claimExpiringKeys,
   claimFailedRuns,
+  claimLapsedGrants,
   claimRecoveredRuns,
   deactivatedTenants,
+  grantLapsed,
   readConnectionDetail,
 } from "@undercroft/db/repos";
 
 import { listAdmins, type Recipient } from "../repos/membership.ts";
-import { failedRunMessage, grantExpiringMessage, keyExpiringMessage } from "./alertEmails.ts";
+import {
+  failedRunMessage,
+  grantExpiringMessage,
+  grantLapsedMessage,
+  keyExpiringMessage,
+} from "./alertEmails.ts";
 import type { Superadmins } from "./superadmin.ts";
 import { failedRunCard, recoveredRunCard } from "./syncCards.ts";
 
@@ -85,7 +97,10 @@ export interface AlertSummary {
   readonly suppressed: number;
   /** Successes that ended an announced failure, posted to Lark. */
   readonly recoveries: number;
+  /** Grants about to lapse, warned about. */
   readonly grants: number;
+  /** Grants the provider refused, told once per lapse. ADR 0150. */
+  readonly lapses: number;
   readonly keys: number;
   /** Messages or cards the channel refused or could not deliver. Logged; never retried. */
   readonly undeliverable: number;
@@ -107,22 +122,22 @@ function withheld(deps: TickDeps, tenantId: string, about: Record<string, string
 }
 
 /**
- * Which account a notice is about, where a source may hold several -- or `""` where it cannot,
- * or where no address was ever recorded.
+ * A notice about one source, with what every such notice carries: the origin its link points at,
+ * and which account it is about where a source may hold several -- `""` where it cannot, or
+ * where no address was ever recorded.
  *
  * "The Gmail sync failed" is not a sentence an admin with two mailboxes can act on: which one
  * stopped is the whole question (issue #125, item 6). The address is theirs -- they granted it
  * -- and it is read from `app.connection_detail`, where it has always lived. ADR 0043.
  */
-async function accountLabelOf(
-  exec: SqlExecutor,
-  input: { tenantId: string; source: string },
-): Promise<string> {
-  if (!MULTI_ACCOUNT_KINDS.has(sourceKind(input.source))) {
-    return "";
-  }
-  const detail = await readConnectionDetail(exec, input.tenantId, input.source);
-  return detail?.accountLabel ?? "";
+async function addressed<T extends { tenantId: string; source: string }>(
+  deps: AlertDeps,
+  item: T,
+): Promise<T & { publicUrl: string; account: string }> {
+  const detail = MULTI_ACCOUNT_KINDS.has(sourceKind(item.source))
+    ? await readConnectionDetail(deps.exec, item.tenantId, item.source)
+    : null;
+  return { ...item, publicUrl: deps.publicUrl, account: detail?.accountLabel ?? "" };
 }
 
 /** Post one card: 1 when Lark would not take it, to be counted. */
@@ -176,13 +191,8 @@ interface Counts {
 }
 
 /** Claim the failures and tell each channel there is; a suppressed one is told to neither. */
-async function tellFailures(deps: TickDeps): Promise<{
-  readonly failures: number;
-  readonly suppressed: number;
-  readonly undeliverable: number;
-  readonly withheld: number;
-}> {
-  let failures = 0;
+async function tellFailures(deps: TickDeps): Promise<Counts & { readonly suppressed: number }> {
+  let told = 0;
   let suppressed = 0;
   let undeliverable = 0;
   let held = 0;
@@ -196,14 +206,12 @@ async function tellFailures(deps: TickDeps): Promise<{
       held += 1;
       continue;
     }
-    failures += 1;
-    const input = {
-      ...run,
-      runId: run.id,
-      publicUrl: deps.publicUrl,
-      account: await accountLabelOf(deps.exec, run),
-    };
-    if (deps.email !== undefined) {
+    told += 1;
+    const input = { ...(await addressed(deps, run)), runId: run.id };
+    // A run that failed on a lapsed grant is emailed as the lapse (ADR 0150), in words an admin
+    // can act on rather than the provider's English; it stays claimed `sent`, so its card below
+    // and the recovery after still post. `resolveToken` writes `expired` before the run closes.
+    if (deps.email !== undefined && !(await grantLapsed(deps.exec, run.tenantId, run.source))) {
       undeliverable += await deliver(
         { ...deps, email: deps.email },
         await recipientsFor(deps, run.tenantId),
@@ -215,7 +223,7 @@ async function tellFailures(deps: TickDeps): Promise<{
       undeliverable += await post(deps, deps.lark, failedRunCard(input), about);
     }
   }
-  return { failures, suppressed, undeliverable, withheld: held };
+  return { told, suppressed, undeliverable, withheld: held };
 }
 
 async function tellRecoveries(
@@ -232,60 +240,82 @@ async function tellRecoveries(
       continue;
     }
     told += 1;
-    const card = recoveredRunCard({
-      ...run,
-      runId: run.id,
-      publicUrl: deps.publicUrl,
-      account: await accountLabelOf(deps.exec, run),
-    });
+    const card = recoveredRunCard({ ...(await addressed(deps, run)), runId: run.id });
     undeliverable += await post(deps, lark, card, about);
   }
   return { told, undeliverable, withheld: held };
 }
 
-async function tellExpiringGrants(deps: TickDeps, email: EmailSender): Promise<Counts> {
-  let told = 0;
-  let undeliverable = 0;
-  let held = 0;
-  for (const grant of await claimExpiringGrants(deps.exec, WARN_DAYS)) {
-    const about = { kind: "grant_expiring", tenantId: grant.tenantId, source: grant.source };
-    if (withheld(deps, grant.tenantId, about)) {
-      held += 1;
-      continue;
-    }
-    told += 1;
-    undeliverable += await deliver(
-      { ...deps, email },
-      await recipientsFor(deps, grant.tenantId),
-      (to) => grantExpiringMessage(to, { ...grant, publicUrl: deps.publicUrl }),
-      about,
-    );
-  }
-  return { told, undeliverable, withheld: held };
-}
-
-async function tellExpiringKeys(deps: TickDeps, email: EmailSender): Promise<Counts> {
-  let told = 0;
-  let undeliverable = 0;
-  let held = 0;
-  for (const key of await claimExpiringKeys(deps.exec, WARN_DAYS)) {
-    const about = { kind: "key_expiring", tenantId: key.tenantId, keyId: key.id };
-    if (withheld(deps, key.tenantId, about)) {
-      held += 1;
-      continue;
-    }
-    told += 1;
-    undeliverable += await deliver(
-      { ...deps, email },
-      await recipientsFor(deps, key.tenantId),
-      (to) => keyExpiringMessage(to, { ...key, publicUrl: deps.publicUrl }),
-      about,
-    );
-  }
-  return { told, undeliverable, withheld: held };
-}
-
 const NONE: Counts = { told: 0, undeliverable: 0, withheld: 0 };
+
+/** A notice only email carries, claimed and ready to be written for each recipient. */
+interface EmailNotice {
+  readonly tenantId: string;
+  /** What the log names it by, whether it is sent, refused or withheld. */
+  readonly about: Record<string, string>;
+  readonly compose: (to: Recipient) => EmailMessage;
+}
+
+/**
+ * Claim notices only email carries and tell each to its tenant's admins -- one about a
+ * deactivated customer to nobody. Without email nothing is claimed: a claim nobody hears is lost.
+ */
+async function tellByEmail(
+  deps: TickDeps,
+  claim: (deps: TickDeps) => Promise<EmailNotice[]>,
+): Promise<Counts> {
+  const { email } = deps;
+  if (email === undefined) {
+    return NONE;
+  }
+  let told = 0;
+  let undeliverable = 0;
+  let held = 0;
+  for (const notice of await claim(deps)) {
+    if (withheld(deps, notice.tenantId, notice.about)) {
+      held += 1;
+      continue;
+    }
+    told += 1;
+    undeliverable += await deliver(
+      { ...deps, email },
+      await recipientsFor(deps, notice.tenantId),
+      notice.compose,
+      notice.about,
+    );
+  }
+  return { told, undeliverable, withheld: held };
+}
+
+async function expiringGrants(deps: TickDeps): Promise<EmailNotice[]> {
+  return (await claimExpiringGrants(deps.exec, WARN_DAYS)).map((grant) => ({
+    tenantId: grant.tenantId,
+    about: { kind: "grant_expiring", tenantId: grant.tenantId, source: grant.source },
+    compose: (to): EmailMessage =>
+      grantExpiringMessage(to, { ...grant, publicUrl: deps.publicUrl }),
+  }));
+}
+
+async function lapsedGrants(deps: TickDeps): Promise<EmailNotice[]> {
+  const notices: EmailNotice[] = [];
+  for (const grant of await claimLapsedGrants(deps.exec)) {
+    const input = await addressed(deps, grant);
+    notices.push({
+      tenantId: grant.tenantId,
+      about: { kind: "grant_lapsed", tenantId: grant.tenantId, source: grant.source },
+      compose: (to) => grantLapsedMessage(to, input),
+    });
+  }
+  return notices;
+}
+
+async function expiringKeys(deps: TickDeps): Promise<EmailNotice[]> {
+  return (await claimExpiringKeys(deps.exec, WARN_DAYS)).map((key) => ({
+    tenantId: key.tenantId,
+    about: { kind: "key_expiring", tenantId: key.tenantId, keyId: key.id },
+    compose: (to): EmailMessage => keyExpiringMessage(to, { ...key, publicUrl: deps.publicUrl }),
+  }));
+}
 
 /**
  * One tick: claim what is due, tell whoever should be told. Safe to run as often as wanted.
@@ -295,28 +325,23 @@ export async function runAlerts(deps: AlertDeps): Promise<AlertSummary> {
   const failed = await tellFailures(tick);
   // After the failures, so a failure and the success that ended it in one interval are both told.
   const recoveries = deps.lark === undefined ? NONE : await tellRecoveries(tick, deps.lark);
-  const grants = deps.email === undefined ? NONE : await tellExpiringGrants(tick, deps.email);
-  const keys = deps.email === undefined ? NONE : await tellExpiringKeys(tick, deps.email);
+  const grants = await tellByEmail(tick, expiringGrants);
+  const lapses = await tellByEmail(tick, lapsedGrants);
+  const keys = await tellByEmail(tick, expiringKeys);
+  const outcomes = [failed, recoveries, grants, lapses, keys];
 
   const summary = {
-    failures: failed.failures,
+    failures: failed.told,
     suppressed: failed.suppressed,
     recoveries: recoveries.told,
     grants: grants.told,
+    lapses: lapses.told,
     keys: keys.told,
-    undeliverable:
-      failed.undeliverable + recoveries.undeliverable + grants.undeliverable + keys.undeliverable,
-    withheld: failed.withheld + recoveries.withheld + grants.withheld + keys.withheld,
+    undeliverable: outcomes.reduce((sum, counts) => sum + counts.undeliverable, 0),
+    withheld: outcomes.reduce((sum, counts) => sum + counts.withheld, 0),
   };
-  if (
-    summary.failures +
-      summary.suppressed +
-      summary.recoveries +
-      summary.grants +
-      summary.keys +
-      summary.withheld >
-    0
-  ) {
+  // Quiet when nothing was claimed. `undeliverable` counts only notices also counted above.
+  if (Object.values(summary).some((count) => count > 0)) {
     deps.log?.info("alerts_tick", summary);
   }
   return summary;

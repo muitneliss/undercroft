@@ -192,6 +192,11 @@ Cards are written in Vietnamese, the platform's language, and link to the run in
 The ledger's `ops.run.notice` claims each one, so a card goes out at most once however many
 replicas tick. A card Lark refuses is logged as `alert_post_failed` and not retried.
 
+A run that failed because its grant lapsed still gets its red card, but its admins are not sent
+the failed-run email: they get the email-only "reconnect" notice for the lapse instead, once
+per lapse (ADR 0150). That notice is claimed on `app.connection_secret.lapse_told_at`, and the
+tick's `alerts_tick` log line counts it as `lapses`.
+
 | Where               | Name                             | Value                                                        |
 | ------------------- | -------------------------------- | ------------------------------------------------------------ |
 | Dokploy environment | `UNDERCROFT_LARK_WEBHOOK_URL`    | the custom bot's webhook URL — unset means email only        |

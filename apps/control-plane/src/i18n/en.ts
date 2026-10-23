@@ -68,6 +68,13 @@ export const en = {
     action: "Reconnect",
   },
 
+  grantLapsed: {
+    subject: "{{tenantId}}'s {{source}} access has lapsed",
+    heading: "Reconnect required",
+    lead: "The access we were granted has lapsed or been withdrawn, so this source has stopped syncing. Nothing has been lost — reconnecting picks up where the last sync finished.",
+    action: "Reconnect",
+  },
+
   keyExpiring: {
     subject: "{{tenantId}}'s ingest key “{{label}}” is about to expire",
     heading: "An ingest key is about to expire",
