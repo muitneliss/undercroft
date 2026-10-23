@@ -7,9 +7,9 @@
  * the compiler binds one value per name. The values live in the URL, as a question's own
  * parameters do (`lib/params.ts`), so a dashboard with its filters set is a link.
  *
- * The date presets are computed in Asia/Singapore, the zone every schedule here is written
- * in (`lib/when.ts`): "today" for a reader in Hanoi at half past midnight is still the day
- * the platform is on, so a preset and the run that landed the rows agree on which day it is.
+ * The date presets count the viewer's own days (ADR 0149): "today" is the day on the reader's
+ * clock, the same clock `lib/when.ts` prints every instant on, so "last 7 days" ends on the
+ * date the screen beside it shows as today.
  */
 
 import type { DashboardFilter } from "@undercroft/contracts/bi";
@@ -35,18 +35,24 @@ export function paramsOfAll(filters: readonly DashboardFilter[]): string[] {
 export const DATE_PRESETS = ["last7", "last30", "thisMonth", "thisYear"] as const;
 export type DatePreset = (typeof DATE_PRESETS)[number];
 
-const DAY_MS = 86_400_000;
-
-/** `YYYY-MM-DD` in the platform's zone: `en-CA` is the CLDR locale whose short date is ISO. */
-const ISO_DATE = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Asia/Singapore",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
+/**
+ * `YYYY-MM-DD` of a local calendar day. `Date`'s own getters read the runtime's zone at the
+ * moment they are called, so there is no formatter here to capture a zone and keep it.
+ */
 function isoDate(at: Date): string {
-  return ISO_DATE.format(at);
+  const month = String(at.getMonth() + 1).padStart(2, "0");
+  const day = String(at.getDate()).padStart(2, "0");
+  return `${at.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * The local day `days` before `now`'s, counted in calendar days rather than in 24-hour steps:
+ * across a daylight-saving change a day is 23 or 25 hours, and subtracting milliseconds from
+ * just after midnight would land on the wrong date. `Date` rolls a day of 0 or below back into
+ * the month before.
+ */
+function daysBefore(now: Date, days: number): string {
+  return isoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - days));
 }
 
 /** The preset's range, both ends inclusive, ending today. */
@@ -54,9 +60,9 @@ export function presetRange(preset: DatePreset, now = new Date()): { from: strin
   const to = isoDate(now);
   switch (preset) {
     case "last7":
-      return { from: isoDate(new Date(now.getTime() - 6 * DAY_MS)), to };
+      return { from: daysBefore(now, 6), to };
     case "last30":
-      return { from: isoDate(new Date(now.getTime() - 29 * DAY_MS)), to };
+      return { from: daysBefore(now, 29), to };
     case "thisMonth":
       return { from: `${to.slice(0, 7)}-01`, to };
     case "thisYear":

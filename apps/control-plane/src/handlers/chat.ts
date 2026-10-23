@@ -200,7 +200,10 @@ function refusedStanding(c: HonoContext, ctx: Context, held: "deactivated" | nul
     : c.json({ error: catalogue(ctx.locale)("error.tenantDeactivated") }, 409);
 }
 
-/** Asia/Singapore, always. A locale never moves a timestamp -- `.claude/rules/i18n.md`. */
+/**
+ * The assistant's clock, in Asia/Singapore. The server cannot know the reader's zone, so it
+ * keeps the platform's and the prompt says which it is (ADR 0149); a locale never moves it.
+ */
 function nowInSingapore(): string {
   return new Date().toLocaleString("sv-SE", { timeZone: "Asia/Singapore" });
 }

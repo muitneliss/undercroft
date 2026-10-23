@@ -961,7 +961,7 @@ export const en = {
       "Only what you hold and what you can read yourself. The built-in roles read everything already; a customer's own role reads only what is granted here.",
     permissionOption: "{{label}} · {{permission}}",
     untilLabel: "Until the end of (optional)",
-    untilHint: "In Singapore time (SGT). Leave it empty for a standing grant.",
+    untilHint: "In your local time. Leave it empty for a standing grant.",
     add: "Grant",
     adding: "Granting…",
     added: "Granted.",
@@ -1072,7 +1072,7 @@ export const en = {
     cronHint:
       "Five fields: minute, hour, day of month, month, day of week (0 is Sunday). In Singapore time (SGT), no more often than every {{minutes}} minutes.",
     cronSave: "Save schedule",
-    cronPreview: "The next three runs (Singapore time)",
+    cronPreview: "The next three runs (your local time)",
     cronZone: "Singapore time (SGT)",
     cronRefused: {
       fields: "Five fields are needed, separated by spaces.",

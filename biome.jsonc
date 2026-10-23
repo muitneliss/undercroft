@@ -542,7 +542,8 @@
     //
     // `vite.config.ts` and `src/test/setup.ts` live inside `apps/ui` but run on Node and Bun
     // respectively, never in the browser. `vitest.config.ts` runs on Node too: it is the Vitest
-    // server that drives Chromium, not a page (ADR 0099).
+    // server that drives Chromium, not a page (ADR 0099). `src/test/zone.ts` is imported only by
+    // Bun suites, to set the process's `TZ`; no page and no visual suite reaches it.
     {
       "includes": [
         "apps/cli/**",
@@ -559,7 +560,8 @@
         ".claude/**",
         "apps/ui/vite.config.ts",
         "apps/ui/vitest.config.ts",
-        "apps/ui/src/test/setup.ts"
+        "apps/ui/src/test/setup.ts",
+        "apps/ui/src/test/zone.ts"
       ],
       "linter": { "rules": { "correctness": { "noNodejsModules": "off" } } }
     },
@@ -592,6 +594,15 @@
         // inside this PR. Until then the rule would report the one line that names the debt.
         "packages/crypto/src/seal.ts"
       ],
+      "linter": { "rules": { "style": { "noProcessEnv": "off" } } }
+    },
+
+    // The one place a UI suite sets the runtime's zone. The UI prints instants in the viewer's
+    // own zone (ADR 0149), so a suite that asserts a clock must choose one, and `TZ` is the only
+    // way a JavaScript runtime is told its zone. One helper rather than a line-level ignore in
+    // each of the six suites that pin a clock, so the write and its restore are in one place.
+    {
+      "includes": ["apps/ui/src/test/zone.ts"],
       "linter": { "rules": { "style": { "noProcessEnv": "off" } } }
     },
 

@@ -6,8 +6,8 @@
  * One select holds both kinds: the permissions the reader holds, read off their own
  * `permissions` through `can`, and the objects they can read, from the server's lists
  * (`useGrantObjects`). The subset rule refuses the rest; offering only these is a courtesy. An
- * expiry is a calendar day, sent as the last second of that day in the schedule zone
- * (`endOfScheduleDay`), so the day picked is the day printed.
+ * expiry is a calendar day, sent as the last second of that day in the reader's own zone
+ * (`endOfLocalDay`, ADR 0149), so the day picked is the day printed.
  *
  * Since ADR 0143 a grant of one model or reference table may also say which rows it shows and
  * which columns it hides (`GrantRuleFields`), and the form shows, under it, what the person or
@@ -39,7 +39,7 @@ import {
 import { ruleOfDraft } from "@/lib/grantRules.ts";
 import { can, PERMISSION_LABELS } from "@/lib/permissions.ts";
 import { type RoleOption, roleName } from "@/lib/roles.ts";
-import { endOfScheduleDay } from "@/lib/when.ts";
+import { endOfLocalDay } from "@/lib/when.ts";
 import { type GrantDraft, grantDraftFor, useUiStore } from "@/store.ts";
 import type { trpc } from "@/trpc.ts";
 
@@ -168,7 +168,7 @@ function requestOf(draft: GrantDraft, day: string): Omit<GrantRequest, "tenantId
   const grant = grantOf(draft.grant);
   const model = oneModelOf(draft.grant);
   const rowRule = model === null ? null : ruleOfDraft(draft.conditions);
-  const expiresAt = day === "" ? null : endOfScheduleDay(day);
+  const expiresAt = day === "" ? null : endOfLocalDay(day);
   if (subject === null || grant === null || rowRule === "incomplete") {
     return null;
   }

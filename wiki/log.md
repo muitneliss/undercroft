@@ -467,3 +467,6 @@
 ## [2026-10-18] remove | ADR 0146 Each Division Reads Under Its Own Permission
 ## [2026-10-19] ingest | Runbook Deployment
 ## [2026-10-19] ingest | ADR 0148 The Actions Outage Mode Ends
+## [2026-10-23] ingest | Design: The Village, the Journal Drawn as People at Work
+## [2026-10-23] ingest | ADR 0149 Times Are Shown in the Viewer's Zone
+## [2026-10-23] ingest | Runbook: Access control

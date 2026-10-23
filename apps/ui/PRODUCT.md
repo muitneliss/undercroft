@@ -62,8 +62,9 @@ own database role, in that customer's own schema.
   saved; ADR 0059) or on demand.
 - After each successful ingest, the customer's dbt models are built as that customer's role.
   Failing tests land in a per-customer `dq` schema.
-- Times are always shown in Asia/Singapore, in the reader's language. Amounts are never
-  localised.
+- Times are shown in the reader's own time zone and in the reader's language (ADR 0149); a
+  cron expression is written in Singapore time and says so, and an email names its zone.
+  Amounts are never localised.
 - Operators and customers use the same browser application; there is no second BI tool.
 - The same procedures are reachable from the `undercroft` CLI, by a person or their LLM agent,
   as the person who signed in; and from an in-app assistant, the interleaf, with exactly the

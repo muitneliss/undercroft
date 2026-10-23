@@ -2,10 +2,11 @@
  * A run's outcome wears the grant's own four marks, and the next run is worded honestly.
  */
 
-import { describe, expect, test as it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test as it } from "bun:test";
 
 import { translatorFor } from "@/i18n/index.ts";
 import { connection } from "@/test/fixtures.ts";
+import { enterZone, leaveZone, VIETNAM } from "@/test/zone.ts";
 import {
   describeRun,
   journalEmptyBody,
@@ -18,6 +19,9 @@ import {
 const en = translatorFor("en");
 const vi = translatorFor("vi");
 const NOW = new Date("2026-09-17T12:00:00Z");
+
+beforeAll(() => enterZone(VIETNAM));
+afterAll(leaveZone);
 
 describe("runMark", () => {
   it("maps the three outcomes and the absence of one onto the four geometries", () => {
@@ -35,8 +39,8 @@ describe("runMark", () => {
 });
 
 describe("nextRunNote", () => {
-  it("a future due time is printed as a date in the fixed zone", () => {
-    // 17:30 UTC is 01:30 the next day in Singapore, in either language.
+  it("a future due time is printed as a date on the reader's clock", () => {
+    // 17:30 UTC is 00:30 the next day in Vietnam, in either language.
     const note = nextRunNote(
       en,
       "en",
@@ -44,7 +48,7 @@ describe("nextRunNote", () => {
       NOW,
     );
     expect(note).toContain("18");
-    expect(note).toContain("01:30");
+    expect(note).toContain("00:30");
   });
 
   it("a due time already past means the scheduler's next tick, not a missed run", () => {
@@ -111,8 +115,8 @@ describe("journalEmptyBody", () => {
       [{ nextRunAt: "2026-09-18T02:00:00Z" }, { nextRunAt: "2026-09-17T17:30:00Z" }],
       NOW,
     );
-    // 17:30 UTC is 01:30 the next day in Singapore.
-    expect(body).toContain("01:30");
+    // 17:30 UTC is 00:30 the next day in Vietnam.
+    expect(body).toContain("00:30");
     expect(body).toContain("Run now");
   });
 

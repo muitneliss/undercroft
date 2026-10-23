@@ -118,8 +118,8 @@ export function OpenInvitations({
                   </td>
                   <td>{roleNamed(invitation.role, roles)}</td>
                   {/* Through `formatDate`, not `toISOString().slice(0, 10)`: that rendered
-                    the date in UTC while every other date on the schedule is in Singapore
-                    time, so an invitation expiring at 07:00 SGT showed the previous day. */}
+                    the date in UTC while every other date on the schedule is in the reader's
+                    zone, so an invitation expiring at 07:00 in Hanoi showed the previous day. */}
                   <td className="datum datum--quiet">{formatDate(invitation.expiresAt, locale)}</td>
                   {canManage ? (
                     <WithdrawCell invitation={invitation} revoke={revoke} tenantId={tenantId} />

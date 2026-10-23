@@ -1,18 +1,21 @@
 /**
- * The language moves; the clock does not.
+ * The language moves the words; the reader's zone moves the clock.
  *
- * `when.ts` gained a locale, and the hazard that arrived with it is specific: the obvious
- * "make dates local" change would drop `timeZone: "Asia/Singapore"` and render a Vietnamese
- * reader's expiry an hour earlier than the cron beside it fires. That is how somebody
- * concludes a grant has a day longer than it has, and nothing raises. So the zone is pinned
- * here against a locale that is NOT Singapore's.
+ * `when.ts` prints an instant in the viewer's own zone (ADR 0149), so the hazards are two. One is
+ * a formatter that ignores the zone -- a fixed `timeZone`, the old Singapore rule coming back --
+ * which would show a reader in Hanoi a time an hour off from the clock on their wall. The other is
+ * a formatter that follows the LOCALE's region instead of the zone. So the same instant is printed
+ * under two zones an hour apart, in both languages, and each suite names the zone it runs in:
+ * `bun test` is UTC and a laptop is wherever it is, and a test that leaned on either would pass
+ * for the wrong reason somewhere.
  */
 
-import { describe, expect, test as it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test as it } from "bun:test";
 
 import { translatorFor } from "@/i18n/index.ts";
+import { enterZone, leaveZone, SINGAPORE, VIETNAM } from "@/test/zone.ts";
 import {
-  endOfScheduleDay,
+  endOfLocalDay,
   expiryNote,
   formatDate,
   formatDuration,
@@ -31,18 +34,20 @@ const TWELVE_SECONDS = /^12 secs?$/u;
 const TWO_MINUTES = /^2 mins?$/u;
 const NINETY_MINUTES = /^1\.5 hrs?$/u;
 
-describe("formatDate", () => {
-  it("changes language without changing timezone", () => {
-    // 16:30 UTC on the 17th is 00:30 on the 18th in Singapore (UTC+8), but still 23:30 on
-    // the 17th in Vietnam (UTC+7) and 16:30 on the 17th in UTC. The instant has to sit in
-    // that one hour: an hour later it is the 18th in Vietnam too, and a formatter that
-    // followed the locale's region or the host's zone would pass on a Hanoi laptop.
+describe("formatDate in Vietnam", () => {
+  beforeAll(() => enterZone(VIETNAM));
+  afterAll(leaveZone);
+
+  it("is the reader's own day, whichever language reads it", () => {
+    // 16:30 UTC on the 17th is 23:30 on the 17th in Vietnam (UTC+7), but already 00:30 on the
+    // 18th in Singapore (UTC+8). The instant has to sit in that one hour: an hour later it is the
+    // 18th in both, and a formatter fixed to Singapore would pass here for the wrong reason.
     const late = "2026-09-17T16:30:00Z";
 
-    expect(formatDate(late, "en")).toContain("18");
-    expect(formatDate(late, "vi")).toContain("18");
-    expect(formatDate(late, "en")).not.toContain("17");
-    expect(formatDate(late, "vi")).not.toContain("17");
+    expect(formatDate(late, "en")).toContain("17");
+    expect(formatDate(late, "vi")).toContain("17");
+    expect(formatDate(late, "en")).not.toContain("18");
+    expect(formatDate(late, "vi")).not.toContain("18");
     // Same instant, same day, different words for the month.
     expect(formatDate(late, "vi")).not.toBe(formatDate(late, "en"));
   });
@@ -50,6 +55,21 @@ describe("formatDate", () => {
   it("an unreadable date is reported as missing, not rendered as today", () => {
     expect(formatDate("not a date", "vi")).toBe("—");
     expect(formatDate(null, "vi")).toBe("—");
+  });
+});
+
+describe("formatDate in Singapore", () => {
+  beforeAll(() => enterZone(SINGAPORE));
+  afterAll(leaveZone);
+
+  it("is the next day for the same instant: the zone moves the clock, the language does not", () => {
+    // The Vietnamese-language reader in Singapore sees Singapore's day. Run after the Vietnam
+    // suite in the same process, this also fails if a cached formatter kept the earlier zone.
+    const late = "2026-09-17T16:30:00Z";
+
+    expect(formatDate(late, "en")).toContain("18");
+    expect(formatDate(late, "vi")).toContain("18");
+    expect(formatDate(late, "vi")).not.toContain("17");
   });
 });
 
@@ -70,6 +90,9 @@ describe("expiryNote", () => {
 });
 
 describe("relativeTime", () => {
+  beforeAll(() => enterZone(VIETNAM));
+  afterAll(leaveZone);
+
   it("says how long ago in the reader's language, from the same instant", () => {
     const fiveMinutesAgo = "2026-09-17T11:55:00Z";
 
@@ -78,14 +101,14 @@ describe("relativeTime", () => {
     expect(relativeTime("2026-09-16T09:00:00Z", "en", NOW)).toBe("yesterday");
   });
 
-  it("past a month it is the date, in the fixed zone, not a count of days", () => {
-    // 17:30 UTC on 1 August is 01:30 on the 2nd in Singapore, whichever language reads it --
-    // and 00:30 in Vietnam, 17:30 in UTC. The clock reading is what tells the zones apart; a
-    // bare "02" would match the year 2026 whatever zone the date was rendered in.
+  it("past a month it is the date on the reader's clock, not a count of days", () => {
+    // 17:30 UTC on 1 August is 00:30 on the 2nd in Vietnam, whichever language reads it -- and
+    // 01:30 in Singapore, 17:30 in UTC. The clock reading is what tells the zones apart; a bare
+    // "02" would match the year 2026 whatever zone the date was rendered in.
     const long = "2026-08-01T17:30:00Z";
 
-    expect(relativeTime(long, "en", NOW)).toContain("01:30");
-    expect(relativeTime(long, "vi", NOW)).toContain("01:30");
+    expect(relativeTime(long, "en", NOW)).toContain("00:30");
+    expect(relativeTime(long, "vi", NOW)).toContain("00:30");
     expect(relativeTime(long, "en", NOW)).not.toContain("ago");
   });
 
@@ -119,18 +142,22 @@ describe("formatDuration", () => {
   });
 });
 
-describe("endOfScheduleDay", () => {
-  it("is the last second of that day in Singapore, which the list then prints as that day", () => {
-    // A grant "until the 31st" must not lapse at 07:00 on the 31st, which a day read as UTC would.
-    const until = endOfScheduleDay("2026-10-31");
+describe("endOfLocalDay", () => {
+  beforeAll(() => enterZone(VIETNAM));
+  afterAll(leaveZone);
 
-    expect(until).toBe("2026-10-31T15:59:59.000Z");
+  it("is the last second of that day on the reader's clock, which the list then prints as that day", () => {
+    // A grant "until the 31st" must not lapse at 07:00 on the 31st, which a day read as UTC would,
+    // nor an hour early, which a day read in Singapore would for a reader in Vietnam.
+    const until = endOfLocalDay("2026-10-31");
+
+    expect(until).toBe("2026-10-31T16:59:59.000Z");
     expect(formatDate(until, "vi")).toBe(formatDate("2026-10-31T04:00:00Z", "vi"));
   });
 
   it("is nothing for a value that is not a calendar day, never a guessed instant", () => {
-    expect(endOfScheduleDay("")).toBeNull();
-    expect(endOfScheduleDay("31/10/2026")).toBeNull();
-    expect(endOfScheduleDay("2026-13-40")).toBeNull();
+    expect(endOfLocalDay("")).toBeNull();
+    expect(endOfLocalDay("31/10/2026")).toBeNull();
+    expect(endOfLocalDay("2026-13-40")).toBeNull();
   });
 });

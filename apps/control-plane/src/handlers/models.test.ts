@@ -470,11 +470,13 @@ describe("models.build", () => {
     );
 
     expect(got.code).toBe("CONFLICT");
-    // The run, and the minute in Singapore time, as every screen and email words an instant. The
-    // joint between date and time is ICU's ("at" on one build, a comma on another), so not pinned.
+    // The run, and the minute in Singapore time with the zone named on it: the server cannot know
+    // the reader's zone, so a bare 10:05 would read an hour off to a reader in Hanoi with nothing
+    // to say so (ADR 0149). The joint between date and time is ICU's ("at" on one build, a comma
+    // on another), and so is the zone's short name, so neither is pinned to one spelling.
     expect(got.message).toStartWith("A build is already running for this customer: run run-held,");
     expect(got.message).toContain("13 Oct 2026");
-    expect(got.message).toContain("10:05");
+    expect(got.message).toMatch(/10:05 (?:SGT|GMT\+8)/u);
     expect(got.facts).toEqual({
       reason: "BUILD_IN_PROGRESS",
       runId: "run-held",

@@ -20,13 +20,18 @@ const SOURCE_NAMES: Readonly<Record<string, string>> = {
   drive: "Google Drive",
 };
 
-/**
- * Which CLDR locale writes a date for each language, in the platform's fixed zone -- the
- * same table and the same zone `apps/ui/src/lib/when.ts` uses, so an email and the screen
- * beside it never disagree by an hour.
- */
+/** Which CLDR locale writes a date for each language, as in `apps/ui/src/lib/when.ts`. */
 const CLDR: Record<Locale, string> = { vi: "vi-VN", en: "en-SG" };
 
+/**
+ * An instant as the server writes it: in Asia/Singapore, with the zone named on it.
+ *
+ * The screen shows an instant in the viewer's own zone (ADR 0149), but an email, a Lark card or
+ * a refusal is written here, which cannot know where its reader is -- and one card goes to a
+ * whole group. So it stays in the platform's zone and says which one (`SGT` in English,
+ * `GMT+8` in Vietnamese, as CLDR names it): a time carrying its zone can be converted, while a
+ * bare one an hour off from the screen is not even noticed.
+ */
 export function formatWhen(iso: string, locale: Locale): string {
   return new Intl.DateTimeFormat(CLDR[locale], {
     day: "2-digit",
@@ -36,6 +41,7 @@ export function formatWhen(iso: string, locale: Locale): string {
     minute: "2-digit",
     hour12: false,
     timeZone: "Asia/Singapore",
+    timeZoneName: "short",
   }).format(new Date(iso));
 }
 

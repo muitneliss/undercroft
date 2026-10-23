@@ -14,9 +14,10 @@
  * fall closer together than one tick is refused rather than stored: it would be a promise the
  * scheduler cannot keep, and the card would print fires the ledger never shows.
  *
- * ONE ZONE. A cron is evaluated in `SCHEDULE_ZONE`, Asia/Singapore -- the zone every schedule
- * the UI prints is rendered in (`apps/ui/src/lib/when.ts`), whatever the reader's language. A
- * cron read in one zone beside times rendered in another is how "0 9" becomes an hour off.
+ * ONE ZONE. A cron is evaluated in `SCHEDULE_ZONE`, Asia/Singapore, for every reader. The UI
+ * prints the fires it previews in the reader's own zone like any other instant (ADR 0149), so
+ * the field that takes an expression names the zone it is written in: a cron read in one zone
+ * beside times rendered in another, with neither named, is how "0 9" becomes an hour off.
  * Singapore keeps no daylight saving, so no fire is ever skipped or doubled by a clock change.
  *
  * STANDARD CRON, EXACTLY FIVE FIELDS: minute, hour, day of month, month, day of week (Sunday
@@ -44,7 +45,7 @@ import { z } from "zod";
 
 import { needsScope } from "./connectionScope.ts";
 
-/** The zone every cron is evaluated in, and every schedule time is printed in. */
+/** The zone every cron is evaluated in, whoever reads it. */
 export const SCHEDULE_ZONE = "Asia/Singapore";
 
 const MINUTE_MS = 60_000;
