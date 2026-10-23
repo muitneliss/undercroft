@@ -1,12 +1,12 @@
 ---
 title: 'Design: The Village, the Journal Drawn as People at Work'
 type: source
-date: 2026-10-08
+date: 2026-10-23
 tags: []
 source: docs/design/village.md
 source_path: docs/design/village.md
-source_hash: 93ecf76cd996585c92f0cddafa9d0fbe2402742240b8a3d9e821725176a6a1a9
-ingested: 2026-10-08
+source_hash: 14bbb60c158d7227061d2ca7dd66d541f6114e964928268a8ebac16d09aea446
+ingested: 2026-10-23
 ---
 
 # Design: The Village, the Journal Drawn as People at Work

@@ -10,8 +10,10 @@
  * A PRESET saves on change: there is one field, so a Save plate would be a second step for a
  * decision already made. "Custom (cron)" does not, because choosing it is the start of a
  * decision rather than the end of one: it opens a field for the expression, with Save beside it
- * and, below it, the next three instants the expression fires at, in Singapore time. Those dates
- * are the confirmation -- there is deliberately no sentence paraphrasing the cron (ADR 0059).
+ * and, below it, the next three instants the expression fires at. The expression is read in
+ * Singapore time and the field says so; the instants are printed in the reader's own zone, like
+ * every other time on screen (ADR 0149). Those dates are the confirmation -- there is
+ * deliberately no sentence paraphrasing the cron (ADR 0059).
  *
  * What the select shows is derived, never stored twice: the server's value, or "custom" while
  * this schedule holds a draft in the store (`cronDraft`).

@@ -49,15 +49,15 @@ const RUNS_GET = toolFor("runs.get");
 const RUNS_EVENTS = toolFor("runs.events");
 
 /**
- * Times read in Asia/Singapore whatever the language, as the web UI's `@/lib/when` does: a time
- * an hour off from the journal beside it is how somebody misreads a run.
+ * Times read on the viewer's own clock, the zone the host's browser runs in, as the web UI's
+ * `@/lib/when` does (ADR 0149): the language changes the words, never the zone, and a time an
+ * hour off from the clock on the reader's wall is how somebody misreads a run.
  */
 function formatAt(iso: string | null, locale: Locale): string {
   if (iso === null) {
     return MISSING;
   }
   return new Intl.DateTimeFormat(locale === "vi" ? "vi-VN" : "en-SG", {
-    timeZone: "Asia/Singapore",
     dateStyle: "medium",
     timeStyle: "medium",
   }).format(new Date(iso));

@@ -188,7 +188,7 @@ other view.
   instead of showing an empty box.
 - Beside it, the **work list** names every character in DOM text: who, whom they work for (a
   courier's account, or the run a worker is on), what they are doing, and when that run started,
-  in `Asia/Singapore`. A character with a run links to `/journal/:runId`.
+  in the reader's own zone. A character with a run links to `/journal/:runId`.
 - Beneath that, the **buildings** list names each building and the division it opens, as links.
 - Pointing at a figure or a building in the picture lights its row, with the same wash a hovered
   row takes (`data-lit`), and shows a card above it: the figure's role, what they are doing, for

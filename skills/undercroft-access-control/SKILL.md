@@ -120,8 +120,10 @@ change each ends in:
 - **"Cho Lan quyền đọc raw đến cuối tháng" -- Lan may read raw until the end of the month.**
   One person, one permission, for a while: `grants.save` with `email` Lan's address,
   `permission: "lake:read"` and `expiresAt` the last moment of the month as an ISO 8601 instant
-  with its offset, such as `2026-10-31T23:59:59+08:00` (Singapore time, which every date in
-  Undercroft is shown in). Say the date back in words before asking.
+  with its offset, such as `2026-10-31T23:59:59+07:00`. Use the person's own zone, because the
+  web UI shows every date in the reader's zone (`+07:00` in Vietnam, `+08:00` in Singapore); ask
+  if you do not know it rather than assume one. Say the date and its zone back in words before
+  asking.
 - **"Cho phòng Sales chỉ xem model fct_sales" -- let the Sales department see only the model
   `fct_sales`.** Narrowing what people see needs a role of the customer's own, because every
   built-in sees everything. Plan: `roles.save` with `key: "sales"`, `label: "Sales"`,

@@ -38,7 +38,11 @@ export interface PromptFacts {
    */
   readonly scope: ScopeSummary | null;
   readonly superadmin: boolean;
-  /** Asia/Singapore, always -- see `.claude/rules/i18n.md` on why a locale never moves it. */
+  /**
+   * The server's clock in Asia/Singapore, the zone a cron is written in. The prompt names the
+   * zone, because the reader's screen shows times in their own zone (ADR 0149) and the server
+   * cannot know which that is.
+   */
   readonly now: string;
 }
 
@@ -211,7 +215,9 @@ export function systemPrompt(facts: PromptFacts): string {
     "questions, charts and dashboards. A customer is a 'case' with an id like CASE-0042.",
     "",
     where,
-    `The current time is ${facts.now} (Asia/Singapore, which is what every timestamp is shown in).`,
+    `The current time is ${facts.now} in Asia/Singapore, the zone a cron expression is read in.`,
+    "The reader's screen shows every time in their own zone, which may not be Singapore's, so",
+    "name the zone of any time you state.",
     "",
     ...STANDING_INSTRUCTIONS,
     ...(facts.superadmin

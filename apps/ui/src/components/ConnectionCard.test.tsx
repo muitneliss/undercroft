@@ -326,8 +326,9 @@ describe("the cadence", () => {
       target: { value: "30 7 * * 1-5" },
     });
 
-    // The confirmation is the fires themselves, in Singapore time -- three of them.
-    expect(screen.getByText("Ba lần chạy kế tiếp (giờ Singapore)")).toBeDefined();
+    // The confirmation is the fires themselves, on the reader's clock -- three of them. The
+    // expression's own zone is named by the field's hint, not here (ADR 0149).
+    expect(screen.getByText("Ba lần chạy kế tiếp (giờ của bạn)")).toBeDefined();
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
     fireEvent.click(screen.getByRole("button", { name: "Lưu lịch" }));
 

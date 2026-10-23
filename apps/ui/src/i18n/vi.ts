@@ -1176,7 +1176,7 @@ export const vi = {
     /** A permission in the picker: its words, then the key a person quotes. */
     permissionOption: "{{label}} · {{permission}}",
     untilLabel: "Đến hết ngày (không bắt buộc)",
-    untilHint: "Tính theo giờ Singapore (SGT). Bỏ trống để trao không thời hạn.",
+    untilHint: "Tính theo giờ của bạn. Bỏ trống để trao không thời hạn.",
     add: "Trao quyền",
     adding: "Đang trao…",
     added: "Đã trao quyền.",
@@ -1297,13 +1297,13 @@ export const vi = {
     /** Above one day only: a re-sync spans days because the provider caps requests per day. */
     resyncDays_other:
       "Một lần đọc lại toàn bộ cần khoảng {{count}} ngày, vì mỗi ngày chỉ được dùng {{budget}} lượt gọi cho việc này; phần chưa kịp sẽ tiếp tục ở lần chạy sau.",
-    /** The custom cadence's field. The zone is named every time: see `@/lib/when`. */
+    /** The custom cadence's field. A cron is written in SGT and says so (ADR 0149). */
     cronLabel: "Biểu thức cron",
     cronHint:
       "5 trường: phút, giờ, ngày trong tháng, tháng, thứ trong tuần (0 là Chủ nhật). Tính theo giờ Singapore (SGT), không dày hơn {{minutes}} phút một lần.",
     cronSave: "Lưu lịch",
-    /** Heads the next fires. They ARE the confirmation; there is no paraphrase of the cron. */
-    cronPreview: "Ba lần chạy kế tiếp (giờ Singapore)",
+    /** Heads the next fires, in the reader's zone. They ARE the confirmation, not a paraphrase. */
+    cronPreview: "Ba lần chạy kế tiếp (giờ của bạn)",
     /** Beside a stored expression on a card a reader cannot edit. */
     cronZone: "giờ Singapore (SGT)",
     /** Why Save is off, one per `CronRefusal` in `@undercroft/contracts`. */

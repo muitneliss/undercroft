@@ -93,7 +93,7 @@ export type CronPreview =
   /** Nothing typed yet: no refusal to show, and nothing to save. */
   | { readonly state: "empty" }
   | { readonly state: "refused"; readonly reason: string }
-  /** `cron` is the form the server will store; `fires` are worded dates, SGT. */
+  /** `cron` is the form the server will store; `fires` are worded dates, in the reader's zone. */
   | { readonly state: "ok"; readonly cron: string; readonly fires: readonly string[] };
 
 export function previewCron(

@@ -68,8 +68,8 @@ name with its key beside it.
 1. Choose **Grants**. The table lists every grant, including expired ones.
 2. Under **Grant a permission**, choose whom it is for -- a role, or a person on the roster --
    and the permission.
-3. To make it expire, pick the last day it holds. It holds until the end of that day in
-   Singapore time (SGT), the zone every date in Undercroft is shown in. Leave it empty for a
+3. To make it expire, pick the last day it holds. It holds until the end of that day in your
+   own time zone, the one your browser shows every date in (ADR 0149). Leave it empty for a
    grant that does not expire.
 4. Press **Grant**.
 

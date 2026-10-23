@@ -3,16 +3,20 @@
  * fires at -- never as a paraphrase of itself.
  */
 
-import { describe, expect, test as it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test as it } from "bun:test";
 
 import { translatorFor } from "@/i18n/index.ts";
+import { enterZone, leaveZone, VIETNAM } from "@/test/zone.ts";
 import { CADENCES, describeCadence, isPresetCadence, previewCron } from "./cadence.ts";
 
 const en = translatorFor("en");
 const vi = translatorFor("vi");
 
-/** Sunday 1 March 2026, 18:00 in Singapore. */
+/** Sunday 1 March 2026, 18:00 in Singapore and 17:00 in Vietnam, where this suite reads it. */
 const NOW = new Date("2026-03-01T10:00:00.000Z");
+
+beforeAll(() => enterZone(VIETNAM));
+afterAll(leaveZone);
 
 describe("describeCadence", () => {
   it("names every cadence in both languages, never as its stored word", () => {
@@ -37,18 +41,19 @@ describe("isPresetCadence", () => {
 });
 
 describe("previewCron", () => {
-  it("an expression it can keep reads as its next three fires, weekday first, in Singapore time", () => {
+  it("an expression it can keep reads as its next three fires, weekday first, on the reader's clock", () => {
     const preview = previewCron(en, "en", "30 7 * * 1-5", NOW);
     expect(preview.state).toBe("ok");
     if (preview.state !== "ok") {
       return;
     }
     expect(preview.cron).toBe("30 7 * * 1-5");
-    // Monday to Wednesday, 07:30 -- in Singapore, whatever zone the suite runs in.
+    // Monday to Wednesday at 07:30 in Singapore, where a cron is read, which a reader in Vietnam
+    // sees as 06:30: the expression keeps its zone, and its fires are instants like any other.
     expect(preview.fires).toHaveLength(3);
     expect(preview.fires[0]).toContain("Mon");
     expect(preview.fires[0]).toContain("02 Mar 2026");
-    expect(preview.fires[0]).toContain("07:30");
+    expect(preview.fires[0]).toContain("06:30");
     expect(preview.fires[2]).toContain("Wed");
   });
 

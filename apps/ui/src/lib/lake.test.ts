@@ -4,11 +4,12 @@
  * first run comes in the reader's language.
  */
 
-import { describe, expect, test as it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test as it } from "bun:test";
 
 import type { RawSearchHit } from "@/api/types.ts";
 import { translatorFor } from "@/i18n/index.ts";
 import { formatDate } from "@/lib/when.ts";
+import { enterZone, leaveZone, VIETNAM } from "@/test/zone.ts";
 import {
   hitNotes,
   hitWhere,
@@ -109,12 +110,16 @@ describe("the query a line of the index opens with", () => {
 });
 
 describe("lakeEmptyBody", () => {
+  beforeAll(() => enterZone(VIETNAM));
+  afterAll(leaveZone);
+
   it("says when the first run comes, or that nothing is scheduled, in the reader's words", () => {
     expect(lakeEmptyBody(vi, "vi", [{ nextRunAt: null }], NOW)).toBe(
       "Chưa có nguồn nào sẵn sàng để chạy. Hãy kết nối một nguồn và chọn dữ liệu cần đồng bộ ở mục Nguồn dữ liệu.",
     );
+    // 14:00 UTC, on the reader's clock in Vietnam.
     expect(lakeEmptyBody(en, "en", [{ nextRunAt: "2026-09-17T14:00:00Z" }], NOW)).toContain(
-      "22:00",
+      "21:00",
     );
   });
 });

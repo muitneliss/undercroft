@@ -8,7 +8,7 @@
  * was not given.
  */
 
-import { afterEach, describe, expect, test as it } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test as it } from "bun:test";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { type Permission, PERMISSIONS } from "@undercroft/contracts/access";
 
@@ -18,6 +18,7 @@ import { People } from "@/routes/People.tsx";
 import { useUiStore } from "@/store.ts";
 import { builtInRoles, held } from "@/test/access.ts";
 import { mountRoute, type Received } from "@/test/mountRoute.tsx";
+import { enterZone, leaveZone, VIETNAM } from "@/test/zone.ts";
 
 const TENANT = "CASE-0042";
 const t = translatorFor("vi");
@@ -261,6 +262,9 @@ describe("the role editor", () => {
 });
 
 describe("the grants", () => {
+  beforeAll(() => enterZone(VIETNAM));
+  afterAll(leaveZone);
+
   const STANDING: Grant = {
     id: "g-0",
     subject: "role",
@@ -277,7 +281,7 @@ describe("the grants", () => {
     createdAt: "2026-10-01T02:00:00.000Z",
   };
 
-  it("gives a member a permission until the end of a day in Singapore time", async () => {
+  it("gives a member a permission until the end of a day on the reader's clock", async () => {
     const { received } = open("/?view=access");
     const form = (await screen.findByText(t("accessGrants.addHead"))).closest("form");
     if (form === null) {
@@ -301,7 +305,9 @@ describe("the grants", () => {
         tenantId: TENANT,
         email: "bo@example.test",
         permission: "models:write",
-        expiresAt: "2026-10-31T15:59:59.000Z",
+        // 23:59:59 on the 31st in Vietnam, where this suite reads the day: the day picked is
+        // the day the reader's list then prints.
+        expiresAt: "2026-10-31T16:59:59.000Z",
       },
     ]);
   });
