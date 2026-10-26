@@ -8,7 +8,7 @@
     "./run": "./src/runStatus.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/ext-apps": "2.0.0",
+    "@modelcontextprotocol/ext-apps": "2.0.3",
     "@undercroft/core": "workspace:*"
   },
   "devDependencies": {

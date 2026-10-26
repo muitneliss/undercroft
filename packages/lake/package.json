@@ -8,6 +8,6 @@
   },
   "dependencies": {
     "@undercroft/core": "workspace:*",
-    "@aws-sdk/client-s3": "3.717.0"
+    "@aws-sdk/client-s3": "3.1156.0"
   }
 }
