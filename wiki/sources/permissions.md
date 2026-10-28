@@ -1,12 +1,12 @@
 ---
 title: Permissions
 type: source
-date: 2026-10-18
+date: 2026-10-28
 tags: []
 source: docs/reference/permissions.md
 source_path: docs/reference/permissions.md
-source_hash: 3a259ef198e161ad484c6b58e5824b5fc566a8899ecb5873927dabd1d18965aa
-ingested: 2026-10-18
+source_hash: ba3f01b29e32137d42f919771d3ae313da285c293eacd09f4f18ea7df5572611
+ingested: 2026-10-28
 ---
 
 # Permissions
@@ -15,7 +15,7 @@ The reference for what a person may do and read in a customer (`docs/reference/p
 
 **Built-in roles.** `viewer` holds none; `member` holds `reports:author`; `builder` holds `reports:author`, `models:read`, `models:write`, `lake:read`, `runs:read` and `sources:read`; `admin` holds every permission, including any added later. A platform superadmin holds `admin` in every customer that exists. Every built-in reaches the whole customer, and is never narrowed by a rule. A viewer and a member open Customers and Reports and no other division: Sources needs `sources:read`, the Journal `runs:read`, the Lake `lake:read`, Models `models:read`, People `people:manage`. Open to every member: the reads of Reports (`bi.runQuestion`, `bi.questions.list/get/answer`, `bi.dashboards.list/get`, `bi.schema`, exporting a saved question), `roles.list/get`, `tenants.get`, and `grants.reach` and `scopes.preview` about oneself.
 
-**Coverage.** `reports:author`: `bi.answer`, `bi.compile`, saving and deleting questions and dashboards, exporting a definition or a model. `models:read`: `models.list/get/revision/check/lineage/reference`, `macros.list/get/check`, `seeds.list/get`. `models:write`: `models.save/delete/build/preview`, `macros.save/delete`, `seeds.save/delete`. `lake:read`: `lake.summary/records/documents/query/search/querySchema`, `dq.failures`, `documentKinds.list`. `runs:read`: `runs.list/get/events`. `sources:read`: `connections.list/get`. `sources:manage`: `connections.*` writes, `browseScope`, `runs.trigger`, finishing OAuth consent. `keys:manage`: `keys.*`. `catalogue:manage`: `documentKinds` writes. `people:manage`: `people.*`, `grants.list`, `grants.reach` and `scopes.preview` about others. `audit:read`: `audit.tenant`. `tenant:manage`: `tenants.rename/deactivate/reactivate`. `roles:manage`: `roles.save/delete`, `grants.save/delete`. Each procedure's description ends with what its gates need.
+**Coverage.** `reports:author`: `bi.answer`, `bi.compile`, saving and deleting questions and dashboards, exporting a definition or a model. `models:read`: `models.list/get/revision/check/lineage/reference`, `macros.list/get/check`, `seeds.list/get`. `models:write`: `models.save/delete/build/preview`, `macros.save/delete`, `seeds.save/delete`. `lake:read`: `lake.summary/records/documents/query/search/querySchema`, `dq.failures`, `documentKinds.list`. `runs:read`: `runs.list/get/events`. `sources:read`: `connections.list/get`. `sources:manage`: `connections.*` writes, `browseScope`, `runs.trigger`, finishing OAuth consent. `keys:manage`: `keys.*`. `catalogue:manage`: `documentKinds` writes. `people:manage`: `people.*`, `grants.list`, `grants.reach` and `scopes.preview` about others. `audit:read`: `audit.tenant`. `tenant:manage`: `tenants.rename/deactivate/reactivate`. `roles:manage`: `roles.save/delete`, `grants.save/delete`. Each procedure's description ends with what its gates need. Outside every permission, a platform superadmin's alone: `tenants.create`, `audit.all`, and the agents' call log `audit.calls.list` and `audit.calls.get` ([[ADR 0151 An Agent's Call Is Kept Whole for a Superadmin for 30 Days]]); anybody else is refused `FORBIDDEN`.
 
 **Objects.** `model:<name>`/`model:*`, `raw:<source>/<entity>`/`raw:<source>/*`/`raw:*`, `report:question:<uuid>`/`report:dashboard:<uuid>`/`report:*`, each `read`; a `*` only where shown; one model or report must exist. A customer's own role reaches only what is granted. Outside reach: an empty page for a stream, `NOT_FOUND` for a model or report, a dashboard's `ungranted` tiles, and Postgres's "permission denied" for a question over an unreached model. The build login's procedures need `model:*` and `raw:*` (`WHOLE_REACH_REQUIRED`). A narrow reader's new report is granted to them.
 

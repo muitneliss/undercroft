@@ -398,6 +398,8 @@ export const vi = {
     workerBusy:
       "Cơ sở dữ liệu của khách hàng này đang bận (đang dựng mô hình hoặc có nhiều truy vấn cùng lúc). Hãy thử lại sau ít giây.",
     paramMissing: "Câu hỏi cần một giá trị cho {{name}}. Hãy đặt bộ lọc đó rồi chạy lại.",
+    /** A call the log never held, or one swept after 30 days (ADR 0151). */
+    callNotFound: "Không có lần gọi {{id}} trong nhật ký. Các lần gọi chỉ được giữ 30 ngày.",
     workerUnavailable:
       "Hiện chưa lấy được danh sách từ Google. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     /**

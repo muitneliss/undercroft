@@ -63,6 +63,7 @@ const PLACE = {
   grants: "contents",
   scopes: "contents",
   audit: "contents",
+  auditCalls: "contents",
   keys: "contents",
   auth: "appendix",
   session: "appendix",

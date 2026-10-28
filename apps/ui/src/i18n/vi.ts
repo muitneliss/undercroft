@@ -538,13 +538,20 @@ export const vi = {
    */
   activity: {
     head: "Hoạt động",
-    leadMine:
-      "Mọi thao tác bạn đã làm, qua trình duyệt, CLI, MCP hay trợ lý, kể cả những lần bị từ chối.",
-    leadAll: "Mọi thao tác trên nền tảng, của mọi người, ở mọi khách hàng.",
+    // One per view of the account page's log, keyed by the view as the address names it.
+    lead: {
+      mine: "Mọi thao tác bạn đã làm, qua trình duyệt, CLI, MCP hay trợ lý, kể cả những lần bị từ chối.",
+      all: "Mọi thao tác trên nền tảng, của mọi người, ở mọi khách hàng.",
+      calls:
+        "Mọi lần gọi của tác tử qua CLI, MCP và trợ lý trong 30 ngày gần nhất: yêu cầu đã gửi, câu trả lời và lỗi kèm nguyên nhân thật. Bí mật đã được che, và câu trả lời chứa dữ liệu của khách hàng chỉ được giữ hình dạng.",
+    },
     leadTenant: "Mọi thao tác trong {{tenantId}}, của bất kỳ ai, kể cả những lần bị từ chối.",
     scopeLabel: "Phạm vi nhật ký",
-    scopeMine: "Của tôi",
-    scopeAll: "Mọi khách hàng",
+    scope: {
+      mine: "Của tôi",
+      all: "Mọi khách hàng",
+      calls: "Lần gọi của tác tử",
+    },
     notLoaded: "Không tải được nhật ký hoạt động.",
     none: "Chưa có hoạt động nào.",
     caption_other: "{{count, number}} thao tác gần nhất",
@@ -615,6 +622,8 @@ export const vi = {
       audit_mine: "Xem nhật ký hoạt động của mình",
       audit_tenant: "Xem nhật ký hoạt động của khách hàng",
       audit_all: "Xem nhật ký hoạt động của nền tảng",
+      audit_calls_list: "Xem các lần gọi của tác tử",
+      audit_calls_get: "Xem trọn một lần gọi của tác tử",
       lake_summary: "Xem tổng quan hồ dữ liệu thô",
       lake_records: "Đọc bản ghi thô",
       lake_documents: "Đọc tài liệu thô",
@@ -679,6 +688,37 @@ export const vi = {
     } satisfies Record<ActionKey, string>,
   },
 
+  // The call log (ADR 0151): agents' calls kept whole, for a platform superadmin.
+  calls: {
+    filterEmail: "Email người gọi",
+    emailPlaceholder: "ada@example.test",
+    filterCustomer: "Khách hàng",
+    customerPlaceholder: "CASE-0042",
+    filterOutcome: "Kết quả",
+    outcomeAny: "Mọi kết quả",
+    filter: "Lọc",
+    none: "Không có lần gọi nào khớp.",
+    caption_other: "{{count, number}} lần gọi gần nhất",
+    colProcedure: "Thủ tục",
+    colSize: "Yêu cầu → câu trả lời",
+    sizes: "{{request}} → {{response}}",
+    truncated: "đã cắt ở 256 KB",
+    kept: {
+      shape: "chỉ hình dạng",
+      none: "không giữ câu trả lời",
+    },
+    notLoadedOne: "Không tải được lần gọi này.",
+    trace: "Trace ID: {{trace}}",
+    request: "Yêu cầu",
+    response: "Câu trả lời",
+    error: "Lỗi, như máy chủ thấy",
+    noBody: "Không có.",
+    cut: "Đã cắt ở 256 KB; toàn bộ là {{bytes}}. Hiển thị nguyên văn như đã lưu.",
+    asStored: "Không phải JSON hoàn chỉnh; hiển thị nguyên văn như đã lưu.",
+    keptShape:
+      "Câu trả lời chứa dữ liệu của khách hàng, nên chỉ giữ hình dạng: các cột, số dòng và ghi chú, không một ô nào.",
+    keptNone: "Câu trả lời của thủ tục này chính là nhật ký này, nên không được giữ lại.",
+  },
   consent: {
     title: "Cho phép truy cập",
     lead: "{{name}} (chuyển hướng về {{host}}) xin làm việc với Undercroft thay mặt bạn, với đúng quyền bạn đang có ở mọi khách hàng.",

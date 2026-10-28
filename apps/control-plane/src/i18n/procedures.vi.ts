@@ -85,6 +85,10 @@ export const procedureSentences: SentenceTable = {
     "Các thao tác của chính bạn, mới nhất trước: đã làm gì, qua đâu, và kết quả ra sao.",
   "audit.tenant": "Mọi thao tác trong khách hàng, của bất kỳ ai, mới nhất trước.",
   "audit.all": "Mọi thao tác trên nền tảng, mới nhất trước. Chỉ quản trị nền tảng.",
+  "audit.calls.list":
+    "Các lần gọi của tác tử qua CLI, MCP và trợ lý trong 30 ngày gần nhất, mới nhất trước, không kèm nội dung: ai gọi, thủ tục nào, kết quả, kích thước yêu cầu và câu trả lời. Lọc theo email, tenantId, path hoặc outcome. Chỉ quản trị nền tảng.",
+  "audit.calls.get":
+    "Một lần gọi của tác tử, trọn vẹn: yêu cầu đã gửi, câu trả lời (chỉ hình dạng khi nó chứa dữ liệu của khách hàng) và lỗi kèm nguyên nhân thật, cùng traceId để lần theo. Bí mật đã được che. Chỉ quản trị nền tảng.",
   "lake.summary":
     "Những gì đã nạp, theo từng luồng: số lượng và độ mới. Chỉ những luồng bạn xem được.",
   "lake.records":

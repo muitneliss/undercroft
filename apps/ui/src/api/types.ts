@@ -111,6 +111,9 @@ export type ConnectedApp = inferRouterOutputs<AppRouter>["account"]["apps"]["lis
 /** One row of the audit log (ADR 0113), as each of its three readers answers it. */
 export type AuditEntry = inferRouterOutputs<AppRouter>["audit"]["mine"]["items"][number];
 
+/** One agent's call as the call log lists it (ADR 0151), without its bodies. */
+export type CallEntry = inferRouterOutputs<AppRouter>["audit"]["calls"]["list"]["items"][number];
+
 /** What has landed, per stream, as `lake.summary` returns it. */
 export type LakeSummary = inferRouterOutputs<AppRouter>["lake"]["summary"];
 

@@ -57,6 +57,8 @@ export const vi = {
       "Những gì một người xem được, đã quy ra cụ thể: mọi model họ đọc, các dòng và cột của nó, và quy tắc nào đã hỏng.",
     audit:
       "Ai đã làm gì: thao tác của chính bạn, của một khách hàng cho người có quyền audit:read ở đó, tất cả cho quản trị nền tảng.",
+    auditCalls:
+      "Các lần gọi của tác tử, giữ trọn 30 ngày -- yêu cầu, câu trả lời, lỗi kèm nguyên nhân. Chỉ quản trị nền tảng.",
     runs: "Các lần chạy.",
     session: "Phiên hiện tại.",
     tenants: "Khách hàng.",

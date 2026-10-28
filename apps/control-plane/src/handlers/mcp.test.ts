@@ -198,6 +198,29 @@ describe("a write through a token", () => {
     ]);
   });
 
+  it("refused to a read token at the door, is kept in the call log with what it sent (ADR 0151)", async () => {
+    const client = await connect(await mint("read"));
+    await client.callTool({ name: "runs_trigger", arguments: { tenantId: OWN, source: "xero" } });
+    await client.close();
+
+    const { rows } = await plane.db.query<Record<string, unknown>>(
+      `SELECT path, type, channel, outcome, reason, request, response, error ->> 'code' AS code
+         FROM ops.call_log WHERE outcome = 'refused' ORDER BY id`,
+    );
+    expect(rows).toEqual([
+      {
+        path: "runs.trigger",
+        type: "mutation",
+        channel: "mcp",
+        outcome: "refused",
+        reason: "WRITES_DISABLED",
+        request: JSON.stringify({ tenantId: OWN, source: "xero" }),
+        response: null,
+        code: "FORBIDDEN",
+      },
+    ]);
+  });
+
   it("reaches the worker with a write token", async () => {
     const client = await connect(await mint("write"));
     await client.callTool({ name: "runs_trigger", arguments: { tenantId: OWN, source: "xero" } });

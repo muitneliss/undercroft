@@ -473,3 +473,6 @@
 ## [2026-10-23] ingest | ADR 0150 A Lapsed Grant Is Emailed Once Per Lapse
 ## [2026-10-23] ingest | Architecture
 ## [2026-10-23] ingest | Runbook Deployment
+## [2026-10-28] ingest | ADR 0151 An Agent's Call Is Kept Whole for a Superadmin for 30 Days
+## [2026-10-28] ingest | Permissions
+## [2026-10-28] ingest | ADR 0151 An Agent's Call Is Kept Whole for a Superadmin for 30 Days

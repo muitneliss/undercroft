@@ -291,6 +291,14 @@ interface UiState {
   openLakeRefusals: Record<string, string>;
   /** Unfold this source's refusals, or fold them if they are the ones already open. */
   toggleLakeRefusals: (tenantId: string, source: string) => void;
+  /**
+   * Which agent's call is unfolded on the account page's call log (ADR 0151), by id; `null` is
+   * none. One at a time: an unfolded call is up to half a megabyte of request and answer, and two
+   * would push every row between them off the screen. Not in the URL, for `openReason`'s reason.
+   */
+  openCall: string | null;
+  /** Unfold this call, or fold it if it is the one already open. */
+  toggleCall: (id: string) => void;
 
   modelDraft: ModelDraft | null;
   setModelDraft: (draft: ModelDraft | null) => void;
@@ -1173,6 +1181,14 @@ function roleSlice(
   };
 }
 
+/** The call log's one unfolded call. */
+function callSlice(set: Setter): Pick<UiState, "openCall" | "toggleCall"> {
+  return {
+    openCall: null,
+    toggleCall: (id): unknown => set((state) => ({ openCall: state.openCall === id ? null : id })),
+  };
+}
+
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
@@ -1185,6 +1201,7 @@ export const useUiStore = create<UiState>()(
       ...grantSlice(set),
       ...scopeSlice(set),
       ...lakeSlice(set),
+      ...callSlice(set),
       ...modelSlice(set),
       ...questionSlice(set),
       ...dashboardSlice(set),
