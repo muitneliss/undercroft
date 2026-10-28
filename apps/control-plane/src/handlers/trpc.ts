@@ -37,7 +37,7 @@
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
-import type { Locale } from "@undercroft/core";
+import type { Locale, Logger } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { currentTraceId } from "@undercroft/telemetry";
 import { z } from "zod";
@@ -57,6 +57,7 @@ import type { SpecReads } from "../services/connections.ts";
 import type { StartOutcome } from "../services/oauth.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import { auditRuleOf, detailOf, isRecorded, namedTenant } from "./audited.ts";
+import { errorOf, keepCall } from "./callPayload.ts";
 import type { ProcedureMeta } from "./holdOpen.ts";
 import { effectOf, grantAdmits } from "./surface.ts";
 
@@ -198,6 +199,13 @@ export interface Context {
    * replace it with a hold on their own request (`holdOpen.ts`), so no procedure reaches Bun.
    */
   readonly holdOpen: (seconds: number) => void;
+  /**
+   * Where a line about this request goes that no caller is told: that an agent's call could not
+   * be kept in `ops.call_log` (ADR 0151). Optional, as `ServerDeps.log` is and for its reason --
+   * a suite that does not read the line need not build a logger; `createContext` passes the
+   * process's own. `| undefined` because a context is spread into a narrower one at every door.
+   */
+  readonly log?: Logger | undefined;
 }
 
 export type { Role } from "../services/authz.ts";
@@ -301,9 +309,15 @@ export const { router } = t;
  *
  * The raw input, not the parsed one: this runs before any `.input()` has parsed it. It is read for
  * the tenant it names and for the fields the table lists, both kept only as plain values.
+ *
+ * Beside the audit row, and independent of who writes it, an agent's call is kept whole for a
+ * superadmin (`keepCall`, ADR 0151): what it sent, what it was answered, and the cause of a
+ * failure its caller was told only as `internal_error`. The browser's never is.
  */
 const audited = t.procedure.use(async ({ ctx, path, type, getRawInput, next }) => {
+  const started = performance.now();
   const result = await next();
+  const durationMs = Math.round(performance.now() - started);
   const rule = auditRuleOf(path, type);
   if (ctx.user === null || !isRecorded(rule, ctx.channel)) {
     return result;
@@ -313,6 +327,16 @@ const audited = t.procedure.use(async ({ ctx, path, type, getRawInput, next }) =
   // carry none -- which this lazy parse would refuse after the call already happened. A call
   // that sent nothing readable named nothing.
   const raw: unknown = await getRawInput().catch(() => undefined);
+  await keepCall(ctx, {
+    actor: { ...actor, userId: ctx.user.userId },
+    path,
+    type: type === "mutation" ? "mutation" : "query",
+    raw,
+    durationMs,
+    answer: result.ok ? result.data : undefined,
+    error: result.ok ? null : errorOf(result.error, refusalFacts(result.error)),
+    ...endingOf(result.ok ? null : result.error),
+  });
   if (result.ok && rule !== "read") {
     if (rule !== "service") {
       await recordAction(ctx.exec, {

@@ -70,6 +70,10 @@ export const procedureSentences: SentenceTable = {
     "Your own actions, newest first: what you did, through which door, and how it ended.",
   "audit.tenant": "Every action taken in the customer, by anyone, newest first.",
   "audit.all": "Every action on the platform, newest first. Platform superadmins only.",
+  "audit.calls.list":
+    "Agents' calls through the CLI, MCP and the assistant in the last 30 days, newest first, without their bodies: who called, which procedure, how it ended, the sizes of the request and the answer. Narrow by email, tenantId, path or outcome. Platform superadmins only.",
+  "audit.calls.get":
+    "One agent's call whole: the request it sent, the answer (its shape only where it carries a customer's data) and the error with its real cause, with the traceId to follow it. Secrets are redacted. Platform superadmins only.",
   "lake.summary":
     "What has landed, per stream: counts and freshness. Only the streams you can read.",
   "lake.records":

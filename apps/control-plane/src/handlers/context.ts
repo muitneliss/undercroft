@@ -331,6 +331,7 @@ function contextFor(deps: ServerDeps, headers: Headers, door: Door, caller: Call
     // Not held until a door says so (`holdOpen.ts`): `/trpc` and `/mcp` hold their own request.
     holdOpen: () => undefined,
     worker: deps.worker ?? null,
+    ...(deps.log === undefined ? {} : { log: deps.log }),
     specReads: deps.specReads ?? NO_SPECS,
     // The id and key only. `clientSecret` is deliberately not spread in here; the
     // browser never needs it and this object is serialised straight to it.

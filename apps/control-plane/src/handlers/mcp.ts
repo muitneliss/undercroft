@@ -55,7 +55,8 @@ import { listResources, NO_WIDGETS, readResource, resultMeta, type Widgets } fro
 import { resolveProcedure } from "./procedures.ts";
 import { appRouter } from "./router.ts";
 import { BY_TRPC_CODE, grantAdmits } from "./surface.ts";
-import { type Context, recordCall } from "./trpc.ts";
+import { errorOf, keepCall } from "./callPayload.ts";
+import { actorOf, type Context, recordCall, refusalFacts, refusal as worded } from "./trpc.ts";
 
 export interface McpDeps {
   /** The bearer door: this request's context, or why it has none (`bearerContext`). */
@@ -161,8 +162,24 @@ async function callTool(
   if (!grantAdmits(ctx.grant, spec.effect)) {
     logCall(deps, { ctx, tool, outcome: "WRITES_DISABLED" });
     if (ctx.user !== null) {
-      const refusal = { outcome: "refused", reason: "WRITES_DISABLED" } as const;
-      await recordCall({ ...ctx, user: ctx.user }, { path: spec.path, raw: args, ...refusal });
+      const ending = { outcome: "refused", reason: "WRITES_DISABLED" } as const;
+      const caller = { ...ctx, user: ctx.user };
+      await recordCall(caller, { path: spec.path, raw: args, ...ending });
+      // Kept as the router's middleware would have kept it, the refusal it would have thrown.
+      const thrown = worded("FORBIDDEN", t("error.writesDisabled"), {
+        reason: "WRITES_DISABLED",
+        grant: ctx.grant,
+      });
+      await keepCall(ctx, {
+        actor: { ...actorOf(caller), userId: caller.user.userId },
+        path: spec.path,
+        type: spec.type,
+        raw: args,
+        durationMs: null,
+        answer: undefined,
+        error: errorOf(thrown, refusalFacts(thrown)),
+        ...ending,
+      });
     }
     return refused("WRITES_DISABLED", t("error.writesDisabled"));
   }

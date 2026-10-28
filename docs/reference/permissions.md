@@ -170,6 +170,10 @@ what the role or the member reaches and by the object a grant names. `model:*` i
 Every procedure's description, in the CLI's help and in an MCP client's tool list, ends with
 the permission it needs, read off the server's own gate.
 
+A few procedures belong to no permission and no customer: a platform superadmin's alone, whatever
+role they hold. They are `tenants.create`, `audit.all`, and the agents' call log,
+`audit.calls.list` and `audit.calls.get` (ADR 0151). Anybody else is refused `FORBIDDEN`.
+
 ## A refusal
 
 A caller who is a member but lacks the permission is refused `FORBIDDEN`. The message names the

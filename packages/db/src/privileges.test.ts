@@ -554,6 +554,34 @@ describe("the audit log is append-only in the database", () => {
   });
 });
 
+describe("an agent's kept calls are the control plane's alone", () => {
+  // ADR 0151. A row holds what an agent sent and was answered, for a superadmin. The control plane
+  // writes, reads and sweeps it; BI holds USAGE on `ops` for `ops.run`, so the table's own grant
+  // is all that keeps a dashboard off an agent's requests, and the worker and dbt need none of it.
+  const plant = `INSERT INTO ops.call_log (user_id, actor, channel, path, type, outcome, response_kept)
+     VALUES (gen_random_uuid(), 'a@x.test', 'mcp', 'tenants.get', 'query', 'ok', 'whole')`;
+
+  it("the control plane writes, reads and deletes a row, and cannot change one", async () => {
+    await db.asRole("undercroft_app", async (tx) => {
+      await tx.query(plant);
+      const { rows } = await tx.query<{ n: number }>("SELECT count(*)::int AS n FROM ops.call_log");
+      expect(rows[0]?.n).toBe(1);
+      await expectDenied(() => tx.query("UPDATE ops.call_log SET actor = 'b@x.test'"));
+      await tx.query("DELETE FROM ops.call_log");
+    });
+  });
+
+  it("BI, dbt and the worker can neither read nor write one", async () => {
+    await db.exec(plant);
+    for (const role of ["undercroft_bi", "undercroft_dbt", "undercroft_worker"] as const) {
+      await db.asRole(role, async (tx) => {
+        await expectDenied(() => tx.query("SELECT * FROM ops.call_log"));
+        await expectDenied(() => tx.query(plant));
+      });
+    }
+  });
+});
+
 describe("a tenant's stored seeds are the control plane's to write and the worker's to read", () => {
   // ADR 0128. The worker renders every seed into a build and writes none; a model's SQL runs as
   // a dbt role and must reach the cells only as the table dbt loaded, never the stored copy.

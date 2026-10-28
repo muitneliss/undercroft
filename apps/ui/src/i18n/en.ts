@@ -408,13 +408,19 @@ export const en = {
 
   activity: {
     head: "Activity",
-    leadMine:
-      "Everything you have done, through the browser, the CLI, MCP or the assistant, refusals included.",
-    leadAll: "Everything done on the platform, by everyone, in every customer.",
+    lead: {
+      mine: "Everything you have done, through the browser, the CLI, MCP or the assistant, refusals included.",
+      all: "Everything done on the platform, by everyone, in every customer.",
+      calls:
+        "Every call an agent made through the CLI, MCP or the assistant in the last 30 days: the request it sent, the answer and the error with its real cause. Secrets are redacted, and an answer carrying a customer's data is kept as its shape only.",
+    },
     leadTenant: "Everything done in {{tenantId}}, by anyone, refusals included.",
     scopeLabel: "Which log",
-    scopeMine: "Mine",
-    scopeAll: "Every customer",
+    scope: {
+      mine: "Mine",
+      all: "Every customer",
+      calls: "Agents' calls",
+    },
     notLoaded: "The activity log could not be loaded.",
     none: "No activity yet.",
     caption_one: "The latest {{count, number}} action",
@@ -484,6 +490,8 @@ export const en = {
       audit_mine: "Read their own activity",
       audit_tenant: "Read a customer's activity",
       audit_all: "Read the platform's activity",
+      audit_calls_list: "Read agents' calls",
+      audit_calls_get: "Read one agent's call whole",
       lake_summary: "Read the raw lake's summary",
       lake_records: "Read raw records",
       lake_documents: "Read raw documents",
@@ -548,6 +556,37 @@ export const en = {
     },
   },
 
+  calls: {
+    filterEmail: "Caller's email",
+    emailPlaceholder: "ada@example.test",
+    filterCustomer: "Customer",
+    customerPlaceholder: "CASE-0042",
+    filterOutcome: "Outcome",
+    outcomeAny: "Any outcome",
+    filter: "Filter",
+    none: "No call matches.",
+    caption_one: "The latest {{count, number}} call",
+    caption_other: "The latest {{count, number}} calls",
+    colProcedure: "Procedure",
+    colSize: "Request → answer",
+    sizes: "{{request}} → {{response}}",
+    truncated: "cut at 256 KB",
+    kept: {
+      shape: "shape only",
+      none: "answer not kept",
+    },
+    notLoadedOne: "This call could not be loaded.",
+    trace: "Trace ID: {{trace}}",
+    request: "Request",
+    response: "Answer",
+    error: "Error, as the server saw it",
+    noBody: "None.",
+    cut: "Cut at 256 KB; the whole was {{bytes}}. Shown exactly as stored.",
+    asStored: "Not whole JSON; shown exactly as stored.",
+    keptShape:
+      "The answer carries a customer's data, so only its shape is kept: the columns, how many rows and the notes, never a cell.",
+    keptNone: "This procedure's answer is this log itself, so it is not kept.",
+  },
   consent: {
     title: "Allow access",
     lead: "{{name}} (redirecting to {{host}}) is asking to work with Undercroft on your behalf, with exactly the access you have in every customer.",

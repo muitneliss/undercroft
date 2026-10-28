@@ -74,7 +74,18 @@ widen it before you conclude anything. An empty window is not an absence.
 4. **Fall back to the host** when Loki is empty or a line is missing:
    `task obs:host-logs SERVICE=<svc> FOR=<id>`. The worker is where runs, connectors and
    dbt live. The control plane holds tRPC, sign-in and the assistant.
-5. **Then read the code** at the route or event you found. The trace tells you where to
+5. **Read what the agent sent**, when the failure came through the CLI, `/mcp` or the
+   assistant. The trace and its lines carry no body (ADR 0058). The call log keeps each agent's
+   call whole for 30 days, for a platform superadmin (ADR 0151). Find the call by who made it and
+   when, with `audit.calls.list` filtered by `email` (also `tenantId`, `path`, `outcome`). Read it
+   with `audit.calls.get`: the request as sent, the answer, and the error with the cause the
+   caller was told only as `internal_error`. Its `traceId` leads back into
+   `task obs:trace TRACE=<id>`, and from a trace the caller and the time lead to the call.
+   Secrets are `[redacted]`. An answer that carries a customer's rows or document text is kept as
+   its shape only (`responseKept: "shape"`), so re-run the request to see the rows. A body over
+   256 KB is cut, and `requestTruncated` or `responseTruncated` says so. Quote none of it into a
+   public issue: it is a customer's data.
+6. **Then read the code** at the route or event you found. The trace tells you where to
    look. Only the code tells you why.
 
 ## What you report

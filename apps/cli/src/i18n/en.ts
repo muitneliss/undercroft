@@ -36,6 +36,8 @@ export const en = {
       "What a person can see, resolved: every model they read, its rows and columns, and which rules are broken.",
     audit:
       "Who did what: your own actions, a customer's for whoever holds audit:read there, everything for a superadmin.",
+    auditCalls:
+      "Agents' calls kept whole for 30 days -- request, answer, error with its cause. Platform superadmins only.",
     runs: "Runs.",
     session: "The current session.",
     tenants: "Customers.",
