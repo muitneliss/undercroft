@@ -125,7 +125,7 @@ services:
   # together. Everything is set here, from the one secret the worker already has.
   pgbouncer:
     <<: *restart
-    image: edoburu/pgbouncer:v1.26.0-p0
+    image: edoburu/pgbouncer:v1.26.1-p0
     depends_on:
       postgres:
         condition: service_healthy
@@ -227,7 +227,7 @@ services:
 
   kestra:
     <<: *restart
-    image: kestra/kestra:v2.0.6
+    image: kestra/kestra:v2.0.7
     command: server standalone
     depends_on:
       kestra-postgres:

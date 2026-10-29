@@ -103,7 +103,7 @@ services:
   # The tenant pooler (ADR 0088). Every setting is the server's; see that file for each one.
   pgbouncer:
     <<: *restart
-    image: edoburu/pgbouncer:v1.26.0-p0
+    image: edoburu/pgbouncer:v1.26.1-p0
     depends_on:
       postgres:
         condition: service_healthy
@@ -183,7 +183,7 @@ services:
 
   kestra:
     <<: *restart
-    image: kestra/kestra:v2.0.6
+    image: kestra/kestra:v2.0.7
     command: server standalone
     depends_on:
       kestra-postgres:
