@@ -12,7 +12,7 @@
     "@undercroft/core": "workspace:*"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "21.0.3",
+    "@happy-dom/global-registrator": "21.0.4",
     "@undercroft/control-plane": "workspace:*"
   }
 }
