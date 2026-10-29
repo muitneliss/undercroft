@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.80.0](https://github.com/muitneliss/undercroft/compare/v1.79.0...v1.80.0) (2026-10-29)
+
+
+### Features
+
+* **audit:** keep an agent's call for a superadmin for 30 days ([#510](https://github.com/muitneliss/undercroft/issues/510)) ([90f730b](https://github.com/muitneliss/undercroft/commit/90f730b2d9e96cc264a7cc190e824cd739618883))
+
 ## [1.79.0](https://github.com/muitneliss/undercroft/compare/v1.78.0...v1.79.0) (2026-10-23)
 
 
