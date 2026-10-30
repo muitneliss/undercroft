@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.80.1](https://github.com/muitneliss/undercroft/compare/v1.80.0...v1.80.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **ui:** left-align an agent call's request and response JSON ([#512](https://github.com/muitneliss/undercroft/issues/512)) ([d51d8b1](https://github.com/muitneliss/undercroft/commit/d51d8b16484e642228b187190f082c4949b3dd27))
+
 ## [1.80.0](https://github.com/muitneliss/undercroft/compare/v1.79.0...v1.80.0) (2026-10-29)
 
 
