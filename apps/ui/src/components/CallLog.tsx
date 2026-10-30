@@ -270,7 +270,7 @@ function CallTable({ calls }: { calls: readonly CallEntry[] }): React.JSX.Elemen
           return open
             ? [
                 row,
-                <TableRow key={`${call.id}:open`}>
+                <TableRow className="table__hinge" key={`${call.id}:open`}>
                   <TableCell colSpan={COLUMNS}>
                     <CallDetail id={call.id} />
                   </TableCell>
