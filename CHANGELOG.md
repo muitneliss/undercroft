@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.80.2](https://github.com/muitneliss/undercroft/compare/v1.80.1...v1.80.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** close the hono, better-auth, MCP SDK, tRPC, yaml and zod 4 security alerts ([#514](https://github.com/muitneliss/undercroft/issues/514)) ([cfb6e0e](https://github.com/muitneliss/undercroft/commit/cfb6e0e1ce0028c6190cc0de604727157ce35c47))
+* **deps:** move zod 3.25.76 to 4.6.7 to close the array memory-exhaustion alert ([#516](https://github.com/muitneliss/undercroft/issues/516)) ([3541e13](https://github.com/muitneliss/undercroft/commit/3541e13ab51b36a64eecfda4d668b1ebcf342bc6))
+
 ## [1.80.1](https://github.com/muitneliss/undercroft/compare/v1.80.0...v1.80.1) (2026-10-30)
 
 
