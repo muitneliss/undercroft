@@ -26,7 +26,7 @@ export const RawRecord = z.object({
    */
   payloadText: z.string(),
   /** When the source last changed it. Null is honest; a guess is not. */
-  sourceUpdatedAt: z.string().datetime().nullable(),
+  sourceUpdatedAt: z.iso.datetime().nullable(),
 });
 
 export type RawRecord = z.infer<typeof RawRecord>;

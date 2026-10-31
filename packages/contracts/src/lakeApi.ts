@@ -16,7 +16,7 @@ export const MAX_BATCH_BYTES = 10 * 1024 * 1024;
 export const LandRecordInput = z.object({
   entity: z.string().min(1),
   sourceRecordId: z.string().min(1),
-  sourceUpdatedAt: z.string().datetime().nullable().default(null),
+  sourceUpdatedAt: z.iso.datetime().nullable().default(null),
   /** The record body as JSON text, hashed and stored verbatim. Never re-serialised. */
   payloadText: z.string(),
 });

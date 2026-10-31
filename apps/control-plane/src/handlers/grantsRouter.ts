@@ -115,7 +115,7 @@ export const grantsRouter = router({
         ...Subject,
         permission: z.enum(PERMISSIONS).optional(),
         object: z.string().trim().min(1).max(MAX_OBJECT_CHARS).optional(),
-        expiresAt: z.string().datetime({ offset: true }).nullable().default(null),
+        expiresAt: z.iso.datetime({ offset: true }).nullable().default(null),
         rowRule: RowRuleShape.optional(),
         hiddenColumns: HiddenColumnsShape.optional(),
       }),
@@ -176,7 +176,7 @@ export const grantsRouter = router({
 
   /** Take one grant away, by id. Refused for a grant of a permission the caller does not hold. */
   delete: requirePermission("roles:manage")
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const outcome = await grants.remove(ctx.exec, {
         tenantId: ctx.tenantId,

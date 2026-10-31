@@ -135,7 +135,7 @@ export const MAX_TILES = 50;
 
 /** One question on a dashboard's twelve-column grid. */
 export const DashboardTile = z.object({
-  questionId: z.string().uuid(),
+  questionId: z.uuid(),
   x: z.number().int().min(0).max(11),
   y: z.number().int().min(0).max(1000),
   w: z.number().int().min(1).max(12),

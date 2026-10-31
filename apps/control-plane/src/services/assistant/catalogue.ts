@@ -257,10 +257,8 @@ export function summarizeFor(toolName: string, output: unknown): string | null {
  * outlives any one request's binding. It also keeps the validator independent of the SDK's
  * `ToolSet` shape, which carries an `execute` the validator has no use for.
  */
-export function inputSchemas(
-  tiers: readonly Tier[],
-): Record<string, { inputSchema: z.ZodTypeAny }> {
-  const schemas: Record<string, { inputSchema: z.ZodTypeAny }> = {};
+export function inputSchemas(tiers: readonly Tier[]): Record<string, { inputSchema: z.ZodType }> {
+  const schemas: Record<string, { inputSchema: z.ZodType }> = {};
   for (const [name, spec] of Object.entries(TOOLS)) {
     if (tiers.includes(spec.tier)) {
       schemas[name] = { inputSchema: spec.inputSchema };

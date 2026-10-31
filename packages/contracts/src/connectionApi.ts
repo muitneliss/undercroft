@@ -23,14 +23,14 @@ export const CredentialInput = z.object({
    * recorded honestly rather than papered over.
    */
   refreshToken: z.string(),
-  expiresAt: z.string().datetime().nullable(),
+  expiresAt: z.iso.datetime().nullable(),
   /**
    * When the provider said the REFRESH token dies -- Google's `refresh_token_expires_in`, sent
    * for a project still in Testing (seven days) or a time-based grant. Absent or null is "it
    * said nothing", never "it never dies". Optional so a control plane older than the field
    * still seals. `services/grantExpiry.ts` turns it into the grant's end.
    */
-  refreshExpiresAt: z.string().datetime().nullable().optional(),
+  refreshExpiresAt: z.iso.datetime().nullable().optional(),
 });
 
 export const StoreCredentialRequest = z.object({

@@ -1,4 +1,5 @@
 {
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "$ref": "#/definitions/Connector",
   "definitions": {
     "Connector": {
@@ -25,7 +26,7 @@
           "format": "uri"
         },
         "auth": {
-          "anyOf": [
+          "oneOf": [
             {
               "type": "object",
               "properties": {
@@ -47,7 +48,7 @@
                   "const": "bearer"
                 },
                 "token": {
-                  "anyOf": [
+                  "oneOf": [
                     {
                       "type": "object",
                       "properties": {
@@ -106,15 +107,15 @@
                   "format": "uri"
                 },
                 "rotatesRefreshToken": {
-                  "type": "boolean",
-                  "default": false
+                  "default": false,
+                  "type": "boolean"
                 },
                 "scopes": {
+                  "default": [],
                   "type": "array",
                   "items": {
                     "type": "string"
-                  },
-                  "default": []
+                  }
                 },
                 "accountHeader": {
                   "type": "string"
@@ -129,22 +130,30 @@
           ]
         },
         "defaults": {
+          "default": {},
           "type": "object",
           "properties": {
             "headers": {
+              "default": {},
               "type": "object",
-              "additionalProperties": {
+              "propertyNames": {
                 "type": "string"
               },
-              "default": {}
+              "additionalProperties": {
+                "type": "string"
+              }
             },
             "timeoutMs": {
+              "default": 60000,
               "type": "integer",
               "exclusiveMinimum": 0,
-              "default": 60000
+              "maximum": 9007199254740991
             },
             "pagination": {
-              "anyOf": [
+              "default": {
+                "kind": "none"
+              },
+              "oneOf": [
                 {
                   "type": "object",
                   "properties": {
@@ -185,21 +194,22 @@
                       "const": "page-number"
                     },
                     "param": {
-                      "type": "string",
-                      "default": "page"
+                      "default": "page",
+                      "type": "string"
                     },
                     "startAt": {
+                      "default": 1,
                       "type": "integer",
                       "minimum": 0,
-                      "default": 1
+                      "maximum": 9007199254740991
                     },
                     "stopOn": {
+                      "default": "empty-page",
                       "type": "string",
                       "enum": [
                         "empty-page",
                         "total-path"
-                      ],
-                      "default": "empty-page"
+                      ]
                     },
                     "totalPath": {
                       "type": "string",
@@ -243,12 +253,12 @@
                       "const": "offset"
                     },
                     "param": {
-                      "type": "string",
-                      "default": "offset"
+                      "default": "offset",
+                      "type": "string"
                     },
                     "limitParam": {
-                      "type": "string",
-                      "default": "limit"
+                      "default": "limit",
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -256,117 +266,125 @@
                   ],
                   "additionalProperties": false
                 }
-              ],
-              "default": {
-                "kind": "none"
-              }
+              ]
             },
             "rateLimit": {
+              "default": {},
               "type": "object",
               "properties": {
                 "minIntervalMs": {
+                  "default": 0,
                   "type": "integer",
                   "minimum": 0,
-                  "default": 0
+                  "maximum": 9007199254740991
                 },
                 "requestsPerMinute": {
                   "type": "integer",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "requestsPerDay": {
                   "type": "integer",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
                 }
               },
-              "additionalProperties": false,
-              "default": {}
+              "additionalProperties": false
             },
             "retry": {
+              "default": {},
               "type": "object",
               "properties": {
                 "attempts": {
+                  "default": 5,
                   "type": "integer",
                   "minimum": 1,
-                  "maximum": 10,
-                  "default": 5
+                  "maximum": 10
                 },
                 "on": {
-                  "type": "array",
-                  "items": {
-                    "type": "integer"
-                  },
                   "default": [
                     429,
                     500,
                     502,
                     503,
                     504
-                  ]
+                  ],
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
                 },
                 "backoff": {
+                  "default": "exponential",
                   "type": "string",
                   "enum": [
                     "exponential",
                     "fixed"
-                  ],
-                  "default": "exponential"
+                  ]
                 },
                 "baseMs": {
+                  "default": 500,
                   "type": "integer",
                   "exclusiveMinimum": 0,
-                  "default": 500
+                  "maximum": 9007199254740991
                 },
                 "maxMs": {
+                  "default": 30000,
                   "type": "integer",
                   "exclusiveMinimum": 0,
-                  "default": 30000
+                  "maximum": 9007199254740991
                 },
                 "jitter": {
+                  "default": "full",
                   "type": "string",
                   "enum": [
                     "full",
                     "none"
-                  ],
-                  "default": "full"
+                  ]
                 },
                 "respectRetryAfter": {
-                  "type": "boolean",
-                  "default": true
+                  "default": true,
+                  "type": "boolean"
                 },
                 "maxRetryAfterMs": {
+                  "default": 120000,
                   "type": "integer",
                   "exclusiveMinimum": 0,
-                  "default": 120000
+                  "maximum": 9007199254740991
                 }
               },
-              "additionalProperties": false,
-              "default": {}
+              "additionalProperties": false
             },
             "guards": {
+              "default": {},
               "type": "object",
               "properties": {
                 "failOnEmpty": {
-                  "type": "boolean",
-                  "default": true
+                  "default": true,
+                  "type": "boolean"
                 },
                 "failOnExactCount": {
                   "type": "integer",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "maxRecords": {
                   "type": "integer",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
                 }
               },
-              "additionalProperties": false,
-              "default": {}
+              "additionalProperties": false
             },
             "wholeReadBudget": {
               "type": "object",
               "properties": {
                 "requestsPerDay": {
                   "type": "integer",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "remainingHeader": {
                   "type": "string",
@@ -379,10 +397,10 @@
               "additionalProperties": false
             }
           },
-          "additionalProperties": false,
-          "default": {}
+          "additionalProperties": false
         },
         "entities": {
+          "minItems": 1,
           "type": "array",
           "items": {
             "type": "object",
@@ -392,7 +410,7 @@
                 "pattern": "^[a-z][a-z0-9_]*$"
               },
               "request": {
-                "anyOf": [
+                "oneOf": [
                   {
                     "type": "object",
                     "properties": {
@@ -401,33 +419,39 @@
                         "const": "list"
                       },
                       "method": {
+                        "default": "GET",
                         "type": "string",
                         "enum": [
                           "GET",
                           "POST"
-                        ],
-                        "default": "GET"
+                        ]
                       },
                       "path": {
                         "type": "string",
                         "minLength": 1
                       },
                       "query": {
+                        "default": {},
                         "type": "object",
-                        "additionalProperties": {
+                        "propertyNames": {
                           "type": "string"
                         },
-                        "default": {}
+                        "additionalProperties": {
+                          "type": "string"
+                        }
                       },
                       "partitions": {
+                        "minItems": 2,
                         "type": "array",
                         "items": {
                           "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
                           "additionalProperties": {
                             "type": "string"
                           }
-                        },
-                        "minItems": 2
+                        }
                       },
                       "body": {},
                       "batchRead": {
@@ -444,12 +468,12 @@
                             ]
                           },
                           "properties": {
+                            "minItems": 1,
                             "type": "array",
                             "items": {
                               "type": "string",
                               "minLength": 1
-                            },
-                            "minItems": 1
+                            }
                           }
                         },
                         "required": [
@@ -483,10 +507,10 @@
                         "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
                       },
                       "chunkSize": {
+                        "default": 100,
                         "type": "integer",
                         "minimum": 1,
-                        "maximum": 1000,
-                        "default": 100
+                        "maximum": 1000
                       },
                       "path": {
                         "type": "string",
@@ -526,7 +550,7 @@
                 "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
               },
               "pagination": {
-                "anyOf": [
+                "oneOf": [
                   {
                     "type": "object",
                     "properties": {
@@ -567,21 +591,22 @@
                         "const": "page-number"
                       },
                       "param": {
-                        "type": "string",
-                        "default": "page"
+                        "default": "page",
+                        "type": "string"
                       },
                       "startAt": {
+                        "default": 1,
                         "type": "integer",
                         "minimum": 0,
-                        "default": 1
+                        "maximum": 9007199254740991
                       },
                       "stopOn": {
+                        "default": "empty-page",
                         "type": "string",
                         "enum": [
                           "empty-page",
                           "total-path"
-                        ],
-                        "default": "empty-page"
+                        ]
                       },
                       "totalPath": {
                         "type": "string",
@@ -625,12 +650,12 @@
                         "const": "offset"
                       },
                       "param": {
-                        "type": "string",
-                        "default": "offset"
+                        "default": "offset",
+                        "type": "string"
                       },
                       "limitParam": {
-                        "type": "string",
-                        "default": "limit"
+                        "default": "limit",
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -663,22 +688,22 @@
                     "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
                   },
                   "format": {
+                    "default": "iso8601",
                     "type": "string",
                     "enum": [
                       "iso8601",
                       "epoch-millis",
                       "yyyy-mm-dd",
                       "ms-json-date"
-                    ],
-                    "default": "iso8601"
+                    ]
                   },
                   "send": {
+                    "default": "verbatim",
                     "type": "string",
                     "enum": [
                       "verbatim",
                       "rfc3339-seconds"
-                    ],
-                    "default": "verbatim"
+                    ]
                   }
                 },
                 "required": [
@@ -691,40 +716,43 @@
                 "type": "object",
                 "properties": {
                   "minIntervalMs": {
+                    "default": 0,
                     "type": "integer",
                     "minimum": 0,
-                    "default": 0
+                    "maximum": 9007199254740991
                   },
                   "requestsPerMinute": {
                     "type": "integer",
-                    "exclusiveMinimum": 0
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
                   },
                   "requestsPerDay": {
                     "type": "integer",
-                    "exclusiveMinimum": 0
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
                   }
                 },
-                "additionalProperties": false,
-                "default": {}
+                "additionalProperties": false
               },
               "guards": {
                 "type": "object",
                 "properties": {
                   "failOnEmpty": {
-                    "type": "boolean",
-                    "default": true
+                    "default": true,
+                    "type": "boolean"
                   },
                   "failOnExactCount": {
                     "type": "integer",
-                    "exclusiveMinimum": 0
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
                   },
                   "maxRecords": {
                     "type": "integer",
-                    "exclusiveMinimum": 0
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
                   }
                 },
-                "additionalProperties": false,
-                "default": {}
+                "additionalProperties": false
               },
               "readScope": {
                 "type": "string",
@@ -738,6 +766,7 @@
                 ]
               },
               "documents": {
+                "minItems": 1,
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -764,16 +793,15 @@
                     "contentType"
                   ],
                   "additionalProperties": false
-                },
-                "minItems": 1
+                }
               },
               "neverRead": {
+                "minItems": 1,
                 "type": "array",
                 "items": {
                   "type": "string",
                   "pattern": "^[A-Za-z0-9_*-]+$"
-                },
-                "minItems": 1
+                }
               }
             },
             "required": [
@@ -782,8 +810,7 @@
               "idPath"
             ],
             "additionalProperties": false
-          },
-          "minItems": 1
+          }
         }
       },
       "required": [
@@ -797,6 +824,5 @@
       ],
       "additionalProperties": false
     }
-  },
-  "$schema": "http://json-schema.org/draft-07/schema#"
+  }
 }
