@@ -154,9 +154,14 @@ export const connectionsRouter = router({
       return outcome.value;
     }),
 
-  /** Record what may be read. Admin-only: it widens or narrows a live grant. */
+  /**
+   * Record what may be read. Admin-only: it widens or narrows a live grant.
+   *
+   * `selection` is optional so that a missing one reaches `scopeRefusal`, worded in the
+   * reader's language like any other selection nobody could read, rather than Zod's English.
+   */
   setScope: requirePermission("sources:manage")
-    .input(z.object({ source: z.string().min(1), selection: z.unknown() }))
+    .input(z.object({ source: z.string().min(1), selection: z.unknown().optional() }))
     .mutation(async ({ ctx, input }) => {
       const result = await connections.setScope(ctx.exec, {
         tenantId: ctx.tenantId,

@@ -2,9 +2,11 @@
  * Parse and validate a connector spec from YAML text.
  *
  * A parse failure names the path that failed, because "invalid connector" sends someone
- * to read the whole file while "entities.0.idPath: Required" points at the line. The
- * connector spec is the surface users author by hand, so its error messages are part of
- * the API.
+ * to read the whole file while "entities.0.idPath: Invalid input: expected string, received
+ * undefined" points at the line. The connector spec is the surface users author by hand, so
+ * the path at the head of each message is part of the API. The sentence after it is the
+ * spec's own where `connectorSpec.ts` words one, and otherwise Zod's, which is not ours to
+ * promise: Zod 4 reworded every default (Zod 3 said "Required" here).
  */
 
 import { parse as parseYaml } from "yaml";

@@ -40,6 +40,10 @@ export const TenantId = z
  *
  * `app.app_user.email` and the sign-in gate both normalise this way, and an invitation
  * written in different case from the address someone signs in with would never be redeemed.
+ *
+ * The format is checked with the string method rather than Zod 4's `z.email()`, which the
+ * method is deprecated in favour of, because checks run in the order they are written:
+ * `z.email().trim()` would refuse `" a@b.test "` before trimming it.
  */
 export const Email = z.string().trim().toLowerCase().email().max(320); // the longest address RFC 5321 allows
 

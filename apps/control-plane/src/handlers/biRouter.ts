@@ -30,7 +30,7 @@ import { actorOf, router, tenantProcedure } from "./trpc.ts";
 
 /** What an export is of: a saved question, a definition as `bi.answer` takes one, or a model. */
 const ExportSource = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("question"), questionId: z.string().uuid() }),
+  z.object({ kind: z.literal("question"), questionId: z.uuid() }),
   z.object({ kind: z.literal("definition"), definition: QuestionDefinition }),
   z.object({ kind: z.literal("model"), model: ModelName }),
 ]);
@@ -72,7 +72,7 @@ export const biRouter = router({
 
   /** Answer a saved question. Any member of the tenant: the question was saved for them. */
   runQuestion: tenantProcedure
-    .input(z.object({ questionId: z.string().uuid(), params: QueryParams.default({}) }))
+    .input(z.object({ questionId: z.uuid(), params: QueryParams.default({}) }))
     .mutation(({ ctx, input }) =>
       answerSaved(ctx, {
         tenantId: input.tenantId,
@@ -111,20 +111,18 @@ export const biRouter = router({
         ),
       ),
 
-    get: tenantProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .query(async ({ ctx, input }) => {
-        const question = await questions.getQuestionView(
-          ctx.exec,
-          input.tenantId,
-          input.id,
-          ctx.reach,
-        );
-        if (question === null) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
-        return question;
-      }),
+    get: tenantProcedure.input(z.object({ id: z.uuid() })).query(async ({ ctx, input }) => {
+      const question = await questions.getQuestionView(
+        ctx.exec,
+        input.tenantId,
+        input.id,
+        ctx.reach,
+      );
+      if (question === null) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      return question;
+    }),
 
     /**
      * A saved question's answer under bound parameters, as a READ. A dashboard's tiles
@@ -133,7 +131,7 @@ export const biRouter = router({
      * `runQuestion`, which stays a mutation for the Run plate on the question's own leaf.
      */
     answer: tenantProcedure
-      .input(z.object({ id: z.string().uuid(), params: QueryParams.default({}) }))
+      .input(z.object({ id: z.uuid(), params: QueryParams.default({}) }))
       .query(({ ctx, input }) =>
         answerSaved(ctx, {
           tenantId: input.tenantId,
@@ -146,7 +144,7 @@ export const biRouter = router({
     save: requirePermission("reports:author")
       .input(
         z.object({
-          id: z.string().uuid().optional(),
+          id: z.uuid().optional(),
           name: z.string().trim().min(1).max(120),
           definition: QuestionDefinition,
           chart: ChartConfig,
@@ -170,7 +168,7 @@ export const biRouter = router({
       }),
 
     delete: requirePermission("reports:author")
-      .input(z.object({ id: z.string().uuid() }))
+      .input(z.object({ id: z.uuid() }))
       .mutation(async ({ ctx, input }) => {
         const removed = await questions.removeQuestion(ctx.exec, {
           tenantId: ctx.tenantId,
@@ -190,20 +188,18 @@ export const biRouter = router({
       bi.listDashboardViews(ctx.exec, input.tenantId, ctx.reach),
     ),
 
-    get: tenantProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .query(async ({ ctx, input }) => {
-        const dashboard = await bi.getDashboardView(ctx.exec, input.tenantId, input.id, ctx.reach);
-        if (dashboard === null) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
-        return dashboard;
-      }),
+    get: tenantProcedure.input(z.object({ id: z.uuid() })).query(async ({ ctx, input }) => {
+      const dashboard = await bi.getDashboardView(ctx.exec, input.tenantId, input.id, ctx.reach);
+      if (dashboard === null) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      return dashboard;
+    }),
 
     save: requirePermission("reports:author")
       .input(
         z.object({
-          id: z.string().uuid().optional(),
+          id: z.uuid().optional(),
           name: z.string().trim().min(1).max(120),
           layout: DashboardLayout,
           filters: DashboardFilters,
@@ -227,7 +223,7 @@ export const biRouter = router({
       }),
 
     delete: requirePermission("reports:author")
-      .input(z.object({ id: z.string().uuid() }))
+      .input(z.object({ id: z.uuid() }))
       .mutation(async ({ ctx, input }) => {
         const removed = await bi.removeDashboard(ctx.exec, {
           tenantId: ctx.tenantId,
@@ -288,23 +284,21 @@ export const biRouter = router({
      * an export needs are asked again at the moment the rows are taken. Anyone else's export, and
      * an expired one, is NOT_FOUND.
      */
-    get: tenantProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .query(async ({ ctx, input }) => {
-        const found = await biExports.openExport(ctx.exec, {
-          tenantId: ctx.tenantId,
-          id: input.id,
-          userId: ctx.user.userId,
-          reach: ctx.reach,
-        });
-        if (found === null) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
-        if (biExports.exportNeedsAuthor(found.kind) && !holds(ctx, "reports:author")) {
-          throw permissionRefusal(ctx, "reports:author");
-        }
-        return found;
-      }),
+    get: tenantProcedure.input(z.object({ id: z.uuid() })).query(async ({ ctx, input }) => {
+      const found = await biExports.openExport(ctx.exec, {
+        tenantId: ctx.tenantId,
+        id: input.id,
+        userId: ctx.user.userId,
+        reach: ctx.reach,
+      });
+      if (found === null) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      if (biExports.exportNeedsAuthor(found.kind) && !holds(ctx, "reports:author")) {
+        throw permissionRefusal(ctx, "reports:author");
+      }
+      return found;
+    }),
   }),
 
   /**

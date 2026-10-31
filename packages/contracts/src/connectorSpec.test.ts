@@ -40,6 +40,55 @@ describe("the shipped HubSpot spec is valid", () => {
   });
 });
 
+describe("an entity's own pacing and guards override the spec's, and only when written", () => {
+  // `reader.ts` reads `entity.rateLimit ?? spec.defaults.rateLimit`. An entity block that
+  // defaulted itself into existence would replace the spec-wide pacing with a zero interval,
+  // and Xero's 1100 ms would be gone without a word -- what Zod 4's defaults-inside-optional
+  // does to a block that carries its own `.default({})`.
+  function specWith(entityExtra: string): string {
+    return `
+apiVersion: undercroft.dev/v1
+kind: Connector
+id: paced
+displayName: Paced
+baseUrl: https://example.test
+auth: { kind: none }
+defaults:
+  rateLimit: { minIntervalMs: 1100 }
+  guards: { failOnEmpty: false }
+entities:
+  - name: things
+    request: { kind: list, path: /things }
+    idPath: id
+${entityExtra}`;
+  }
+
+  it("leaves an entity that writes neither to the spec's defaults", () => {
+    const spec = parseSpec(specWith(""));
+    const [things] = spec.entities;
+    expect({
+      entityRateLimit: things?.rateLimit,
+      entityGuards: things?.guards,
+      defaults: [spec.defaults.rateLimit.minIntervalMs, spec.defaults.guards.failOnEmpty],
+    }).toStrictEqual({
+      entityRateLimit: undefined,
+      entityGuards: undefined,
+      defaults: [1100, false],
+    });
+  });
+
+  it("keeps an entity's own block, with the block's field defaults filled", () => {
+    const spec = parseSpec(
+      specWith("    rateLimit: { requestsPerDay: 100 }\n    guards: { maxRecords: 5 }\n"),
+    );
+    const [things] = spec.entities;
+    expect({ rateLimit: things?.rateLimit, guards: things?.guards }).toStrictEqual({
+      rateLimit: { minIntervalMs: 0, requestsPerDay: 100 },
+      guards: { failOnEmpty: true, maxRecords: 5 },
+    });
+  });
+});
+
 describe("an invalid spec fails with a path-qualified message", () => {
   it("names the missing field and its path", () => {
     const broken = `

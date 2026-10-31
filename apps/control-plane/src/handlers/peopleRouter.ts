@@ -163,7 +163,7 @@ export const peopleRouter = router({
 
   /** Withdraw an invitation that has not been accepted. */
   revokeInvitation: requirePermission("people:manage")
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const revoked = await people.revokeInvitation(ctx.exec, {
         id: input.id,

@@ -65,8 +65,8 @@ const TTL_MS = 5 * 60 * 1000;
  */
 const CACHE = { resultType: "complete", ttlMs: TTL_MS, cacheScope: "public" } as const;
 
-const ListParams = z.object({ cursor: z.string().optional() }).passthrough();
-const GetParams = z.object({ uri: z.string() }).passthrough();
+const ListParams = z.object({ cursor: z.string().optional() }).loose();
+const GetParams = z.object({ uri: z.string() }).loose();
 
 /** A skill as `skills/list` and `skills/get` describe it: its frontmatter and its manifest. */
 interface SkillEntry {

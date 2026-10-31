@@ -219,8 +219,8 @@ export const appRouter = router({
           trigger: z.enum(runs.RUN_FILTERS.trigger).optional(),
           parentRunId: z.string().min(1).optional(),
           chained: z.boolean().optional(),
-          startedAfter: z.string().datetime({ offset: true }).optional(),
-          startedBefore: z.string().datetime({ offset: true }).optional(),
+          startedAfter: z.iso.datetime({ offset: true }).optional(),
+          startedBefore: z.iso.datetime({ offset: true }).optional(),
           ids: z.array(z.string().min(1)).min(1).max(MAX_LISTED_RUNS).optional(),
         }),
       )

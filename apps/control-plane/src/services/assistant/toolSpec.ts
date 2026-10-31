@@ -36,7 +36,7 @@ export type Plate = "table" | "chart" | "runs" | "grants" | "questions" | "facts
 export interface ToolSpec {
   /** Read by the model. English, deliberately -- see the module docstring. */
   readonly description: string;
-  readonly inputSchema: z.ZodTypeAny;
+  readonly inputSchema: z.ZodType;
   readonly tier: Tier;
   readonly plate: Plate;
   /**

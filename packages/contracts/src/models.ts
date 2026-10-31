@@ -181,14 +181,14 @@ export const ModelTests = z
       const kinds = list.map(kindOf);
       if (new Set(kinds).size !== kinds.length) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           message: "a column takes each test kind once",
           path: ["columns", column],
         });
       }
       if (list.some(unquotedNonDecimal)) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           message: "with quote: false every accepted value must be a plain decimal",
           path: ["columns", column],
         });
@@ -197,7 +197,7 @@ export const ModelTests = z
     const names = (tests.sql ?? []).map((test) => test.name);
     if (new Set(names).size !== names.length) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: "SQL test names must be unique within the model",
         path: ["sql"],
       });

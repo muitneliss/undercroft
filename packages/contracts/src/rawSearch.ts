@@ -77,7 +77,7 @@ const hitBase = {
   /** `ts_rank_cd`, for ordering only. Never shown: a relevance number means nothing to a reader. */
   rank: z.number(),
   excerpt: z.string(),
-  observedAt: z.string().datetime(),
+  observedAt: z.iso.datetime(),
   /**
    * The source has since deleted it, and this is the tombstone.
    *
@@ -85,7 +85,7 @@ const hitBase = {
    * "which contract said this" is asked about terminated contracts more often than live ones --
    * but a hit that did not say it had been deleted upstream would read as a current fact.
    */
-  deletedAt: z.string().datetime().nullable(),
+  deletedAt: z.iso.datetime().nullable(),
 } as const;
 
 export const RawSearchHit = z.discriminatedUnion("kind", [

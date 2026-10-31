@@ -79,7 +79,7 @@ export const WRITE_TOOLS = {
       "reader may invite only at a role holding nothing they lack themselves. Sign-in is " +
       "invitation-only, so this is the only way somebody gains access.",
     inputSchema: inTenant.extend({
-      email: z.string().email(),
+      email: z.email(),
       role: z.string().min(1).max(MAX_ROLE_KEY_CHARS).regex(ROLE_KEY),
     }),
     tier: "write",
@@ -139,7 +139,7 @@ export const PRIVILEGED_WRITE_TOOLS = {
     description:
       "Withdraw an open invitation by id, so that address can no longer sign in. Use when an " +
       "invitation went to the wrong person.",
-    inputSchema: inTenant.extend({ id: z.string().uuid() }),
+    inputSchema: inTenant.extend({ id: z.uuid() }),
     tier: "privileged",
     plate: "facts",
     procedure: "people.revokeInvitation",

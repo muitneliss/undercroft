@@ -445,7 +445,7 @@ describe("an answer a widget draws", () => {
 describe("the skills, over the MCP Skills extension", () => {
   const Entry = z.object({
     uri: z.string(),
-    frontmatter: z.record(z.unknown()),
+    frontmatter: z.record(z.string(), z.unknown()),
     resources: z.array(z.object({ uri: z.string(), digest: z.string(), size: z.number() })),
   });
   // `resultType` is envelope: the client consumes it before a result schema sees the rest,

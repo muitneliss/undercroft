@@ -36,7 +36,7 @@ export const RawDocument = z.object({
   /** Bytes as a decimal string. `bigint` in Postgres; a JS number would round at 2^53. */
   byteLength: z.string().regex(/^\d+$/u),
   /** When the source last changed it. Null is honest; a guess is not. */
-  sourceUpdatedAt: z.string().datetime().nullable(),
+  sourceUpdatedAt: z.iso.datetime().nullable(),
 });
 
 export type RawDocument = z.infer<typeof RawDocument>;

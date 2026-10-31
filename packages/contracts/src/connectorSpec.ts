@@ -50,7 +50,7 @@ const Auth = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("oauth2"),
-    tokenUrl: z.string().url(),
+    tokenUrl: z.url(),
     /**
      * Xero invalidates the old refresh token the moment it is exchanged. Declared so the
      * runtime knows to persist the rotated token under a row lock *before* using the
@@ -93,41 +93,44 @@ const Pagination = z.discriminatedUnion("kind", [
   }),
 ]);
 
-const RateLimit = z
-  .object({
-    /** Minimum spacing between two requests, ms. Xero: 1100. */
-    minIntervalMs: z.number().int().min(0).default(0),
-    requestsPerMinute: z.number().int().positive().optional(),
-    requestsPerDay: z.number().int().positive().optional(),
-  })
-  .default({});
+/*
+ * `RateLimit`, `Retry` and `Guards` carry no default of their own, because each is read in two
+ * places that mean different things by its absence. Under `defaults`, an absent block is every
+ * field at its default, so `defaults` fills it with `.prefault({})`, which parses `{}` through the
+ * block. On an entity, an absent block is "no override", read as `entity.rateLimit ??
+ * spec.defaults.rateLimit`, and must stay `undefined`: Zod 4 lets a default inside `.optional()`
+ * stand in for a missing key, so a default here would hand every entity a zeroed override and
+ * quietly discard a spec-wide pacing such as Xero's 1100 ms.
+ */
+const RateLimit = z.object({
+  /** Minimum spacing between two requests, ms. Xero: 1100. */
+  minIntervalMs: z.number().int().min(0).default(0),
+  requestsPerMinute: z.number().int().positive().optional(),
+  requestsPerDay: z.number().int().positive().optional(),
+});
 
-const Retry = z
-  .object({
-    attempts: z.number().int().min(1).max(10).default(5),
-    on: z.array(z.number().int()).default([429, 500, 502, 503, 504]),
-    backoff: z.enum(["exponential", "fixed"]).default("exponential"),
-    baseMs: z.number().int().positive().default(500),
-    maxMs: z.number().int().positive().default(30_000),
-    jitter: z.enum(["full", "none"]).default("full"),
-    respectRetryAfter: z.boolean().default(true),
-    // Clamp, so a malformed or hostile Retry-After cannot park a run for hours.
-    maxRetryAfterMs: z.number().int().positive().default(120_000),
-  })
-  .default({});
+const Retry = z.object({
+  attempts: z.number().int().min(1).max(10).default(5),
+  on: z.array(z.number().int()).default([429, 500, 502, 503, 504]),
+  backoff: z.enum(["exponential", "fixed"]).default("exponential"),
+  baseMs: z.number().int().positive().default(500),
+  maxMs: z.number().int().positive().default(30_000),
+  jitter: z.enum(["full", "none"]).default("full"),
+  respectRetryAfter: z.boolean().default(true),
+  // Clamp, so a malformed or hostile Retry-After cannot park a run for hours.
+  maxRetryAfterMs: z.number().int().positive().default(120_000),
+});
 
-const Guards = z
-  .object({
-    /** A source yielding nothing is a green run that published an empty table. */
-    failOnEmpty: z.boolean().default(true),
-    /**
-     * HubSpot's search endpoint caps at 10,000 and does not signal truncation. Landing
-     * exactly on the cap is almost certainly silent data loss, so treat it as an error.
-     */
-    failOnExactCount: z.number().int().positive().optional(),
-    maxRecords: z.number().int().positive().optional(),
-  })
-  .default({});
+const Guards = z.object({
+  /** A source yielding nothing is a green run that published an empty table. */
+  failOnEmpty: z.boolean().default(true),
+  /**
+   * HubSpot's search endpoint caps at 10,000 and does not signal truncation. Landing
+   * exactly on the cap is almost certainly silent data loss, so treat it as an error.
+   */
+  failOnExactCount: z.number().int().positive().optional(),
+  maxRecords: z.number().int().positive().optional(),
+});
 
 const Incremental = z.object({
   /** Send the high-water mark as a query param, or sort and stop client-side. */
@@ -315,26 +318,26 @@ export const ConnectorSpec = z
     kind: z.literal("Connector"),
     id: z.string().regex(/^[a-z][a-z0-9_-]*$/u, "connector id must be kebab/snake-case"),
     displayName: z.string().min(1),
-    baseUrl: z.string().url(),
+    baseUrl: z.url(),
     auth: Auth,
     defaults: z
       .object({
         headers: z.record(z.string(), z.string()).default({}),
         timeoutMs: z.number().int().positive().default(60_000),
         pagination: Pagination.default({ kind: "none" }),
-        rateLimit: RateLimit,
-        retry: Retry,
-        guards: Guards,
+        rateLimit: RateLimit.prefault({}),
+        retry: Retry.prefault({}),
+        guards: Guards.prefault({}),
         wholeReadBudget: WholeReadBudget.optional(),
       })
-      .default({}),
+      .prefault({}),
     entities: z.array(Entity).min(1),
   })
   .superRefine((spec, ctx) => {
     const budgetIssue = wholeReadBudgetProblem(spec.defaults);
     if (budgetIssue !== null) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["defaults", "wholeReadBudget", "requestsPerDay"],
         message: budgetIssue,
       });
@@ -343,7 +346,7 @@ export const ConnectorSpec = z
     for (const entity of spec.entities) {
       if (entity.request.kind === "batch-from" && !names.has(entity.request.entity)) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["entities", entity.name, "request", "entity"],
           message: `batch-from references unknown entity '${entity.request.entity}'`,
         });
@@ -351,7 +354,7 @@ export const ConnectorSpec = z
       const readScopeIssue = readScopeProblem(entity.readScope, spec.auth);
       if (readScopeIssue !== null) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["entities", entity.name, "readScope"],
           message: readScopeIssue,
         });
@@ -359,7 +362,7 @@ export const ConnectorSpec = z
       const refused = removedWhenRefusal(spec.entities, entity);
       if (refused !== null) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["entities", entity.name, "removedWhen"],
           message: refused,
         });
@@ -367,7 +370,7 @@ export const ConnectorSpec = z
       const documentsIssue = documentsProblem(entity);
       if (documentsIssue !== null) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["entities", entity.name, "documents"],
           message: documentsIssue,
         });
