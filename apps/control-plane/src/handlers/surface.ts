@@ -372,6 +372,8 @@ export type SurfaceErrorCode =
  * request was fine and the platform's state refused it, which is what CONFLICT means to a
  * caller. The server's own sentence says which, and is passed through. The server-side
  * failures all read as INTERNAL_ERROR: the caller cannot tell them apart and cannot fix any.
+ * `PRECONDITION_REQUIRED` sits beside `PRECONDITION_FAILED` for the same reason, and
+ * `PAYMENT_REQUIRED` is a refusal of this caller's access, so it reads as PERMISSION_DENIED.
  */
 export type ErrorCodeTable = Readonly<Record<TRPC_ERROR_CODE_KEY, SurfaceErrorCode>>;
 
@@ -381,6 +383,8 @@ export const BY_TRPC_CODE: ErrorCodeTable = {
   NOT_FOUND: "NOT_FOUND",
   CONFLICT: "CONFLICT",
   PRECONDITION_FAILED: "CONFLICT",
+  PRECONDITION_REQUIRED: "CONFLICT",
+  PAYMENT_REQUIRED: "PERMISSION_DENIED",
   BAD_REQUEST: "VALIDATION_FAILED",
   PARSE_ERROR: "VALIDATION_FAILED",
   PAYLOAD_TOO_LARGE: "VALIDATION_FAILED",
