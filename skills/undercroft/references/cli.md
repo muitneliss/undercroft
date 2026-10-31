@@ -15,7 +15,7 @@ npm install -g "https://<their Undercroft>/cli/undercroft-cli.tgz"
 
 <!-- x-release-please-start-version -->
 
-This file describes the commands and error codes of release 1.80.1.
+This file describes the commands and error codes of release 1.80.2.
 
 <!-- x-release-please-end -->
 
