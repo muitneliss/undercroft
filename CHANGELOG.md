@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.81.0](https://github.com/muitneliss/undercroft/compare/v1.80.2...v1.81.0) (2026-11-02)
+
+
+### Features
+
+* **ui:** link the blog from the public home's header ([#517](https://github.com/muitneliss/undercroft/issues/517)) ([cea4daf](https://github.com/muitneliss/undercroft/commit/cea4daf20477daa400a9c2d3613028d94bd07565))
+
 ## [1.80.2](https://github.com/muitneliss/undercroft/compare/v1.80.1...v1.80.2) (2026-10-31)
 
 
