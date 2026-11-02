@@ -210,6 +210,7 @@ export const vi = {
     skip: "Đến nội dung chính",
     docs: "Tài liệu",
     readDocs: "Xem tài liệu",
+    blog: "Blog",
     stillFilm: "Dừng chuyển động",
     title: "Giữ nguyên dữ liệu.",
     titleEnd: "Tự định nghĩa câu trả lời.",

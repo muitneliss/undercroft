@@ -10,7 +10,7 @@ import { usePageLamp } from "@/components/usePageLamp.ts";
 import { useVaultFilm, type VaultRefs } from "@/components/useVaultFilm.ts";
 import { CONTACT_EMAIL } from "@/lib/contact.ts";
 import { KANNA_URL } from "@/lib/partner.ts";
-import { servicePageUrl } from "@/lib/servicePages.ts";
+import { blogUrl, servicePageUrl } from "@/lib/servicePages.ts";
 import { STAGES, STEPS, type StepId } from "@/lib/vault/model.ts";
 import type { VaultWords } from "@/lib/vault/runtime.ts";
 import { useUiStore } from "@/store.ts";
@@ -153,6 +153,7 @@ function StillPlate(): React.JSX.Element {
 
 export function Landing(): React.JSX.Element {
   const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
   const contentId = useId();
   const titleId = useId();
   const agentId = useId();
@@ -199,6 +200,7 @@ export function Landing(): React.JSX.Element {
         </Link>
         <nav className="landing__nav" aria-label={t("nav.sections")}>
           <a href={DOCUMENTATION}>{t("landing.docs")}</a>
+          <a href={blogUrl(locale)}>{t("landing.blog")}</a>
           <Link to="/sign-in">{t("signIn.signIn")}</Link>
           <StillPlate />
           <LanguageSwitcher />
