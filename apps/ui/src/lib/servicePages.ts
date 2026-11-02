@@ -1,6 +1,6 @@
 /**
- * The hosted service's own public pages -- what the app is, its privacy policy, its terms --
- * which live on the blog (`apps/blog/src/content/service`), not in this app.
+ * The blog's front page, and the hosted service's own public pages -- what the app is, its
+ * privacy policy, its terms -- which live on the blog (`apps/blog/src/content/service`), not in this app.
  *
  * Google's brand verification reads the home page signed out and requires it to link the
  * privacy policy and terms; the SPA cannot hold them itself, because a reviewer must read them
@@ -14,6 +14,11 @@ const BLOG_URL = "https://blog.undercroft.lowbit.link";
 
 export type ServicePage = "app" | "privacy" | "terms";
 
+/** The blog's index in the reader's language, as `langPrefix` in `apps/blog/src/site.ts` builds it. */
+export function blogUrl(locale: Locale): string {
+  return `${BLOG_URL}${locale === "vi" ? "" : `/${locale}`}/`;
+}
+
 export function servicePageUrl(locale: Locale, page: ServicePage): string {
-  return `${BLOG_URL}${locale === "vi" ? "" : `/${locale}`}/${page}/`;
+  return `${blogUrl(locale)}${page}/`;
 }

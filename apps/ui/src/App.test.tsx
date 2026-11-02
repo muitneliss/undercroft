@@ -17,7 +17,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpLink } from "@trpc/client";
 import { afterEach, describe, expect, test as it } from "bun:test";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import { App } from "@/App.tsx";
@@ -229,6 +229,20 @@ describe("the public and signed-in home", () => {
     expect(hrefOf(t("landing.googleAbout"))).toBe("https://blog.undercroft.lowbit.link/app/");
     expect(hrefOf(t("landing.privacy"))).toBe("https://blog.undercroft.lowbit.link/privacy/");
     expect(hrefOf(t("landing.terms"))).toBe("https://blog.undercroft.lowbit.link/terms/");
+  });
+
+  it("links the blog's front page in the reader's language", async () => {
+    renderAt("/", {});
+    const vi = translatorFor("vi");
+    expect(
+      (await screen.findByRole("link", { name: vi("landing.blog") })).getAttribute("href"),
+    ).toBe("https://blog.undercroft.lowbit.link/");
+    act(() => useUiStore.setState({ locale: "en" }));
+    expect(
+      (await screen.findByRole("link", { name: translatorFor("en")("landing.blog") })).getAttribute(
+        "href",
+      ),
+    ).toBe("https://blog.undercroft.lowbit.link/en/");
   });
 
   it("links the English pages to a reader who chose English", async () => {

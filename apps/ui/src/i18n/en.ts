@@ -133,6 +133,7 @@ export const en = {
     skip: "Skip to main content",
     docs: "Documentation",
     readDocs: "Read the docs",
+    blog: "Blog",
     stillFilm: "Stop motion",
     title: "Keep the original data.",
     titleEnd: "Define your own answers.",
