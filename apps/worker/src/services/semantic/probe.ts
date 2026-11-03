@@ -62,8 +62,8 @@ export type CallOutcome =
   | {
       readonly ok: true;
       readonly model: string;
-      readonly inputTokens: number;
-      readonly outputTokens: number;
+      readonly inputTokens: number | null;
+      readonly outputTokens: number | null;
       readonly judgements: Readonly<Record<string, Judgement>>;
     }
   | { readonly ok: false; readonly reason: string };

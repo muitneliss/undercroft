@@ -39,6 +39,7 @@ import {
   Tooltip,
   type ActiveElement,
   type ChartOptions,
+  type ChartType,
   type TooltipItem,
 } from "chart.js";
 import { FunnelController, TrapezoidElement } from "chartjs-chart-funnel";
@@ -89,9 +90,19 @@ export function figure(raw: string | null): string {
   return raw === null ? MISSING : formatDecimal(raw);
 }
 
-/** The tooltip says the figure from `raw`, never the float under the cursor. */
+/**
+ * The tooltip says the figure from `raw`, never the float under the cursor.
+ *
+ * One label serves every chart kind, so it reads only the indices and the dataset's label --
+ * the part of a tooltip item each kind shares. chart.js 4.6 types `parsed` per kind, and an item
+ * typed over all the kinds at once would demand a `parsed` that is every shape at the same time.
+ */
 export function tooltipLabel(series: Series) {
-  return (item: TooltipItem<"bar" | "line" | "pie" | "doughnut" | "radar" | "funnel">): string => {
+  return (
+    item: Pick<TooltipItem<ChartType>, "datasetIndex" | "dataIndex"> & {
+      readonly dataset: { readonly label?: string | undefined };
+    },
+  ): string => {
     const raw = series.datasets[item.datasetIndex]?.raw[item.dataIndex] ?? null;
     const label = item.dataset.label ?? series.labels[item.dataIndex] ?? "";
     return `${label}: ${figure(raw)}`;

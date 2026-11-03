@@ -48,6 +48,11 @@ function mean(values: readonly number[]): number | null {
   return values.length === 0 ? null : values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
+/** The counts the provider reported. One it did not report is left out, never read as zero. */
+function reported(values: readonly (number | null)[]): number[] {
+  return values.flatMap((value) => (value === null ? [] : [value]));
+}
+
 /** A measured number, or the em dash that says none was measured -- never a zero. */
 function show(value: number | null, digits = 0): string {
   return value === null ? "—" : value.toFixed(digits);
@@ -119,8 +124,8 @@ function callSection(calls: readonly Call[]): string[] {
         show(percentile(ms, 50)).padStart(7),
         show(percentile(ms, 95)).padStart(7),
         show(percentile(ms, 100)).padStart(7),
-        show(mean(ok.map((o) => o.inputTokens))).padStart(12),
-        show(mean(ok.map((o) => o.outputTokens))).padStart(13),
+        show(mean(reported(ok.map((o) => o.inputTokens)))).padStart(12),
+        show(mean(reported(ok.map((o) => o.outputTokens)))).padStart(13),
       ].join(" "),
     );
     failures.push(...these.flatMap((call) => (call.outcome.ok ? [] : [call.outcome.reason])));
@@ -145,7 +150,9 @@ function pairedSection(run: ProbeRun): string[] {
     (call) => call.outcome.ok && asked.has(call.document.documentId),
   );
   function row(label: string, these: Call[]): string {
-    const tokens = these.flatMap((call) => (call.outcome.ok ? [call.outcome.inputTokens] : []));
+    const tokens = reported(
+      these.flatMap((call) => (call.outcome.ok ? [call.outcome.inputTokens] : [])),
+    );
     const p50 = percentile(
       these.map((c) => c.ms),
       50,
@@ -232,7 +239,7 @@ function sizeSection(calls: readonly Call[]): string[] {
           these.map((c) => c.ms),
           50,
         ),
-      ).padStart(7)} ${show(mean(ok)).padStart(12)}`,
+      ).padStart(7)} ${show(mean(reported(ok))).padStart(12)}`,
     );
   }
   return lines;
@@ -240,7 +247,7 @@ function sizeSection(calls: readonly Call[]): string[] {
 
 function costSection(run: ProbeRun): string[] {
   const ok = ofPass(run.calls, "single").flatMap((call) =>
-    call.outcome.ok
+    call.outcome.ok && call.outcome.inputTokens !== null
       ? [{ chars: Math.min(call.document.chars, run.maxChars), tokens: call.outcome.inputTokens }]
       : [],
   );

@@ -44,11 +44,11 @@ silences the rule for the **whole file**, and Biome never reports one that has g
 - **A genuine one-off gets the line-level `// biome-ignore`**, which Biome expires by itself —
   `bun run lint` runs with `--error-on-warnings`, so an unused one fails the gate. This is the
   only suppression form a source file or a suite may carry, and the whole tree holds
-  **seventeen** across fifteen files:
+  **sixteen** across fifteen files:
   - a `^` that flips a GCM tag bit;
   - a control range that IS the assertion;
   - a compose file's `${IMAGE_TAG:-latest}` quoted as fixture bytes, twice;
-  - an integration suite's `process.env` gate and its CommonJS `pg` import;
+  - an integration suite's `process.env` gate;
   - a refusal-reason catalogue key long enough to read as a secret;
   - the four public source names in each UI catalogue, and a class name in `queryTimeout.ts`,
     all three read as secrets;

@@ -28,7 +28,6 @@ import { describe, expect, test as it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
-// biome-ignore lint/correctness/noUnresolvedImports: `pg` is CommonJS; its default export is the namespace, which Biome's resolver does not model. tsc does, with esModuleInterop.
 import pg from "pg";
 
 import { migrate, setRolePassword } from "./migrate.ts";
