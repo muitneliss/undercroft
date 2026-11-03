@@ -52,11 +52,14 @@ export type ProviderAnswer =
   | { readonly kind: "boolean"; readonly probability: number }
   | { readonly kind: "score"; readonly score: number; readonly confidence: number };
 
-/** One call's answers, with what the call cost and which model gave it. */
+/**
+ * One call's answers, with what the call cost and which model gave it. A token count is `null`
+ * when the provider did not report it: an unreported cost is not a free one.
+ */
 export interface ProviderReply {
   readonly model: string;
-  readonly inputTokens: number;
-  readonly outputTokens: number;
+  readonly inputTokens: number | null;
+  readonly outputTokens: number | null;
   readonly answers: Readonly<Record<string, ProviderAnswer | undefined>>;
 }
 
