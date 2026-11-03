@@ -89,6 +89,9 @@ const BEARER = /^Bearer[ \t]+(?<token>\S+)[ \t]*$/iu;
  *   in `mcpAccessToken.ts` and `Refused` in `accessTokens.ts` say which cases each covers).
  * - `expired`, `revoked`: a real credential that has died, by its clock or by its person.
  * - `no_person`: a live credential whose person is nobody here any more.
+ * - `deactivated`: a credential whose person a platform superadmin deactivated (ADR 0152) --
+ *   recorded in place of `revoked` or `expired` when that is why, since a deactivation revokes
+ *   every credential and the revocation is only its consequence (`causeOf`, `context.ts`).
  * - `insufficient_scope`: a live OAuth token whose person granted neither of our scopes.
  *
  * The client is told only what RFC 6750 lets it act on, decided in one place (`mcp.ts`):
@@ -100,6 +103,7 @@ export type RefusalReason =
   | TokenRefused["reason"]
   | OAuthRefused["reason"]
   | "no_person"
+  | "deactivated"
   | "insufficient_scope";
 
 /**

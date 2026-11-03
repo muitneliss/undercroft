@@ -226,12 +226,16 @@ export interface Recipient {
  *
  * Admins only: an alert says "reconnect this source" or "the run failed", and those are an
  * admin's to act on. A viewer told the same thing can do nothing but worry.
+ *
+ * Not a deactivated admin (ADR 0152): their membership is kept for a reactivation, but they are
+ * nobody here until then, and mail about a customer's data is access by another door.
  */
 export async function listAdmins(exec: SqlExecutor, tenantId: string): Promise<Recipient[]> {
   const { rows } = await exec.query<{ email: string; locale: Locale }>(
     `SELECT u.email, u.locale
      FROM app.tenant_member m JOIN app.app_user u ON u.id = m.user_id
-     WHERE m.tenant_id = $1 AND m.role = 'admin' ORDER BY u.email`,
+     WHERE m.tenant_id = $1 AND m.role = 'admin' AND u.deactivated_at IS NULL
+     ORDER BY u.email`,
     [tenantId],
   );
   return rows;

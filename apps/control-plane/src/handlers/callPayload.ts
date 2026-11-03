@@ -77,6 +77,11 @@ export const PAYLOAD_KEPT: PayloadTable = {
   "tenants.deactivate": "whole",
   "tenants.reactivate": "whole",
 
+  // Addresses, instants and counts: what the audit row holds.
+  "users.list": "whole",
+  "users.deactivate": "whole",
+  "users.reactivate": "whole",
+
   "connections.list": "whole",
   "connections.get": "whole",
   "connections.startOAuth": "whole",

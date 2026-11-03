@@ -1191,6 +1191,7 @@
         "apps/control-plane/src/handlers/grantsRouter.ts",
         "apps/control-plane/src/handlers/seedsRouter.ts",
         "apps/control-plane/src/handlers/tenantsRouter.ts",
+        "apps/control-plane/src/handlers/usersRouter.ts",
         "apps/control-plane/src/inviteCli.ts",
         "apps/control-plane/src/services/people.ts"
       ],

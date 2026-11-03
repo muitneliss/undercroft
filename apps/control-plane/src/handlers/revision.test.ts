@@ -14,6 +14,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 
 import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 const TENANT = "CASE-0042";
 
@@ -64,6 +65,7 @@ function callerFor(userId: string): ReturnType<typeof appRouter.createCaller> {
     locale: "en",
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

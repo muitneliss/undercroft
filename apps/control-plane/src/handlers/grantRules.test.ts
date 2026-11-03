@@ -15,6 +15,7 @@ import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
 import { type Context, refusalFacts } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 const TENANT = "CASE-0042";
 const SALES = { column: "dept", op: "eq" as const, values: ["Sales"] };
@@ -76,6 +77,7 @@ function caller(email: string, userId: string, worker: WorkerClient | null) {
     locale: "en",
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

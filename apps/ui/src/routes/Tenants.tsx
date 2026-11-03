@@ -22,6 +22,9 @@
  * its place says who *can* do it, because a dead end the reader cannot act on is worse than
  * no affordance at all.
  *
+ * Below it, for a superadmin alone, everyone on the platform and the switch that deactivates a
+ * person everywhere (`PlatformPeople`, ADR 0152).
+ *
  * No `useState`, per `state.md`. Both inputs are uncontrolled and read through refs on
  * submit; whether the request is in flight and why it failed are read off the mutation,
  * which is the only thing that actually knows either.
@@ -33,6 +36,7 @@ import { Trans, useTranslation } from "react-i18next";
 import { CustomerIndex } from "@/components/CustomerIndex.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata, type ServerError } from "@/components/Errata.tsx";
+import { PlatformPeople } from "@/components/PlatformPeople.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { trpc } from "@/trpc.ts";
 
@@ -238,6 +242,18 @@ export function Tenants(): React.JSX.Element {
           tenantNameId={tenantNameId}
         />
       </div>
+
+      {/* A superadmin's alone, like the form above, and for the same reason: courtesy, since
+          `users.*` refuse anybody else whatever is rendered here (ADR 0152). */}
+      {session.data?.superadmin === true ? (
+        <>
+          <div className="band-rule" />
+          <h2 className="head">{t("platformPeople.head")}</h2>
+          <div className="body stack">
+            <PlatformPeople signedInAs={session.data.email} />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

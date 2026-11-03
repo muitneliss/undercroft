@@ -33,12 +33,12 @@ table answers most of it:
 
 ```ts
 // apps/control-plane/src/repos/invitation.ts
-/** Whether an address is known here or holds a live invitation. One statement, one round trip. */
-export async function isKnownOrInvited(exec: SqlExecutor, email: string): Promise<boolean>;
+/** What the sign-in gate weighs about an address: its person, if any, and a live invitation. */
+export async function admissionOf(exec: SqlExecutor, email: string): Promise<Admission>;
 ```
 
 Do not split one statement into two round trips just to keep a repo "pure" about its table.
-A `UNION ALL` that answers a sign-in gate in one query is better than two reads the service
+One statement that answers a sign-in gate is better than two reads the service
 has to combine, and the sign-in path runs on every request.
 
 ## A new worker verb

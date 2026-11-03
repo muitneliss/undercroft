@@ -41,6 +41,12 @@ export const procedureSentences: SentenceTable = {
     "Ngừng kích hoạt khách hàng: mọi thành viên mất quyền truy cập và mọi lần đồng bộ dừng lại cho đến khi được kích hoạt lại. Không xoá dữ liệu nào.",
   "tenants.reactivate":
     "Kích hoạt lại một khách hàng đã ngừng kích hoạt: quyền truy cập và lịch đồng bộ trở lại như trước.",
+  "users.list":
+    "Mọi người trên nền tảng: email, ngày tạo, số khách hàng họ là thành viên, và có bị ngừng kích hoạt không. Chỉ quản trị nền tảng.",
+  "users.deactivate":
+    "Ngừng kích hoạt một người trên toàn nền tảng: từ lần gọi tiếp theo họ không vào được bằng cách nào, không đăng nhập được kể cả khi có lời mời, và mọi token, phiên đăng nhập, ứng dụng đã kết nối của họ bị thu hồi vĩnh viễn. Vẫn giữ tư cách thành viên. Chỉ quản trị nền tảng.",
+  "users.reactivate":
+    "Kích hoạt lại một người đã ngừng kích hoạt: quyền truy cập trở lại như trước; họ đăng nhập lại và tạo token mới, vì token cũ vẫn bị thu hồi. Chỉ quản trị nền tảng.",
   "connections.list":
     'Các nguồn của khách hàng và trạng thái kết nối, kèm số lượng mà phạm vi của từng nguồn đã chọn. names (nguồn) hoặc match để lọc; include: ["config"] để lấy mọi tên đã chọn.',
   "connections.get": "Một nguồn và trạng thái kết nối của nó.",

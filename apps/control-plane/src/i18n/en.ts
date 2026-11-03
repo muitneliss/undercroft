@@ -157,6 +157,12 @@ export const en = {
     tenantDeactivated:
       "This customer is deactivated. Nothing in it can be used or synced until an admin reactivates it.",
     tenantNotDeactivated: "This customer is active; there is nothing to reactivate.",
+    userNotFound: "Nobody on the platform has the address {{email}}.",
+    userDeactivated: "{{email}} is already deactivated.",
+    userNotDeactivated: "{{email}} is active; there is nothing to reactivate.",
+    cannotDeactivateSelf: "You cannot deactivate yourself. Ask another platform administrator.",
+    superadminByEnvironment:
+      "{{email}} is a platform administrator by the deployment's configuration, so they cannot be deactivated here. Ask whoever manages the deployment's configuration to take the address off the administrators' list first.",
     tenantRoleCollision:
       "The tenant ID {{tenantId}} is too close to another customer's (it differs only in case or punctuation). Choose one that differs in more than that.",
     documentKindExists:

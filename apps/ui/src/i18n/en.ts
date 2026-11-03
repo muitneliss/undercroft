@@ -460,6 +460,9 @@ export const en = {
       tenants_rename: "Renamed the customer",
       tenants_deactivate: "Deactivated the customer",
       tenants_reactivate: "Reactivated the customer",
+      users_list: "Read everyone on the platform",
+      users_deactivate: "Deactivated a person platform-wide",
+      users_reactivate: "Reactivated a person platform-wide",
       connections_list: "Listed sources",
       connections_get: "Read a source",
       connections_browseScope: "Browsed what can be read",
@@ -843,6 +846,36 @@ export const en = {
     notPublished: "Not published",
     editNeeds:
       "Editing and publishing the catalogue of {{tenantId}} needs permission to manage the document-kind catalogue (catalogue:manage).",
+  },
+
+  platformPeople: {
+    head: "People on the platform",
+    lead: "Removing someone from one customer is done on that customer's People page. Deactivating them here shuts them out of every customer at once and revokes everything they sign in with -- for someone who has left.",
+    caption_one: "{{count, number}} person",
+    caption_other: "{{count, number}} people",
+    colAddress: "Address",
+    colJoined: "Joined",
+    colCustomers: "Customers",
+    colState: "State",
+    colAction: "Action",
+    memberships_one: "{{count, number}} customer",
+    memberships_other: "{{count, number}} customers",
+    active: "Active",
+    deactivatedSince: "Deactivated since {{when}}",
+    deactivate: "Deactivate…",
+    deactivateLead:
+      "From their next call this person has no access to any customer, and cannot sign in even with an invitation. Every token, session and connected app they hold is revoked, and cannot be restored. Their memberships are kept, so they can be reactivated.",
+    deactivateConfirm: "Deactivate {{email}}",
+    deactivating: "Deactivating…",
+    deactivated:
+      "{{email}} is deactivated. Revoked — tokens: {{tokens, number}} · sessions: {{sessions, number}} · connected apps: {{apps, number}}.",
+    notDeactivated: "Not deactivated",
+    reactivate: "Reactivate",
+    reactivating: "Reactivating…",
+    reactivated:
+      "{{email}} is reactivated, with their access as it was. They sign in again and mint new tokens.",
+    notReactivated: "Not reactivated",
+    notLoaded: "The platform's people could not be loaded. Nothing was changed.",
   },
 
   people: {

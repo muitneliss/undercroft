@@ -476,3 +476,8 @@
 ## [2026-10-28] ingest | ADR 0151 An Agent's Call Is Kept Whole for a Superadmin for 30 Days
 ## [2026-10-28] ingest | Permissions
 ## [2026-10-28] ingest | ADR 0151 An Agent's Call Is Kept Whole for a Superadmin for 30 Days
+## [2026-11-03] ingest | ADR 0152 A Person Can Be Deactivated Platform-Wide by a Superadmin
+## [2026-11-03] ingest | ADR 0152 A Person Can Be Deactivated Platform-Wide by a Superadmin
+## [2026-11-03] ingest | Permissions
+## [2026-11-03] ingest | Runbook: Connecting an agent over MCP
+## [2026-11-03] ingest | Runbook Sign-In Setup

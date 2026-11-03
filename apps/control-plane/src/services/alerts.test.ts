@@ -21,6 +21,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { appRouter } from "../handlers/router.ts";
 import type { Context } from "../handlers/trpc.ts";
 import { type AlertDeps, runAlerts } from "./alerts.ts";
+import { NO_OFFBOARDING } from "./users.ts";
 
 const TENANT = "CASE-0042";
 const PUBLIC_URL = "https://undercroft.example.test";
@@ -83,6 +84,7 @@ function caller(userId: string, address: string) {
     locale: DEFAULT_LOCALE,
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({
@@ -129,6 +131,19 @@ describe("a failed run", () => {
     expect(en?.text).toContain("HubSpot answered 401 after 0");
     expect(en?.text).toContain(`${PUBLIC_URL}/tenants/CASE-0042/journal/r-1`);
     expect(en?.text).toContain("24 hours");
+  });
+
+  it("is not told to an admin a superadmin deactivated, whose membership is only kept", async () => {
+    await seedAdmin("ada@example.test");
+    await seedAdmin("gone@example.test");
+    await db.query("UPDATE app.app_user SET deactivated_at = now() WHERE email = $1", [
+      "gone@example.test",
+    ]);
+    await failedRun("r-1");
+
+    await runAlerts(deps());
+
+    expect(email.sent.map((m) => m.to)).toEqual(["ada@example.test"]);
   });
 
   it("is told once: a second tick finds nothing to send", async () => {

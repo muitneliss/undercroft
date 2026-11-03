@@ -151,7 +151,7 @@ export interface Refused {
  * what lets "the client stopped working" be told apart from "its person revoked it".
  *
  * What this does NOT decide is whether the owner is still anybody here. That is the door's
- * shared tail (`appUserForEmail`, in `handlers/context.ts`), which every credential passes
+ * shared tail (`standingOf`, in `handlers/context.ts`), which every credential passes
  * through, so a token cannot outlive its owner's access by a request.
  */
 export async function admit(

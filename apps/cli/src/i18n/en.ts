@@ -41,6 +41,8 @@ export const en = {
     runs: "Runs.",
     session: "The current session.",
     tenants: "Customers.",
+    users:
+      "Everyone on the platform, and deactivating or reactivating a person platform-wide. Platform superadmins only.",
   } satisfies Record<TopicKey, string>,
 
   command: {

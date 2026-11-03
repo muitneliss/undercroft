@@ -73,8 +73,10 @@ project.
 ## What a token is
 
 A token is **yours**, not a customer's. It reaches exactly what you reach in the browser -- every
-customer you are a member of, with the permissions your role holds in each -- and never more. Removing your
-access removes your tokens' at the next request.
+customer you are a member of, with the permissions your role holds in each -- and never more. Being
+removed from one customer ends what your tokens reach there and nothing else. When a platform
+superadmin deactivates you (ADR 0152), every token you hold, every app you connected and every
+session is revoked, and refused from its next request; reactivating you does not bring them back.
 
 Each token carries a **grant** you choose when you mint it:
 
@@ -219,7 +221,7 @@ account procedures themselves (tokens and connected apps).
 
 | What you see                               | Why, and what to do                                                                                                                                                                                                                                                                                                                                                                                            |
 | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `401` on every call                        | The token is revoked, expired or mistyped, or your access was removed. Check the account page; mint a new one. A browser cookie is never enough: `/mcp` reads only `Authorization: Bearer`.                                                                                                                                                                                                                    |
+| `401` on every call                        | The token is revoked, expired or mistyped, or a superadmin deactivated you. Check the account page; mint a new one. A browser cookie is never enough: `/mcp` reads only `Authorization: Bearer`.                                                                                                                                                                                                               |
 | the client fails after working for a while | Usually its access token expired and the client did not renew it. An operator finds the refused requests with `task obs:search FOR=status=401 SINCE=6h` and why each was refused with `task obs:logs FOR=mcp_refused SINCE=6h`; see [Why a bearer was refused](#why-a-bearer-was-refused). The client itself is told only `401`.                                                                               |
 | a tool the UI has is missing               | A `read` token is not offered writes. Mint a `write` token if you mean to allow them.                                                                                                                                                                                                                                                                                                                          |
 | `WRITES_DISABLED`                          | The same, for a client that called a write it was not offered.                                                                                                                                                                                                                                                                                                                                                 |
@@ -245,7 +247,8 @@ client's `mcp_call` lines carry, and never the token.
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `expired`            | The token ran out. A personal token: mint a new one. An OAuth client should renew its access token by itself; one that does not needs fixing. |
 | `revoked`            | The token was revoked, or the app on the account page. Mint a new token, or connect the client again.                                         |
-| `no_person`          | The credential is fine, but its person no longer has access. An administrator invites them again.                                             |
+| `no_person`          | The credential is fine, but its person no longer has an account here. An administrator invites them again.                                    |
+| `deactivated`        | A platform superadmin deactivated its person (ADR 0152), which revoked it. Only a superadmin can reactivate them, and they then mint anew.    |
 | `missing`            | No `Authorization: Bearer` at all. Every OAuth client's first contact looks like this, so it is logged at `info`, not `warn`.                 |
 | `malformed`          | Not a token this server could read: usually a truncated or mangled header value.                                                              |
 | `unknown`            | Not a token this server issued for `/mcp`: mistyped, from another server, or for another resource.                                            |
@@ -261,5 +264,5 @@ Every refusal but `missing` is also in the audit log, as `auth.tokenRefused` wit
 account page when the refusal proves whose it is: a personal token revoked or expired, an app
 whose consent was revoked or that was granted neither scope. A superadmin reads all of them,
 including those that name nobody (`malformed`, `unknown`, an expired OAuth token) and those of a
-person who no longer has access (`no_person`). Every call a token makes, reads included, is there
+person who no longer has access (`no_person`, `deactivated`). Every call a token makes, reads included, is there
 too, with the token's id.

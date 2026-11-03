@@ -62,7 +62,7 @@ both sides — fires, and stays quiet — in `scripts/layering.test.ts`. The rea
   an invitee) arrives as a function, so the decision is testable without the thing it drives.
 - **One repo per table group**, named for the tables: `invitation.ts`, `membership.ts`,
   `rawRecords.ts`. A cross-table read query is named for the question it answers
-  (`isKnownOrInvited`).
+  (`admissionOf`).
 - **A guard belongs in SQL when concurrency matters.** The `raw.records` upsert enforces
   "idempotent" and "no time travel" in the statement, not in the loader, because a check in
   application code only binds the one loader that runs it. `.claude/rules/raw-lake.md`.

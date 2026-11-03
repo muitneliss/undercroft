@@ -14,6 +14,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { procedureManifest, resolveProcedure } from "./procedures.ts";
 import { appRouter } from "./router.ts";
 import { type Context, type Role, refusalFacts, type SessionUser } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 let db: TestDatabase;
 
@@ -51,6 +52,7 @@ function caller(user: SessionUser | null, superadmin = false) {
     // No mail in an authorization test: these procedures are being checked for who may
     // call them, and a sender here would be a second thing under test.
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     // No Google client and no worker, for the same reason. `startOAuth` therefore refuses
     // every caller who gets past the role gate -- which is what makes PRECONDITION_FAILED

@@ -1,0 +1,23 @@
+-- A person can be deactivated, and reactivated, platform-wide. ADR 0152.
+--
+-- ONE COLUMN, AND IT IS THE WHOLE STATE, as `ops.tenant.deactivated_at` is for a customer
+-- (480_tenant_deactivation.sql, ADR 0110). NULL for a person in use, and otherwise the moment a
+-- platform superadmin deactivated them. "Active" is `deactivated_at IS NULL`, read where it is
+-- needed; who did it, every reactivation since and how many credentials each one revoked are in
+-- `ops.audit_log` as `users.deactivate` / `users.reactivate`.
+--
+-- WHAT IT STOPS, AND WHERE. Every door resolves a credential to its person through one function
+-- (`standingOf`, apps/control-plane/src/services/invite.ts), and that function answers nobody for
+-- a deactivated person; the sign-in gate (`admissionOf`, repos/invitation.ts) refuses the address
+-- even when it holds a live invitation, so an invitation cannot quietly re-admit them.
+--
+-- WHAT IT KEEPS. The row itself -- it keys the audit trail, every membership and everything the
+-- person saved -- and their memberships, so reactivating restores access as it was. What it does
+-- NOT keep is the person's credentials: they are revoked by the procedure that sets this column,
+-- not by this file, and stay revoked after a reactivation.
+--
+-- NO NEW GRANT. A column added to an existing table is covered by the table-level grant it
+-- already has (040: `undercroft_app` may read and write every `app` table). The worker has
+-- nothing on `app.app_user` and gets nothing here: it never admits a person.
+
+ALTER TABLE app.app_user ADD COLUMN IF NOT EXISTS deactivated_at timestamptz;

@@ -26,6 +26,12 @@ export const procedureSentences: SentenceTable = {
     "Deactivate a customer: every member loses access and every sync stops until it is reactivated. Nothing is deleted.",
   "tenants.reactivate":
     "Reactivate a deactivated customer: access and sync schedules return as they were.",
+  "users.list":
+    "Everyone on the platform: address, when they joined, how many customers they belong to, and whether they are deactivated. Platform superadmins only.",
+  "users.deactivate":
+    "Deactivate a person platform-wide: from their next call they are let in by no door, cannot sign in even with an invitation, and every token, session and connected app they hold is revoked for good. Their memberships are kept. Platform superadmins only.",
+  "users.reactivate":
+    "Reactivate a deactivated person: their access returns as it was; they sign in again and mint new tokens, since the old ones stay revoked. Platform superadmins only.",
   "connections.list":
     'A customer\'s sources and how each is connected, with how much each scope chose, counted. names (sources) or match to narrow; include: ["config"] for every chosen name.',
   "connections.get": "One source and how it is connected.",

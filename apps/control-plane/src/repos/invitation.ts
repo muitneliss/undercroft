@@ -75,18 +75,33 @@ export async function listLiveForEmail(
   return rows.map((r) => ({ id: r.id, tenantId: r.tenant_id, role: r.role }));
 }
 
-/** Whether an address is known here or holds a live invitation. One statement, one round trip. */
-export async function isKnownOrInvited(exec: SqlExecutor, email: string): Promise<boolean> {
-  const { rows } = await exec.query<{ ok: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1 FROM app.app_user WHERE email = $1
-       UNION ALL
-       SELECT 1 FROM app.invitation
-       WHERE email = $1 AND accepted_at IS NULL AND expires_at > now()
-     ) AS ok`,
+/**
+ * What the sign-in gate weighs about an address: whether a person has it -- and whether that
+ * person is deactivated (ADR 0152) -- and whether it holds a live invitation. Facts, not the
+ * decision: `services/invite.ts` decides, and a deactivated person holding an invitation is the
+ * case it exists to refuse. One statement, one round trip.
+ */
+export interface Admission {
+  readonly person: "none" | "active" | "deactivated";
+  readonly invited: boolean;
+}
+
+export async function admissionOf(exec: SqlExecutor, email: string): Promise<Admission> {
+  const { rows } = await exec.query<{ deactivated: boolean | null; invited: boolean }>(
+    `SELECT (SELECT deactivated_at IS NOT NULL FROM app.app_user WHERE email = $1) AS deactivated,
+            EXISTS (
+              SELECT 1 FROM app.invitation
+              WHERE email = $1 AND accepted_at IS NULL AND expires_at > now()
+            ) AS invited`,
     [email],
   );
-  return rows[0]?.ok === true;
+  const [row] = rows;
+  const invited = row?.invited === true;
+  const deactivated = row?.deactivated ?? null;
+  if (deactivated === null) {
+    return { person: "none", invited };
+  }
+  return { person: deactivated ? "deactivated" : "active", invited };
 }
 
 /** Open an invitation. `days` is interpolated as a parameter, never as SQL. */
