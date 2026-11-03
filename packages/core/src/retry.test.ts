@@ -96,7 +96,13 @@ describe("backoff", () => {
     const result = withRetry(
       op.run,
       { ...DEFAULT_RETRY, attempts: 6, baseMs: 1000, maxMs: 4000, jitter: "none" },
-      { clock, random: noJitter, onRetry: ({ delayMs }): number => delays.push(delayMs) },
+      {
+        clock,
+        random: noJitter,
+        onRetry: ({ delayMs }): void => {
+          delays.push(delayMs);
+        },
+      },
     );
     const outcome = await drive(clock, result, 6, 10_000);
     expect(outcome.ok).toBe(false);
@@ -110,7 +116,13 @@ describe("backoff", () => {
     const result = withRetry(
       op.run,
       { ...DEFAULT_RETRY, attempts: 3, baseMs: 1000, jitter: "full" },
-      { clock, random: (): number => 0.5, onRetry: ({ delayMs }): number => delays.push(delayMs) },
+      {
+        clock,
+        random: (): number => 0.5,
+        onRetry: ({ delayMs }): void => {
+          delays.push(delayMs);
+        },
+      },
     );
     const outcome = await drive(clock, result, 3, 10_000);
     expect(outcome.ok).toBe(false);
@@ -151,7 +163,9 @@ describe("Retry-After", () => {
     }
     const result = withRetry(op, DEFAULT_RETRY, {
       clock,
-      onRetry: ({ delayMs }): number => delays.push(delayMs),
+      onRetry: ({ delayMs }): void => {
+        delays.push(delayMs);
+      },
     });
     await clock.advance(5000);
     expect(await result).toBe("ok");
@@ -171,7 +185,9 @@ describe("Retry-After", () => {
     }
     const result = withRetry(op, DEFAULT_RETRY, {
       clock,
-      onRetry: ({ delayMs }): number => delays.push(delayMs),
+      onRetry: ({ delayMs }): void => {
+        delays.push(delayMs);
+      },
     });
     await clock.advance(DEFAULT_RETRY.maxRetryAfterMs);
     expect(await result).toBe("ok");

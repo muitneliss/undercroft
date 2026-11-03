@@ -89,7 +89,17 @@ describe("the last run", () => {
 describe("Run now", () => {
   it("is offered to an admin and starts a run", () => {
     const started: string[] = [];
-    render(card({}, { canRun: true, onRun: () => started.push("hubspot") }));
+    render(
+      card(
+        {},
+        {
+          canRun: true,
+          onRun: () => {
+            started.push("hubspot");
+          },
+        },
+      ),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Chạy ngay" }));
 

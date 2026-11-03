@@ -22,6 +22,7 @@
  */
 
 import { type ModelSelector, selectedModel } from "@undercroft/contracts";
+import { byCodeUnit } from "@undercroft/core/order";
 import type { SqlExecutor } from "@undercroft/db";
 import { listMacros, listModels, listSeedSummaries } from "@undercroft/db/repos";
 import { type Lineage, lineageAround, modelLineage } from "@undercroft/db/services";
@@ -114,7 +115,7 @@ export async function guardParents(
   if (outside.size === 0) {
     return { ok: true, unknown: [] };
   }
-  const parents = [...outside.keys()].sort();
+  const parents = [...outside.keys()].sort(byCodeUnit);
   const testsOf = await readTestStates(exec, tenantId, parents);
   const read = parents.map((parent) => ({
     parent,

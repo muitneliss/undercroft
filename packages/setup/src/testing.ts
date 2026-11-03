@@ -24,8 +24,10 @@ export function tableRunner(table: Readonly<Record<string, Partial<RunResult>>>)
       return Promise.reject(new Error(`tableRunner: no answer modelled for \`${line}\``));
     }
     const result = { code: 0, stdout: "", stderr: "", ...answer };
-    for (const text of `${result.stdout}${result.stderr}`.split("\n").filter(Boolean)) {
-      options?.onLine?.(text);
+    for (const text of `${result.stdout}${result.stderr}`.split("\n")) {
+      if (text !== "") {
+        options?.onLine?.(text);
+      }
     }
     return Promise.resolve(result);
   };

@@ -33,7 +33,14 @@ function namesIn(dir: string, suffix = ""): string[] {
 
 function frontmatter(file: string): Record<string, unknown> {
   const match = /^---\n(?<yaml>[\s\S]*?)\n---\n/u.exec(readFileSync(join(REPO, file), "utf8"));
-  return match?.groups?.yaml === undefined ? {} : parse(match.groups.yaml);
+  if (match?.groups?.yaml === undefined) {
+    return {};
+  }
+  const parsed: unknown = parse(match.groups.yaml);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`${file}: frontmatter is not a mapping`);
+  }
+  return Object.fromEntries(Object.entries(parsed));
 }
 
 interface ToolCall {

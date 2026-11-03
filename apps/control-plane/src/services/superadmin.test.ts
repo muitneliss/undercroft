@@ -8,13 +8,17 @@
  */
 
 import { describe, expect, test as it } from "bun:test";
+import { byCodeUnit } from "@undercroft/core/order";
 import { isSuperadmin, NO_SUPERADMINS, parseSuperadmins } from "./superadmin.ts";
 
 describe("the list is comma-separated and normalised", () => {
   it("reads several addresses, trimming and lowercasing each", () => {
     const list = parseSuperadmins(" Ada@Example.test , bob@example.test ");
 
-    expect([...list.addresses].toSorted()).toEqual(["ada@example.test", "bob@example.test"]);
+    expect([...list.addresses].toSorted(byCodeUnit)).toEqual([
+      "ada@example.test",
+      "bob@example.test",
+    ]);
     expect(list.rejected).toEqual([]);
   });
 

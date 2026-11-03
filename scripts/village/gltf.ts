@@ -228,10 +228,8 @@ export async function bundle(
     stripPaint(doc);
     const map = mergeDocuments(out, doc);
     const holder = out.createNode(name);
-    for (const merged of doc
-      .getRoot()
-      .listScenes()
-      .map((source) => map.get(source))) {
+    for (const source of doc.getRoot().listScenes()) {
+      const merged = map.get(source);
       if (isScene(merged)) {
         for (const child of merged.listChildren()) {
           holder.addChild(child);

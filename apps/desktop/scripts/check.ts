@@ -38,7 +38,8 @@ const QUIT_TIMEOUT_MS = 30_000;
 const POLL_MS = 500;
 
 function fail(what: string, detail = ""): never {
-  throw new Error(`desktop check failed: ${what}${detail === "" ? "" : `\n${detail}`}`);
+  const below = detail === "" ? "" : `\n${detail}`;
+  throw new Error(`desktop check failed: ${what}${below}`);
 }
 
 function typecheck(): void {

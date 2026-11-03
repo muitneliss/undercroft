@@ -222,7 +222,10 @@ export function placeProps(group: Group, make: PropMakers, scene: VillageScene):
     const spot = { x: WORKSHOP_PIECES.x + at * PILE_SPACING * 1.3, z: WORKSHOP_PIECES.z };
     group.add(placed(make.piece("crate_open"), spot, 0, 2));
   }
-  for (const road of scene.roads.filter((candidate) => candidate.lapsed)) {
+  for (const road of scene.roads) {
+    if (!road.lapsed) {
+      continue;
+    }
     const at = barrierAt(road.slot);
     const fence = placed(make.piece("fence"), at, 0, 1.5);
     fence.rotation.y = Math.PI / 2;

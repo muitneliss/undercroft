@@ -70,7 +70,8 @@ async function drawTitle(ctx: Context, facts: TitleFacts): Promise<void> {
       // Back to the page's first line, then each line rewritten and cleared to its end.
       ctx.stdout.write(`\u001b[${lines.length}F`);
     }
-    ctx.stdout.write(`${lines.map((line) => `${line}\u001b[K`).join("\n")}\n`);
+    const cleared = lines.map((line) => `${line}\u001b[K`);
+    ctx.stdout.write(`${cleared.join("\n")}\n`);
   }
 }
 

@@ -15,12 +15,13 @@ import {
   PERMISSIONS,
   type Permission,
 } from "@undercroft/contracts/access";
+import { byCodeUnit } from "@undercroft/core/order";
 
 import type { ListedRole } from "@/lib/roles.ts";
 
 /** The permissions `role` holds, sorted as the server sends them; none for a role it lacks. */
 export function held(role: string): Permission[] {
-  return isBuiltInRole(role) ? [...BUILT_IN_GRANTS[role]].sort() : [];
+  return isBuiltInRole(role) ? [...BUILT_IN_GRANTS[role]].sort(byCodeUnit) : [];
 }
 
 /**

@@ -22,7 +22,7 @@ function write(path: string, text: string): void {
   writeFileSync(file, text);
 }
 
-function SKILL(name: string, extra = ""): string {
+function skillMarkdown(name: string, extra = ""): string {
   return `---\nname: ${name}\ndescription: Build a model.\n${extra}---\n\n# ${name}\n\nRead \`references/a.md\`.\n`;
 }
 
@@ -48,7 +48,7 @@ afterEach(() => {
 
 describe("a valid tree", () => {
   it("is read into one entry per skill, with a manifest of every file", () => {
-    write("model-builder/SKILL.md", SKILL("model-builder", "metadata:\n  owner: data\n"));
+    write("model-builder/SKILL.md", skillMarkdown("model-builder", "metadata:\n  owner: data\n"));
     write("model-builder/references/a.md", "# A\n");
 
     const [skill, ...rest] = readSkills(root);
@@ -67,7 +67,7 @@ describe("a valid tree", () => {
   });
 
   it("digests and sizes each file from the bytes it will serve", () => {
-    write("model-builder/SKILL.md", SKILL("model-builder"));
+    write("model-builder/SKILL.md", skillMarkdown("model-builder"));
     write("model-builder/references/a.md", "# Ä\n");
 
     const [skill] = readSkills(root);
@@ -81,8 +81,8 @@ describe("a valid tree", () => {
   });
 
   it("orders skills by name, whatever order the disk lists them in", () => {
-    write("zeta/SKILL.md", SKILL("zeta"));
-    write("alpha/SKILL.md", SKILL("alpha"));
+    write("zeta/SKILL.md", skillMarkdown("zeta"));
+    write("alpha/SKILL.md", skillMarkdown("alpha"));
 
     expect(readSkills(root).map((skill) => skill.name)).toEqual(["alpha", "zeta"]);
   });
@@ -90,14 +90,14 @@ describe("a valid tree", () => {
 
 describe("refusals", () => {
   it("a name that is not its directory's is refused", () => {
-    write("model-builder/SKILL.md", SKILL("modelbuilder"));
+    write("model-builder/SKILL.md", skillMarkdown("modelbuilder"));
     expect(refusal()).toEqual([
       "model-builder: frontmatter name is modelbuilder, not its directory's name",
     ]);
   });
 
   it("a name outside the Agent Skills grammar is refused", () => {
-    write("Model--Builder/SKILL.md", SKILL("Model--Builder"));
+    write("Model--Builder/SKILL.md", skillMarkdown("Model--Builder"));
     expect(refusal()[0]).toContain("lowercase letters, digits and single hyphens");
   });
 
@@ -117,7 +117,7 @@ describe("refusals", () => {
   });
 
   it("a skill over the file limit is refused", () => {
-    write("model-builder/SKILL.md", SKILL("model-builder"));
+    write("model-builder/SKILL.md", skillMarkdown("model-builder"));
     for (let index = 0; index < SKILL_FILE_LIMIT; index += 1) {
       write(`model-builder/references/f${String(index)}.md`, "x");
     }
@@ -125,7 +125,7 @@ describe("refusals", () => {
   });
 
   it("every problem is reported at once, not the first alone", () => {
-    write("one/SKILL.md", SKILL("uno"));
+    write("one/SKILL.md", skillMarkdown("uno"));
     write("two/references/a.md", "x");
     expect(refusal()).toHaveLength(2);
   });

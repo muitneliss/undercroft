@@ -23,6 +23,7 @@ import {
   type ModelTests,
   type TestKind,
 } from "@undercroft/contracts/models";
+import { byCodeUnit } from "@undercroft/core/order";
 
 import type { ModelDetail } from "@/api/types.ts";
 
@@ -92,8 +93,8 @@ function sameTests(a: TestMap, b: TestMap): boolean {
     return false;
   }
   return columns.every((column) => {
-    const left = [...(a[column] ?? [])].sort();
-    const right = [...(b[column] ?? [])].sort();
+    const left = [...(a[column] ?? [])].sort(byCodeUnit);
+    const right = [...(b[column] ?? [])].sort(byCodeUnit);
     return left.length === right.length && left.every((kind, i) => kind === right[i]);
   });
 }

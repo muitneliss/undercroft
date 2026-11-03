@@ -20,6 +20,7 @@ import {
   USE_ACTION,
 } from "@undercroft/contracts/access";
 import { type GrantRules, narrowingOf, type RowRule } from "@undercroft/contracts/rowRules";
+import { byCodeUnit } from "@undercroft/core/order";
 import type { SqlExecutor } from "@undercroft/db";
 import { columnsOfModel, objectExists, type StoredRules } from "../repos/accessGrants.ts";
 import { type Beyond, type Holding, lacking } from "./authz.ts";
@@ -71,7 +72,7 @@ function rulesOf(named: NamedGrant): GrantRules | null | "eq-one-value" {
   if (rows?.some((condition) => condition.op === "eq" && condition.values.length !== 1)) {
     return "eq-one-value";
   }
-  const hidden = [...new Set(named.hiddenColumns ?? [])].sort();
+  const hidden = [...new Set(named.hiddenColumns ?? [])].sort(byCodeUnit);
   return rows === null && hidden.length === 0 ? null : { rows, hidden };
 }
 

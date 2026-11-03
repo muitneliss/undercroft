@@ -122,7 +122,7 @@ class RecordSplitter {
   }
 
   /** The wanted records this piece completes, or `null` for a size no record it reads has. */
-  push(piece: Uint8Array): XlsbRecord[] | null {
+  take(piece: Uint8Array): XlsbRecord[] | null {
     const buffer = this.#joined(piece);
     const records: XlsbRecord[] = [];
     let at = Math.min(this.#skipping, buffer.byteLength);
@@ -175,7 +175,7 @@ export async function* recordsOf(
   try {
     let step = await pieces.next();
     while (step.done !== true) {
-      const records = splitter.push(step.value);
+      const records = splitter.take(step.value);
       if (records === null) {
         return "unreadable";
       }

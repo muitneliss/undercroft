@@ -1,5 +1,6 @@
 import { describe, expect, test as it } from "bun:test";
 import { TestClock } from "./clock.ts";
+import { byCodeUnit } from "./order.ts";
 import { createStampSource, formatStamp, isStamp, parseStamp } from "./stamp.ts";
 
 describe("stamp format", () => {
@@ -26,7 +27,7 @@ describe("stamp format", () => {
     // nicety -- it is what makes incremental load correct.
     const base = Date.UTC(2026, 8, 17, 10, 15, 1) * 1000;
     const stamps = [base + 5, base, base + 1_000_000, base + 999_999].map(formatStamp);
-    expect([...stamps].sort()).toEqual(
+    expect([...stamps].sort(byCodeUnit)).toEqual(
       [base, base + 5, base + 999_999, base + 1_000_000].map(formatStamp),
     );
   });

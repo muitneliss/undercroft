@@ -84,7 +84,8 @@ export function resolveProcedure(caller: Caller, path: string): Procedure | null
     if (node === null || (typeof node !== "object" && typeof node !== "function")) {
       return null;
     }
-    node = Reflect.get(node, segment);
+    const child: unknown = Reflect.get(node, segment);
+    node = child;
   }
   return isProcedure(node) ? node : null;
 }

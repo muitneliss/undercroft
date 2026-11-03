@@ -1,9 +1,10 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
 
-  // Biome replaces ESLint + typescript-eslint, and takes the formatter for every language
-  // it can parse. Prettier survives only for Markdown and YAML; see `.prettierignore` and
-  // `docs/adr/0012-biome-replaces-eslint-and-prettier.md`.
+  // Biome replaces ESLint + typescript-eslint, and takes the formatter for every language but
+  // two. Prettier survives for Markdown and YAML, which Biome 2.6 can format but is kept off
+  // (`!**/*.md` below); see `.prettierignore`,
+  // `docs/adr/0012-biome-replaces-eslint-and-prettier.md` and ADR 0153.
   //
   // This file is `.jsonc` rather than `.json` on purpose. Every non-obvious setting below
   // is a decision with a reason, and CLAUDE.md is explicit that a constraint with no
@@ -32,7 +33,19 @@
       "!apps/ui/public/geo",
       // Rewritten by release-please on every release, in its own compact JSON. Formatting it
       // turned main's gate red on the 1.20.0 release commit, and would on every release after.
-      "!.release-please-manifest.json"
+      "!.release-please-manifest.json",
+      // Markdown is Prettier's, and the wiki's Markdown is the Ymir CLI's (`.prettierignore`
+      // says both). Biome 2.6 reads Markdown by default: on this tree it would rewrite 231 files
+      // Prettier already formats, wiki pages among them, and its linter reported 24 unlabelled
+      // code fences -- three in `wiki/`, which no hand may edit, and seven in accepted ADRs.
+      // Two formatters on one file is the drift `.prettierignore` exists to prevent, so Biome
+      // does not read Markdown at all. It is excluded HERE rather than with `markdown.linter`:
+      // measured on 2.6.4, `"enabled": false` there stops the formatter but not the linter --
+      // `useFencedCodeLanguage` still fired on `README.md` -- most likely the same precedence of
+      // the group severities below that ADR 0140 records for domains.
+      // Moving Markdown from Prettier to Biome is a decision about the docs' formatter, not
+      // part of a dependency bump. ADR 0153.
+      "!**/*.md"
     ]
   },
 
@@ -108,8 +121,9 @@
 
     // Maximum strictness, chosen deliberately: every rule Biome ships, at error severity.
     //
-    // `preset: "all"` turns on all 554 rules across the eight groups -- including nursery,
-    // which is experimental and WILL churn on a Biome minor bump. The per-group `"error"`
+    // `preset: "all"` turns on every rule across the eight groups -- 671 in 2.6.4's schema, up
+    // from 558 in 2.5.15 -- including nursery, which is experimental and WILL churn on a Biome
+    // minor bump: 2.6 added 114 rules and promoted 59 out of nursery (ADR 0153). The per-group `"error"`
     // entries escalate the ones whose default severity is `info` or `warn`, because a
     // warning that never fails the gate is a rule nobody fixes.
     //
@@ -316,7 +330,42 @@
             // its kin, where an empty string and a missing one ARE one answer -- an empty tenant
             // id is no tenant -- and one is an assertion in `lineage.test.ts` that fails the
             // same way either way. The inference gap `noUnnecessaryConditions` is off for below.
-            "useStrictBooleanExpressions": "off"
+            "useStrictBooleanExpressions": "off",
+            // New in 2.6.4: `null` becomes `undefined`. 2,994 findings in 657 files, and the rule
+            // is asking for the one thing CLAUDE.md's rule 2 forbids. `null` is this repo's
+            // spelling of "missing, visibly": `parseAmount` returns it for an unreadable amount
+            // (`money.md`), a repo returns it for no row, `pg` hands back SQL NULL as it, and the
+            // wire carries it -- `JSON.stringify({ amount: undefined })` is `{}`, so the rewrite
+            // would make a missing amount vanish from a response instead of arriving as missing.
+            // The rule's own allowance for `=== null` covers the reading half and not the writing.
+            "noNull": "off",
+            // New in 2.6: at most 10 statements a function. 581 findings in 329 files, 438 of
+            // them outside a suite -- and every one of the 438 is in a function
+            // `noExcessiveLinesPerFunction` already passes, because that rule is ON for source at
+            // its 50 lines and reports nothing. Both measure a function's size; this one counts a
+            // guard clause or a `const` the same as the work. Meeting 10 means cutting 438
+            // functions into pieces that only make sense called in order -- Ousterhout's
+            // conjoined methods, which `.claude/agents/undercroft-coder.md` lists as a red flag.
+            // The lines rule stays the bound.
+            "noExcessiveStatementsPerFunction": "off",
+            // New in 2.6: wants a named temporary before `for (const x of <expression>)`. 59
+            // findings, and they are this codebase's three loop idioms: `of await claim(...)`
+            // (11), `of page.items ?? []` (17), and `Object.entries`/`.split`/`.slice` on the
+            // thing being walked. A `const` that exists only to be iterated on the next line
+            // names the collection twice, once in the temporary and once in the loop's binding.
+            "noUnreadableForOfExpression": "off",
+            // New in 2.6: a test title must start lower-case. All 53 findings start with a proper
+            // noun or a component's name -- "HubSpot asks the worker...", "SQL Postgres refused
+            // is BAD_REQUEST...", "Vietnamese by default...", `describe("LakeSummary")` -- and
+            // lower-casing them misspells the subject. Its `allowedPrefixes` would have to list
+            // every product, language and component a title can begin with.
+            "useLowercaseTestTitle": "off",
+            // New in 2.6: wants `Iterator.zip` for a loop that reads two arrays at one index. Two
+            // findings, and neither can take it: every tsconfig here compiles against the ES2023
+            // lib, which does not declare `Iterator.zip`, so the fix does not typecheck. One of
+            // the two is `canonicalJson`'s comparator, which decides a record's lake address.
+            // Turn it on the day the lib does.
+            "useIteratorZip": "off"
           },
           "complexity": {
             // `void promise` is this repo's marker for a call that is deliberately not
@@ -507,7 +556,9 @@
             // `PostIndex.astro` and `PostPage.astro`, so acting on it would delete live
             // styles. `noUndeclaredClasses`, the other direction, stays on: it found the
             // one class that really had no style.
-            "noUnusedClasses": "off",
+            "noUnusedClasses": "off"
+          },
+          "suspicious": {
             // `::selection` is a progressive enhancement: where it is unsupported the
             // browser's own selection shows, and nothing on the page is told by a selection.
             // The same reason `index.css` and `landing-cover.css` carry.
@@ -595,6 +646,27 @@
         "packages/crypto/src/seal.ts"
       ],
       "linter": { "rules": { "style": { "noProcessEnv": "off" } } }
+    },
+
+    // New in 2.6: `process.exit()`. Its concern is a library that ends the process it was
+    // loaded into; it stays on below the entry points, where that would be a real bug. All 24
+    // findings are entry points, which ARE the process and whose exit status is their answer:
+    // the servers' signal handlers, the CLIs' exit codes, the `task` scripts (`scripts/test.ts`
+    // hands `bun test`'s status back to Task, and a run killed by a signal must not read as a
+    // pass), the spec validator and the wiki hook, a process Claude Code spawns and reads the
+    // exit status of. The same composition roots the
+    // `noProcessEnv` entry above names, plus the two script directories outside `scripts/`.
+    {
+      "includes": [
+        "apps/*/src/main.ts",
+        "apps/worker/src/server.ts",
+        "apps/*/src/*Cli.ts",
+        "packages/*/src/*Cli.ts",
+        "packages/contracts/scripts/**",
+        "scripts/**",
+        ".claude/hooks/**"
+      ],
+      "linter": { "rules": { "nursery": { "noProcessExit": "off" } } }
     },
 
     // The one place a UI suite sets the runtime's zone. The UI prints instants in the viewer's
@@ -699,6 +771,11 @@
             // state. Every name it reports is reachable that way, so acting on it would
             // delete live styles.
             "noUnusedClasses": "off",
+            // A cascade layer orders one sheet against another; an icon has nothing to
+            // cascade with, and `index.css` IS the sheet.
+            "useLayeredStyles": "off"
+          },
+          "suspicious": {
             // Four progressive enhancements -- `scrollbar-color`, `::selection`,
             // `user-select` and `overflow-x: clip`. Each degrades to the browser default
             // where unsupported, and the form tells no state by one of these alone. Where
@@ -706,10 +783,7 @@
             // briefly overhang the binder: a 190ms cosmetic overflow, not a broken layout,
             // and the alternative (`hidden`) fails worse by moving the document's scroll
             // inside `.book`.
-            "useBaseline": "off",
-            // A cascade layer orders one sheet against another; an icon has nothing to
-            // cascade with, and `index.css` IS the sheet.
-            "useLayeredStyles": "off"
+            "useBaseline": "off"
           },
           "style": {
             // `.colophon .datum` is grouped with the colophon, which puts it above the
@@ -807,7 +881,7 @@
         "apps/worker/src/services/google/api.ts",
         "packages/connector-runtime/src/reader.ts"
       ],
-      "linter": { "rules": { "nursery": { "usePlaywrightValidDescribeCallback": "off" } } }
+      "linter": { "rules": { "correctness": { "usePlaywrightValidDescribeCallback": "off" } } }
     },
 
     // The error types that cross package boundaries. Parameter properties ARE the shape of
@@ -832,7 +906,7 @@
     // own selection shows instead; nothing on the cover is told by a selection.
     {
       "includes": ["apps/ui/src/styles/landing-cover.css"],
-      "linter": { "rules": { "nursery": { "useBaseline": "off" } } }
+      "linter": { "rules": { "suspicious": { "useBaseline": "off" } } }
     },
     // The visual tier's motion stop (ADR 0099): four `!important` durations that must beat
     // every duration the app's own rules set, whatever their specificity, so an animation that
@@ -877,7 +951,7 @@
     // `fX100` and `fInt` flags in its two low bits and a 30-bit value above them, a string's
     // `fHighByte` is bit 0 of its flags byte, a sheet's visibility is the low two bits of a byte
     // and a row's `fDyZero` is 0x20 of its flags. The spec defines each as a mask, and
-    // `(rk | 0) >> 2` is the sign-extended field; arithmetic in its place would be a second
+    // `rk >> 2` is the sign-extended field; arithmetic in its place would be a second
     // definition of the format. 18 findings across the four files. ADR 0104 decision 7.
     {
       "includes": [
@@ -993,7 +1067,7 @@
         "apps/ui/src/components/Sky.tsx",
         "apps/ui/src/routes/SignIn.tsx"
       ],
-      "linter": { "rules": { "nursery": { "noInlineStyles": "off" } } }
+      "linter": { "rules": { "style": { "noInlineStyles": "off" } } }
     },
 
     // Three findings the rules cannot see through.
@@ -1220,6 +1294,47 @@
       "linter": { "rules": { "complexity": { "useMaxParams": "off" } } }
     },
 
+    // New in 2.6: no leading or trailing underscore. Its 17 findings are every one a name this
+    // repo reads and did not choose: tRPC's `_def` (the router's procedure table and a
+    // procedure's meta, in `procedures.ts`, `permissionGate.ts` and three suites), the MCP
+    // specification's `_meta` (`host.ts` and `mcp.test.ts`), Zod 4's `_zod` (the JSON Schema
+    // emitter), and `__UNDERCROFT_RELEASE__`, the Vite `define` that `javascript.globals` above
+    // already declares, spelled the way a build-time constant is. The rule has no allow-list, so
+    // it is scoped to these files and stays on for a name somebody here picks.
+    {
+      "includes": [
+        "apps/control-plane/src/handlers/procedures.ts",
+        "apps/control-plane/src/handlers/permissionGate.ts",
+        "apps/control-plane/src/handlers/holdOpen.test.ts",
+        "apps/control-plane/src/handlers/mcp.test.ts",
+        "apps/cli/src/cli.test.ts",
+        "apps/mcp-widgets/src/host.ts",
+        "packages/contracts/scripts/emitSchema.ts",
+        "apps/ui/src/release.d.ts",
+        "apps/ui/src/test/setup.ts"
+      ],
+      "linter": { "rules": { "nursery": { "noDanglingUnderscore": "off" } } }
+    },
+
+    // New in 2.6: a Tailwind class string must be static, because Tailwind's scanner cannot
+    // see a class assembled at runtime and so never generates it. None of the five it reports
+    // is a Tailwind utility. They are BEM modifiers of the sheets' own blocks: `mark--${mark}`
+    // and `feed__line--${level}` are written out in `apps/ui/src/index.css`, `rail__step--`
+    // and `image--` in the desktop wizard's sheet, and `run-chain--${into}` names its variant
+    // for a selector, with only `.run-chain` styled. The browser matches every one with no
+    // scanner involved -- the same runtime assembly `noUnusedClasses` is off for in both
+    // sheets. A utility built from a template anywhere else is still reported.
+    {
+      "includes": [
+        "apps/ui/src/components/StatusMark.tsx",
+        "apps/ui/src/components/RunEvents.tsx",
+        "apps/ui/src/components/RunFlow.tsx",
+        "apps/desktop/src/view/Wizard.tsx",
+        "apps/desktop/src/view/steps/InstallStep.tsx"
+      ],
+      "linter": { "rules": { "nursery": { "useTailwindStaticClassStrings": "off" } } }
+    },
+
     // The visual tier's harness (ADR 0099) is not a suite by name, but its whole job is the
     // assertion every visual test shares: wait for the page to settle, refuse a procedure the
     // fixtures left unanswered, match the screenshot with animations stopped. Three findings,
@@ -1269,14 +1384,7 @@
             // factory. `useExplicitType` is already off repo-wide for the same reason and
             // this is its other half; a test's helpers are read top to bottom with their
             // call sites in view.
-            "useExplicitReturnType": "off",
-            // These assert inside a callback the code under test invokes -- a refresher, an
-            // onRetry hook -- which is how a collaborator is checked without a mock.
-            // `.claude/rules/tests.md` bans the mock alternative outright.
-            "noConditionalExpect": "off",
-            // Test bodies whose assertion is that the call did not throw, written in the
-            // guard style `tests.md` prescribes rather than as an `expect()`.
-            "useExpect": "off"
+            "useExplicitReturnType": "off"
           },
           "performance": {
             // 35 findings, all of them a regex written inside the assertion it belongs to.
@@ -1305,7 +1413,14 @@
             // 5 findings, all a seam whose TYPE is async: a `typeof fetch` recorder, a
             // `run: () => Promise<string>` counter. The signature is the contract being
             // stood in for; dropping `async` to satisfy the rule would stop it matching.
-            "useAwait": "off"
+            "useAwait": "off",
+            // These assert inside a callback the code under test invokes -- a refresher, an
+            // onRetry hook -- which is how a collaborator is checked without a mock.
+            // `.claude/rules/tests.md` bans the mock alternative outright.
+            "noConditionalExpect": "off",
+            // Test bodies whose assertion is that the call did not throw, written in the
+            // guard style `tests.md` prescribes rather than as an `expect()`.
+            "useExpect": "off"
           }
         }
       }

@@ -17,6 +17,7 @@ import { join } from "node:path";
 
 import { parseSpec } from "@undercroft/contracts";
 import { describe, expect, test as it } from "bun:test";
+import { byCodeUnit } from "@undercroft/core/order";
 
 import { PROVIDERS } from "./oauthProviders.ts";
 
@@ -86,7 +87,7 @@ describe("the Xero consent's scopes", () => {
   });
 
   it("asks for the granular scopes behind every entity the spec reads, and a refresh token", () => {
-    expect([...asked].sort()).toEqual(
+    expect([...asked].sort(byCodeUnit)).toEqual(
       [
         "accounting.contacts.read",
         "accounting.invoices.read",
@@ -95,12 +96,12 @@ describe("the Xero consent's scopes", () => {
         "accounting.banktransactions.read",
         "accounting.manualjournals.read",
         "offline_access",
-      ].sort(),
+      ].sort(byCodeUnit),
     );
   });
 
   it("is the list the spec declares, so a run is never narrower than the consent", () => {
-    expect([...asked].sort()).toEqual([...specScopes()].sort());
+    expect([...asked].sort(byCodeUnit)).toEqual([...specScopes()].sort(byCodeUnit));
   });
 
   it("has every entity name the scope Xero reads its list under, and asks for it", () => {

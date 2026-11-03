@@ -72,7 +72,7 @@ function foldedCharacters(source: string, quoted: RegExp): Set<string> {
 
 /** Sorted, so a failure prints the missing letters rather than two unordered blobs. */
 function sorted(characters: Set<string>): string[] {
-  return [...characters].sort();
+  return [...characters].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 describe("raw.fold and the browser's fold know the same letters", () => {

@@ -77,7 +77,7 @@ function regionOfFeature(item: Feature<Geometry>): Region {
 }
 
 function nameOf(item: Feature<Geometry>): string {
-  const name = item.properties?.name;
+  const name: unknown = item.properties?.name;
   return typeof name === "string" ? name : String(item.id ?? "");
 }
 

@@ -25,6 +25,7 @@
  */
 
 import { createStampSource, isStamp, type StampSource, systemClock } from "@undercroft/core";
+import { byCodeUnit } from "@undercroft/core/order";
 import type { ObjectStore } from "./objectStore.ts";
 import {
   blobKey as blobKeyOf,
@@ -265,7 +266,7 @@ export class LakeStore {
         stamps.add(head);
       }
     }
-    return [...stamps].sort();
+    return [...stamps].sort(byCodeUnit);
   }
 
   async manifest(sourceKey: string, stamp: string): Promise<Record<string, unknown>> {

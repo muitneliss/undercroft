@@ -319,7 +319,10 @@ describe("the shipped Xero spec", () => {
     await ingest(fetcher);
 
     const asked = fetcher.calls.map((call) => call.url);
-    for (const list of LISTS.filter((l) => l.paging === "none")) {
+    for (const list of LISTS) {
+      if (list.paging !== "none") {
+        continue;
+      }
       expect(asked.filter((url) => url.startsWith(`${BASE}${list.path}`))).toEqual([
         pageUrl(list, null),
       ]);

@@ -15,6 +15,7 @@
  */
 
 import type { ProcedurePath } from "@undercroft/control-plane/surface";
+import { byCodeUnit } from "@undercroft/core/order";
 
 export type {
   Effect,
@@ -72,7 +73,7 @@ export function topicsOf(ids: readonly string[]): string[] {
       topics.add(words.slice(0, end).join(":"));
     }
   }
-  return [...topics].sort();
+  return [...topics].sort(byCodeUnit);
 }
 
 /** Where a topic id breaks into words: between topics, and inside a kebab-cased one. */

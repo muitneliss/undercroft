@@ -39,7 +39,9 @@ beforeEach(async () => {
   plane = await startControlPlane({
     log: createLogger({
       component: "control-plane",
-      sink: (line) => logged.push(JSON.parse(line) as Record<string, unknown>),
+      sink: (line) => {
+        logged.push(JSON.parse(line) as Record<string, unknown>);
+      },
       context: () => ({ traceId: currentTraceId() }),
     }),
     seed: async (db) => {

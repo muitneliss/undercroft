@@ -28,6 +28,7 @@
 
 import { type SeedColumn, type SeedRefusal, seedRefusal } from "@undercroft/contracts";
 import { hiddenColumns, type Reach, reachesModel, rowsLimited } from "@undercroft/contracts/access";
+import { byCodeUnit } from "@undercroft/core/order";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   deleteSeedUnlessBuilding,
@@ -224,7 +225,7 @@ async function readersOf(exec: SqlExecutor, tenantId: string, seed: string): Pro
       ),
     )
     .map((model) => model.name);
-  return [...new Set([...fromText, ...fromTests])].sort();
+  return [...new Set([...fromText, ...fromTests])].sort(byCodeUnit);
 }
 
 export type RemoveOutcome =

@@ -176,8 +176,7 @@ export async function revokeConnection(
   deps: RevokeDeps,
   input: { source: string; tenantId: string },
 ): Promise<{ revokedUpstream: boolean }> {
-  let revokedUpstream = false;
-
+  let revokedUpstream: boolean;
   try {
     revokedUpstream = await revokeUpstream(deps, input);
   } catch {

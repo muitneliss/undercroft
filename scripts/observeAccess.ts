@@ -126,9 +126,10 @@ export async function grafana(api: Dokploy): Promise<Grafana> {
   if (domain === undefined || missing.length > 0) {
     return fail(`the ${OBSERVABILITY_COMPOSE} compose has no ${missing.join(", ")}`);
   }
+  const credentials = `${user}:${password}`;
   return {
     url: `https://${domain.host}`,
-    authorization: `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`,
+    authorization: `Basic ${Buffer.from(credentials).toString("base64")}`,
   };
 }
 

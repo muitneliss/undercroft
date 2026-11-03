@@ -81,7 +81,7 @@ function field(input: unknown, name: string): string {
   if (input === null || typeof input !== "object" || !(name in input)) {
     return "";
   }
-  const value = Reflect.get(input, name);
+  const value: unknown = Reflect.get(input, name);
   return typeof value === "string" ? value : String(value ?? "");
 }
 

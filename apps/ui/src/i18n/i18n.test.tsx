@@ -20,6 +20,7 @@
 import { afterEach, describe, expect, test as it } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { DEFAULT_LOCALE } from "@undercroft/core/locale";
+import { byCodeUnit } from "@undercroft/core/order";
 import type { ComponentProps } from "react";
 import { MemoryRouter } from "react-router-dom";
 
@@ -77,8 +78,8 @@ afterEach(() => {
 
 describe("the catalogues", () => {
   it("answer exactly the same keys as each other", () => {
-    const viKeys = [...keys(vi)].sort();
-    const enKeys = [...keys(en)].sort();
+    const viKeys = [...keys(vi)].sort(byCodeUnit);
+    const enKeys = [...keys(en)].sort(byCodeUnit);
 
     // Reported as sorted arrays rather than as `size`, so a failure names the missing key
     // instead of saying two numbers differ.

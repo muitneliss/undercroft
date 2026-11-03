@@ -14,6 +14,7 @@
  * `services/tenantSession.ts`); this module decides nothing about who may read what.
  */
 
+import { byCodeUnit } from "@undercroft/core/order";
 import type { QueryField, SqlExecutor } from "@undercroft/db";
 
 export interface Framed {
@@ -108,7 +109,7 @@ export function relationsInPlan(plan: unknown, schema: string): string[] {
     visit(Reflect.get(node, "Plans"));
   }
   visit(plan);
-  return [...found].sort();
+  return [...found].sort(byCodeUnit);
 }
 
 async function planRelations(

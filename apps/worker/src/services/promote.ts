@@ -32,6 +32,7 @@
  * transaction that moves its replacement in.
  */
 
+import { byCodeUnit } from "@undercroft/core/order";
 import type { SqlExecutor } from "@undercroft/db";
 import type { RunStep } from "@undercroft/db/repos";
 import { buildGraph, promotable } from "@undercroft/db/services";
@@ -84,14 +85,14 @@ export function promote(
       const staged = byName(present, target.stagingSchema);
       const published = byName(present, target.analyticsSchema);
       const { chosen, heldByViews } = await settle({ exec, target, staged, published }, decide);
-      await grantStagedToScopes(exec, [...chosen].sort());
+      await grantStagedToScopes(exec, [...chosen].sort(byCodeUnit));
       await dropReplaced(
         exec,
         target,
         [...chosen].flatMap((name) => published.get(name) ?? []),
         new Set([...chosen].map((name) => keyOf({ schema: target.stagingSchema, name }))),
       );
-      for (const name of [...chosen].sort()) {
+      for (const name of [...chosen].sort(byCodeUnit)) {
         const relation = staged.get(name);
         if (relation !== undefined) {
           await moveRelation(exec, relation, target.analyticsSchema);

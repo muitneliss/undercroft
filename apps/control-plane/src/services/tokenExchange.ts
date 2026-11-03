@@ -52,7 +52,8 @@ export async function exchangeCode(
   }
   const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded" };
   if (shape.clientAuth === "basic") {
-    headers.authorization = `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64")}`;
+    const credentials = `${config.clientId}:${config.clientSecret}`;
+    headers.authorization = `Basic ${Buffer.from(credentials).toString("base64")}`;
   } else {
     form.set("client_id", config.clientId);
     form.set("client_secret", config.clientSecret);

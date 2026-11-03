@@ -100,7 +100,9 @@ function recorder(recorded: Record<string, unknown>): Recorder {
       return Promise.resolve(new Response(text, { status: 200 }));
     },
     sleep: () => Promise.resolve(),
-    log: (line: string) => lines.push(line),
+    log: (line: string) => {
+      lines.push(line);
+    },
     now: () => 0,
   };
   return { deps, lines };

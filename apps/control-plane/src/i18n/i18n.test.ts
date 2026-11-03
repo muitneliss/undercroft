@@ -12,6 +12,7 @@
  */
 
 import { describe, expect, test as it } from "bun:test";
+import { byCodeUnit } from "@undercroft/core/order";
 
 import { invitationMessage } from "../services/people.ts";
 import { en } from "./en.ts";
@@ -39,7 +40,7 @@ function keys(catalogue: Record<string, unknown>, prefix = ""): Set<string> {
 
 describe("the catalogues", () => {
   it("answer exactly the same keys as each other", () => {
-    expect([...keys(en)].sort()).toEqual([...keys(vi)].sort());
+    expect([...keys(en)].sort(byCodeUnit)).toEqual([...keys(vi)].sort(byCodeUnit));
   });
 
   it("answer every key with a sentence rather than with the key itself", () => {

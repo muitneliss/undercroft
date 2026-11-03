@@ -9,6 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { byCodeUnit } from "@undercroft/core/order";
 import { provisionScope, rotateTenantPassword } from "./repos/tenantRoles.ts";
 import { createMigratedTestDatabase, type TestDatabase } from "./testing.ts";
 
@@ -278,7 +279,7 @@ describe("a scope login's password and its end", () => {
       "SELECT rolname FROM pg_roles WHERE rolname = ANY($1) ORDER BY rolname",
       [[idle, leased, recent]],
     );
-    expect(left.rows.map((row) => row.rolname)).toEqual([leased, recent].sort());
+    expect(left.rows.map((row) => row.rolname)).toEqual([leased, recent].sort(byCodeUnit));
     expect((await db.query("SELECT * FROM ops.pgbouncer_auth($1)", [idle])).rows).toEqual([]);
     // The next reader of that set gets it back, granted, on their first read.
     expect(await provisionScope(db, TENANT, ["fct_sales"])).toBe(idle);
@@ -479,7 +480,9 @@ describe("a scope's row and column rules (ADR 0143)", () => {
     await db.query("SELECT ops.provision_tenant($1)", [TENANT]);
 
     expect((await policies()).rows).toEqual(before.rows);
-    expect(before.rows.map((row) => row.polname)).toEqual([sales, "undercroft_open"].sort());
+    expect(before.rows.map((row) => row.polname)).toEqual(
+      [sales, "undercroft_open"].sort(byCodeUnit),
+    );
 
     await db.exec(
       `UPDATE ops.tenant_scope SET last_used_at = now() - interval '8 days' WHERE role_name = '${sales}'`,

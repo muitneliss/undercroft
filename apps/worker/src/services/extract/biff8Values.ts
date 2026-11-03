@@ -63,7 +63,8 @@ function hundredth(text: string): string {
   const padded = whole.padStart(3, "0");
   const integer = padded.slice(0, -2).replace(LEADING_ZEROS, "");
   const decimals = `${padded.slice(-2)}${fraction}`.replace(TRAILING_ZEROS, "");
-  const shifted = `${negative ? "-" : ""}${integer}${decimals === "" ? "" : `.${decimals}`}`;
+  const point = decimals === "" ? "" : `.${decimals}`;
+  const shifted = `${negative ? "-" : ""}${integer}${point}`;
   return plain(shifted);
 }
 
@@ -75,8 +76,9 @@ export function rkText(rk: number): string {
     new DataView(bytes.buffer).setUint32(4, (rk & RK_VALUE_MASK) >>> 0, true);
     text = doubleText(bytes);
   } else {
-    // Arithmetic shift keeps the sign of the 30-bit integer.
-    text = String((rk | 0) >> 2);
+    // `>>` reads its operand as a signed 32-bit integer, so this arithmetic shift keeps the
+    // sign of the 30-bit integer above the two flag bits.
+    text = String(rk >> 2);
   }
   return (rk & RK_HUNDREDTHS) === 0 ? plain(text) : hundredth(text);
 }

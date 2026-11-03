@@ -28,7 +28,7 @@
 @property --lamp-y {
   syntax: "<length-percentage>";
   inherits: false;
-  initial-value: 0px;
+  initial-value: 0;
 }
 
 @property --lamp-strength {

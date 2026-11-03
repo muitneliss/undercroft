@@ -99,7 +99,7 @@ export function inScopeFiles(root: string): string[] {
     }
   }
 
-  return [...found].sort();
+  return [...found].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 interface Page {
