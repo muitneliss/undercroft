@@ -49,6 +49,10 @@ export const AUDITED: AuditTable = {
   "tenants.deactivate": "service",
   "tenants.reactivate": "service",
 
+  // The service writes each, naming the person and -- for a deactivation -- what it revoked.
+  "users.deactivate": "service",
+  "users.reactivate": "service",
+
   // Starting a consent records nothing anywhere else; finishing one is `connections.connected`.
   "connections.startOAuth": { fields: ["source", "addAccount"] },
   "connections.setScope": "service",

@@ -39,9 +39,9 @@
  */
 
 import type { SqlExecutor } from "@undercroft/db";
-import { findIdByEmail, provisionByEmail } from "../repos/appUser.ts";
+import { findStandingByEmail, provisionByEmail } from "../repos/appUser.ts";
 import { type Channel, record as recordAudit } from "../repos/auditLog.ts";
-import { isKnownOrInvited, listLiveForEmail, markAccepted } from "../repos/invitation.ts";
+import { admissionOf, listLiveForEmail, markAccepted } from "../repos/invitation.ts";
 import { addMember } from "../repos/membership.ts";
 import { recordEvent } from "./audit.ts";
 import { isSuperadmin, NO_SUPERADMINS, type Superadmins } from "./superadmin.ts";
@@ -69,8 +69,10 @@ function normalizeEmail(email: string): string {
  * invitation if this is the first sign-in.
  *
  * Returns `null` when the address has no `app_user` and no live invitation -- the caller
- * must refuse the sign-in. Returning `null` rather than throwing keeps "not invited" a
- * value the caller decides how to report, instead of an exception shape it has to match.
+ * must refuse the sign-in -- and when its `app_user` is deactivated (ADR 0152), whatever it is
+ * invited to: an invitation redeemed here would quietly hand back the access a superadmin took.
+ * Returning `null` rather than throwing keeps "not invited" a value the caller decides how to
+ * report, instead of an exception shape it has to match.
  *
  * Every live invitation for the address is accepted, not just the first: an operator may be
  * invited to several tenants before ever signing in, and honouring one while silently
@@ -95,7 +97,13 @@ export async function resolveInvitedUser(
     return null;
   }
 
-  let appUserId = await findIdByEmail(exec, email);
+  const standing = await findStandingByEmail(exec, email);
+  // Before the invitations, and unless the environment names the address, which outranks the
+  // column here exactly as it does in `isAdmissible`.
+  if (standing?.deactivated === true && !isSuperadmin(superadmins, email)) {
+    return null;
+  }
+  let appUserId = standing?.id ?? null;
   const invitations = await listLiveForEmail(exec, email);
 
   // Neither known nor invited. An expired invitation lands here too, which is the point:
@@ -155,14 +163,35 @@ export async function isAdmissible(
   rawEmail: string,
   superadmins: Superadmins = NO_SUPERADMINS,
 ): Promise<boolean> {
+  return (await admissionRefusal(exec, rawEmail, superadmins)) === null;
+}
+
+/**
+ * Why an address may not hold a session, or `null` when it may: {@link isAdmissible}'s question,
+ * answered with the reason a refusal records.
+ *
+ * `DEACTIVATED` outranks a live invitation (ADR 0152): a person a superadmin deactivated is
+ * refused even holding one, or an invitation sent by a customer's admin who could not see the
+ * deactivation would undo it at the next sign-in. The superadmin check still comes first and
+ * still answers without a query, for the recovery reason given above.
+ */
+export async function admissionRefusal(
+  exec: SqlExecutor,
+  rawEmail: string,
+  superadmins: Superadmins = NO_SUPERADMINS,
+): Promise<"NOT_INVITED" | "DEACTIVATED" | null> {
   const email = normalizeEmail(rawEmail);
   if (email === "") {
-    return false;
+    return "NOT_INVITED";
   }
   if (isSuperadmin(superadmins, email)) {
-    return true;
+    return null;
   }
-  return await isKnownOrInvited(exec, email);
+  const { person, invited } = await admissionOf(exec, email);
+  if (person === "deactivated") {
+    return "DEACTIVATED";
+  }
+  return person === "active" || invited ? null : "NOT_INVITED";
 }
 
 /** How the person was trying to get in, so the trail distinguishes the two doors. */
@@ -173,10 +202,17 @@ export type RefusedVia = "google" | "email-otp";
  * library's error codes, so a renamed code upstream cannot quietly change what the trail says.
  *
  * - `NOT_INVITED`: the address may not hold a session at all.
+ * - `DEACTIVATED`: the address is a person a platform superadmin deactivated (ADR 0152), refused
+ *   whatever invitation it holds.
  * - `WRONG_CODE`, `CODE_EXPIRED`, `TOO_MANY_ATTEMPTS`: an address that may, offered a one-time
  *   code that was not the one sent, or no longer good, or tried once too often.
  */
-export type SignInRefusal = "NOT_INVITED" | "WRONG_CODE" | "CODE_EXPIRED" | "TOO_MANY_ATTEMPTS";
+export type SignInRefusal =
+  | "NOT_INVITED"
+  | "DEACTIVATED"
+  | "WRONG_CODE"
+  | "CODE_EXPIRED"
+  | "TOO_MANY_ATTEMPTS";
 
 /**
  * Record that an address was turned away at sign-in.
@@ -214,21 +250,41 @@ export async function recordRefusal(
 }
 
 /**
- * The `app_user` for an already-authenticated address, or `null`.
+ * Who an already-authenticated address is here, or why it is nobody.
  *
- * The read half of the gate, used on every request once a session exists. It provisions
- * nothing: by the time a session is being resolved the `app_user` must already be there, and
- * creating one here would turn a revoked account into a working one.
+ * - `no_person`: no `app_user` -- the account was never provisioned, or was deleted.
+ * - `deactivated`: a platform superadmin deactivated the person (ADR 0152). Their credentials
+ *   were revoked in the same act, so this is normally reached only by one revoked a moment ago,
+ *   or by a session or token presented in the instant between.
  */
-export async function appUserForEmail(
+export type Standing =
+  | { readonly ok: true; readonly user: InvitedUser }
+  | { readonly ok: false; readonly reason: "no_person" | "deactivated" };
+
+/**
+ * The read half of the gate, used on every request once a credential is proven: the shared tail
+ * every door passes through (`handlers/context.ts`). It provisions nothing: by the time a session
+ * is being resolved the `app_user` must already be there, and creating one here would turn a
+ * revoked account into a working one. Read on every request, so a deactivation takes effect at
+ * the next one.
+ *
+ * An address named in `UNDERCROFT_SUPERADMINS` is never `deactivated` here: the environment is
+ * the authority over who administers the platform (ADR 0013), and it admits them at sign-in
+ * before any query, so a column that refused them afterwards would leave them signed in and
+ * nobody. `users.deactivate` refuses such an address for the same reason.
+ */
+export async function standingOf(
   exec: SqlExecutor,
   rawEmail: string,
-): Promise<InvitedUser | null> {
+  superadmins: Superadmins = NO_SUPERADMINS,
+): Promise<Standing> {
   const email = normalizeEmail(rawEmail);
-  if (email === "") {
-    return null;
+  const found = email === "" ? null : await findStandingByEmail(exec, email);
+  if (found === null) {
+    return { ok: false, reason: "no_person" };
   }
-
-  const id = await findIdByEmail(exec, email);
-  return id === null ? null : { appUserId: id, email };
+  if (found.deactivated && !isSuperadmin(superadmins, email)) {
+    return { ok: false, reason: "deactivated" };
+  }
+  return { ok: true, user: { appUserId: found.id, email } };
 }

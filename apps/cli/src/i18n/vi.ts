@@ -62,6 +62,8 @@ export const vi = {
     runs: "Các lần chạy.",
     session: "Phiên hiện tại.",
     tenants: "Khách hàng.",
+    users:
+      "Mọi người trên nền tảng, và ngừng kích hoạt hoặc kích hoạt lại một người trên toàn nền tảng. Chỉ quản trị nền tảng.",
   } satisfies Record<TopicKey, string>,
 
   command: {

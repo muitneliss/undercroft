@@ -19,6 +19,7 @@ import type { SpecReads } from "../services/connections.ts";
 import { loadSpecReads } from "../specs.ts";
 import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 const TENANT = "CASE-0042";
 const ADMIN = { userId: "", email: "ada@example.test" };
@@ -57,6 +58,7 @@ function caller(specReads: SpecReads = new Map()) {
     locale: DEFAULT_LOCALE,
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

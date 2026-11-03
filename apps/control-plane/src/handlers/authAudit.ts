@@ -19,6 +19,7 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware, isAPIError } from "better-auth/api";
 import { type Channel, recordEvent } from "../services/audit.ts";
 import {
+  admissionRefusal,
   isAdmissible,
   type RefusedVia,
   recordRefusal,
@@ -89,15 +90,23 @@ function sessionHooks(exec: SqlExecutor): SessionHooks {
 }
 
 /**
- * Record an address turned away because it may not hold a session at all (`NOT_INVITED`), through
- * the door the request that tried came in by.
+ * Whether an address may hold a session at all, and -- when it may not -- the `auth.refused` row
+ * saying why, `NOT_INVITED` or `DEACTIVATED` (ADR 0152), through the door the request that tried
+ * came in by. The decision and its record in one call, so the two gates that ask it (Google's
+ * `validateUserInfo` and the code by email, `auth.ts`) cannot record a reason other than the one
+ * they refused on. The answer is the gate's alone to act on; the person is told nothing of it.
  */
-export function refuseUninvited(
+export async function admitsOrRecords(
   exec: SqlExecutor,
+  superadmins: Superadmins,
   attempt: { email: string; via: RefusedVia },
   context: HookContext | null | undefined,
-): Promise<void> {
-  return recordRefusal(exec, { ...attempt, channel: channelIn(context), reason: "NOT_INVITED" });
+): Promise<boolean> {
+  const reason = await admissionRefusal(exec, attempt.email, superadmins);
+  if (reason !== null) {
+    await recordRefusal(exec, { ...attempt, channel: channelIn(context), reason });
+  }
+  return reason === null;
 }
 
 /** The endpoint a one-time code is offered to. */
@@ -129,7 +138,7 @@ function offeredFor(body: unknown): string {
  * `auth.refused`.
  *
  * Only for an admissible address. One that is not was never sent a code and was recorded as
- * `NOT_INVITED` when it asked for one; a code offered for it is somebody typing at a form that
+ * `NOT_INVITED` or `DEACTIVATED` when it asked for one; a code offered for it is somebody typing at a form that
  * can only refuse them, and a row for each attempt would be the log filling itself on a
  * stranger's behalf. A wrong code for an address that IS somebody's is what that person, and an
  * operator, want to see.

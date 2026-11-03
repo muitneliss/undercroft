@@ -26,6 +26,7 @@ import { inMemoryJudge, unavailableJudge } from "../services/assistant/judge.ts"
 import { inMemoryLanguageModel, type Turn } from "../services/assistant/model.ts";
 import { registerAssistantRoutes } from "./chat.ts";
 import type { Context, SessionUser } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 let db: TestDatabase;
 let operator: SessionUser;
@@ -61,6 +62,7 @@ function context(user: SessionUser | null, locale: Locale = DEFAULT_LOCALE): Con
     locale,
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

@@ -16,6 +16,7 @@ import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
 import { type Context, type RefusalFacts, type Role, refusalFacts } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 const TENANT = "CASE-0042";
 const SQL = { kind: "sql" as const, sql: "select 1 as n" };
@@ -48,6 +49,7 @@ function caller(userId: string, email: string, worker: WorkerClient, locale: "vi
     locale,
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

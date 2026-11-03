@@ -132,6 +132,12 @@ export const EFFECTS: EffectTable = {
   "tenants.deactivate": "write",
   "tenants.reactivate": "write",
 
+  // Destructive, unlike `tenants.deactivate`, because part of it cannot be undone: the
+  // credentials it revokes stay revoked through a reactivation (ADR 0152). Reactivating gives
+  // back only what deactivating kept, so it is a write.
+  "users.deactivate": "destructive",
+  "users.reactivate": "write",
+
   // `startOAuth` records a handshake and returns a consent URL; the person opens it.
   "connections.startOAuth": "write",
   "connections.setScope": "write",

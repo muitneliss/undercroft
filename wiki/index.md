@@ -155,6 +155,7 @@
 - [ADR 0149 Times Are Shown in the Viewer's Zone](sources/adr-0149-times-are-shown-in-the-viewer-s-zone.md)
 - [ADR 0150 A Lapsed Grant Is Emailed Once Per Lapse](sources/adr-0150-a-lapsed-grant-is-emailed-once-per-lapse.md)
 - [ADR 0151 An Agent's Call Is Kept Whole for a Superadmin for 30 Days](sources/adr-0151-an-agent-s-call-is-kept-whole-for-a-superadmin-for-30-days.md)
+- [ADR 0152 A Person Can Be Deactivated Platform-Wide by a Superadmin](sources/adr-0152-a-person-can-be-deactivated-platform-wide-by-a-superadmin.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

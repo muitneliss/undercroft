@@ -14,6 +14,7 @@ import { DEFAULT_LOCALE } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { appRouter } from "./router.ts";
 import type { Context, Role, SessionUser } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 let db: TestDatabase;
 
@@ -46,6 +47,7 @@ function caller(user: SessionUser, door: Partial<Context> = {}) {
     locale: DEFAULT_LOCALE,
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({ ok: false, reason: "not-configured", provider: "google" } as const),

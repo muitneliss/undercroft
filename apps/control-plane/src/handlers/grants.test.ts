@@ -12,6 +12,7 @@ import type { Permission } from "@undercroft/contracts/access";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { appRouter } from "./router.ts";
 import { type Context, refusalFacts } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 const TENANT = "CASE-0042";
 const DRAFT = { tenantId: TENANT, name: "stg_deals", sql: "select 1", tests: { columns: {} } };
@@ -53,6 +54,7 @@ function caller(email: string, userId: string) {
     locale: "en",
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

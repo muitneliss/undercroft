@@ -19,6 +19,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { resolveInvitedUser } from "../services/invite.ts";
 import { appRouter } from "./router.ts";
 import type { Context, Role, SessionUser } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 let db: TestDatabase;
 
@@ -62,6 +63,7 @@ function caller(user: SessionUser, locale: Locale = DEFAULT_LOCALE) {
     locale,
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(true),
     startConsent: () =>
       Promise.resolve({

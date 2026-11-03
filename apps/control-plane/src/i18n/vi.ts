@@ -285,6 +285,20 @@ export const vi = {
      * The sentence names the fix -- a reference that differs in more than that -- rather
      * than the mechanism, which the operator cannot see.
      */
+    /** `users.*` (ADR 0152): a person the platform has no record of. */
+    userNotFound: "Không có ai trên nền tảng với địa chỉ {{email}}.",
+    userDeactivated: "{{email}} đã bị ngừng kích hoạt từ trước.",
+    userNotDeactivated: "{{email}} đang hoạt động, không cần kích hoạt lại.",
+    /** A superadmin who did this would have nobody left to undo it but another superadmin. */
+    cannotDeactivateSelf:
+      "Bạn không thể tự ngừng kích hoạt chính mình. Hãy nhờ một quản trị viên hệ thống khác.",
+    /**
+     * The environment admits a superadmin before any check of ours (ADR 0013), so a deactivation
+     * would revoke their credentials and never keep them out. Points at a person, not at the
+     * variable, for the reason `requiresSuperadmin` does.
+     */
+    superadminByEnvironment:
+      "{{email}} là quản trị viên hệ thống theo cấu hình triển khai, nên không thể ngừng kích hoạt ở đây. Hãy nhờ người quản lý cấu hình triển khai gỡ địa chỉ này khỏi danh sách quản trị viên trước.",
     tenantRoleCollision:
       "Mã khách hàng {{tenantId}} quá giống mã của một khách hàng khác (chỉ khác chữ hoa/thường hoặc dấu). Hãy chọn một mã khác hẳn.",
     documentKindExists: "Catalogue đã có loại {{kind}}. Hãy sửa mô tả của loại đó.",

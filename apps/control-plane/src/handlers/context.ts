@@ -21,11 +21,12 @@ import { type EmailSender, type Locale, type Logger, negotiateLocale } from "@un
 import type { SqlExecutor } from "@undercroft/db";
 import type { Grant } from "../services/accessTokens.ts";
 import { recordTokenRefusal } from "../services/audit.ts";
-import { appUserForEmail } from "../services/invite.ts";
+import { type InvitedUser, type Standing, standingOf } from "../services/invite.ts";
 import { type GoogleIngestConfig, type ProviderConfig, startConsent } from "../services/oauth.ts";
 import { invitationMessage } from "../services/people.ts";
 import { isSuperadmin, NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
 import type { SpecReads } from "../services/connections.ts";
+import { NO_OFFBOARDING, type Offboarding } from "../services/users.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import type { Assistant } from "../services/assistant/agent.ts";
 import type { Judge } from "../services/assistant/judge.ts";
@@ -155,11 +156,11 @@ export interface Caller {
 /**
  * The shared tail every credential passes through.
  *
- * `appUserForEmail` turns the authenticated address into the `app_user` uuid that memberships
- * are keyed by, which is the only id a procedure may act on. An address with no `app_user`
- * resolves to nobody, not to a session: that is the case where someone's account was removed
- * while they still hold a valid cookie or token -- they are who they say they are, and they
- * are nobody here. Read on every request, so a removal takes effect at the next one.
+ * `standingOf` turns the authenticated address into the `app_user` uuid that memberships are
+ * keyed by, which is the only id a procedure may act on -- or says why the address is nobody: no
+ * `app_user`, or a person a superadmin deactivated (ADR 0152). Either way they resolve to nobody,
+ * not to a session: they are who they say they are, and they are nobody here. Read on every
+ * request, so a deactivation takes effect at the next one, whatever the credential still says.
  *
  * Platform authority is decided here too, and only here, off the environment list against the
  * address -- so removal from `UNDERCROFT_SUPERADMINS` also takes effect at the next request.
@@ -171,25 +172,37 @@ export interface Caller {
  * by the grant guard as a write it may not make. That lends nobody anything: every procedure but
  * the public ones refuses them first, and a public one is open to a request with no credential.
  */
+async function standingFor(deps: ServerDeps, presented: Presented): Promise<Standing> {
+  return await standingOf(deps.exec, presented.email, deps.superadmins ?? NO_SUPERADMINS);
+}
+
+/** The caller a proven credential and its standing make, or nobody. */
+function callerOf(
+  deps: ServerDeps,
+  presented: Presented | null,
+  standing: Standing | null,
+  door: Door,
+): Caller {
+  if (presented === null || standing === null || !standing.ok) {
+    return nobodyAt(door);
+  }
+  const person: InvitedUser = standing.user;
+  return {
+    user: { userId: person.appUserId, email: person.email },
+    credentialId: presented.credentialId,
+    via: viaOf(door),
+    grant: presented.grant,
+    superadmin: isSuperadmin(deps.superadmins ?? NO_SUPERADMINS, person.email),
+  };
+}
+
 async function callerFor(
   deps: ServerDeps,
   presented: Presented | null,
   door: Door,
 ): Promise<Caller> {
-  if (presented === null) {
-    return nobodyAt(door);
-  }
-  const appUser = await appUserForEmail(deps.exec, presented.email);
-  if (appUser === null) {
-    return nobodyAt(door);
-  }
-  return {
-    user: { userId: appUser.appUserId, email: appUser.email },
-    credentialId: presented.credentialId,
-    via: viaOf(door),
-    grant: presented.grant,
-    superadmin: isSuperadmin(deps.superadmins ?? NO_SUPERADMINS, appUser.email),
-  };
+  const standing = presented === null ? null : await standingFor(deps, presented);
+  return callerOf(deps, presented, standing, door);
 }
 
 function viaOf(door: Door): Via {
@@ -244,17 +257,38 @@ export async function bearerContext(
 ): Promise<Context | BearerRefusal> {
   const presented = await resolveBearer(deps, headers, bearers);
   if ("reason" in presented) {
-    return await recorded(deps, presented);
+    return await recorded(deps, await causeOf(deps, presented));
   }
-  const caller = await callerFor(deps, presented, "bearer");
-  // A live credential, and nobody here: the shared tail found no `app_user` for its address.
-  return caller.user === null
-    ? await recorded(deps, {
-        reason: "no_person",
-        credentialId: presented.credentialId,
-        owner: presented.email,
-      })
-    : contextFor(deps, headers, "bearer", caller);
+  const standing = await standingFor(deps, presented);
+  // A live credential, and nobody here: the shared tail found no `app_user` for its address, or
+  // found one deactivated.
+  if (!standing.ok) {
+    return await recorded(deps, {
+      reason: standing.reason,
+      credentialId: presented.credentialId,
+      owner: presented.email,
+    });
+  }
+  return contextFor(deps, headers, "bearer", callerOf(deps, presented, standing, "bearer"));
+}
+
+/**
+ * A refused bearer's reason, with its person's deactivation put first (ADR 0152).
+ *
+ * Deactivating a person revokes every credential they hold, so the token they present next is
+ * refused as `revoked` -- the consequence. Where the refusal names an owner and that owner is
+ * deactivated, the log says `deactivated` instead, the cause: the same "the person first" order
+ * `mcpAuth.ts` keeps between `no_person` and `revoked`. One read, and only on a refusal that
+ * names somebody, which already writes an audit row.
+ */
+async function causeOf(deps: ServerDeps, refusal: BearerRefusal): Promise<BearerRefusal> {
+  if (refusal.owner === undefined) {
+    return refusal;
+  }
+  const standing = await standingOf(deps.exec, refusal.owner, deps.superadmins ?? NO_SUPERADMINS);
+  return !standing.ok && standing.reason === "deactivated"
+    ? { ...refusal, reason: "deactivated" }
+    : refusal;
 }
 
 /**
@@ -293,6 +327,19 @@ async function recorded(deps: ServerDeps, refusal: BearerRefusal): Promise<Beare
 }
 
 /**
+ * What `users.deactivate` needs beyond the database, built from this server's own deps: the
+ * environment's list, asked about one address, and Better Auth's store (`signIns.ts`).
+ */
+function offboardingOf(deps: ServerDeps): Offboarding {
+  const { auth } = deps;
+  return {
+    isSuperadmin: (email): boolean => isSuperadmin(deps.superadmins ?? NO_SUPERADMINS, email),
+    withdrawSignIns: (email) =>
+      auth === undefined ? NO_OFFBOARDING.withdrawSignIns(email) : auth.withdraw(email),
+  };
+}
+
+/**
  * The context for a caller already resolved.
  *
  * Every refusal this request produces and every email it causes to be sent is worded in the
@@ -326,6 +373,7 @@ function contextFor(deps: ServerDeps, headers: Headers, door: Door, caller: Call
     notifyInvitation: (to, tenantId): Promise<boolean> =>
       sendInvitation(deps, to, tenantId, locale),
     apps: auth?.mcp ?? null,
+    offboarding: offboardingOf(deps),
     signInMethods: auth?.methods ?? [],
     publicUrl: deps.publicUrl ?? null,
     // Not held until a door says so (`holdOpen.ts`): `/trpc` and `/mcp` hold their own request.

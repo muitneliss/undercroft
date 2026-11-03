@@ -21,6 +21,7 @@ import type { WorkerFailure } from "../services/workerRefusals.ts";
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 const TENANT = "CASE-0042";
 const ADMIN = { userId: "", email: "ada@example.test" };
@@ -62,6 +63,7 @@ function callerOf(worker: InMemoryWorkerClient) {
     locale: DEFAULT_LOCALE,
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

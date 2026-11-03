@@ -326,7 +326,9 @@ You can withdraw an invitation that has not been accepted yet: **Withdraw…** o
 and nothing is sent until the second press, which names the address. For someone who already
 has access, an admin can change their role or remove them from the roster on the same page, or
 with `undercroft people set-role` and `undercroft people remove-member`. A removal takes effect
-on that person's next request, even if they are signed in at the time. The one change that is
+on that person's next request, even if they are signed in at the time -- in that customer only:
+their account, their other customers and their tokens are untouched (see
+[Offboarding a person](#offboarding-a-person)). The one change that is
 refused is the one that would leave the customer with no admin: make someone else an admin
 first. The roster shows this in advance: while one member holds `admin`, that row says it is
 the last admin and offers neither a lower role nor Remove. Every role change and removal is
@@ -336,10 +338,29 @@ and the role the person held before. Whoever holds `audit:read` (an admin) reads
 
 Sign-in itself is on the record, in each person's own **Activity** on the account page: every
 sign-in and sign-out (one row, whichever button ended the session), an address turned away
-(`auth.refused`, with `NOT_INVITED`, or `WRONG_CODE`, `CODE_EXPIRED` or `TOO_MANY_ATTEMPTS` for a
+(`auth.refused`, with `NOT_INVITED`, `DEACTIVATED` for a person a superadmin deactivated, or
+`WRONG_CODE`, `CODE_EXPIRED` or `TOO_MANY_ATTEMPTS` for a
 code offered for a real person's address), an app the person allowed in on the consent page, and
 a token of theirs refused at `/mcp` (`auth.tokenRefused`). A token nobody here issued is recorded
 too, naming nobody, and only a superadmin reads it. ADR 0120.
+
+### Offboarding a person
+
+When someone leaves, a platform superadmin deactivates them (ADR 0152): **Khách hàng / Customers**
+→ **Mọi người trên nền tảng / People on the platform** → **Ngừng kích hoạt… / Deactivate…**, and
+the second press, which names the address. Or `undercroft users deactivate --email <address>`
+(destructive, so the CLI asks for `--yes` where nobody can be asked). From their next request the
+person is refused at every door -- the browser, the CLI, `/mcp`, exports and the assistant -- and
+cannot sign in, even holding a live invitation; every personal access token, connected app and
+session they hold is revoked, and the counts are in the answer and in `ops.audit_log`
+(`users.deactivate`). Their memberships are kept.
+
+**Kích hoạt lại / Reactivate** (`undercroft users reactivate --email <address>`) gives back their
+access as it was. The revoked credentials stay revoked: they sign in again and mint new tokens.
+
+A customer's own admin cannot do this -- the person may belong to customers that admin cannot
+see -- and removing them from one customer does not do it. Neither your own address nor one
+`UNDERCROFT_SUPERADMINS` names can be deactivated: take an address off that list first.
 
 ## Skip sign-in locally
 
@@ -390,7 +411,7 @@ row, the same sign-out, and it lasts as long as any other session.
 | `redirect_uri_mismatch` from Google      | `UNDERCROFT_PUBLIC_URL` does not match a registered URI, exactly, path included | Re-check step 2; `http` vs `https` and the port both count                                                                    |
 | Boot log says `sign_in_unconfigured`     | A required value is unset; it names which                                       | Step 4                                                                                                                        |
 | `Database schema mismatch` / 500 on auth | Migrations not applied                                                          | Step 5                                                                                                                        |
-| "That address has not been invited"      | No live invitation for that exact address                                       | Step 7, and check for a typo or a different case                                                                              |
+| "That address has not been invited"      | No live invitation for that exact address, or the person is deactivated         | Step 7, and check for a typo or a different case; `auth.refused` says `DEACTIVATED` for the second                            |
 | No code ever arrives                     | Either mail is not configured, or the address is not invited                    | Check the boot log; the server will not say which, on purpose — telling you would let anyone test which addresses have access |
 | Signed in, but no customers listed       | You have a session but no membership                                            | Check `app.tenant_member`; the invitation may have been for another tenant                                                    |
 | `permission denied for table auth_user`  | The auth tables exist without grants                                            | Re-run step 5; `060_auth.sql` carries its own grants                                                                          |

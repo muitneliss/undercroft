@@ -67,14 +67,16 @@ import { type BetterAuthOptions, type BetterAuthPlugin, betterAuth } from "bette
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
 import { messages } from "../i18n/index.ts";
-import { isAdmissible, resolveInvitedUser } from "../services/invite.ts";
+import { resolveInvitedUser } from "../services/invite.ts";
 import { setLocale } from "../services/preferences.ts";
+import type { Withdrawn } from "../services/users.ts";
 import { NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
-import { auditPlugin, refuseUninvited } from "./authAudit.ts";
+import { admitsOrRecords, auditPlugin } from "./authAudit.ts";
 import { localeOf } from "./authLocale.ts";
 import { coreModels, USER_TABLE } from "./authSchema.ts";
 import { devSignIn } from "./devSignIn.ts";
 import { createMcpAuth, type McpAuth, mcpPlugins, oauthIssuer } from "./mcpAuth.ts";
+import { withdrawSignIns } from "./signIns.ts";
 
 /** How long a code is good for. Long enough to switch to a mail client, not to a new day. */
 const OTP_EXPIRES_SECONDS = 600;
@@ -222,6 +224,8 @@ export interface Auth {
    * anybody is signed in -- and it names methods, never an address.
    */
   methods: readonly SignInMethod[];
+  /** Withdraw a deactivated person's sessions and OAuth apps (ADR 0152, `signIns.ts`). */
+  withdraw: (email: string) => Promise<Withdrawn>;
 }
 
 /**
@@ -241,7 +245,7 @@ function userModel(config: AuthConfig, superadmins: Superadmins): BetterAuthOpti
      * withdrawing someone's access takes effect on their next Google sign-in rather than
      * whenever their session happens to expire.
      *
-     * It is read-only by construction (`isAdmissible`, not `resolveInvitedUser`) because
+     * It is read-only by construction (`admissionRefusal`, not `resolveInvitedUser`) because
      * it runs on paths where nothing should be provisioned. The library fails this hook
      * CLOSED: if it throws, the sign-in is refused rather than allowed.
      */
@@ -249,17 +253,13 @@ function userModel(config: AuthConfig, superadmins: Superadmins): BetterAuthOpti
       { user },
       context,
     ): Promise<{ error: string; errorDescription: string } | undefined> => {
-      // An identity with no address cannot be matched to an invitation, so it is refused:
-      // `isAdmissible("")` is false. Failing closed on a missing email is the point.
-      if (await isAdmissible(config.exec, user.email ?? "", superadmins)) {
+      // No address cannot match an invitation, so it is refused. A refusal is recorded: the
+      // person sees only "No access", and the operator needs WHICH address was turned away --
+      // a typo, the wrong Google account -- and why: not invited, or deactivated (ADR 0152).
+      const attempt = { email: user.email ?? "", via: "google" } as const;
+      if (await admitsOrRecords(config.exec, superadmins, attempt, context)) {
         return;
       }
-
-      // Recorded, because the person on the other side sees only "No access" and the
-      // operator needs to know WHICH address was turned away -- usually a typo or the
-      // wrong Google account.
-      await refuseUninvited(config.exec, { email: user.email ?? "", via: "google" }, context);
-
       return {
         error: "not_invited",
         errorDescription:
@@ -317,11 +317,10 @@ function otpSignIn(
       // It returns normally instead of raising, so the caller cannot tell "not invited"
       // from "sent". Answering honestly here would turn the sign-in form into an
       // oracle for which addresses have access, which is the same enumeration argument
-      // `trpc.ts` makes for answering 404 rather than 403 to a non-member.
-      if (!(await isAdmissible(config.exec, email, superadmins))) {
-        // Silent to the caller, not to the operator: the response must not reveal that
-        // this address has no access, but the trail must say so.
-        await refuseUninvited(config.exec, { email, via: "email-otp" }, context);
+      // `trpc.ts` makes for answering 404 rather than 403 to a non-member. Silent to the
+      // caller, not to the operator: the trail says so, and why.
+      const attempt = { email, via: "email-otp" } as const;
+      if (!(await admitsOrRecords(config.exec, superadmins, attempt, context))) {
         return;
       }
 
@@ -465,5 +464,6 @@ export function createAuth(config: AuthConfig): Auth {
     },
     mcp: issuer === null ? null : createMcpAuth(instance, issuer),
     methods: signInMethods(config),
+    withdraw: async (email) => withdrawSignIns(await instance.$context, email, issuer !== null),
   };
 }

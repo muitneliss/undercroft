@@ -592,6 +592,9 @@ export const vi = {
       tenants_rename: "Đổi tên khách hàng",
       tenants_deactivate: "Ngừng kích hoạt khách hàng",
       tenants_reactivate: "Kích hoạt lại khách hàng",
+      users_list: "Xem mọi người trên nền tảng",
+      users_deactivate: "Ngừng kích hoạt một người trên toàn nền tảng",
+      users_reactivate: "Kích hoạt lại một người trên toàn nền tảng",
       connections_list: "Xem các nguồn",
       connections_get: "Xem một nguồn",
       connections_browseScope: "Duyệt những gì có thể đọc",
@@ -1031,6 +1034,41 @@ export const vi = {
     notPublished: "Chưa áp dụng được",
     editNeeds:
       "Sửa và áp dụng danh mục của {{tenantId}} cần quyền quản lý catalogue loại tài liệu (catalogue:manage).",
+  },
+
+  /**
+   * The people on the whole platform, on the customer index, for a platform superadmin alone
+   * (ADR 0152). Deactivating is beside a customer's own "Remove", not a stronger copy of it: it
+   * reaches every customer the person belongs to, which is why only a superadmin may do it.
+   */
+  platformPeople: {
+    head: "Mọi người trên nền tảng",
+    lead: "Gỡ một người khỏi một khách hàng làm ở trang Người dùng của khách hàng đó. Ngừng kích hoạt ở đây thì chặn họ ở mọi khách hàng cùng lúc và thu hồi mọi thứ họ dùng để đăng nhập — dành cho người rời tổ chức.",
+    caption_other: "{{count, number}} người",
+    colAddress: "Địa chỉ",
+    colJoined: "Tham gia",
+    colCustomers: "Khách hàng",
+    colState: "Trạng thái",
+    colAction: "Thao tác",
+    memberships_other: "{{count, number}} khách hàng",
+    active: "Đang hoạt động",
+    deactivatedSince: "Ngừng kích hoạt từ {{when}}",
+    deactivate: "Ngừng kích hoạt…",
+    /** Inside Deactivate's second press: what it ends, what cannot be undone, and what it keeps. */
+    deactivateLead:
+      "Người này mất quyền truy cập ở mọi khách hàng ngay từ lần gọi tiếp theo và không đăng nhập được, kể cả khi có lời mời. Mọi token, phiên đăng nhập và ứng dụng đã kết nối của họ bị thu hồi và không khôi phục được. Tư cách thành viên được giữ nguyên để có thể kích hoạt lại.",
+    deactivateConfirm: "Ngừng kích hoạt {{email}}",
+    deactivating: "Đang ngừng kích hoạt…",
+    /** After a deactivation: what it revoked, as labelled counts rather than a plural sentence. */
+    deactivated:
+      "{{email}} đã bị ngừng kích hoạt. Đã thu hồi — token: {{tokens, number}} · phiên đăng nhập: {{sessions, number}} · ứng dụng đã kết nối: {{apps, number}}.",
+    notDeactivated: "Chưa ngừng kích hoạt được",
+    reactivate: "Kích hoạt lại",
+    reactivating: "Đang kích hoạt lại…",
+    reactivated:
+      "{{email}} đã được kích hoạt lại, với quyền truy cập như trước. Họ cần đăng nhập lại và tạo token mới.",
+    notReactivated: "Chưa kích hoạt lại được",
+    notLoaded: "Không tải được danh sách người dùng của nền tảng. Không có gì bị thay đổi.",
   },
 
   people: {

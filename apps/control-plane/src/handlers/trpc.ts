@@ -43,18 +43,14 @@ import { currentTraceId } from "@undercroft/telemetry";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import type { Grant } from "../services/accessTokens.ts";
-import {
-  type Actor,
-  type Channel,
-  type Outcome,
-  recordAction,
-  recordAttempt,
-} from "../services/audit.ts";
+import type { Actor, Channel, Outcome } from "../services/audit.ts";
+import { recordAction, recordAttempt } from "../services/audit.ts";
 import type { OAuthApps } from "../services/connectedApps.ts";
 import type { SignInMethod } from "./auth.ts";
 import { accessIn } from "../services/authz.ts";
 import type { SpecReads } from "../services/connections.ts";
 import type { StartOutcome } from "../services/oauth.ts";
+import type { Offboarding } from "../services/users.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import { auditRuleOf, detailOf, isRecorded, namedTenant } from "./audited.ts";
 import { errorOf, keepCall } from "./callPayload.ts";
@@ -136,6 +132,14 @@ export interface Context {
    * one question of it and never reaches the library.
    */
   readonly apps: OAuthApps | null;
+  /**
+   * What deactivating a person needs beyond the database (ADR 0152): whether the environment
+   * names an address a superadmin, and Better Auth's store to withdraw their sign-ins from. A
+   * port the composition root builds, for the reason `apps` is one; `users.deactivate`, behind
+   * `superadminProcedure`, is its one reader -- the exception to `superadmin`'s rule below that
+   * no procedure asks the list about another address, and the only answer it gives is a refusal.
+   */
+  readonly offboarding: Offboarding;
   /**
    * The language to answer this request in, negotiated from its `Accept-Language`.
    *

@@ -18,6 +18,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { CATALOGUE, TOOLS } from "../services/assistant/catalogue.ts";
 import { bindTools, unresolvedProcedures } from "./assistantTools.ts";
 import type { Context, Role, SessionUser } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 let db: TestDatabase;
 
@@ -41,6 +42,7 @@ function context(user: SessionUser | null, superadmin = false, exec: SqlExecutor
     locale: DEFAULT_LOCALE,
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

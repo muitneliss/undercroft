@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { startConsent } from "../services/oauth.ts";
 import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 const TENANT = "CASE-0042";
 const ADMIN = { userId: "", email: "ada@example.test" };
@@ -221,6 +222,7 @@ describe("a consent that cannot start names the provider of the source pressed",
       locale,
       endSession: () => Promise.resolve(),
       apps: null,
+      offboarding: NO_OFFBOARDING,
       notifyInvitation: () => Promise.resolve(false),
       startConsent: (start) => startConsent({ exec: db, ...deps }, start),
       worker: null,

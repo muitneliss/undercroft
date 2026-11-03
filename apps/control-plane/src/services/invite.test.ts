@@ -10,7 +10,7 @@
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import type { SqlExecutor } from "@undercroft/db";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { appUserForEmail, isAdmissible, resolveInvitedUser } from "./invite.ts";
+import { isAdmissible, resolveInvitedUser, standingOf } from "./invite.ts";
 
 let db: TestDatabase;
 
@@ -147,15 +147,18 @@ describe("resolving a session's address to its authorization identity", () => {
     await seedInvitation("CASE-0042", "operator@example.test", "member");
     const provisioned = await resolveInvitedUser(db, "operator@example.test");
 
-    const found = await appUserForEmail(db, "operator@example.test");
+    const found = await standingOf(db, "operator@example.test");
 
-    expect(found?.appUserId).toBe(provisioned?.appUserId);
+    expect(found.ok ? found.user.appUserId : found.reason).toBe(provisioned?.appUserId ?? "");
   });
 
   it("an unknown address resolves to nothing and provisions nothing", async () => {
     // Read-only on purpose: if this created an app_user, deleting an account would not
     // revoke access, it would just delay it until the next request.
-    expect(await appUserForEmail(db, "stranger@example.test")).toBeNull();
+    expect(await standingOf(db, "stranger@example.test")).toEqual({
+      ok: false,
+      reason: "no_person",
+    });
 
     const { rows } = await db.query("SELECT id FROM app.app_user");
     expect(rows).toHaveLength(0);
@@ -197,8 +200,8 @@ describe("a superadmin needs no invitation, where the decision reads the databas
     const resolved = await resolveInvitedUser(db, "root@example.test", roots);
 
     expect(resolved?.email).toBe("root@example.test");
-    const found = await appUserForEmail(db, "root@example.test");
-    expect(found?.appUserId).toBe(resolved?.appUserId ?? "");
+    const found = await standingOf(db, "root@example.test", roots);
+    expect(found.ok ? found.user.appUserId : found.reason).toBe(resolved?.appUserId ?? "");
   });
 
   it("and gives them no memberships at all", async () => {

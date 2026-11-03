@@ -171,8 +171,9 @@ Every procedure's description, in the CLI's help and in an MCP client's tool lis
 the permission it needs, read off the server's own gate.
 
 A few procedures belong to no permission and no customer: a platform superadmin's alone, whatever
-role they hold. They are `tenants.create`, `audit.all`, and the agents' call log,
-`audit.calls.list` and `audit.calls.get` (ADR 0151). Anybody else is refused `FORBIDDEN`.
+role they hold. They are `tenants.create`, `audit.all`, the agents' call log,
+`audit.calls.list` and `audit.calls.get` (ADR 0151), and everyone on the platform, `users.list`,
+`users.deactivate` and `users.reactivate` (ADR 0152). Anybody else is refused `FORBIDDEN`.
 
 ## A refusal
 

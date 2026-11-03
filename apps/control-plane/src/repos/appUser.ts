@@ -26,6 +26,28 @@ export async function findIdByEmail(exec: SqlExecutor, email: string): Promise<s
   return rows[0]?.id ?? null;
 }
 
+/** An `app_user` as the doors weigh it: who, and whether they are deactivated (ADR 0152). */
+export interface UserStanding {
+  readonly id: string;
+  readonly deactivated: boolean;
+}
+
+/**
+ * The `app_user` for an address and whether it is deactivated, or `null` when there is none.
+ * One read, so "who" and "may they act" cannot be answered by two statements that disagree.
+ */
+export async function findStandingByEmail(
+  exec: SqlExecutor,
+  email: string,
+): Promise<UserStanding | null> {
+  const { rows } = await exec.query<{ id: string; deactivated: boolean }>(
+    "SELECT id, deactivated_at IS NOT NULL AS deactivated FROM app.app_user WHERE email = $1",
+    [email],
+  );
+  const [row] = rows;
+  return row === undefined ? null : { id: row.id, deactivated: row.deactivated };
+}
+
 /**
  * Create the `app_user` for an address, or return the existing one.
  *

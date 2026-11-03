@@ -25,6 +25,7 @@ import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
 import type { Context, Role } from "./trpc.ts";
+import { NO_OFFBOARDING } from "../services/users.ts";
 
 let db: TestDatabase;
 
@@ -53,6 +54,7 @@ function caller(userId: string, email: string, worker: WorkerClient | null = nul
     locale: DEFAULT_LOCALE,
     endSession: () => Promise.resolve(),
     apps: null,
+    offboarding: NO_OFFBOARDING,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

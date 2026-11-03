@@ -27,6 +27,7 @@ import { scopesRouter } from "./scopesRouter.ts";
 import { peopleRouter } from "./peopleRouter.ts";
 import { rolesRouter } from "./rolesRouter.ts";
 import { tenantsRouter } from "./tenantsRouter.ts";
+import { usersRouter } from "./usersRouter.ts";
 
 /** The most run ids one `runs.list` takes: "where are these runs now", not a bulk export. */
 const MAX_LISTED_RUNS = 50;
@@ -86,6 +87,9 @@ export const appRouter = router({
   account: accountRouter,
 
   tenants: tenantsRouter,
+
+  /** Everyone on the platform, and deactivating one of them everywhere. Superadmin only (ADR 0152). */
+  users: usersRouter,
 
   connections: connectionsRouter,
 
