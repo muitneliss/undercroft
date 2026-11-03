@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.82.0](https://github.com/muitneliss/undercroft/compare/v1.81.0...v1.82.0) (2026-11-03)
+
+
+### Features
+
+* **control-plane:** a superadmin can deactivate a person platform-wide ([#522](https://github.com/muitneliss/undercroft/issues/522)) ([df7479b](https://github.com/muitneliss/undercroft/commit/df7479b41178346c84257279c8b3ee3951ee39f5))
+
 ## [1.81.0](https://github.com/muitneliss/undercroft/compare/v1.80.2...v1.81.0) (2026-11-02)
 
 
