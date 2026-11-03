@@ -594,7 +594,9 @@ async function until(holds: () => boolean | Promise<boolean>): Promise<void> {
     if (await holds()) {
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 5);
+    });
   }
   throw new Error("the awaited state never came");
 }

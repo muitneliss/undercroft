@@ -80,7 +80,9 @@ let project = "";
 let findings: Finding[] = [];
 
 function rulesOn(file: string): string[] {
-  return [...new Set(findings.filter((f) => f.file === file).map((f) => f.ruleId))].sort();
+  return [...new Set(findings.filter((f) => f.file === file).map((f) => f.ruleId))].sort((a, b) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
 }
 
 beforeAll(async () => {

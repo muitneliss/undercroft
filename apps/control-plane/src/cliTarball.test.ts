@@ -15,7 +15,9 @@ let dir: string;
 const logged: Record<string, unknown>[] = [];
 const log = createLogger({
   component: "control-plane",
-  sink: (line) => logged.push(JSON.parse(line) as Record<string, unknown>),
+  sink: (line) => {
+    logged.push(JSON.parse(line) as Record<string, unknown>);
+  },
 });
 
 beforeAll(async () => {

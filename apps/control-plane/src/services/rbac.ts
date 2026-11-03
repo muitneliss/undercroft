@@ -75,6 +75,7 @@ import {
   type RowRule,
   unionOf,
 } from "@undercroft/contracts/rowRules";
+import { byCodeUnit } from "@undercroft/core/order";
 import { type Adapter, type Enforcer, type Model, newEnforcer, newModelFromString } from "casbin";
 
 /**
@@ -274,7 +275,7 @@ function gather(named: Named, object: ReachObject): void {
 
 /** Sorted by code unit: the order an answer is compared and hashed in. */
 function sorted(values: Iterable<string>): string[] {
-  return [...values].sort();
+  return [...values].sort(byCodeUnit);
 }
 
 /**

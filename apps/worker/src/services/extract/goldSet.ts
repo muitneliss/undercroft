@@ -108,10 +108,11 @@ interface GoldSheet {
 }
 
 function xlsxOf(shared: readonly string[], sheets: readonly GoldSheet[]): Uint8Array {
+  const items = shared.map((item) => `<si>${item}</si>`).join("");
   return zipOf([
     {
       name: "xl/sharedStrings.xml",
-      body: `<sst xmlns="x" count="${String(shared.length)}" uniqueCount="${String(shared.length)}">${shared.map((item) => `<si>${item}</si>`).join("")}</sst>`,
+      body: `<sst xmlns="x" count="${String(shared.length)}" uniqueCount="${String(shared.length)}">${items}</sst>`,
     },
     ...sheets.map((sheet) => ({
       name: `xl/worksheets/sheet${String(sheet.at)}.xml`,

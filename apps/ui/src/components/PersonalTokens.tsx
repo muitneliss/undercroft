@@ -258,8 +258,8 @@ function MintForm({
         mint.mutate({
           label,
           grant: grantOf(data.get("grant")),
-          // parseInt, not Number(): a day count, not an amount.
-          expiresInDays: Number.parseInt(String(data.get("expires") ?? "90"), 10),
+          // parseInt, not Number(): a day count read from the field's text, not an amount.
+          expiresInDays: Number.parseInt(data.get("expires")?.toString() ?? "90", 10),
         });
       }}
     >

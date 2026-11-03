@@ -236,9 +236,11 @@ function containsSql(column: string, filter: Filter): string {
     throw new Error(`filter on ${filter.column} needs one value`);
   }
   // A parameter reference is bound whole; a literal is wrapped for ILIKE here.
-  return WHOLE_PARAM.test(value)
-    ? `${column}::text ILIKE ('%' || ${value.trim()} || '%')`
-    : `${column}::text ILIKE ${quoteLiteral(`%${value}%`)}`;
+  if (WHOLE_PARAM.test(value)) {
+    return `${column}::text ILIKE ('%' || ${value.trim()} || '%')`;
+  }
+  const pattern = quoteLiteral(`%${value}%`);
+  return `${column}::text ILIKE ${pattern}`;
 }
 
 function inSql(column: string, filter: Filter): string {
@@ -327,9 +329,8 @@ export function compileVisual(definition: VisualDefinition): string {
     lines.push(`GROUP BY ${definition.groupBy.map(quoteIdent).join(", ")}`);
   }
   if (definition.orderBy.length > 0) {
-    lines.push(
-      `ORDER BY ${definition.orderBy.map((o) => `${quoteIdent(o.by)} ${o.dir.toUpperCase()}`).join(", ")}`,
-    );
+    const order = definition.orderBy.map((o) => `${quoteIdent(o.by)} ${o.dir.toUpperCase()}`);
+    lines.push(`ORDER BY ${order.join(", ")}`);
   }
   lines.push(`LIMIT ${String(definition.limit)}`);
   return lines.join("\n");

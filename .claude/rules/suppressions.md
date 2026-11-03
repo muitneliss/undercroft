@@ -44,7 +44,7 @@ silences the rule for the **whole file**, and Biome never reports one that has g
 - **A genuine one-off gets the line-level `// biome-ignore`**, which Biome expires by itself —
   `bun run lint` runs with `--error-on-warnings`, so an unused one fails the gate. This is the
   only suppression form a source file or a suite may carry, and the whole tree holds
-  **sixteen** across fifteen files:
+  **nineteen** across seventeen files:
   - a `^` that flips a GCM tag bit;
   - a control range that IS the assertion;
   - a compose file's `${IMAGE_TAG:-latest}` quoted as fixture bytes, twice;
@@ -57,7 +57,16 @@ silences the rule for the **whole file**, and Biome never reports one that has g
   - the `await` on a reader's `Extracted | Promise<Extracted>`, which Biome 2.5.15's
     `useAwaitThenable` reads as no Promise at all;
   - the blog's JSON-LD, written with Astro's `set:html` and escaped by `jsonLdText`;
+  - the `0rem` on `index.css`'s narrow `--head-col`, which reaches a `calc()` sum where a
+    unitless `0` is invalid (ADR 0152);
+  - the two `var`s of `drivePicker.ts`'s ambient `declare global`, the only declaration form
+    that adds to `globalThis`, which `useVarsOnTop` reads as hoisting;
   - the charting `Big#toNumber()` below.
+
+  Not a `biome-ignore-start`/`-end` range either: measured on Biome 2.6.4, an unused range is
+  never reported, so it outlives its reason exactly as a header did. `drivePicker.ts` held the
+  one range until ADR 0152 split it into the two lines above.
+
 - **A plugin is suppressed by NAME: `// biome-ignore lint/plugin/money:`.** Measured against
   Biome 2.5.14: naming the plugin silences that plugin and no other, and Biome reports the
   suppression as unused when the violation on that line came from a different one — which is

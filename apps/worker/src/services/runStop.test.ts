@@ -586,7 +586,12 @@ describe("a run still going when the drain gives up", () => {
     stop.abort();
     held.open();
 
-    const drained = await drainJobsBy(db, new Promise<never>(() => undefined));
+    const drained = await drainJobsBy(
+      db,
+      new Promise<never>(() => {
+        // A deadline that never comes: only the jobs finishing may end the wait.
+      }),
+    );
 
     expect(drained).toBe(true);
     const [stopped] = await runsOf("demo");

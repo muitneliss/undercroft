@@ -20,7 +20,7 @@ import { type MessageKey, messages } from "../i18n/index.ts";
 import { formatWhen, sourceName } from "./alertWording.ts";
 
 /** A card is read by the platform's operators, so it is written in the platform's language. */
-const CARD = messages(DEFAULT_LOCALE);
+const t = messages(DEFAULT_LOCALE);
 
 function runTitle(
   mark: string,
@@ -29,8 +29,8 @@ function runTitle(
 ): string {
   const sentence =
     input.source === SOURCE_OF_TRANSFORM
-      ? CARD(keys.models, { tenantId: input.tenantId })
-      : CARD(keys.sync, { source: sourceName(input.source), tenantId: input.tenantId });
+      ? t(keys.models, { tenantId: input.tenantId })
+      : t(keys.sync, { source: sourceName(input.source), tenantId: input.tenantId });
   return `${mark} ${sentence}`;
 }
 
@@ -41,12 +41,12 @@ function runFacts(input: {
   account: string;
 }): [label: string, value: string][] {
   const source =
-    input.source === SOURCE_OF_TRANSFORM ? CARD("runFailed.models") : sourceName(input.source);
-  const facts: [string, string][] = [[CARD("email.source"), source]];
+    input.source === SOURCE_OF_TRANSFORM ? t("runFailed.models") : sourceName(input.source);
+  const facts: [string, string][] = [[t("email.source"), source]];
   if (input.account !== "") {
-    facts.push([CARD("email.account"), input.account]);
+    facts.push([t("email.account"), input.account]);
   }
-  facts.push([CARD("email.customer"), input.tenantId]);
+  facts.push([t("email.customer"), input.tenantId]);
   return facts;
 }
 
@@ -54,9 +54,7 @@ function journalLink(
   publicUrl: string,
   input: { tenantId: string; runId: string },
 ): LarkNotice["links"] {
-  return [
-    [CARD("runFailed.action"), `${publicUrl}/tenants/${input.tenantId}/journal/${input.runId}`],
-  ];
+  return [[t("runFailed.action"), `${publicUrl}/tenants/${input.tenantId}/journal/${input.runId}`]];
 }
 
 /** The card for a failed run: the email's subject, its schedule, and the run's own reason. */
@@ -74,8 +72,8 @@ export function failedRunCard(input: {
     tone: "red",
     facts: [
       ...runFacts(input),
-      [CARD("email.when"), formatWhen(input.endedAt, DEFAULT_LOCALE)],
-      [CARD("syncCard.reason"), input.error ?? CARD("runFailed.noReason")],
+      [t("email.when"), formatWhen(input.endedAt, DEFAULT_LOCALE)],
+      [t("syncCard.reason"), input.error ?? t("runFailed.noReason")],
     ],
     body: "",
     links: journalLink(input.publicUrl, input),
@@ -98,11 +96,11 @@ export function recoveredRunCard(input: {
   const failing = input.testsFailed !== null && input.testsFailed > 0 ? input.testsFailed : null;
   const facts: [label: string, value: string][] = [
     ...runFacts(input),
-    [CARD("syncCard.failingSince"), formatWhen(input.failingSince, DEFAULT_LOCALE)],
-    [CARD("email.when"), formatWhen(input.endedAt, DEFAULT_LOCALE)],
+    [t("syncCard.failingSince"), formatWhen(input.failingSince, DEFAULT_LOCALE)],
+    [t("email.when"), formatWhen(input.endedAt, DEFAULT_LOCALE)],
   ];
   if (failing !== null) {
-    facts.push([CARD("syncCard.testsFailing"), String(failing)]);
+    facts.push([t("syncCard.testsFailing"), String(failing)]);
   }
   return {
     title: runTitle(failing === null ? "✅" : "⚠️", input, {

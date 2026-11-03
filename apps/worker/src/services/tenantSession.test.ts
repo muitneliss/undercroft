@@ -9,6 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { byCodeUnit } from "@undercroft/core/order";
 import { provisionTenantRoles } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
@@ -79,7 +80,7 @@ describe("holding a scope login (ADR 0142)", () => {
         `SELECT a.rolpassword AS verifier FROM ops.tenant_scope s
          JOIN pg_authid a ON a.rolname = s.role_name
          WHERE s.tenant_id = $1 AND s.models = $2::text[]`,
-        [DBT.tenantId, [...models].sort()],
+        [DBT.tenantId, [...models].sort(byCodeUnit)],
       ),
     );
     return rows[0]?.verifier ?? null;

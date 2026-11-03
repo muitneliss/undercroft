@@ -6,6 +6,8 @@
  * the other file dbt writes after a build; pure, so a fixture pins it.
  */
 
+import { byCodeUnit } from "@undercroft/core/order";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -153,7 +155,7 @@ export function buildGraph(manifest: unknown): {
         reached.add(name);
       }
     }
-    return [...reached].sort();
+    return [...reached].sort(byCodeUnit);
   }
   const parents = new Map([...direct].map(([name, read]) => [name, throughEphemeral(read)]));
   const testReads = new Map(

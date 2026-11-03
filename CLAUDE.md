@@ -234,8 +234,9 @@ exception, so it stays on everywhere else. **Not** as a header in the source: a
 `biome-ignore-all` permits the whole file rather than the line, and Biome never reports one
 that has stopped being needed, which is how 17 of the repo's 679 headers came to be dead with
 the gate green. `.claude/rules/suppressions.md` and ADR 0018; ADR 0018 supersedes ADR 0012 on
-this point. Prettier is kept for Markdown and YAML alone, the two languages Biome cannot
-format.
+this point. Prettier is kept for Markdown and YAML alone. Biome 2.6 can format both, and is
+kept off them: two formatters on one file is how two definitions of "formatted" drift, and
+`biome.jsonc` excludes Markdown from Biome entirely (ADR 0153).
 
 **Tests are a category, not an exception.** Twelve rules whose whole answer is "because it is
 a test" — `noBunModules`, `useExpect`, `noSecrets`, `useTopLevelRegex`, the two length rules

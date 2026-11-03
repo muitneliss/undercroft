@@ -101,13 +101,14 @@ function drawRun(host: Host, run: Run, feed: Feed | null, stopped: string | null
       : element(
           "ol",
           "events",
-          ...latest.map((event) =>
-            element(
+          ...latest.map((event) => {
+            const entity = event.entity === null ? "" : ` · ${event.entity}`;
+            return element(
               "li",
               `level--${event.level}`,
-              `${formatAt(event.at, locale)}  ${event.event}${event.entity === null ? "" : ` · ${event.entity}`}`,
-            ),
-          ),
+              `${formatAt(event.at, locale)}  ${event.event}${entity}`,
+            );
+          }),
         ),
     ...(feed?.clipped ?? []).map((note) => element("p", "note", note)),
     ...(stopped === null ? [] : [element("p", "note", stopped)]),

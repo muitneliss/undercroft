@@ -78,9 +78,19 @@ export function narrowingOf(rules: GrantRules | null | undefined): Narrowing | n
   return { rows: rules.rows === null ? null : [rules.rows], hidden: [...rules.hidden] };
 }
 
+/**
+ * The distinct values, in UTF-16 code-unit order: the order a bare `.sort()` gives, which
+ * `byCodeUnit` in `@undercroft/core/order` names. Spelled here rather than imported because this
+ * module imports nothing (above). Every set this module turns into text goes through it, so a
+ * canonical key comes out the same in the browser, the control plane and the worker.
+ */
+function distinctSorted(values: Iterable<string>): string[] {
+  return [...new Set(values)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
 /** The value set of a condition, deduplicated and sorted: `eq` is `in` with one value. */
 function valueSet(condition: RowCondition): string[] {
-  return [...new Set(condition.values)].sort();
+  return distinctSorted(condition.values);
 }
 
 /** A rule as one text, whatever order its conditions and values were written in. */
@@ -88,7 +98,7 @@ function ruleText(rule: RowRule): string {
   const conditions = rule.map((condition) =>
     JSON.stringify([condition.column, valueSet(condition)]),
   );
-  return JSON.stringify([...new Set(conditions)].sort());
+  return JSON.stringify(distinctSorted(conditions));
 }
 
 /** Rules deduplicated by what they say. */
@@ -117,9 +127,7 @@ export function unionOf(narrowings: readonly (Narrowing | null)[]): Narrowing | 
   const hidden = (first?.hidden ?? []).filter((column) =>
     rest.every((narrowing) => narrowing.hidden.includes(column)),
   );
-  return rows === null && hidden.length === 0
-    ? null
-    : { rows, hidden: [...new Set(hidden)].sort() };
+  return rows === null && hidden.length === 0 ? null : { rows, hidden: distinctSorted(hidden) };
 }
 
 /**
@@ -143,7 +151,7 @@ export function intersectionOf(a: Narrowing | null, b: Narrowing | null): Narrow
     const bRows = b.rows;
     rows = distinctRules(a.rows.flatMap((left) => bRows.map((right) => [...left, ...right])));
   }
-  const hidden = [...new Set([...a.hidden, ...b.hidden])].sort();
+  const hidden = distinctSorted([...a.hidden, ...b.hidden]);
   return rows === null && hidden.length === 0 ? null : { rows, hidden };
 }
 
@@ -191,12 +199,12 @@ export function scopeKey(scope: {
   readonly models: readonly string[];
   readonly limits: readonly ModelLimit[];
 }): string {
-  const models = [...new Set(scope.models)].sort();
+  const models = distinctSorted(scope.models);
   const limits = scope.limits
     .map((limit) => {
       const rows =
-        limit.rows === null ? null : [...new Set(limit.rows.map((rule) => ruleText(rule)))].sort();
-      return { model: limit.model, rows, hidden: [...new Set(limit.hidden)].sort() };
+        limit.rows === null ? null : distinctSorted(limit.rows.map((rule) => ruleText(rule)));
+      return { model: limit.model, rows, hidden: distinctSorted(limit.hidden) };
     })
     .filter((limit) => limit.rows !== null || limit.hidden.length > 0)
     .sort((a, b) => (a.model < b.model ? -1 : 1));

@@ -141,7 +141,8 @@ function serialise(value: unknown): string {
     const entries = Object.entries(value)
       .filter(([, v]) => v !== undefined)
       .sort(([a], [b]) => byCodePoint(a, b));
-    return `{${entries.map(([k, v]) => `${escapeString(k)}:${serialise(v)}`).join(",")}}`;
+    const members = entries.map(([k, v]) => `${escapeString(k)}:${serialise(v)}`);
+    return `{${members.join(",")}}`;
   }
 
   throw new TypeError(`refusing to canonicalise a ${typeof value}`);

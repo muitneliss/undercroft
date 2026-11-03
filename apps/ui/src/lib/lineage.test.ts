@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, test as it } from "bun:test";
+import { byCodeUnit } from "@undercroft/core/order";
 
 import type { ModelLineage } from "@/api/types.ts";
 import { upstreamOf, upstreamPaths } from "./lineage.ts";
@@ -45,7 +46,7 @@ const GRAPH: ModelLineage = {
 
 describe("upstreamOf", () => {
   it("follows every declared edge back to the raw lake, and never forward", () => {
-    expect([...upstreamOf(GRAPH, "model:c")].sort()).toEqual([
+    expect([...upstreamOf(GRAPH, "model:c")].sort(byCodeUnit)).toEqual([
       "model:a",
       "model:b",
       "model:c",
@@ -58,7 +59,7 @@ describe("upstreamOf", () => {
       nodes: [model("x"), model("y")],
       edges: [edge("model:x", "model:y"), edge("model:y", "model:x")],
     };
-    expect([...upstreamOf(cyclic, "model:x")].sort()).toEqual(["model:x", "model:y"]);
+    expect([...upstreamOf(cyclic, "model:x")].sort(byCodeUnit)).toEqual(["model:x", "model:y"]);
     expect(
       layout(cyclic)
         .placed.map((p) => p.node.id)
@@ -171,7 +172,7 @@ describe("arrange", () => {
       edges: [edge("model:x", "model:y"), edge("model:y", "model:x")],
     };
     const arranged = await arrange(cyclic, cyclic);
-    expect([...(arranged?.cards.keys() ?? [])].sort()).toEqual(["model:x", "model:y"]);
+    expect([...(arranged?.cards.keys() ?? [])].sort(byCodeUnit)).toEqual(["model:x", "model:y"]);
     expect(arranged?.routes.size).toBe(2);
   });
 

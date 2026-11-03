@@ -151,7 +151,10 @@ export function configFromEnv(env: Record<string, string | undefined>): Config {
 
 export const realDeps: Deps = {
   fetch: (input, init): Promise<Response> => globalThis.fetch(input, init ?? {}),
-  sleep: (ms): Promise<void> => new Promise((resolve): NodeJS.Timeout => setTimeout(resolve, ms)),
+  sleep: (ms): Promise<void> =>
+    new Promise((resolve): void => {
+      setTimeout(resolve, ms);
+    }),
   log: (line): boolean => process.stdout.write(`${line}\n`),
   now: () => Date.now(),
 };

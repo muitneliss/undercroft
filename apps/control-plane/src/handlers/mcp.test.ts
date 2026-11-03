@@ -68,7 +68,9 @@ beforeEach(async () => {
     devSignInAs: OPERATOR,
     log: createLogger({
       component: "control-plane",
-      sink: (line) => logged.push(JSON.parse(line) as Record<string, unknown>),
+      sink: (line) => {
+        logged.push(JSON.parse(line) as Record<string, unknown>);
+      },
       context: () => ({ traceId: currentTraceId() }),
     }),
     seed,

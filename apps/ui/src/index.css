@@ -5423,6 +5423,7 @@
     }
 
     :root {
+      /* biome-ignore lint/nursery/noZeroLengthUnit: a custom property is substituted as written, and `--head-col` reaches `calc(-1 * (var(--head-col) + var(--s-5)))`, where a unitless 0 makes the sum invalid. */
       --head-col: 0rem;
       --t-h1: 1.9rem;
       --t-h2: 1.4rem;

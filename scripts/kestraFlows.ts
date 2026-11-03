@@ -140,11 +140,12 @@ interface Send {
 }
 
 async function send(cfg: Config, deps: Deps, request: Send): Promise<Response> {
+  const credentials = `${cfg.user}:${cfg.password}`;
   try {
     return await deps.fetch(request.url, {
       method: request.method,
       headers: {
-        authorization: `Basic ${Buffer.from(`${cfg.user}:${cfg.password}`).toString("base64")}`,
+        authorization: `Basic ${Buffer.from(credentials).toString("base64")}`,
         "content-type": "application/x-yaml",
       },
       body: request.yaml,
@@ -236,7 +237,10 @@ export async function deliverFlows(
 if (import.meta.main) {
   const deps: Deps = {
     fetch: (input: string, init?: RequestInit): Promise<Response> => fetch(input, init),
-    sleep: (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms)),
+    sleep: (ms: number): Promise<void> =>
+      new Promise((resolve): void => {
+        setTimeout(resolve, ms);
+      }),
     log: (line: string): void => {
       process.stdout.write(`${line}\n`);
     },

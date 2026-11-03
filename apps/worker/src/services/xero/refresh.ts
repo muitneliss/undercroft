@@ -35,7 +35,8 @@ export function xeroClientAuthorization(config: {
   readonly clientId: string;
   readonly clientSecret: string;
 }): string {
-  return `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64")}`;
+  const credentials = `${config.clientId}:${config.clientSecret}`;
+  return `Basic ${Buffer.from(credentials).toString("base64")}`;
 }
 
 /**

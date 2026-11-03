@@ -48,12 +48,14 @@ interface GoogleGlobals {
   picker?: unknown;
 }
 
-// biome-ignore-start lint/nursery/useVarsOnTop: `var` is the only declaration form that adds to `globalThis` in an ambient block. There is no hoisting here to regret -- these are type declarations for two scripts Google injects.
+// `var` is the only declaration form that adds to `globalThis` in an ambient block. There is no
+// hoisting here to regret -- these are type declarations for two scripts Google injects.
 declare global {
+  // biome-ignore lint/style/useVarsOnTop: an ambient global, declared for the script Google injects; see above.
   var google: GoogleGlobals | undefined;
+  // biome-ignore lint/style/useVarsOnTop: an ambient global, declared for the script Google injects; see above.
   var gapi: { load: (name: string, cb: () => void) => void } | undefined;
 }
-// biome-ignore-end lint/nursery/useVarsOnTop: see above
 
 function loadScript(src: string): Promise<void> {
   if (document.querySelector(`script[src="${src}"]`) !== null) {

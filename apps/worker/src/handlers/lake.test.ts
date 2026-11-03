@@ -213,7 +213,15 @@ describe("the lake records API", () => {
 /** A logger whose lines are kept, so a test can read what the boundary wrote. */
 function lines(): { sink: string[]; log: ReturnType<typeof createLogger> } {
   const sink: string[] = [];
-  return { sink, log: createLogger({ component: "worker", sink: (line) => sink.push(line) }) };
+  return {
+    sink,
+    log: createLogger({
+      component: "worker",
+      sink: (line) => {
+        sink.push(line);
+      },
+    }),
+  };
 }
 
 describe("the request line and the error boundary", () => {

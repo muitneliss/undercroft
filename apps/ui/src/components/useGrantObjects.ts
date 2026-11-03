@@ -22,6 +22,7 @@ import {
   reportObject,
   wholeObject,
 } from "@undercroft/contracts/access";
+import { byCodeUnit } from "@undercroft/core/order";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
@@ -127,7 +128,9 @@ export function useGrantObjects(tenantId: string): GrantObjects {
   const reports = reportOptions(questions.data ?? [], dashboards.data ?? [], t);
   return {
     whole: wholeOptions(reach.data?.reach, t),
-    models: [...new Set(named)].sort().map((name) => ({ object: modelObject(name), label: name })),
+    models: [...new Set(named)]
+      .sort(byCodeUnit)
+      .map((name) => ({ object: modelObject(name), label: name })),
     streams: streamOptions(lake.data, t),
     reports,
     names: new Map(reports.map((option) => [option.object, option.label])),

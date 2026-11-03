@@ -106,12 +106,21 @@ function mount(browse: () => Response, schedule: readonly unknown[] = SCHEDULE):
   );
 }
 
-async function next(): Promise<HTMLButtonElement> {
-  return await screen.findByRole<HTMLButtonElement>("button", { name: "Tiếp: kiểm tra thay đổi" });
+/** The button named `name`, checked to be one rather than asserted through a type argument. */
+async function buttonNamed(name: string): Promise<HTMLButtonElement> {
+  const found: unknown = await screen.findByRole("button", { name });
+  if (!(found instanceof HTMLButtonElement)) {
+    throw new Error(`"${name}" is not a <button>`);
+  }
+  return found;
 }
 
-async function save(): Promise<HTMLButtonElement> {
-  return await screen.findByRole<HTMLButtonElement>("button", { name: "Lưu lựa chọn" });
+function next(): Promise<HTMLButtonElement> {
+  return buttonNamed("Tiếp: kiểm tra thay đổi");
+}
+
+function save(): Promise<HTMLButtonElement> {
+  return buttonNamed("Lưu lựa chọn");
 }
 
 describe("saving a mailbox's scope", () => {

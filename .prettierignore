@@ -1,6 +1,7 @@
-# Prettier is no longer the repo's formatter. Biome owns every language it can parse --
-# JS, TS, JSX, TSX, JSON, JSONC, CSS, GraphQL, HTML -- and Prettier is kept for exactly the
-# two it cannot: Markdown and YAML. That is 67 .md and 23 .yaml/.yml files, including
+# Prettier is no longer the repo's formatter. Biome owns JS, TS, JSX, TSX, JSON, JSONC, CSS,
+# GraphQL and HTML, and Prettier is kept for exactly two languages: Markdown and YAML. Biome
+# 2.6 can format both, and is kept off them -- `biome.jsonc` excludes `**/*.md`, and its YAML
+# formatter is off by default -- for the reason below (ADR 0153). That is 67 .md and 23 .yaml/.yml files, including
 # docs/adr/, the Kestra flows and the CI workflows, which would otherwise stop being
 # format-checked entirely.
 #

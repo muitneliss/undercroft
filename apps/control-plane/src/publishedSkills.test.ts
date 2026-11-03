@@ -281,7 +281,10 @@ describe("the published skills", () => {
         : textsOf(entry)
             .map(([, t]) => t)
             .join("\n");
-    for (const skill of skills.filter((s) => s.name !== ENTRY)) {
+    for (const skill of skills) {
+      if (skill.name === ENTRY) {
+        continue;
+      }
       expect(text).toContain(`\`${skill.name}\``);
     }
   });

@@ -58,14 +58,15 @@ function packageOf(
   function partOf(spec: SheetSpec, at: number): string {
     return spec.part ?? `worksheets/sheet${String(at + 1)}.xml`;
   }
-  const listed = sheets.map(
-    (s, at) =>
-      `<sheet name="${s.name}" sheetId="${String(at + 1)}" r:id="rId${String(at + 1)}"${s.state === undefined ? "" : ` state="${s.state}"`}/>`,
-  );
+  const listed = sheets.map((s, at) => {
+    const state = s.state === undefined ? "" : ` state="${s.state}"`;
+    return `<sheet name="${s.name}" sheetId="${String(at + 1)}" r:id="rId${String(at + 1)}"${state}/>`;
+  });
   const related = sheets.map(
     (s, at) =>
       `<Relationship Id="rId${String(at + 1)}" Type="${rel}/worksheet" Target="${partOf(s, at)}"/>`,
   );
+  const shared = SHARED.map((item) => `<si><t>${item}</t></si>`).join("");
   return zipOf([
     { name: "[Content_Types].xml", body: typesOf(WORKBOOK_MAIN), stored: true },
     {
@@ -82,7 +83,7 @@ function packageOf(
     },
     {
       name: "xl/sharedStrings.xml",
-      body: `<sst>${SHARED.map((item) => `<si><t>${item}</t></si>`).join("")}</sst>`,
+      body: `<sst>${shared}</sst>`,
     },
     { name: "xl/styles.xml", body: extra.styles ?? "<styleSheet/>" },
     ...sheets.flatMap((s, at) =>

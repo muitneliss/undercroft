@@ -205,7 +205,8 @@ function testRelationName(kind: string, model: string, args: readonly string[]):
     return full;
   }
   const hash = createHash("md5").update(full, "utf8").digest("hex");
-  return `${`${kind}_${model}`.slice(0, TEST_NAME_KEPT)}_${hash}`;
+  const kept = `${kind}_${model}`.slice(0, TEST_NAME_KEPT);
+  return `${kept}_${hash}`;
 }
 
 /**

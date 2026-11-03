@@ -18,7 +18,10 @@ export interface Clock {
 
 export const systemClock: Clock = {
   now: () => new Date(),
-  sleep: (ms): Promise<void> => new Promise((resolve): NodeJS.Timeout => setTimeout(resolve, ms)),
+  sleep: (ms): Promise<void> =>
+    new Promise((resolve): void => {
+      setTimeout(resolve, ms);
+    }),
 };
 
 interface Sleeper {
@@ -28,7 +31,9 @@ interface Sleeper {
 
 /** Yield to the macrotask queue, letting every pending continuation run. */
 function drain(): Promise<void> {
-  return new Promise<void>((resolve) => setTimeout(resolve, 0));
+  return new Promise<void>((resolve): void => {
+    setTimeout(resolve, 0);
+  });
 }
 
 /**

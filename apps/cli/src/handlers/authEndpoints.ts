@@ -76,7 +76,9 @@ function postAuth(
       },
       (response) => {
         const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
+        response.on("data", (chunk: Buffer) => {
+          chunks.push(chunk);
+        });
         response.on("error", reject);
         response.on("end", () => {
           resolve({

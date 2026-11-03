@@ -157,7 +157,7 @@ describe("batch-from reads a relation against ids from another entity", () => {
     expect(JSON.parse(fetcher.calls[1]?.body ?? "null")).toEqual({
       inputs: [{ id: "d1", after: "p2" }],
     });
-    const [paged, whole] = records.map((r) => JSON.parse(r.payloadText));
+    const [paged, whole] = records.map((r): unknown => JSON.parse(r.payloadText));
     expect(paged).toEqual({ from: { id: "d1" }, to: [link("l1"), link("l2")] });
     expect(whole).toEqual({ from: { id: "d2" }, to: [link("l9")] });
   });

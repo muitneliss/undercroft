@@ -11,7 +11,7 @@
 
 import { describe, expect, test as it } from "bun:test";
 import { parseSpec } from "@undercroft/contracts";
-import { TestClock } from "@undercroft/core";
+import { byCodeUnit, TestClock } from "@undercroft/core";
 
 import { type RawRecordOut, type ReadEnd, readEntity } from "./run.ts";
 import { InMemoryFetcher } from "./testing.ts";
@@ -70,7 +70,7 @@ describe("a finished read hands back a listing only when it listed everything", 
       { id: "new", changedAt: "900" },
     ]);
 
-    expect([...(end.listed ?? [])].sort()).toEqual(["new", "old"]);
+    expect([...(end.listed ?? [])].sort(byCodeUnit)).toEqual(["new", "old"]);
   });
 
   it("a watermark sent to the source answers null: what it left out may just be unchanged", async () => {

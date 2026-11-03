@@ -91,11 +91,11 @@ const OVERRIDDEN: readonly string[] = [
   "lint/correctness/noNodejsModules",
   "lint/nursery/noBunModules",
   "lint/nursery/noUnsafeTypeAssertion",
-  "lint/nursery/useExpect",
   "lint/nursery/useExplicitReturnType",
   "lint/performance/useTopLevelRegex",
   "lint/security/noSecrets",
   "lint/suspicious/useAwait",
+  "lint/suspicious/useExpect",
 ];
 
 interface Diagnostic {

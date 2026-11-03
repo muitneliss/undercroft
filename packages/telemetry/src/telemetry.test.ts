@@ -12,7 +12,9 @@ it("a line logged while serving a request carries the trace id that request answ
   const lines: string[] = [];
   const log = createLogger({
     component: "test",
-    sink: (line) => lines.push(line),
+    sink: (line) => {
+      lines.push(line);
+    },
     context: () => ({ traceId: currentTraceId() }),
   });
   const app = new Hono();

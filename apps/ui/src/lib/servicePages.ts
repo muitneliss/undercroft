@@ -16,7 +16,8 @@ export type ServicePage = "app" | "privacy" | "terms";
 
 /** The blog's index in the reader's language, as `langPrefix` in `apps/blog/src/site.ts` builds it. */
 export function blogUrl(locale: Locale): string {
-  return `${BLOG_URL}${locale === "vi" ? "" : `/${locale}`}/`;
+  const prefix = locale === "vi" ? "" : `/${locale}`;
+  return `${BLOG_URL}${prefix}/`;
 }
 
 export function servicePageUrl(locale: Locale, page: ServicePage): string {

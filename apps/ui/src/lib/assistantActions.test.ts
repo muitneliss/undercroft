@@ -24,8 +24,12 @@ function spy(): {
     went,
     drafts,
     deps: {
-      navigate: (path) => went.push(path),
-      setLakeSql: (tenantId, sql) => drafts.push([tenantId, sql]),
+      navigate: (path) => {
+        went.push(path);
+      },
+      setLakeSql: (tenantId, sql) => {
+        drafts.push([tenantId, sql]);
+      },
       knownDivision: (id): id is DivisionId =>
         ["sources", "journal", "lake", "models", "reports"].includes(id),
     },
@@ -74,8 +78,12 @@ describe("drafting a query", () => {
     const order: string[] = [];
     draftLakeQuery(
       {
-        navigate: () => order.push("navigate"),
-        setLakeSql: () => order.push("draft"),
+        navigate: () => {
+          order.push("navigate");
+        },
+        setLakeSql: () => {
+          order.push("draft");
+        },
         knownDivision: (id): id is DivisionId => id.length > 0,
       },
       { tenantId: "CASE-0042", sql: "select 1" },
