@@ -183,7 +183,7 @@ services:
 
   kestra:
     <<: *restart
-    image: kestra/kestra:v2.0.7
+    image: kestra/kestra:v2.0.8
     command: server standalone
     depends_on:
       kestra-postgres:
