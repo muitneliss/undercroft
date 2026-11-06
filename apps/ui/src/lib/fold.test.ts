@@ -1,10 +1,10 @@
 /**
  * The browser's half of the fold, pinned against the database's.
  *
- * `raw.fold` in `190_raw_search.sql` is what MATCHED the hit; this is what HIGHLIGHTS it. Two
- * implementations of one idea is a drift hazard, so what is pinned here is the property that
- * has to hold for the highlight to land on the right characters: the same folding, and the
- * same length. `packages/db/src/rawSearch.test.ts` pins the SQL side of exactly that.
+ * `raw.fold` (`190_raw_search.sql`, respelled in `670_fast_fold.sql`) is what MATCHED the hit;
+ * this is what HIGHLIGHTS it. Two implementations of one idea is a drift hazard, so what is
+ * pinned here is the property that has to hold for the highlight to land on the right
+ * characters: the same folding, and the same length. `packages/db/src/rawSearch.test.ts` pins the SQL side of exactly that.
  */
 
 import { describe, expect, test as it } from "bun:test";

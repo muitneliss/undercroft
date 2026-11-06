@@ -34,18 +34,20 @@ import { TenantNotProvisioned } from "./tenantSession.ts";
  * Ranking a match means rebuilding its folded tsvector, so the cap is a budget counted in
  * vectors rebuilt, and one vector costs very different amounts in the two kinds. A record is a
  * JSON payload of a kilobyte or two. A document's text runs to 200,000 characters
- * (`raw.search_cap()`). Measured in the gate's PGlite against this statement, the only engine
- * measured:
+ * (`raw.search_cap()`). So the caps differ by kind rather than sharing one number.
  *
- * - 2,000 records of 1.5 KB rank in about 2 s, about 1 ms each.
- * - Documents of 20 KB rank at about 13 ms each.
- * - Documents of the full 200,000 characters rank at about 130 ms each, and their excerpts
- *   cost about 200 ms each on the page.
+ * Measured read-only on production (ADR 0154), in a tenant of 191,250 documents and 246,221
+ * records, for a name that matched 10 records and 531 documents. The candidate lookups took 8 ms
+ * and 11 ms; the rest is ranking and the page's excerpts. With the fold as 190 spelled it, the
+ * statement took 17.07 s: ranking the 100 newest documents (averaging 36,037 characters) took
+ * about 10 s, and the 21-row page's excerpts about 6.4-7.25 s. With the fold respelled in 670,
+ * ranking them took 3.62 s and the excerpts about 0.2 s; 670 also folds each text once rather
+ * than twice, which a bench measured as a further third off building a vector.
  *
- * So the caps differ by kind rather than sharing one number. At 100 documents the common case
- * ranks in about 1.3 s. A lake made entirely of full-size documents comes to about 13 s plus
- * the page's excerpts. A cap set by that worst case would rank a dozen documents; past it, the
- * timeout's refusal says what happened and to narrow the question.
+ * The worst case is a lake whose 100 newest matches all sit at the 200,000-character cap. On
+ * production's CPU that ranks in about 13 s with 670 in full, before the page's excerpts: under
+ * the timeout with little room. A cap set below it would rank fewer matches for every question;
+ * past the budget, the timeout's refusal says what happened and to narrow the question.
  */
 export const RANKED_PER_KIND: Readonly<Record<SearchKind, number>> = {
   record: 2000,

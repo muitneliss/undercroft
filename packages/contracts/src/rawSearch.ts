@@ -10,7 +10,8 @@
  * `excerpt` is a window onto the match cut from the ORIGINAL text -- diacritics intact, not the
  * folded form the index matched against. It is deliberately NOT highlighted here: markup on the
  * wire would have to be trusted or escaped by every reader, and the same fold that found it can
- * re-find it in the browser. See `raw.search_excerpt` in 190_raw_search.sql and ADR 0026.
+ * re-find it in the browser. See `raw.search_excerpt` in 190_raw_search.sql (respelled, with the
+ * same answers, in 670_fast_fold.sql) and ADR 0026.
  */
 
 import { z } from "zod";
