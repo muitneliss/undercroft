@@ -44,7 +44,7 @@ async function main(): Promise<void> {
   const log = createLogger({ component: "search-index" });
 
   const pool = createPool(dsn);
-  // One connection for the whole life of the process: the advisory lock and the parallel
+  // One connection for the whole life of the process: the advisory lock and the serial
   // setting belong to a session, and a pool would hand each statement whichever it had free.
   const client = await pool.connect();
   try {

@@ -4,7 +4,15 @@
  * PGlite carries pg_textsearch (`testing.ts`), so what is pinned here is the extension's own
  * ranking, not a stand-in: the door's order, its query language, its stream narrowing, when it
  * refuses, and that its two scans are index scans. Which logins may call it, and that none may
- * reach the extension itself, are `privileges.test.ts`'s.
+ * run an extension function itself, are `privileges.test.ts`'s.
+ *
+ * WHAT THE GATE CANNOT SHOW: the speed. pg_textsearch's planner hook replaces the ORDER BY score
+ * with the score the scan already holds only when it resolves its names through the backend's
+ * `search_path` as the first statement had it (ADR 0156); without it every returned row is
+ * re-scored from its text and a search took 11-42 s on the bench. PGlite runs one backend,
+ * started as the superuser, so whether a tenant login's backend gets the stub -- and the 54-101
+ * ms that buys -- is measured against real Postgres, not here. The plan tests below prove the
+ * index ORDER; they do not prove the row is not re-scored.
  *
  * The fixture is one tenant whose indexes `ops.provision_tenant` made while it was empty, with
  * documents landed afterwards -- the path a new customer takes -- and a second tenant holding the

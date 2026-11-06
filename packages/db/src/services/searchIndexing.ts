@@ -16,14 +16,12 @@
  *
  * THE TWO RULES IT DECIDES BY, each a stated budget beside what it was measured against:
  *
- *   - Parallel or serial. A serial build bloats: for a tenant of 172,000 documents the simple
- *     index was 421 MB and the english 778 MB serially, against 214 MB in parallel. But a
- *     PARALLEL build of a partial expression index evaluates the expression for EVERY row of the
- *     table, the tenant's or not (timescale/pg_textsearch#593: a 200-document tenant took 111 s in
- *     parallel and 96 ms serially). So a tenant holding at least a quarter of `raw.document_text`
- *     builds in parallel -- the rows it does not own cost at most three times its own, split
- *     across the workers -- and every other tenant serially. The quarter is a judgement between
- *     those two measurements, not a measured optimum.
+ *   - Serial, always. A `CONCURRENTLY` build of a pg_textsearch index is serial whatever the
+ *     server allows (measured: no parallel worker, and the same size), and it bloats: for a tenant
+ *     of 172,000 documents 781 MB (simple) and 778 MB (english), against 214 MB for a parallel
+ *     build that is not concurrent. The bloat is accepted: the search latency ADR 0156 records was
+ *     measured on these indexes, and production has about 79 GB free. A non-concurrent build would
+ *     hold a SHARE lock on `raw.document_text` -- every tenant's extraction -- for the whole build.
  *   - Reindex when grown. Re-extraction grows an index and `VACUUM` gives nothing back (216 ->
  *     362 MB for 10% of a tenant's documents rewritten). An index is rebuilt once it is at least
  *     twice its size at its last build AND at least 64 MiB larger: doubling keeps the rebuilds'
@@ -38,7 +36,6 @@ import { type Clock, describeError, type Logger, systemClock } from "@undercroft
 import type { SqlExecutor } from "../executor.ts";
 import {
   buildSearchIndex,
-  documentShare,
   dropSearchIndex,
   dropStrayIndex,
   recordSearchIndexBuild,
@@ -50,8 +47,6 @@ import {
   unlockSearchIndexing,
 } from "../repos/searchIndexes.ts";
 
-/** A tenant holding at least this share of `raw.document_text` builds with parallel workers. */
-export const PARALLEL_SHARE = 0.25;
 /** An index is reindexed once it is at least this many times its size at its last build... */
 export const REINDEX_GROWTH = 2;
 /** ...and at least this many bytes larger. */
@@ -98,11 +93,6 @@ export function upkeepOf(
     state.bytes >= state.builtBytes * REINDEX_GROWTH &&
     state.bytes - state.builtBytes >= REINDEX_MIN_GROWTH_BYTES;
   return grown ? "reindexed" : "kept";
-}
-
-/** The parallel-or-serial rule in the header, over the tenant's rows and the table's. */
-export function buildsInParallel(tenantRows: number, totalRows: number): boolean {
-  return totalRows > 0 && tenantRows >= totalRows * PARALLEL_SHARE;
 }
 
 /** Run one pass. Never throws for one index's failure: it is logged, and the pass goes on. */
@@ -163,21 +153,14 @@ async function mend(
       const builtBytes = await recordSearchIndexBuild(exec, state.tenantId, state.config);
       return { action: "recorded", facts: { builtBytes } };
     }
-    const parallel = await inParallel(exec, state.tenantId);
-    await reindexSearchIndex(exec, state.tenantId, state.config, parallel);
+    await reindexSearchIndex(exec, state.tenantId, state.config);
     const builtBytes = await recordSearchIndexBuild(exec, state.tenantId, state.config);
-    return { action: "reindexed", facts: { parallel, bytesBefore: state.bytes, builtBytes } };
+    return { action: "reindexed", facts: { bytesBefore: state.bytes, builtBytes } };
   }
   if (state.present) {
     await dropSearchIndex(exec, state.tenantId, state.config);
   }
-  const parallel = await inParallel(exec, state.tenantId);
-  await buildSearchIndex(exec, state.tenantId, state.config, parallel);
+  await buildSearchIndex(exec, state.tenantId, state.config);
   const builtBytes = await recordSearchIndexBuild(exec, state.tenantId, state.config);
-  return { action: state.present ? "rebuilt" : "built", facts: { parallel, builtBytes } };
-}
-
-async function inParallel(exec: SqlExecutor, tenantId: string): Promise<boolean> {
-  const { tenantRows, totalRows } = await documentShare(exec, tenantId);
-  return buildsInParallel(tenantRows, totalRows);
+  return { action: state.present ? "rebuilt" : "built", facts: { builtBytes } };
 }

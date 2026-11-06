@@ -1,7 +1,7 @@
 -- A document search ranks through two BM25 indexes per tenant, behind a door. ADR 0155, as
--- amended by ADR 0156 (the measured facts that changed its decisions 1, 3 and 5).
+-- amended by ADR 0156 (the measured facts that changed its decisions 1, 2, 3 and 5).
 --
--- WHAT THIS FILE IS. The extension, in a schema no customer login can use; the one derivation of
+-- WHAT THIS FILE IS. The extension, whose functions no customer login can run; the one derivation of
 -- a tenant's index names and the statements that build them; the door a tenant's login ranks
 -- through; and the answer to "may this tenant rank through the door yet". It changes nothing a
 -- search does today: the worker still reads ADR 0123's candidates until its statement is switched
@@ -16,16 +16,31 @@
 -- and that is the intent: a database that cannot rank this way must not look as if it could.
 -- The gate's PGlite loads the extension in `packages/db/src/testing.ts`.
 --
--- WHY THE EXTENSION LIVES IN A SCHEMA NOBODY ELSE MAY USE. BM25 scores carry corpus statistics,
+-- WHY THE EXTENSION'S FUNCTIONS ARE EXECUTABLE BY NOBODY. BM25 scores carry corpus statistics,
 -- and `to_bm25query(text, index_name)` accepts ANY index name without reading a row of it. The
 -- spike measured the consequence: a tenant's dbt login wrote a table in its own analytics schema
 -- -- which is what a dbt model is -- and scored its text against ANOTHER tenant's index. A word
 -- the other tenant held scored -2.17, a word it did not hold scored 0: a membership oracle over
 -- another customer's documents, which row-level security cannot stop because no row of the other
--- tenant is read. So `search_ext` grants USAGE to nobody, every extension object below is named
--- through it, and the only code that reaches it is this file's, running as its owner. The
--- explicit refusals live in `repeatable/010_provision_tenant.sql` (tenant and scope logins) and
--- below (the platform roles), so a later broad grant is a visible contradiction.
+-- tenant is read. So the extension lives in `search_ext`, every function in it is revoked from
+-- PUBLIC (below), and the only code that runs one is this file's, as its owner.
+--
+-- WHY A TENANT'S DBT LOGIN STILL HAS USAGE ON IT (ADR 0156, amending ADR 0155 decision 2).
+-- pg_textsearch's planner hook swaps the ORDER BY score for the score the index scan already
+-- holds (`bm25_get_current_score()`), and it finds that stub and the `<@>` operator by
+-- UNQUALIFIED name through `search_path` -- in effect as the backend's first statement had it.
+-- Without the stub every row the index returns is re-scored from its text, about 1.8 ms a row,
+-- and a search took 11-42 s as the tenant login on the bench; with it, 54-101 ms. So the dbt login
+-- has USAGE (name resolution) and `search_ext` on its role's `search_path`
+-- (`repeatable/010_provision_tenant.sql`), the door and its head carry it on theirs, and the
+-- oracle stays shut by EXECUTE instead: the probe is refused "permission denied for function".
+-- BI and scope logins, and the platform roles, have no USAGE at all.
+--
+-- A FUTURE `ALTER EXTENSION pg_textsearch UPDATE` MUST REPEAT THE REVOKE BELOW. An extension
+-- script creates its functions with Postgres's default, EXECUTE for PUBLIC; the migration that
+-- updates the extension must revoke it again in the same file, or a tenant can score against
+-- any index from the next deploy on. `privileges.test.ts` enumerates the schema's functions, so
+-- a new one executable by a tenant fails the gate.
 
 -- -- the extension ------------------------------------------------------------------------------
 CREATE SCHEMA IF NOT EXISTS search_ext;
@@ -33,6 +48,7 @@ REVOKE ALL ON SCHEMA search_ext FROM PUBLIC;
 REVOKE ALL ON SCHEMA search_ext FROM undercroft_app, undercroft_worker, undercroft_dbt, undercroft_bi;
 
 CREATE EXTENSION IF NOT EXISTS pg_textsearch SCHEMA search_ext;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA search_ext FROM PUBLIC;
 
 -- `IF NOT EXISTS` is satisfied by an extension in ANY schema, and one created in `public` would
 -- leave every `search_ext.` name below unresolvable -- and the operators reachable by every
@@ -262,6 +278,11 @@ $$;
 -- them. That is a guarantee; numbering an ordered subquery with `row_number() OVER ()` would only
 -- usually be one.
 --
+-- `search_ext` IS ON ITS PATH, though every name in the statement is qualified, for the planner
+-- hook in the header: it resolves the cached-score stub unqualified, and with the path pinned to
+-- `pg_catalog, raw` it failed ("function bm25_get_current_score() does not exist"). The door
+-- carries the same path, so whichever function's planning the hook runs inside, it finds it.
+--
 -- WHY SEQUENTIAL SCANS AND SORTS ARE OFF, for this function's own statement alone. At a LIMIT as
 -- deep as the depth, the planner may price "scan the tenant's rows by another index, score each
 -- from its text, sort" below the BM25 index scan -- it does on a small table -- and that plan
@@ -279,7 +300,7 @@ CREATE OR REPLACE FUNCTION raw.search_document_bm25_head(
 )
     RETURNS TABLE (source text, document_id text)
     LANGUAGE plpgsql STABLE
-    SET search_path = pg_catalog, raw
+    SET search_path = pg_catalog, raw, search_ext
     SET enable_seqscan = off
     SET enable_sort = off
 AS $fn$
@@ -317,7 +338,8 @@ $fn$;
 --     lie past the depth of both heads (or the query has no positive term to rank, such as
 --     `-xe` alone), and a short page would read as "no more hits".
 --
--- `enable_seqscan = off` reaches the heads, so their index scans are the only path.
+-- `enable_seqscan = off` reaches the heads, so their index scans are the only path, and
+-- `search_ext` is on the path for the planner hook (the head's header says why).
 CREATE OR REPLACE FUNCTION raw.search_document_bm25(
     p_role     name,
     p_q        text,
@@ -327,7 +349,7 @@ CREATE OR REPLACE FUNCTION raw.search_document_bm25(
 )
     RETURNS TABLE (source text, document_id text, ordinal bigint)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
-    SET search_path = pg_catalog, raw
+    SET search_path = pg_catalog, raw, search_ext
     SET enable_seqscan = off
 AS $fn$
 #variable_conflict use_column

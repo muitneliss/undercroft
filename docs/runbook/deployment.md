@@ -413,6 +413,16 @@ A deploy that restarts it mid-build leaves that index invalid; the next pass dro
 it. A new tenant gets its indexes from `db-migrate` (empty, so built at once) unless the table
 was busy at that moment, in which case the next pass builds them.
 
+Builds are serial and come out three to four times the size of a parallel one (781 MB for
+the largest tenant's index); that is expected, and the growth rule keeps them from growing
+further (ADR 0156).
+
+A search is fast only in a tenant backend that started with `search_ext` on its role's default
+`search_path`, which `db-migrate` sets: pg_textsearch's planner hook reads it once, at the
+backend's first statement, and without it every ranked row is re-scored from its text (ADR 0156).
+Backends the pooler already holds take the new default when they reconnect, within its
+`SERVER_LIFETIME` of an hour.
+
 **The release that first carries `680_bm25_search.sql` needs the Postgres image already
 running** (see [The Postgres image](#the-postgres-image)). The migration creates the extension,
 which needs the preload, and stops the migrate without it. On that release the first pass builds

@@ -7,9 +7,9 @@
  * the same names to rank with, and an index this file named one way while the door looked for
  * another would be built and never used.
  *
- * ONE CONNECTION. Building CONCURRENTLY cannot run in a transaction, and whether a build may use
- * parallel workers is a session setting: so every function here expects an executor bound to one
- * connection for the whole pass, and says which settings it leaves behind (none).
+ * ONE CONNECTION. Building CONCURRENTLY cannot run in a transaction, and the serial setting and
+ * the pass's advisory lock belong to a session: so every function here expects an executor bound
+ * to one connection for the whole pass, and leaves no setting behind.
  */
 
 import type { SqlExecutor } from "../executor.ts";
@@ -94,24 +94,6 @@ export async function strayInvalidSearchIndexes(exec: SqlExecutor): Promise<stri
   return rows.map((row) => row.qualified);
 }
 
-/** How many of `raw.document_text`'s rows are this tenant's, and how many there are. */
-export async function documentShare(
-  exec: SqlExecutor,
-  tenantId: string,
-): Promise<{ tenantRows: number; totalRows: number }> {
-  const { rows } = await exec.query<{ tenant_rows: number; total_rows: number }>(
-    `SELECT (count(*) FILTER (WHERE tenant_id = $1))::float8 AS tenant_rows,
-            count(*)::float8 AS total_rows
-     FROM raw.document_text`,
-    [tenantId],
-  );
-  const [row] = rows;
-  if (row === undefined) {
-    throw new Error("an aggregate over raw.document_text answered no row");
-  }
-  return { tenantRows: row.tenant_rows, totalRows: row.total_rows };
-}
-
 /** The statement `raw.search_index_sql` gives for this verb; see 680 for the four. */
 async function statementFor(
   exec: SqlExecutor,
@@ -131,17 +113,16 @@ async function statementFor(
 }
 
 /**
- * Run a maintenance statement with or without parallel workers, and put the session back.
+ * Run a maintenance statement serially, and put the session back.
  *
- * Serial is `max_parallel_maintenance_workers = 0`; parallel is the server's own setting. The
- * choice is the caller's (`services/searchIndexing.ts` states the rule); here it is only applied.
+ * A `CONCURRENTLY` build of a pg_textsearch index is serial today whatever the server allows
+ * (measured: no parallel worker in `pg_stat_activity`, and the same size either way). It is
+ * pinned serial anyway because if a later release parallelised it, a parallel build of a
+ * partial expression index evaluates the expression for EVERY row of the table, the tenant's or
+ * not (timescale/pg_textsearch#593: 200 documents, 111 s against 96 ms).
  */
-async function maintain(exec: SqlExecutor, sql: string, parallel: boolean): Promise<void> {
-  await exec.query(
-    parallel
-      ? "RESET max_parallel_maintenance_workers"
-      : "SET max_parallel_maintenance_workers = 0",
-  );
+async function maintain(exec: SqlExecutor, sql: string): Promise<void> {
+  await exec.query("SET max_parallel_maintenance_workers = 0");
   try {
     await exec.query(sql);
   } finally {
@@ -154,9 +135,8 @@ export async function buildSearchIndex(
   exec: SqlExecutor,
   tenantId: string,
   config: SearchIndexConfig,
-  parallel: boolean,
 ): Promise<void> {
-  await maintain(exec, await statementFor(exec, tenantId, config, "build"), parallel);
+  await maintain(exec, await statementFor(exec, tenantId, config, "build"));
 }
 
 /** `REINDEX INDEX CONCURRENTLY`: a fresh copy swapped in under the same name. */
@@ -164,9 +144,8 @@ export async function reindexSearchIndex(
   exec: SqlExecutor,
   tenantId: string,
   config: SearchIndexConfig,
-  parallel: boolean,
 ): Promise<void> {
-  await maintain(exec, await statementFor(exec, tenantId, config, "reindex"), parallel);
+  await maintain(exec, await statementFor(exec, tenantId, config, "reindex"));
 }
 
 /** `DROP INDEX CONCURRENTLY IF EXISTS` this tenant's index in this configuration. */

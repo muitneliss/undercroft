@@ -184,8 +184,8 @@ BEGIN
         v_dbt);
     -- The BM25 door, its keys-only filter and whether it is ready (680, ADR 0155, ADR 0156). The
     -- same argument: SECURITY DEFINER, keys of the calling login's own documents only, and the
-    -- index names derived inside from that login's tenant. The extension itself stays out of
-    -- reach (refused below); this is the only way a tenant ranks.
+    -- index names derived inside from that login's tenant. The extension's functions stay out of
+    -- reach (no EXECUTE, 680); this is the only way a tenant ranks.
     EXECUTE format(
         'GRANT EXECUTE ON FUNCTION raw.search_document_bm25(name, text, integer, text[], text[]),
              raw.search_document_matches(name, text, text[], text[]),
@@ -214,10 +214,11 @@ BEGIN
         'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT SELECT ON TABLES TO %I',
         v_dbt, v_staging, v_bi);
 
-    -- Explicit refusals, so a later broad grant is a visible contradiction. `search_ext` holds
-    -- pg_textsearch, whose `to_bm25query` scores any text against ANY index it is named: USAGE
-    -- there is a membership oracle over every other customer's documents (680, ADR 0155).
-    EXECUTE format('REVOKE ALL ON SCHEMA app, ops, search_ext FROM %I, %I', v_dbt, v_bi);
+    -- Explicit refusals, so a later broad grant is a visible contradiction. BI never reaches
+    -- `search_ext`, where pg_textsearch lives; the dbt login's USAGE there is granted below and
+    -- is name resolution only (680 revokes EXECUTE on every function in it from PUBLIC).
+    EXECUTE format('REVOKE ALL ON SCHEMA app, ops FROM %I, %I', v_dbt, v_bi);
+    EXECUTE format('REVOKE ALL ON SCHEMA search_ext FROM %I', v_bi);
     EXECUTE format('REVOKE ALL ON SCHEMA %I FROM %I', v_dq, v_bi);
     -- Staging holds builds no test has passed yet; a dashboard reads none of it (ADR 0131).
     EXECUTE format('REVOKE ALL ON SCHEMA %I FROM %I', v_staging, v_bi);
@@ -246,6 +247,22 @@ BEGIN
     -- `pg_db_role_setting`, not the role's own row, so it does not race the password
     -- rotation the CONNECTION LIMIT guard is about (ADR 0087).
     EXECUTE format('ALTER ROLE %I SET client_connection_check_interval = %L', v_dbt, '5s');
+
+    -- THE BM25 SEARCH NEEDS THE EXTENSION ON THIS LOGIN'S PATH FROM ITS FIRST STATEMENT (ADR
+    -- 0156). pg_textsearch's planner hook replaces the ORDER BY score with the score the index
+    -- scan already computed (`bm25_get_current_score()`), but it finds that function and the
+    -- `<@>` operator by UNQUALIFIED name, through `search_path`, and in effect only as the
+    -- backend's first statement had it. Without the stub Postgres re-scores every row the index
+    -- returns from its text, about 1.8 ms a row: measured as the tenant login, a search took
+    -- 11-42 s; with it, 54-101 ms. So the path is the login's own default, set where a backend
+    -- reads it before any statement -- a `SET` inside a session comes too late -- and it is
+    -- Postgres's default with `search_ext` appended LAST, so no name this login resolves today
+    -- resolves to anything else. The USAGE that makes the schema searchable is name resolution
+    -- only: every function in it is revoked from PUBLIC (680), so the membership oracle stays
+    -- shut, by EXECUTE. Unconditional, for the reason the setting above gives; a pooled backend
+    -- takes it at its next connection (PgBouncer's `SERVER_LIFETIME`, an hour).
+    EXECUTE format('GRANT USAGE ON SCHEMA search_ext TO %I', v_dbt);
+    EXECUTE format('ALTER ROLE %I SET search_path = %s', v_dbt, '"$user", public, search_ext');
 
     -- The customer's scope logins (ADR 0142): the ones nobody uses any more dropped, and every
     -- other one's grants -- and, since ADR 0143, its column grants and row policies -- restated

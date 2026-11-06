@@ -9,14 +9,13 @@
  * the integration tier's. A cut-short build is planted the way Postgres leaves one: an index
  * whose `indisvalid` is false.
  *
- * The two rules a pass decides by are pure and pinned without a database, each from both sides.
+ * The growth rule a pass decides by is pure, and pinned without a database from both sides.
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { createLogger } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "../testing.ts";
 import {
-  buildsInParallel,
   indexSearch,
   REINDEX_MIN_GROWTH_BYTES,
   type SearchIndexPass,
@@ -25,7 +24,7 @@ import {
 
 const MIB = 1024 * 1024;
 
-describe("the rules a pass decides by", () => {
+describe("the growth rule a pass decides by", () => {
   it("reindexes an index at twice its built size and 64 MiB larger", () => {
     expect(upkeepOf({ bytes: 200 * MIB, builtBytes: 100 * MIB })).toBe("reindexed");
     expect(upkeepOf({ bytes: 64 * MIB + 16_384, builtBytes: 16_384 })).toBe("reindexed");
@@ -41,18 +40,6 @@ describe("the rules a pass decides by", () => {
 
   it("records a baseline for a valid index with no size on record", () => {
     expect(upkeepOf({ bytes: 16_384, builtBytes: null })).toBe("recorded");
-  });
-
-  it("builds in parallel for a tenant holding a quarter of the documents or more", () => {
-    expect(buildsInParallel(25, 100)).toBe(true);
-    expect(buildsInParallel(172_000, 191_200)).toBe(true);
-  });
-
-  it("builds serially for a smaller tenant, and for an empty table", () => {
-    // timescale/pg_textsearch#593: in parallel, 200 documents took 111 s rather than 96 ms.
-    expect(buildsInParallel(200, 191_200)).toBe(false);
-    expect(buildsInParallel(24, 100)).toBe(false);
-    expect(buildsInParallel(0, 0)).toBe(false);
   });
 });
 
@@ -143,11 +130,10 @@ describe("a tenant's BM25 indexes, from provisioning to a pass of search-index",
     expect(
       lines
         .filter((line) => line.tenantId === "CASE-0043")
-        .map((line) => [line.component, line.event, line.config, line.parallel]),
+        .map((line) => [line.component, line.event, line.config]),
     ).toEqual([
-      // The tenant holds every document there is, so its builds are parallel by the rule.
-      ["search-index", "search_index.built", "simple", true],
-      ["search-index", "search_index.built", "english", true],
+      ["search-index", "search_index.built", "simple"],
+      ["search-index", "search_index.built", "english"],
     ]);
     expect(await ready("undercroft_dbt_case_0043")).toBe(true);
     const { rows } = await db.asRole("undercroft_dbt_case_0043", (tx) =>

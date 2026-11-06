@@ -395,8 +395,8 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
     }
   });
 
-  it("no tenant, BI, scope or platform login may use the schema the BM25 extension lives in", async () => {
-    // USAGE there is a membership oracle (the test below), so it is held by its owner alone.
+  it("no BI, scope or platform login may use the schema the BM25 extension lives in", async () => {
+    // A tenant's dbt login is the one exception, and the next test says what it may do there.
     const scope = await provisionScope(db, "CASE-0042", ["fct_sales"]);
     const { rows: home } = await db.query<{ schema: string }>(
       `SELECT extnamespace::regnamespace::text AS schema FROM pg_extension
@@ -405,7 +405,7 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
     expect(home).toEqual([{ schema: "search_ext" }]);
     const { rows } = await db.query<{ role: string; usage: boolean }>(
       `SELECT r.role, has_schema_privilege(r.role, 'search_ext', 'USAGE') AS usage
-       FROM (SELECT role_name::text AS role FROM ops.tenant_role
+       FROM (SELECT role_name::text AS role FROM ops.tenant_role WHERE kind = 'bi'
              UNION SELECT role_name::text FROM ops.tenant_scope
              UNION SELECT unnest(ARRAY['undercroft_app', 'undercroft_worker', 'undercroft_dbt',
                                        'undercroft_bi', 'undercroft_owner'])) r
@@ -413,7 +413,60 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
     );
     expect(rows.map((r) => r.role)).toContain(scope);
     expect(rows.filter((r) => r.usage)).toEqual([]);
-    expect(rows.length).toBe(10);
+    expect(rows.length).toBe(8);
+  });
+
+  it("a tenant's dbt login resolves names in that schema and may run none of its functions", async () => {
+    // USAGE is there for the extension's planner hook, which finds its cached-score stub by
+    // unqualified name (ADR 0156); EXECUTE is what keeps the membership oracle shut. Every
+    // function in the schema is enumerated, so one a future extension release adds -- with
+    // Postgres's default EXECUTE for PUBLIC -- fails here rather than reaching a tenant.
+    const { rows } = await db.query<{
+      login: string;
+      usage: boolean;
+      functions: number;
+      runnable: string[];
+    }>(
+      `SELECT t.role_name::text AS login,
+              has_schema_privilege(t.role_name, 'search_ext', 'USAGE') AS usage,
+              count(p.oid)::int AS functions,
+              coalesce(array_agg(p.proname::text ORDER BY p.proname)
+                       FILTER (WHERE has_function_privilege(t.role_name, p.oid, 'EXECUTE')), '{}')
+                AS runnable
+       FROM ops.tenant_role t
+       CROSS JOIN pg_proc p
+       WHERE t.kind = 'dbt' AND p.pronamespace = 'search_ext'::regnamespace
+       GROUP BY t.role_name
+       ORDER BY 1`,
+    );
+    expect(rows.map(({ login, usage, runnable }) => ({ login, usage, runnable }))).toEqual([
+      { login: "undercroft_dbt_case_0042", usage: true, runnable: [] },
+      { login: "undercroft_dbt_case_0043", usage: true, runnable: [] },
+    ]);
+    // Not vacuous: the scoring function, `to_bm25query` and the stub are all in there.
+    expect(rows[0]?.functions).toBeGreaterThan(30);
+  });
+
+  it("a tenant's dbt login has the extension on its own default path, and re-provisioning restores it", async () => {
+    // Set on the ROLE, where a backend reads it before its first statement: the planner hook is
+    // settled by then, and a `SET` inside the session comes too late (ADR 0156). PGlite runs one
+    // backend, started as the superuser, so the gate cannot show the hook itself or the latency
+    // it buys -- only that the setting a real backend would start with is there.
+    async function settings(): Promise<string[]> {
+      const { rows } = await db.query<{ setconfig: string[] }>(
+        `SELECT s.setconfig FROM pg_db_role_setting s JOIN pg_roles r ON r.oid = s.setrole
+          WHERE r.rolname = 'undercroft_dbt_case_0042'`,
+      );
+      return rows.flatMap((row) => row.setconfig);
+    }
+    const path = 'search_path="$user", public, search_ext';
+    expect(await settings()).toContain(path);
+
+    await db.exec("ALTER ROLE undercroft_dbt_case_0042 RESET search_path");
+    expect(await settings()).not.toContain(path);
+    await db.query("SELECT ops.provision_tenant('CASE-0042')");
+
+    expect(await settings()).toContain(path);
   });
 
   it("a tenant cannot score its own table's text against another tenant's index", async () => {
@@ -454,7 +507,8 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
         return (error as Error).message;
       }
     });
-    expect(refusal).toMatch(/permission denied for schema search_ext/u);
+    // Refused by EXECUTE, not by USAGE: the login may name the extension, and run none of it.
+    expect(refusal).toMatch(/permission denied for function/u);
   });
 
   it("the worker lands extracted text for a tenant whose search indexes exist", async () => {

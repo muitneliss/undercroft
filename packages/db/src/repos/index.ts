@@ -176,7 +176,6 @@ export {
 } from "./documentKinds.ts";
 export {
   buildSearchIndex,
-  documentShare,
   dropSearchIndex,
   dropStrayIndex,
   recordSearchIndexBuild,
