@@ -3,7 +3,7 @@
 --
 -- WHY. `lake.search` ran into the worker's 15 s statement timeout in production on an ordinary
 -- name. Measured read-only on production, in a tenant of 191,250 documents and 246,221 records
--- (Postgres 17.11), a search for `DO HOAI THUONG` matched 10 records and 531 documents, and the
+-- (Postgres 17.11), a search for a person's three-syllable name matched 10 records and 531 documents, and the
 -- candidate lookups (530) found them through the index in 8 ms and 11 ms. The whole statement
 -- took 17.07 s. Nearly all of it was what runs AFTER the lookups: ranking the 100 newest
 -- documents (`ts_rank_cd` over a rebuilt `raw.search_tsv`; they averaged 36,037 characters)
@@ -28,8 +28,8 @@
 -- Measured on production with the new fold alone: folding the 100 documents 4.17 s -> 1.04 s,
 -- ranking them 9.97 s -> 3.62 s (the same `ts_rank_cd` sum), and the page's excerpts about
 -- 6.4 s -> 0.2 s (the same total length). On a bench of real Postgres 17 (one 200,000-character
--- body), folding once besides: `raw.search_tsv` 70 ms -> 47 ms, and the excerpt for
--- `DO HOAI THUONG` 99 ms -> 29 ms, each with an identical md5.
+-- body), folding once besides: `raw.search_tsv` 70 ms -> 47 ms, and the excerpt for a
+-- three-term query 99 ms -> 29 ms, each with an identical md5.
 --
 -- THE OUTPUT IS UNCHANGED, AND THAT IS LOAD-BEARING. Both GIN indexes in 190 hold the output of
 -- `raw.search_tsv` and `raw.record_tsv`, which call `raw.fold`. Postgres trusts an IMMUTABLE

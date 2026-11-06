@@ -10,13 +10,13 @@
 ## Context
 
 `lake.search` still ran into the worker's 15 s statement timeout in production. One trace
-(`ecd525122aca29028589585adafa47d1`) searched for a person's name, `DO HOAI THUONG`. There were
-three timeouts in seven days.
+(`ecd525122aca29028589585adafa47d1`) searched for a person's full name: three syllables, typed
+without diacritics, the first being the surname `do`. There were three timeouts in seven days.
 
 ADR 0123 had made the matching go through the GIN index, and that part held. The search was
 measured read-only on production, in the tenant it timed out for: 191,250 documents averaging
 6,459 characters (p99 65,839; 433 at the 200,000-character cap) and 246,221 records, on Postgres
-17.11 with `shared_buffers` 128 MB and `work_mem` 4 MB, on an 8-core VPS. `DO HOAI THUONG`
+17.11 with `shared_buffers` 128 MB and `work_mem` 4 MB, on an 8-core VPS. That name
 matched 10 records and 531 documents.
 
 | What was timed on production                      | With 190's fold |  With the new fold |
@@ -141,5 +141,5 @@ The signatures, attributes and grants of all four replaced functions are unchang
   compares the database's fold with the browser's, and before this change it read 190 by name.
 - **A separate relevance issue remains, and it is not addressed here.** `raw.search_query` ORs
   a `simple` query with an `english` one. The English half drops `do` as a stop word, so
-  `DO HOAI THUONG` also matches any text holding `hoai` and `thuong`, which widens the
-  candidates. That is a follow-up about relevance, not about speed.
+  a name beginning with the surname `do` also matches any text holding its other two
+  syllables, which widens the candidates. That is a follow-up about relevance, not about speed.
