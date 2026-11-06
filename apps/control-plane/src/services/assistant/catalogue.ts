@@ -105,8 +105,10 @@ export const READ_TOOLS = {
   searchLake: {
     description:
       "Full-text search across everything landed for one customer, in Vietnamese or English. " +
-      "Diacritics are folded, so 'hop dong' finds 'Hợp đồng'. Each kind ranks only its newest " +
-      "matches, and `capped` names a kind that had more: say so rather than calling the hits " +
+      "Diacritics are folded, so 'hop dong' finds 'Hợp đồng'. Documents are ranked by relevance " +
+      "across every match; records only among their newest matches. `capped` names a kind that " +
+      "was ranked only among its newest and had more matches -- records past their cap, or " +
+      "documents when the search index could not answer: say so rather than calling the hits " +
       "everything that matched.",
     inputSchema: inTenant.extend({
       q: z.string().min(1).describe("What to look for, in the reader's own words."),

@@ -309,8 +309,9 @@ export class InMemoryWorkerClient implements WorkerClient {
    * Records the question and answers with whatever `answersSearchWith` was given.
    *
    * Like `runRawQuery`, this fake models the CALLER's decisions -- who is admitted, what is
-   * recorded, what a refusal becomes on screen -- and not the matching, which is Postgres's and
-   * is proven against it in `packages/db/src/rawSearch.test.ts`. A fake that pretended to fold
+   * recorded, what a refusal becomes on screen -- and not the matching or the ranking, which are
+   * Postgres's and are proven against it in `packages/db/src/rawSearch.test.ts`,
+   * `packages/db/src/bm25Search.test.ts` and the worker's own suite. A fake that pretended to fold
    * Vietnamese would be a second, quietly different answer to what the reader asked.
    */
   searchRaw(input: SearchInput): Promise<WorkerOutcome<RawSearchResponse>> {

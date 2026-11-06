@@ -88,7 +88,7 @@ export const procedureSentences: SentenceTable = {
     "A source's raw documents, or the ones a run wrote. Only a source whose documents you can read; any other is an empty page.",
   "lake.query": "Run one SELECT over the raw lake.",
   "lake.search":
-    "Full-text search over the raw lake. Each kind ranks only its newest matches, and the answer says when that cut any. Only in the streams you can read, narrowed before anything is ranked.",
+    "Full-text search over the raw lake. Documents are ranked by relevance across every match, records among their newest matches; when a kind was ranked only among its newest -- records past their cap, or documents while the search index cannot answer -- the answer says so in capped. Only in the streams you can read, narrowed before anything is ranked.",
   "lake.querySchema":
     "The tables and columns lake query can read; tables for exactly those, match for names containing a fragment (case-insensitive), columns: false for table names alone.",
   "documentKinds.list":

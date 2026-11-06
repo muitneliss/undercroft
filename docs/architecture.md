@@ -360,7 +360,8 @@ Migrations are numbered files in `packages/db/sql/`, applied in order and record
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
 | `app`            | People and auth (`auth_*`, `app_user`, `tenant_member`), invitations, sealed secrets, ingest keys, models, BI questions and dashboards, assistant threads, access tokens, OAuth clients | control plane, worker   |
 | `ops`            | Tenants, connections (scope, cadence, cron), the run ledger (`run`, `run_entity`, `run_refusal`, `run_step`, `run_event`), the audit log, `tenant_role`                                 | control plane, worker   |
-| `raw`            | `records` (partitioned by source), `documents`, `document_text`, `load_cursor`, `sync_cursor`, and the search functions                                                                 | worker                  |
+| `raw`            | `records` (partitioned by source), `documents`, `document_text`, `load_cursor`, `sync_cursor`, the search functions and the BM25 door, and each tenant's two BM25 indexes               | worker                  |
+| `search_ext`     | The pg_textsearch extension, whose functions no login may execute; a tenant's dbt login may only resolve names in it, for the extension's planner hook (ADR 0156)                       | migrations              |
 | `analytics_slug` | One tenant's published dbt models and seeds: only what passed its tests                                                                                                                 | that tenant's dbt login |
 | `staging_slug`   | That tenant's builds before promotion, and those held back; BI has no USAGE                                                                                                             | that tenant's dbt login |
 | `dq_slug`        | That tenant's stored test failures                                                                                                                                                      | that tenant's dbt login |
@@ -440,9 +441,18 @@ reaches only some models, as a scope login granted exactly those tables
 columns of a model, granted only those columns and limited by a row-level policy on the table
 ([ADR 0143](adr/0143-row-and-column-rules-on-model-grants.md)). Result rows are never stored.
 
-Full-text search covers record payloads and document text through two GIN expression indexes.
-Text is folded, so Vietnamese matches with or without tone marks
-([ADR 0026](adr/0026-full-text-search-over-the-raw-lake.md)).
+Full-text search covers record payloads and document text. Two GIN expression indexes find the
+matches, and text is folded, so Vietnamese matches with or without tone marks
+([ADR 0026](adr/0026-full-text-search-over-the-raw-lake.md)). Records are ranked among their
+newest matches ([ADR 0123](adr/0123-search-ranks-the-newest-matches-found-through-the-index.md)).
+Documents are ranked by relevance across every match, through two BM25 indexes per tenant behind
+a `SECURITY DEFINER` door that derives the index names from the caller's own tenant, so no
+tenant ranks against another's statistics
+([ADR 0155](adr/0155-search-ranks-through-a-bm25-index-per-tenant.md),
+[ADR 0156](adr/0156-bm25-search-as-measured-before-it-shipped.md)). While a tenant's indexes are
+being built, or for a page past what the door ranks, documents are ranked the older way and the
+answer's `capped` says so; a page interleaves the two kinds by their place within each
+([ADR 0157](adr/0157-a-search-page-interleaves-its-kinds-and-capped-names-the-older-path.md)).
 
 ## Key flows
 

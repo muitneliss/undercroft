@@ -61,8 +61,8 @@ export const MAX_SEARCH_STREAMS = 1000;
  * `entity` null; a document is its source's `documents` stream. Empty finds nothing.
  *
  * Its own route for the reason `ScopedRunQueryRequest` has one: a worker that predates it would
- * drop `streams` and search the whole lake. The worker narrows inside the candidate lookups,
- * before anything is ranked or counted, so a page never holds or counts what the reader cannot
+ * drop `streams` and search the whole lake. The worker narrows inside the candidate lookups and
+ * the BM25 door, before anything is ranked or counted, so a page never holds or counts what the reader cannot
  * see.
  */
 export const RawSearchWithinRequest = RawSearchRequest.extend({
@@ -75,7 +75,14 @@ export type RawSearchWithinRequest = z.infer<typeof RawSearchWithinRequest>;
 /** What both kinds of hit carry: where it came from, how well it matched, and a window on it. */
 const hitBase = {
   source: z.string().min(1),
-  /** `ts_rank_cd`, for ordering only. Never shown: a relevance number means nothing to a reader. */
+  /**
+   * An ordering key and nothing else: `1 / place`, where `place` is the hit's place among its
+   * own kind's ranked matches -- 1 for each kind's best. Each kind is ranked within itself
+   * (records by `ts_rank_cd`, ADR 0123; documents through the BM25 door, ADR 0155, or by
+   * `ts_rank_cd` when the door could not answer), and a page interleaves the kinds by place,
+   * because their scores do not measure the same thing. Comparable within one answer only, and
+   * never shown: a relevance number means nothing to a reader.
+   */
   rank: z.number(),
   excerpt: z.string(),
   observedAt: z.iso.datetime(),
@@ -123,14 +130,20 @@ export const RawSearchResponse = z.object({
    */
   truncated: z.boolean(),
   /**
-   * The kinds that had more matches than a search ranks, and how many it ranked: the newest
-   * `ranked` of them, by the date each hit shows (ADR 0123).
+   * The kinds that had more matches than were ranked, and how many were: the newest `ranked` of
+   * them, by the date each hit shows (ADR 0123). Empty when every match was ranked.
    *
-   * Ranking a match is the expensive part of a search, so each kind ranks a bounded set. When
-   * the set was cut, the answer says so here. Paging still covers only the ranked set, so a
-   * match older than the newest `ranked` is not on any page. A reader who needs it adds a word
-   * or picks a kind; nothing about the search makes it look like there was nothing more. Empty
-   * when every match was ranked.
+   * Records are always ranked this way, among their newest matches, so `record` is here whenever
+   * more of them matched. Documents rank through the tenant's BM25 indexes, every match by
+   * relevance with no cap (ADR 0155), so `document` is here only when that door could not answer
+   * this search -- its indexes not built or not ready yet, or a page past what it ranks (ADR 0156)
+   * -- the search was answered ADR 0123's way, AND more documents matched than that ranks. Its
+   * presence is therefore how a reader tells a newest-only page from a relevance-ranked one: a
+   * document page without it ranked every matching document.
+   *
+   * Paging covers only the ranked set, so a match older than the newest `ranked` is not on any
+   * page. A reader who needs it adds a word or picks a kind; nothing about the search makes it
+   * look like there was nothing more.
    */
   capped: z.array(z.object({ kind: SearchKind, ranked: z.number().int().positive() })),
 });

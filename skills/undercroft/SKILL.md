@@ -208,9 +208,13 @@ Both doors refuse with the same codes. Branch on the code, and give the person t
   that ran past its time limit is refused this way with no issues. The same search will stop
   again, so do not repeat it. Narrow it: one kind, more words, or a quoted phrase.
 
-`lake.search` ranks only each kind's newest matches. When a kind had more, the answer's
-`capped` names it and how many were ranked. Matches older than those are on no page, so tell
-the person rather than reading the result as everything that matched.
+`lake.search` ranks documents by relevance across every match, and records only among their
+newest matches. `capped` names a kind that was ranked only among its newest and had more
+matches, with how many were ranked: records past their cap, or documents when the customer's
+search index could not answer this search (it is still being built, or the page is past what it
+ranks) and the search fell back to the newest documents. Matches older than those are on no
+page, so tell the person rather than reading the result as everything that matched. A document
+answer without `capped` ranked every matching document.
 
 A refusal is the platform working as designed. `INTERNAL_ERROR`, a value you do not believe,
 or an answer that breaks the contract in `references/cli.md` or `references/mcp.md` is a

@@ -886,13 +886,20 @@ export const vi = {
     /** Said only when the page was cut, so a reader knows to narrow rather than to conclude. */
     searchMore: "Còn kết quả khác. Hãy thêm từ khoá để thu hẹp.",
     /**
-     * A kind matched more than a search ranks, so the hits are the best of its newest matches,
-     * not of all of them (ADR 0123). Said, rather than left to look like the whole answer.
+     * Records matched more than a search ranks, so their hits are the best of the newest
+     * matches, not of all of them (ADR 0123). Said, rather than left to look like the whole
+     * answer.
      */
     searchCappedRecords_other:
       "Có hơn {{count, number}} bản ghi khớp; chỉ {{count, number}} bản ghi mới nhất được xếp hạng. Hãy thêm từ khoá để thu hẹp.",
+    /**
+     * Documents normally rank by relevance across every match (ADR 0155). This is said only when
+     * the search index could not answer -- not built yet for this customer, or a page past what
+     * it ranks -- and the search ranked the newest documents instead (ADR 0156). Naming the
+     * cause is what tells this page from a relevance-ranked one.
+     */
     searchCappedDocuments_other:
-      "Có hơn {{count, number}} tài liệu khớp; chỉ {{count, number}} tài liệu mới nhất được xếp hạng. Hãy thêm từ khoá để thu hẹp.",
+      "Có hơn {{count, number}} tài liệu khớp, nhưng chỉ mục tìm kiếm chưa xếp hạng được lượt tìm này, nên chỉ {{count, number}} tài liệu mới nhất được xếp hạng. Hãy thêm từ khoá để thu hẹp.",
     searchColWhere: "Ở đâu",
     searchColMatch: "Nội dung khớp",
     searchKindRecord: "Bản ghi",
