@@ -23,8 +23,9 @@
  * extension from the object passed to its constructor and from nowhere else: a data directory
  * dumped from a database that loaded it does not even start without it ("PGlite failed to
  * initialize properly"). So {@link boot} is the one place a PGlite is built, and the snapshot is
- * restored with the extension it was seeded with. It is loaded, not created: a database has it
- * only once a migration or a test says `CREATE EXTENSION`.
+ * restored with the extension it was seeded with. It is loaded here and created by the migration
+ * that needs it (`680_bm25_search.sql`), so an empty `createTestDatabase()` has it only after
+ * `migrate()`.
  *
  * The extension package demands one PGlite release exactly (a peer dependency of
  * `@electric-sql/pglite-pg_textsearch`), which is why `@electric-sql/pglite` is pinned to that

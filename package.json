@@ -36,6 +36,7 @@
     "lint": "biome lint --error-on-warnings .",
     "lint:rules": "ast-grep scan",
     "migrate": "bun run packages/db/src/migrateCli.ts",
+    "search-index": "bun run packages/db/src/searchIndexCli.ts",
     "kestra:flows": "bun run scripts/kestraFlows.ts",
     "invite": "bun run apps/control-plane/src/inviteCli.ts",
     "extract:accuracy": "bun run apps/worker/src/extractionAccuracyCli.ts",

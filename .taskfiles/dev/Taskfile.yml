@@ -111,6 +111,15 @@ tasks:
     cmds:
       - bun run migrate
 
+  search-index:
+    desc: Build, mend and measure every tenant's BM25 search indexes in the local compose Postgres, once (ADR 0155, ADR 0156).
+    run: once
+    deps: [migrate]
+    env:
+      UNDERCROFT_POSTGRES_DSN: "postgres://{{.PG_USER}}:{{.UNDERCROFT_PG_PASSWORD}}@localhost:{{.PG_PORT}}/{{.PG_DB}}"
+    cmds:
+      - bun run search-index
+
   extract:
     desc: "Read landed documents into raw.document_text. Usage: task dev:extract TENANT=test001 SOURCE=drive"
     requires:
@@ -249,6 +258,9 @@ tasks:
     cmds:
       - task: up
       - task: migrate
+      # The search indexes the migration could not make itself (a tenant that already holds
+      # documents); quick on a local lake, and the search falls back without them anyway.
+      - task: search-index
       # Best-effort: Kestra is a Java standalone that can take a minute to answer (or, on a
       # machine where it's misbehaving, up to its own five-minute deadline before it says so).
       # Delivering flows only matters for testing the scheduled trigger itself, so it must not

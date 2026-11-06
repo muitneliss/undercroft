@@ -24,6 +24,7 @@ Everything else talks over the compose network and publishes nothing.
 | `kestra-init`                | one-shot, exits 0    | Hands Kestra's volumes to uid 1000; without it Kestra crash-loops                               |
 | `db-migrate`                 | one-shot, exits 0    | Applies `packages/db/sql`, sets the two platform roles' passwords                               |
 | `kestra-flows`               | one-shot, exits 0    | Delivers `flows/` to Kestra from the control-plane image, every deploy                          |
+| `search-index`               | compose network only | Builds and mends each tenant's BM25 search indexes: a pass at start, then every six hours       |
 
 > **Sign-in must be configured, or the control plane has no way in.** Authentication is
 > wired (invite-only, Google or an emailed code — ADR 0010), but it is assembled only when
@@ -389,6 +390,57 @@ migration(s)" are different facts, and a log that cannot tell them apart is no e
 `SchemaMismatchError` and answers 500 to every `/api/auth/*` request, while still logging
 `sign_in_configured` at boot. Look for `Database schema mismatch` with the missing table
 names in the control-plane log.
+
+## Search indexes
+
+Each tenant has two BM25 indexes on `raw.document_text`, one `simple` and one `english`, which
+`lake.search` ranks documents through (ADR 0155, ADR 0156). The `search-index` service keeps
+them:
+
+- it builds an index that is missing, `CONCURRENTLY`, so no tenant's extraction waits on it;
+- it drops and rebuilds one a killed build left invalid;
+- it reindexes one that has doubled since its last build and grown by at least 64 MiB;
+- it logs one `search_index.*` line per index and per action, and `search_index.pass` at the end.
+
+It runs from the control-plane image as the bootstrap role, like `db-migrate`, because building
+on the table needs its owner. It is **long-running on purpose**: `up --wait` fails a deploy on a
+container nothing depends on that has already exited, and a pass with nothing to do exits in a
+second. So it makes a pass when it starts and every six hours after, and `verify` reads it as
+running. Nothing depends on it: until a tenant's indexes are valid, the search ranks ADR 0123's
+way, so a first build that takes minutes delays nothing.
+
+A deploy that restarts it mid-build leaves that index invalid; the next pass drops and rebuilds
+it. A new tenant gets its indexes from `db-migrate` (empty, so built at once) unless the table
+was busy at that moment, in which case the next pass builds them.
+
+**The release that first carries `680_bm25_search.sql` needs the Postgres image already
+running** (see [The Postgres image](#the-postgres-image)). The migration creates the extension,
+which needs the preload, and stops the migrate without it. On that release the first pass builds
+every tenant that holds documents, a large tenant's two indexes taking minutes. Follow it with:
+
+```sh
+task obs:logs FOR=search_index SINCE=2h
+```
+
+Each tenant should log `search_index.built` twice (`simple` and `english`), or
+`search_index.recorded` for a tenant `db-migrate` indexed. A `search_index.failed` line names
+the index and the error; the next pass tries it again. Whether a tenant ranks through its
+indexes is one read-only query, over read-only SSH as for the preload check:
+
+```sql
+SELECT tenant_id, raw.search_document_bm25_ready(role_name)
+FROM ops.tenant_role WHERE kind = 'dbt' ORDER BY tenant_id;
+```
+
+To run a pass by hand -- a database restored from a backup, or to see one finish -- point at the
+database as its bootstrap role:
+
+```sh
+UNDERCROFT_POSTGRES_DSN=... task db:search-index
+```
+
+It runs one pass and exits, non-zero when an index failed. If the service is mid-pass it holds
+the lock, and the hand-run pass logs `search_index.skipped` and does nothing.
 
 ## Sign-in
 

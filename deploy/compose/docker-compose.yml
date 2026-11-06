@@ -339,6 +339,26 @@ services:
         limits:
           memory: 256m
 
+  # The tenants' BM25 search indexes, a pass at start and one every six hours. Long-running on
+  # purpose, and depended on by nothing: see the server file.
+  search-index:
+    <<: *restart
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile.control-plane
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    command: ["bun", "run", "search-index", "--repeat"]
+    environment:
+      # As the bootstrap superuser, like `db-migrate`: building on `raw.document_text` needs the
+      # table's owner.
+      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
   # The Kestra flows, delivered by the deploy: `flows/` is baked into the control-plane
   # image and this one-shot pushes each file through Kestra's API, then exits. It waits for
   # Kestra to answer and fails at once on a flow Kestra rejects. See the server file.

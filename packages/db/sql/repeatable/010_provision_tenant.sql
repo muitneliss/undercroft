@@ -25,6 +25,56 @@
 -- PRIVILEGES" -- is unchanged and is recorded at the top of `080_tenant_isolation.sql`,
 -- beside the table and the policies this function's grants are about.
 
+-- A tenant's two BM25 indexes (ADR 0155, ADR 0156), made here only when that is cheap and safe.
+--
+-- WHEN. Only for a tenant with NO documents: then the build reads the heap to test the predicate
+-- and indexes nothing, which is brief. A tenant that holds documents is `search-index`'s, which
+-- builds CONCURRENTLY -- something no function can do, because it cannot run in a transaction.
+-- Guarded on the indexes' existence first, because this runs for every tenant on every migrate
+-- (ADR 0036), and on a tenant that has them already it must cost nothing.
+--
+-- NEVER WAITING. A plain CREATE INDEX takes a SHARE lock on `raw.document_text`, held to the end
+-- of the caller's transaction -- the whole migrate, or the control plane's tenant creation. Asked
+-- with NOWAIT, a lock that is not free at once (a worker landing text, a CONCURRENTLY build in
+-- progress) skips the build rather than queueing every tenant's extraction behind it; the index
+-- is then missing, the search falls back to ADR 0123's path, and `search-index` builds it on its
+-- next pass.
+--
+-- SERIAL, by the function's own setting: a parallel build of a partial expression index evaluates
+-- the expression for every row of the table, not only the tenant's (timescale/pg_textsearch#593:
+-- 111 s parallel against 96 ms serial, for 200 documents).
+CREATE OR REPLACE FUNCTION ops.provision_search_indexes(p_tenant_id text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, ops
+SET max_parallel_maintenance_workers = 0
+AS $fn$
+DECLARE
+    v_config text;
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM raw.search_index_configs() AS c(config)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM pg_class x
+            WHERE x.relname = raw.search_index_name(p_tenant_id, c.config)
+              AND x.relnamespace = 'raw'::regnamespace))
+    THEN
+        RETURN;
+    END IF;
+    IF EXISTS (SELECT 1 FROM raw.document_text WHERE tenant_id = p_tenant_id) THEN
+        RETURN;
+    END IF;
+    BEGIN
+        LOCK TABLE raw.document_text IN SHARE MODE NOWAIT;
+    EXCEPTION WHEN lock_not_available THEN
+        RETURN;
+    END;
+    FOR v_config IN SELECT raw.search_index_configs() LOOP
+        EXECUTE raw.search_index_sql(p_tenant_id, v_config, 'create');
+    END LOOP;
+END
+$fn$;
+REVOKE ALL ON FUNCTION ops.provision_search_indexes(text) FROM PUBLIC;
+
 -- Idempotent: running it again for a tenant that already has its roles changes nothing, so
 -- the worker can call it before a build as belt and braces for tenants created before this
 -- migration existed.
@@ -132,6 +182,15 @@ BEGIN
         'GRANT EXECUTE ON FUNCTION raw.search_record_candidates(name, text, integer, text[], text[]),
              raw.search_document_candidates(name, text, integer, text[], text[]) TO %I',
         v_dbt);
+    -- The BM25 door, its keys-only filter and whether it is ready (680, ADR 0155, ADR 0156). The
+    -- same argument: SECURITY DEFINER, keys of the calling login's own documents only, and the
+    -- index names derived inside from that login's tenant. The extension itself stays out of
+    -- reach (refused below); this is the only way a tenant ranks.
+    EXECUTE format(
+        'GRANT EXECUTE ON FUNCTION raw.search_document_bm25(name, text, integer, text[], text[]),
+             raw.search_document_matches(name, text, text[], text[]),
+             raw.search_document_bm25_ready(name) TO %I',
+        v_dbt);
     -- A promotion grants each scope login the staged tables it reaches before moving them, so a
     -- table is never published ungranted to a reader who should see it (ADR 0142). Like the two
     -- above it answers only for the calling login's own customer.
@@ -155,8 +214,10 @@ BEGIN
         'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT SELECT ON TABLES TO %I',
         v_dbt, v_staging, v_bi);
 
-    -- Explicit refusals, so a later broad grant is a visible contradiction.
-    EXECUTE format('REVOKE ALL ON SCHEMA app, ops FROM %I, %I', v_dbt, v_bi);
+    -- Explicit refusals, so a later broad grant is a visible contradiction. `search_ext` holds
+    -- pg_textsearch, whose `to_bm25query` scores any text against ANY index it is named: USAGE
+    -- there is a membership oracle over every other customer's documents (680, ADR 0155).
+    EXECUTE format('REVOKE ALL ON SCHEMA app, ops, search_ext FROM %I, %I', v_dbt, v_bi);
     EXECUTE format('REVOKE ALL ON SCHEMA %I FROM %I', v_dq, v_bi);
     -- Staging holds builds no test has passed yet; a dashboard reads none of it (ADR 0131).
     EXECUTE format('REVOKE ALL ON SCHEMA %I FROM %I', v_staging, v_bi);
@@ -192,6 +253,9 @@ BEGIN
     -- by an older body gets what the current one grants.
     PERFORM ops.drop_stale_scopes(p_tenant_id);
     PERFORM ops.apply_scopes(p_tenant_id);
+
+    -- The search indexes, for a tenant with no documents yet; see the function above.
+    PERFORM ops.provision_search_indexes(p_tenant_id);
 END
 $fn$;
 
@@ -601,7 +665,7 @@ BEGIN
             USING ERRCODE = 'no_data_found';
     END IF;
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I', 'analytics_' || v_slug, p_role);
-    EXECUTE format('REVOKE ALL ON SCHEMA app, ops, raw FROM %I', p_role);
+    EXECUTE format('REVOKE ALL ON SCHEMA app, ops, raw, search_ext FROM %I', p_role);
     EXECUTE format('REVOKE ALL ON SCHEMA %I, %I FROM %I', 'dq_' || v_slug, 'staging_' || v_slug, p_role);
     EXECUTE format('ALTER ROLE %I SET statement_timeout = %L', p_role, '15s');
     EXECUTE format('ALTER ROLE %I SET default_transaction_read_only = on', p_role);
