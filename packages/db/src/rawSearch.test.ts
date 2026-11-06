@@ -2,9 +2,13 @@
  * Full-text search over the raw lake, pinned: the fold, the two indexes, and the isolation.
  *
  * These run in the gate because PGlite is real Postgres: the same `normalize`, the same
- * `translate`, the same GIN planner. There is no extension to install, which is the point --
+ * `regexp_replace`, the same GIN planner. There is no extension to install, which is the point --
  * `unaccent` is the usual answer to Vietnamese diacritics and PGlite does not ship it, so a
  * design that needed it would be enforced nowhere until production.
+ *
+ * The fold's mapping is pinned letter by letter, because the GIN indexes were built with it: a
+ * respelling of `raw.fold` (670 did one, for speed, ADR 0154) that answered differently would
+ * leave every index silently stale rather than fail.
  *
  * The length-preservation test is the load-bearing one. `raw.search_excerpt` cuts the snippet
  * out of the ORIGINAL text using an offset found in the FOLDED text, which is only valid while
@@ -85,6 +89,38 @@ describe("the search functions, which read nothing", () => {
         );
         expect(same).toBe(true);
       }
+    });
+
+    it("maps exactly these letters to these ASCII letters, so the indexes built with it stay valid", async () => {
+      // Every letter the fold knows, both cases, against its ASCII letter written out. The GIN
+      // indexes in 190 hold the output of this function; it is IMMUTABLE, so Postgres never
+      // re-checks them. A respelling that maps one letter differently -- or a bracket class
+      // that quietly became a range -- would find a row by one spelling and miss it by the
+      // other, with no error anywhere. The last row is the quiet side: ligatures are left
+      // alone, because expanding one would change the string's length.
+      const mapping: [string, string][] = [
+        ["àáảãạăằắẳẵặâầấẩẫậ", "aaaaaaaaaaaaaaaaa"],
+        ["ÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬ", "aaaaaaaaaaaaaaaaa"],
+        ["èéẻẽẹêềếểễệ", "eeeeeeeeeee"],
+        ["ÈÉẺẼẸÊỀẾỂỄỆ", "eeeeeeeeeee"],
+        ["ìíỉĩị", "iiiii"],
+        ["ÌÍỈĨỊ", "iiiii"],
+        ["òóỏõọôồốổỗộơờớởỡợ", "ooooooooooooooooo"],
+        ["ÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢ", "ooooooooooooooooo"],
+        ["ùúủũụưừứửữự", "uuuuuuuuuuu"],
+        ["ÙÚỦŨỤƯỪỨỬỮỰ", "uuuuuuuuuuu"],
+        ["ỳýỷỹỵ", "yyyyy"],
+        ["ỲÝỶỸỴ", "yyyyy"],
+        ["đĐ", "dd"],
+        ["äëïöüÿñçåîû", "aeiouyncaiu"],
+        ["ÄËÏÖÜŸÑÇÅÎÛ", "aeiouyncaiu"],
+        ["æœß", "æœß"],
+      ];
+      const folded: [string, string][] = [];
+      for (const [letters] of mapping) {
+        folded.push([letters, await one<string>("SELECT raw.fold($1) AS v", [letters])]);
+      }
+      expect(folded).toEqual(mapping);
     });
 
     it("leaves a string with nothing to fold alone but for case", async () => {
@@ -188,6 +224,18 @@ Phần kết thúc.`;
       ]);
       expect(excerpt).toContain("Hợp đồng");
       // Centred on the match rather than returning the head of the document.
+      expect(excerpt).not.toContain("Phần mở đầu");
+    });
+
+    it("ignores a query term the text lacks, rather than placing it at the head", async () => {
+      // `-xe` is a negated term: the row matched BECAUSE the text lacks it, and it still splits
+      // out of the query as a word to look for. Counted as found at offset 0, it would win the
+      // minimum and every negation would excerpt the head of the document instead of the match.
+      const excerpt = await one<string>("SELECT raw.search_excerpt($1, $2) AS v", [
+        BODY,
+        "-xe hop dong",
+      ]);
+      expect(excerpt).toContain("Hợp đồng");
       expect(excerpt).not.toContain("Phần mở đầu");
     });
 

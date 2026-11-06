@@ -482,3 +482,4 @@
 ## [2026-11-03] ingest | Runbook: Connecting an agent over MCP
 ## [2026-11-03] ingest | Runbook Sign-In Setup
 ## [2026-11-03] ingest | ADR 0153 Biome 2.6 Is Adopted Rule by Rule
+## [2026-11-06] ingest | ADR 0154 The Fold Is Spelled for Speed, and Answers Exactly as Before

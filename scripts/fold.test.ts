@@ -1,7 +1,7 @@
 /**
  * The two folds cannot drift apart.
  *
- * `raw.fold` in `packages/db/sql/190_raw_search.sql` is what MATCHED a search hit;
+ * `raw.fold` -- as the LAST migration to define it states it -- is what MATCHED a search hit;
  * `fold()` in `apps/ui/src/lib/fold.ts` is what HIGHLIGHTS it. Each has its own behavioural
  * tests, and each passes them while disagreeing with the other -- a letter one side folds and
  * the other does not is a term that matched in Postgres and is left unmarked on screen, or a
@@ -15,11 +15,12 @@
  */
 
 import { describe, expect, test as it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO = join(import.meta.dirname, "..");
-const SQL = join(REPO, "packages/db/sql/190_raw_search.sql");
+const SQL_DIR = join(REPO, "packages/db/sql");
+const FOLD_CREATE = "CREATE OR REPLACE FUNCTION raw.fold(";
 const TS = join(REPO, "apps/ui/src/lib/fold.ts");
 
 const SINGLE_QUOTED = /'(?<literal>[^']*)'/gu;
@@ -36,10 +37,34 @@ const NON_ASCII = /[^\p{ASCII}]/u;
  */
 const COMMENT = /(?:--|\/\/)[^\n]*/gu;
 
-/** The body of `raw.fold`, from its CREATE to the `$$` that ends it. */
+/**
+ * The file whose `raw.fold` a migrated database runs: the last to define it, in the order the
+ * runner applies them -- numbered files lexically, then the repeatable ones (`migrate.ts`).
+ *
+ * Not a fixed path. 190 first defined the fold and 670 respelled it (ADR 0154); a check pinned
+ * to 190 would go on comparing the browser against a body no database runs any more.
+ */
+function lastFoldDefinition(): string {
+  const files = [
+    ...readdirSync(SQL_DIR)
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .map((f) => join(SQL_DIR, f)),
+    ...readdirSync(join(SQL_DIR, "repeatable"))
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .map((f) => join(SQL_DIR, "repeatable", f)),
+  ];
+  const defining = files.filter((f) => readFileSync(f, "utf8").includes(FOLD_CREATE));
+  const last = defining.at(-1);
+  expect(last).toBeDefined();
+  return readFileSync(last ?? "", "utf8");
+}
+
+/** The body of the `raw.fold` that runs, from its CREATE to the `$$` that ends it. */
 function sqlFoldBody(): string {
-  const sql = readFileSync(SQL, "utf8");
-  const start = sql.indexOf("CREATE OR REPLACE FUNCTION raw.fold(");
+  const sql = lastFoldDefinition();
+  const start = sql.indexOf(FOLD_CREATE);
   expect(start).toBeGreaterThan(-1);
   const open = sql.indexOf("$$", start);
   const close = sql.indexOf("$$", open + 2);

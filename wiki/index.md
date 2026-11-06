@@ -157,6 +157,7 @@
 - [ADR 0151 An Agent's Call Is Kept Whole for a Superadmin for 30 Days](sources/adr-0151-an-agent-s-call-is-kept-whole-for-a-superadmin-for-30-days.md)
 - [ADR 0152 A Person Can Be Deactivated Platform-Wide by a Superadmin](sources/adr-0152-a-person-can-be-deactivated-platform-wide-by-a-superadmin.md)
 - [ADR 0153 Biome 2.6 Is Adopted Rule by Rule](sources/adr-0153-biome-2-6-is-adopted-rule-by-rule.md)
+- [ADR 0154 The Fold Is Spelled for Speed, and Answers Exactly as Before](sources/adr-0154-the-fold-is-spelled-for-speed-and-answers-exactly-as-before.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

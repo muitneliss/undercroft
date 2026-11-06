@@ -16,7 +16,8 @@
  * not widen what a login can read, and it is written out so that a reader does not have to take
  * that on faith.
  *
- * The matching, folding and excerpting are `raw.*` functions from `190_raw_search.sql` and
+ * The matching, folding and excerpting are `raw.*` functions from `190_raw_search.sql` (the fold
+ * and the excerpt respelled for speed in `670_fast_fold.sql`, ADR 0154) and
  * `530_raw_search_candidates.sql`, not expressions written here: the index is built on those
  * functions, and an expression spelled a second way in application code is an index that
  * quietly stops being used.
