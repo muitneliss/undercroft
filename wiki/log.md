@@ -487,3 +487,4 @@
 ## [2026-11-06] ingest | ADR 0154 The Fold Is Spelled for Speed, and Answers Exactly as Before
 ## [2026-11-06] ingest | ADR 0154 The Fold Is Spelled for Speed, and Answers Exactly as Before
 ## [2026-11-06] ingest | ADR 0155 A Search Ranks Through a BM25 Index per Tenant, Behind a Door
+## [2026-11-06] ingest | ADR 0155 A Search Ranks Through a BM25 Index per Tenant, Behind a Door

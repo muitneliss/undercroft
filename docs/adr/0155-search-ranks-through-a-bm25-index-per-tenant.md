@@ -1,12 +1,11 @@
 # 155. A search ranks through a BM25 index per tenant, behind a door
 
-- Status: Proposed
-- Date: 2026-11-06
-- Would amend: [ADR 0123](0123-search-ranks-the-newest-matches-found-through-the-index.md). The
-  ranking would come from a BM25 index instead of a rebuilt vector, and the cap of the newest 100
-  documents would go. [ADR 0026](0026-full-text-search-over-the-raw-lake.md)'s fold, its
-  length-preserving excerpt and the tenant login would stay. Whether the GIN indexes stay is
-  decision 5.
+- Status: Accepted
+- Date: 2026-11-06 (proposed and accepted the same day; decision 5 settled on acceptance)
+- Amends: [ADR 0123](0123-search-ranks-the-newest-matches-found-through-the-index.md). A
+  document search ranks through a BM25 index instead of a rebuilt vector, and the cap of the
+  newest 100 documents goes. [ADR 0026](0026-full-text-search-over-the-raw-lake.md)'s fold, its
+  length-preserving excerpt, its GIN indexes and the tenant login stay.
 - Evidence: a one-day spike against pg_textsearch v1.5.1 on synthetic data shaped like
   production. Its report and scripts are outside the repository, because they are throwaway. The
   numbers that matter are quoted here.
@@ -65,9 +64,10 @@ against the **other** tenant's index:
 That is a membership oracle over another customer's documents ("does anyone there mention this
 name?"). Row-level security does not stop it, because no row of the other tenant is read.
 
-## Decision (proposed)
+## Decision
 
-1. **One partial BM25 index per tenant.** It covers `raw.document_text` on
+1. **Two partial BM25 indexes per tenant**, one with `text_config='simple'` and one with
+   `text_config='english'` (decision 5). Both cover `raw.document_text` on
    `raw.fold(left(text, raw.search_cap()))`, `WHERE tenant_id = '<tenant>'`.
    - It is created by `ops.provision_tenant` in `repeatable/010_provision_tenant.sql`, the one
      place a tenant's objects are stated (`privileges.md`, ADR 0036).
@@ -75,7 +75,8 @@ name?"). Row-level security does not stop it, because no row of the other tenant
      partial expression index evaluates the expression for every heap row: 96 ms serially against
      111 s with one worker, for a 200-document tenant
      ([timescale/pg_textsearch#593](https://github.com/timescale/pg_textsearch/issues/593)).
-   - Fifty tenants cost about 1 MB per small index and 2.4 ms of planning.
+   - Fifty tenants cost about 1 MB per small index and 2.4 ms of planning (one index each; the
+     spike did not measure two).
 2. **No tenant login can reach the extension.**
    - It is created in a schema of its own, with no `USAGE` for any tenant login, BI login or scope
      login.
@@ -83,7 +84,7 @@ name?"). Row-level security does not stop it, because no row of the other tenant
      index. This was verified: the probe above fails with "permission denied for schema".
 3. **Search goes through a `SECURITY DEFINER` door**, ADR 0123's pattern, for statistics rather
    than for leakproofness. `raw.search_document_bm25(p_role, q, n)`:
-   - derives the index name from `raw.tenant_of(p_role)`, so a caller can only ever rank against
+   - derives both index names from `raw.tenant_of(p_role)`, so a caller can only ever rank against
      its own statistics;
    - **returns keys in order, never a score per row.** Putting `<@>` in the select list re-scores
      the row from its text, about 2.3 ms a row: 10,000 rows took 23.4 s against 46 ms unprojected.
@@ -102,13 +103,22 @@ name?"). Row-level security does not stop it, because no row of the other tenant
    `RawSearchResponse.capped` no longer describes a cut on the document side. Changing that
    contract (removing the kind, or keeping it for records until decision 6) is part of this change
    and is user-visible in the Lake screen and the skill.
-5. **Stemming is an open choice:**
-   - (a) a second per-tenant index with `text_config='english'`, combined in the door, which
-     doubles the BM25 index size and build cost;
-   - (b) `simple` only, losing `contract` → `contracts`.
+5. **English stemming is kept, through a second index.** A `simple` index alone would lose
+   `contract` → `contracts`, and with it the "one search box for both languages" promise of
+   ADR 0026. So each tenant has a `simple` index (Vietnamese, exact syllables) and an `english`
+   index (stems), and the door combines them:
+   - **by rank, not by score.** Each index yields its keys in BM25 order. The door fuses the two
+     orders with reciprocal rank fusion (each key scores `1 / (60 + rank)` in each list it appears
+     in, summed). Adding the two BM25 scores would need a score per row, which decision 3 forbids,
+     and the two scores are on different scales anyway;
+   - over a bounded head of each list, deep enough for the page asked for. The depth is a budget
+     the implementation measures and states, the way `RANKED_PER_KIND` is stated today;
+   - with the filter of decision 3 applied to the fused result, so the semantics stay today's.
 
-   This ADR leans towards (a), to keep the "one search box for both languages" promise of ADR 0026.
-   The GIN indexes stay in either case for the filter of decision 3 and for `raw.records`.
+   The cost: twice the BM25 index size and build time, and two index scans per search. The spike
+   measured one index; the implementation measures both, and the fusion, before release.
+
+   The GIN indexes stay, for the filter of decision 3 and for `raw.records`.
 
 6. **Records stay on ADR 0123's ranking** until BM25 over `raw.records` is measured. That table is
    partitioned by source, and pg_textsearch keeps statistics per partition. Production holds every
@@ -136,6 +146,9 @@ name?"). Row-level security does not stop it, because no row of the other tenant
   measured, and no filter on rows can fix it.
 - **Letting the tenant login call the extension directly**, even with per-tenant indexes. Any index
   name is accepted, so any tenant can score text against another tenant's statistics.
+- **One `simple` BM25 index and no stemming** (decision 5(b) as proposed). Half the index
+  cost, but `contract` would stop finding `contracts`, which a reader of English documents meets
+  every day.
 - **ParadeDB `pg_search`.** AGPL-3.0, no Alpine build, not in PGlite. It would also need the same
   isolation design, and its behaviour under RLS is undocumented.
 - **Keeping ADR 0123's shape and lowering the caps.** That bounds the worst case by ranking fewer
@@ -151,16 +164,16 @@ name?"). Row-level security does not stop it, because no row of the other tenant
   crash open (#569). The index is a projection, rebuilt from `raw.document_text` by `REINDEX`, so
   rule 1 holds: nothing durable is at risk. But a corrupt index would fail searches until it is
   rebuilt.
-- **One index per tenant** multiplies BM25 indexes by tenants, and two per tenant with decision
-  5(a). Measured at 50 tenants it was cheap. It was not measured at 1,000.
+- **Two indexes per tenant** multiply BM25 indexes by twice the tenants. One per tenant, measured
+  at 50 tenants, was cheap. Neither was measured at 1,000.
 - **BM25 has no proximity.** In the spike's fixture, the name with its syllables reversed ranked
   third. Ranking quality beyond "nothing today finds is missed" was not evaluated.
 - **Not measured:** BM25 over `raw.records`, production-CPU timings of the BM25 path, a restart,
   backup and restore, and a replica.
-- **If accepted**, implementation is its own approved plan:
+- **Implementation** is its own approved plan:
   - the migration and the extension schema;
-  - the per-tenant index in `ops.provision_tenant`;
-  - the door and the worker's statement;
+  - the two per-tenant indexes in `ops.provision_tenant`;
+  - the door, its rank fusion and the worker's statement;
   - the `capped` contract;
   - the compose image and its release;
   - the gate's PGlite bump;
