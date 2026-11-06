@@ -5,7 +5,7 @@ date: 2026-11-06
 tags: []
 source: docs/adr/0154-the-fold-is-spelled-for-speed.md
 source_path: docs/adr/0154-the-fold-is-spelled-for-speed.md
-source_hash: 99dd10d5948843ddaa263753acc6f55cd5ae19ed255dcd1e8f708b32b5d68ec9
+source_hash: 9364df07eb4f05db2b904e06d6c63e08187cab9fcf5c365b349e3b077bace9f4
 ingested: 2026-11-06
 ---
 
