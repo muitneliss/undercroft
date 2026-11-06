@@ -1,0 +1,4 @@
+# The Postgres image takes nothing from its build context: the Dockerfile fetches and checks
+# its one source archive itself. The development compose builds it with `deploy/` as the
+# context, which holds compose/.env, so everything is excluded and the daemon receives nothing.
+*

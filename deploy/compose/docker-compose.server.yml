@@ -83,7 +83,12 @@ services:
 
   postgres:
     <<: *restart
-    image: postgres:17-alpine
+    # Postgres with pg_textsearch, which ranks `lake.search` (ADR 0155). Its tag is pinned by
+    # the image's recipe and published outside the release, so it never follows IMAGE_TAG: a
+    # rollback runs this file against an older release's images and must still find it. The
+    # image's CMD preloads the extension, so this service sets no `command:` -- one would
+    # replace the CMD and drop the preload. deploy/Dockerfile.postgres says why it is ours.
+    image: ghcr.io/muitneliss/undercroft-postgres:17-pgts1.5.1
     environment:
       POSTGRES_USER: ${UNDERCROFT_PG_USER:-undercroft}
       POSTGRES_PASSWORD: ${UNDERCROFT_PG_PASSWORD:?set in .env}

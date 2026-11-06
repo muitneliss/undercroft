@@ -18,7 +18,7 @@ Everything else talks over the compose network and publishes nothing.
 | `worker`                     | compose network only | Ingestion, dbt per tenant, the BI query runner; HTTP verbs on :8081                             |
 | `minio`                      | compose network only | Raw lake, on the `pgsty/minio` community build (ADR 0050)                                       |
 | `minio-init`                 | one-shot, exits 0    | Creates the lake's bucket                                                                       |
-| `postgres`                   | compose network only | Curated + control-plane schema                                                                  |
+| `postgres`                   | compose network only | Curated + control-plane schema, on [our own image](#the-postgres-image) with pg_textsearch      |
 | `pgbouncer`                  | compose network only | The pool every tenant login goes through (ADR 0088); the platform's roles connect directly      |
 | `kestra` + `kestra-postgres` | compose network only | Scheduling: `ingest_due` every 5 minutes, `extract_due` hourly, `semantic_due` every 30 minutes |
 | `kestra-init`                | one-shot, exits 0    | Hands Kestra's volumes to uid 1000; without it Kestra crash-loops                               |
@@ -42,7 +42,9 @@ happened once:
 
 1. **Published images**, `ghcr.io/muitneliss/undercroft-{worker,control-plane}:${IMAGE_TAG:-latest}`.
    The host's checkout is `main` at deploy time, not the release, so a `build:` there would
-   ship code no release published and no `verify` could prove.
+   ship code no release published and no `verify` could prove. `postgres` runs a published
+   image too, pinned by its recipe rather than by `IMAGE_TAG`:
+   [The Postgres image](#the-postgres-image).
 2. **No host ports.** Only the control plane is reachable, through Dokploy's proxy.
 3. **A unique network alias per service** (`undercroft-postgres`, `undercroft-minio`, …), and
    every reference uses it. A service with a domain is attached to the shared
@@ -73,9 +75,49 @@ so a rollback to an older release must still find the tag `main`'s compose names
   if the registry cannot be asked, it fails rather than assume the tag is absent.
 - **A recipe change must bump the tag**: change `PG_MAJOR` or `PG_TEXTSEARCH_VERSION` (and
   the archive's `PG_TEXTSEARCH_SHA256`) in the Dockerfile, never a `--build-arg`. A change
-  that leaves both alone is never published, by design. Merge it, let the workflow publish
-  the new tag, and only then point compose at it.
-- **Locally**, `task build:postgres-image` builds it for your machine under the same tag.
+  that leaves both alone is never published, by design. Move the development compose file's
+  tag in the same change, so `task dev:up` and `task ci:itest` run the new recipe;
+  `scripts/postgresImage.test.ts` fails the gate until you do. Merge it, let the workflow
+  publish the new tag, and only then point the server and install files at it.
+- **Locally**, the development compose file names the same tag and can build it. With access
+  to the private package (`docker login ghcr.io` with a token that reads packages), `task
+dev:up` pulls the published image. Without it, the pull is refused and compose builds the
+  recipe instead, which takes a few minutes the first time. `task build:postgres-image` builds
+  it on its own.
+
+### Where it runs, and switching to it
+
+Only the `postgres` service runs it, in all three compose files. `kestra-postgres` is Kestra's
+own database, needs no extension, and stays on `postgres:17-alpine`. The image's command is
+what preloads the extension, so the service sets no `command:` of its own: one would replace
+the command and drop the preload.
+
+`verify` checks it like any other image of ours, against the digest ghcr serves for **its own
+tag**, never the release's, and `preflight` refuses a pinned tag that moves (`latest`). See
+[What `verify` proves](#what-verify-proves).
+
+**The release that first carries the switch restarts Postgres.** Merging the compose change
+deploys nothing. On the next release `--pull always` fetches the image and compose recreates
+`postgres`, because its image changed; every other service is recreated by a release anyway.
+The data volume carries over unchanged: the image is built on the same `postgres:17-alpine`,
+so the major version and musl's collation are the ones the data was written with. The
+database is down for the seconds it takes to stop and start, so roll that release out in a
+quiet window. Later releases leave `postgres` alone until its tag changes again.
+
+**After that deploy**, two read-only checks:
+
+1. `task cd:verify TAG=vX.Y.Z` names `postgres runs the pinned image
+ghcr.io/muitneliss/undercroft-postgres:17-pgts1.5.1`.
+2. The preload is on. Over read-only SSH (`task obs:creds` names the host), with the
+   `appName` that `task cd:preflight` prints:
+
+   ```bash
+   docker exec <appName>-postgres-1 sh -c \
+     'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SHOW shared_preload_libraries"'
+   ```
+
+   It prints `pg_textsearch`. A `SHOW` changes nothing. Anything else means the container is
+   not running the image's command, and the extension cannot be created.
 
 ## How a deploy happens
 
@@ -136,8 +178,9 @@ Four things, before anything is queued:
    and the next release carries the change with its own images. Line endings and trailing
    blank lines are forgiven, nothing else is.
 3. **The file names published images.** At least one service runs a
-   `ghcr.io/muitneliss/undercroft-*` image; the host deploys what a release published, and
-   never builds.
+   `ghcr.io/muitneliss/undercroft-*` image that follows `IMAGE_TAG`; the host deploys what a
+   release published, and never builds. An image of ours that does not follow it is pinned,
+   like the Postgres image, and must name a fixed tag rather than `latest`.
 4. **The stored command** carries `--env-file deploy/compose/.env`,
    `-f deploy/compose/docker-compose.server.yml`, `--pull always`, `--wait`, `--wait-timeout`
    and `--remove-orphans`. Dokploy runs it from the clone's root and writes `.env` beside the
@@ -167,6 +210,11 @@ immutable manifest, so a pass means "the host runs this release" rather than "a 
 pointer equals itself". A release publishes both tags to one digest, so they agree unless
 something is wrong. With no release being rolled out, pass `TAG=latest`; the task
 requires a tag.
+
+A **pinned** image, one whose tag in the file does not follow `IMAGE_TAG` (the Postgres
+image), is compared against its own tag instead, whatever the release: that tag is published
+once and never overwritten, so it is as fixed as `v1.2.3`, and the release's tag would name an
+image nobody built. `verify` reads which images are pinned from the file itself.
 
 Two services need different questions, and `verify` reads which is which from the compose
 file's own `condition: service_completed_successfully` declarations rather than from a list
@@ -431,6 +479,10 @@ The compose file does **not** roll back with it: the host clones `main`'s file w
 `IMAGE_TAG` says (ADR 0049). That is harmless while the file has only gained what older
 images ignore. If the release you are leaving changed the file in a way the older images
 cannot run, revert that change on `main` as well.
+
+`main`'s file names the Postgres image by a pinned tag, so a rollback keeps running it and
+does not restart the database. That is why its tag is pinned rather than built per release: a
+release older than the image never built one, and its images run on this Postgres unchanged.
 
 **Put `IMAGE_TAG` back to `latest` once the fix ships.** While it is pinned, the host keeps
 serving the pinned release, so the next release's deploy will fail `verify` — the running

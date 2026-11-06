@@ -55,7 +55,17 @@ services:
 
   postgres:
     <<: *restart
-    image: postgres:17-alpine
+    # Postgres with pg_textsearch (ADR 0155), the server's image under the same tag. With
+    # access to the private package, `up` pulls the published bytes; without it, the pull is
+    # refused and compose builds the recipe here instead. That is only honest while the tag
+    # names this checkout's recipe, which scripts/postgresImage.test.ts pins -- a recipe bump
+    # moves this tag with it, and the server's only once the new tag is published. The empty
+    # context (Dockerfile.postgres.dockerignore) keeps .env out of the daemon. No `command:`:
+    # it would replace the image's CMD and drop the preload.
+    image: ghcr.io/muitneliss/undercroft-postgres:17-pgts1.5.1
+    build:
+      context: ..
+      dockerfile: Dockerfile.postgres
     environment:
       POSTGRES_USER: ${UNDERCROFT_PG_USER:-undercroft}
       POSTGRES_PASSWORD: ${UNDERCROFT_PG_PASSWORD:?set in .env}
