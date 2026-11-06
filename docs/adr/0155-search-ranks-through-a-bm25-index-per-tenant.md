@@ -69,12 +69,27 @@ name?"). Row-level security does not stop it, because no row of the other tenant
 1. **Two partial BM25 indexes per tenant**, one with `text_config='simple'` and one with
    `text_config='english'` (decision 5). Both cover `raw.document_text` on
    `raw.fold(left(text, raw.search_cap()))`, `WHERE tenant_id = '<tenant>'`.
-   - It is created by `ops.provision_tenant` in `repeatable/010_provision_tenant.sql`, the one
-     place a tenant's objects are stated (`privileges.md`, ADR 0036).
-   - It is built with `SET LOCAL max_parallel_maintenance_workers = 0`. The parallel build of a
+   - **Who builds them depends on whether the tenant already has documents.**
+     - `ops.provision_tenant` (`repeatable/010_provision_tenant.sql`, the one place a tenant's
+       objects are stated: `privileges.md`, ADR 0036) creates them for a tenant that has no
+       documents yet. The build reads only the heap to test the predicate, so it is brief. It is
+       guarded on the index's existence, because the function runs for every tenant on every
+       migrate (ADR 0036).
+     - A tenant that already holds documents cannot be indexed there. `provision_tenant` runs
+       inside one transaction for every tenant on every migrate, so a plain `CREATE INDEX` over a
+       large tenant would hold a SHARE lock on `raw.document_text` (blocking every tenant's
+       extraction) for the whole build and the rest of the migrate. `CREATE INDEX CONCURRENTLY`
+       cannot run in a transaction or a function at all. So a **one-shot `search-index` service**,
+       connected as the bootstrap superuser like `db-migrate` and depended on by nothing, builds
+       the missing indexes `CONCURRENTLY` after each deploy. It is idempotent and only does work
+       for an index that is missing or invalid.
+   - Every build is serial (`max_parallel_maintenance_workers = 0`). The parallel build of a
      partial expression index evaluates the expression for every heap row: 96 ms serially against
      111 s with one worker, for a 200-document tenant
      ([timescale/pg_textsearch#593](https://github.com/timescale/pg_textsearch/issues/593)).
+   - Index names are derived by one function from the tenant, not by string concatenation in two
+     places. A name built from the 40-character slug could pass the 63-character identifier limit,
+     and Postgres truncates silently, so a door deriving it differently would miss the index.
    - Fifty tenants cost about 1 MB per small index and 2.4 ms of planning (one index each; the
      spike did not measure two).
 2. **No tenant login can reach the extension.**
@@ -86,6 +101,11 @@ name?"). Row-level security does not stop it, because no row of the other tenant
    than for leakproofness. `raw.search_document_bm25(p_role, q, n)`:
    - derives both index names from `raw.tenant_of(p_role)`, so a caller can only ever rank against
      its own statistics;
+   - **falls back to ADR 0123's path** while either of the tenant's indexes is missing or not yet
+     valid (`pg_index.indisvalid`). A search during the first build, or for a tenant the
+     `search-index` service has not reached, answers as it does today rather than failing;
+   - narrows by stream exactly as the candidate lookups do (ADR 0142: NULL is the whole lake, an
+     entity of NULL the whole source, a document is the `documents` stream), before ranking;
    - **returns keys in order, never a score per row.** Putting `<@>` in the select list re-scores
      the row from its text, about 2.3 ms a row: 10,000 rows took 23.4 s against 46 ms unprojected.
      A score, if the answer shows one, is computed for the page alone;
@@ -137,8 +157,14 @@ name?"). Row-level security does not stop it, because no row of the other tenant
 - **The gate** moves to `@electric-sql/pglite` 0.5.15 and adds `@electric-sql/pglite-pg_textsearch`.
   The gate then runs Postgres 18 while production runs 17. The fixture agreed byte for byte, but it
   is a divergence to watch.
-- **A scheduled `REINDEX CONCURRENTLY`** of the per-tenant indexes, because re-extraction grows
-  them and `VACUUM` does not give the space back.
+- **`REINDEX CONCURRENTLY`** of a tenant's indexes when they have grown, because re-extraction
+  grows them and `VACUUM` does not give the space back. The `search-index` service does it after
+  each deploy, by a stated growth threshold, for the same reason it does the first build: it needs
+  the table owner and no transaction.
+- **The Postgres image changes before anything uses it.** One release ships the image with the
+  preload and nothing that needs it; the next ships the extension. Its tag is pinned by its
+  contents, not by `IMAGE_TAG`: the compose file deploys from `main` (ADR 0049), so a rollback to a
+  release older than the image would otherwise pull a tag that was never built.
 
 ## Options rejected
 
