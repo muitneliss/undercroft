@@ -13,7 +13,8 @@
  * The fetcher below REFUSES a URL nobody recorded rather than answering a default. A fake
  * that always answers would make `verify` pass against requests it never should have sent --
  * which is exactly the bug in "compare `latest` to `latest`" that the release-tag argument
- * exists to close.
+ * exists to close. The same refusal pins the Postgres image, whose tag no release moves (ADR
+ * 0155): it is recorded under its own tag only, so asking for it under the release's fails.
  */
 
 import { expect, test as it } from "bun:test";
@@ -33,14 +34,23 @@ const APP = "undercroft-test";
 
 const WORKER_DIGEST = `sha256:${"1".repeat(64)}`;
 const CONTROL_DIGEST = `sha256:${"2".repeat(64)}`;
+const POSTGRES_DIGEST = `sha256:${"3".repeat(64)}`;
+
+/** The Postgres image's tag, named by its recipe and built outside any release (ADR 0155). */
+const POSTGRES_TAG = "17-pgts1.5.1";
 const STALE_DIGEST = `sha256:${"9".repeat(64)}`;
 
 const BRANCH_FILE_URL =
   "https://api.github.com/repos/muitneliss/undercroft/contents/deploy/compose/docker-compose.server.yml?ref=main";
 
-/** Two released services: one meant to stay up, one meant to run and exit. */
+/**
+ * Two released services, one meant to stay up and one meant to run and exit, and one pinned
+ * service whose tag no release moves.
+ */
 const COMPOSE = [
   "services:",
+  "  postgres:",
+  `    image: ghcr.io/muitneliss/undercroft-postgres:${POSTGRES_TAG}`,
   "  worker:",
   // biome-ignore lint/suspicious/noTemplateCurlyInString: A compose file's own `${VAR:-default}`, quoted here as the fixture bytes. Reading it as a JS placeholder is the misreading.
   "    image: ghcr.io/muitneliss/undercroft-worker:${IMAGE_TAG:-latest}",
@@ -123,6 +133,7 @@ interface Scenario {
   readonly workerDigest?: string;
   readonly migrateState?: { Status: string; ExitCode: number } | "omitted";
   readonly migrateDigest?: string;
+  readonly postgresDigest?: string;
   readonly panel?: Readonly<Record<string, unknown>>;
   readonly onBranch?: string;
 }
@@ -149,6 +160,12 @@ function routes(scenario: Scenario = {}): Record<string, unknown> {
         state: "exited",
         status: "Exited (0) 6 seconds ago",
       },
+      {
+        containerId: "postgres-container",
+        name: `${APP}-postgres-1`,
+        state: "running",
+        status: "Up 3 days (healthy)",
+      },
     ],
     [`${ENDPOINT}/docker.getConfig?containerId=worker-container`]: {
       Image: scenario.workerDigest ?? WORKER_DIGEST,
@@ -160,8 +177,15 @@ function routes(scenario: Scenario = {}): Record<string, unknown> {
       Config: { Image: `ghcr.io/muitneliss/undercroft-control-plane:${tag}` },
       ...(migrateState === "omitted" ? {} : { State: migrateState }),
     },
+    [`${ENDPOINT}/docker.getConfig?containerId=postgres-container`]: {
+      Image: scenario.postgresDigest ?? POSTGRES_DIGEST,
+      Config: { Image: `ghcr.io/muitneliss/undercroft-postgres:${POSTGRES_TAG}` },
+      State: { Status: "running", ExitCode: 0 },
+    },
     ...ghcr("muitneliss/undercroft-worker", tag, WORKER_DIGEST),
     ...ghcr("muitneliss/undercroft-control-plane", tag, CONTROL_DIGEST),
+    // Recorded under its own tag only: asking for it under the release's would be refused.
+    ...ghcr("muitneliss/undercroft-postgres", POSTGRES_TAG, POSTGRES_DIGEST),
   };
 }
 
@@ -227,6 +251,26 @@ it("a long-running service on a stale digest fails the release", async () => {
   );
 });
 
+it("a pinned image is proved against its own tag while a release rolls out", async () => {
+  // The routes answer `undercroft-postgres` only at its pinned tag, so a verify that asked
+  // for it at `v1.3.0` -- a tag no release builds -- would be refused rather than pass.
+  const { deps, lines } = recorder(routes({ tag: "v1.3.0" }));
+
+  await verify(CFG, deps, ROLLOUT);
+
+  expect(lines).toContain(
+    `  postgres runs the pinned image ghcr.io/muitneliss/undercroft-postgres:${POSTGRES_TAG} (${POSTGRES_DIGEST.slice(0, 19)}...)`,
+  );
+});
+
+it("a pinned image on a stale digest fails the release", async () => {
+  const { deps } = recorder(routes({ tag: "v1.3.0", postgresDigest: STALE_DIGEST }));
+
+  await expect(verify(CFG, deps, ROLLOUT)).rejects.toThrow(
+    new RegExp(`postgres: running ${STALE_DIGEST}`, "u"),
+  );
+});
+
 it("preflight passes when the panel clones main's compose file and main carries this one", async () => {
   const { deps, lines } = recorder(routes());
 
@@ -254,7 +298,7 @@ it("preflight refuses when main's compose file moved past the one this release c
   const { deps } = recorder(routes({ onBranch }));
 
   await expect(preflight(CFG, deps, COMPOSE)).rejects.toThrow(
-    /deploy\/compose\/docker-compose\.server\.yml on main is not the one this checkout carries \(first difference at line 10/u,
+    /deploy\/compose\/docker-compose\.server\.yml on main is not the one this checkout carries \(first difference at line 12/u,
   );
 });
 
@@ -265,6 +309,28 @@ it("preflight forgives line endings and trailing blank lines, which YAML does no
   await preflight(CFG, deps, checkedOut);
 
   expect(lines).toContain("preflight ok");
+});
+
+it("preflight refuses a compose file whose only images of ours are pinned", async () => {
+  // Nothing in it follows IMAGE_TAG, so a release would roll out nothing it built.
+  const pinnedOnly = COMPOSE.split("\n").slice(0, 3).join("\n");
+  const { deps } = recorder(routes({ onBranch: pinnedOnly }));
+
+  await expect(preflight(CFG, deps, pinnedOnly)).rejects.toThrow(
+    /references no ghcr\.io\/muitneliss\/undercroft-\* image that follows IMAGE_TAG/u,
+  );
+});
+
+it("preflight refuses a pinned image whose tag moves", async () => {
+  const moving = COMPOSE.replace(
+    `undercroft-postgres:${POSTGRES_TAG}`,
+    "undercroft-postgres:latest",
+  );
+  const { deps } = recorder(routes({ onBranch: moving }));
+
+  await expect(preflight(CFG, deps, moving)).rejects.toThrow(
+    /pins postgres to ghcr\.io\/muitneliss\/undercroft-postgres:latest, a tag that moves/u,
+  );
 });
 
 it("oneShotServices names what the compose file declares runs to completion", () => {

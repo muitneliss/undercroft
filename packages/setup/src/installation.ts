@@ -208,9 +208,11 @@ class ComposeInstallation implements Installation {
     if ((await readText(this.#envPath)) === null) {
       return keepData ? { ok: true } : await this.#removeOrphanedVolumes();
     }
-    // Images are left in Docker's cache: `postgres`, `kestra` and the rest are shared with
-    // whatever else runs on this machine, and removing a cache another project uses is not an
-    // uninstall's business. The runbook says how to reclaim the space.
+    // Images are left in Docker's cache. The upstream ones (`kestra`, `minio`, Kestra's
+    // `postgres`) may serve whatever else runs on this machine, and even ours -- the worker, the
+    // control plane, the Postgres image with pg_textsearch -- are named by a tag that another
+    // install, or a checkout's development stack, may be running. Removing a cache something
+    // else uses is not an uninstall's business. The runbook says how to reclaim the space.
     const args = keepData ? ["down"] : ["down", "--volumes"];
     const result = step(await this.#compose([...args, "--remove-orphans"]));
     if (!result.ok || keepData) {

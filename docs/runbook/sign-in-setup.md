@@ -123,6 +123,12 @@ task dev:up-all
 task dev:up
 ```
 
+Postgres runs Undercroft's own image, with the pg_textsearch extension preloaded. It is a
+private package: if you have run `docker login ghcr.io` with a token that can read it, the
+first `task dev:up` pulls it; otherwise Docker reports the pull as `unauthorized` and builds the
+image from `deploy/Dockerfile.postgres` instead, which takes a few minutes once. Either way
+you get the same recipe; the [deployment runbook](deployment.md#the-postgres-image) says why.
+
 Then, from the repo root:
 
 ```sh

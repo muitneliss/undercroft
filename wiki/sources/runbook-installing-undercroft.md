@@ -1,15 +1,13 @@
 ---
 title: 'Runbook: Installing Undercroft'
 type: source
-date: 2026-09-30
+date: 2026-11-06
 tags: []
 source: docs/runbook/install.md
 source_path: docs/runbook/install.md
-source_hash: f1aaebd8f6a7043f3a82e97c8f1ee32dfad76766044f96c6b639f22dfd8c8a0a
-ingested: 2026-09-30
+source_hash: d4f8f09c292ee34037e464a7d636deb7f005c4c0d4e0ddbdd85d33a35b42a325
+ingested: 2026-11-06
 ---
-
-# Runbook: Installing Undercroft
 
 # Runbook: Installing Undercroft
 
@@ -21,4 +19,4 @@ Desktop app. Downloads: `macos-arm64-Undercroft.dmg` (Apple Silicon only; an Int
 
 Unsigned downloads: nothing is code-signed; trust rests on public source, public CI and the published SHA-256 checksums (`undercroft-desktop-SHA256SUMS`, `undercroft-installer-SHA256SUMS`), with commands to check each on macOS, Linux and Windows. A browser download on macOS is quarantined; `curl` and `install.sh` are not.
 
-The install folder is `~/.undercroft` or `%LOCALAPPDATA%\Undercroft` (or `--dir`), holding `.env` (0600, every secret) and the wizard-written `docker-compose.yml`; data lives in `undercroft-install_*` volumes, and one machine holds one install. Commands: `status`, `logs [service]`, `down`, `update` (`--tag` is a rollback escape hatch), `uninstall` (`--keep-data`). Back up the `.env` and the `minio-data` volume, the raw lake ([[ADR 0001 Raw Lake Is the Only Durable Layer]]). Troubleshooting covers the docker group, Compose v2, `orphaned-data`, missing arm64 images, a busy port, a slow first start and macOS quarantine. Tasks: `ci:installer-check`, `ci:desktop-check`, `build:installer-cli`, `build:desktop`, `cd:installer-upload`, `cd:desktop-release`, `ci:compose-check`.
+The install folder is `~/.undercroft` or `%LOCALAPPDATA%\Undercroft` (or `--dir`), holding `.env` (0600, every secret) and the wizard-written `docker-compose.yml`; data lives in `undercroft-install_*` volumes, and one machine holds one install. Commands: `status`, `logs [service]`, `down`, `update` (`--tag` is a rollback escape hatch), `uninstall` (`--keep-data`). Uninstall leaves the images in Docker's cache, since another install or project may use them; `docker image ls 'ghcr.io/muitneliss/undercroft-*'` lists Undercroft's own to remove with `docker image rm`. The database runs Undercroft's own Postgres image, Postgres 17 with the pg\_textsearch extension ([[ADR 0155 A Search Ranks Through a BM25 Index per Tenant, Behind a Door]]), tagged by its recipe rather than a release: the first update to a release that uses it, or a later one that changes its tag, replaces the database container, a few seconds' outage with the data kept, and `update --tag` keeps the image the installer names. Back up the `.env` and the `minio-data` volume, the raw lake ([[ADR 0001 Raw Lake Is the Only Durable Layer]]). Troubleshooting covers the docker group, Compose v2, `orphaned-data`, missing arm64 images, a busy port, a slow first start and macOS quarantine. Tasks: `ci:installer-check`, `ci:desktop-check`, `build:installer-cli`, `build:desktop`, `cd:installer-upload`, `cd:desktop-release`, `ci:compose-check`.

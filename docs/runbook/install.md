@@ -296,6 +296,25 @@ compose file it writes and the images it pulls come from the same release. `upda
 vX.Y.Z` pulls another release's images under this installer's compose file. It is an escape
 hatch for a rollback, not the way to update.
 
+The database runs on Undercroft's own Postgres image, `ghcr.io/muitneliss/undercroft-postgres`:
+Postgres 17 with the pg_textsearch extension, which ranks a search of the lake (ADR 0155). Its
+tag names its recipe, not a release, so most updates leave it alone. The first update to a
+release that uses it, and any later one that changes its tag, replaces the database container:
+Undercroft is unavailable for the few seconds Postgres takes to restart, and the data stays,
+because the major version is the same. `update --tag` keeps the image this installer names.
+
+### Reclaiming disk space
+
+`uninstall` leaves the images in Docker's cache, because another install, or another project,
+may be using them. To take the space back, list Undercroft's own:
+
+```sh
+docker image ls 'ghcr.io/muitneliss/undercroft-*'
+```
+
+and remove those nothing else needs with `docker image rm`. `docker image prune -a` removes
+every image no container uses, other projects' included.
+
 ## Back up
 
 Two things, and neither can be recreated:

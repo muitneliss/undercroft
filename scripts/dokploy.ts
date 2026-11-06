@@ -39,7 +39,18 @@ const SMOKE_INTERVAL_MS = 5000;
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 524]);
 
 /** Images this repo publishes. Everything else in the stack is upstream and not ours to verify. */
-const RELEASED_IMAGE_PREFIX = "ghcr.io/muitneliss/undercroft-";
+const PUBLISHED_IMAGE_PREFIX = "ghcr.io/muitneliss/undercroft-";
+
+/**
+ * The release pointer, as an image reference spells it. An image of ours whose tag names it is
+ * built by the release. One whose tag does not is PINNED: built outside the release, under a tag
+ * named by its recipe and never overwritten -- the Postgres image (ADR 0155) -- because the
+ * compose file ships from `main` and a rollback must still find every tag it names.
+ */
+const RELEASE_POINTER = /\$\{IMAGE_TAG[:}]/u;
+
+/** The tag of an image reference: what follows the last `:` after the last `/`, if any. */
+const IMAGE_TAG_PART = /:(?<tag>[^/:]+)$/u;
 
 /** A trailing slash on the configured endpoint, so paths join without doubling it. */
 const TRAILING_SLASH = /\/$/u;
@@ -310,14 +321,29 @@ export function expandEnv(value: string, env: Record<string, string | undefined>
 }
 
 /**
+ * A service whose image this repo publishes. `image` is the reference resolved against the
+ * environment, which is the tag ghcr is asked for. `pinned` is true when the file's reference
+ * does not follow `IMAGE_TAG`, so the release being rolled out does not move it.
+ */
+export interface PublishedService {
+  readonly service: string;
+  readonly image: string;
+  readonly pinned: boolean;
+}
+
+/**
  * Services whose image this repo publishes, read out of the compose file. Line-wise rather
  * than through a YAML parser: the file is ours and plain, and a parser to read it buys nothing.
+ *
+ * Whether an image follows the release is read from the file rather than from a list of names
+ * kept here, for the reason `oneShotServices` gives: the reference is where the intent is
+ * stated, and a second list is a second source of truth.
  */
-export function releasedServices(
+export function publishedServices(
   composeFile: string,
   env: Record<string, string | undefined> = process.env,
-): { service: string; image: string }[] {
-  const found: { service: string; image: string }[] = [];
+): PublishedService[] {
+  const found: PublishedService[] = [];
   let service = "";
   for (const line of composeFile.split("\n")) {
     const matchedService = TOP_LEVEL_SERVICE.exec(line)?.groups?.name;
@@ -325,11 +351,25 @@ export function releasedServices(
       service = matchedService;
     }
     const matchedImage = IMAGE_LINE.exec(line)?.groups?.image;
-    if (matchedImage?.startsWith(RELEASED_IMAGE_PREFIX) === true) {
-      found.push({ service, image: expandEnv(matchedImage, env) });
+    if (matchedImage?.startsWith(PUBLISHED_IMAGE_PREFIX) === true) {
+      found.push({
+        service,
+        image: expandEnv(matchedImage, env),
+        pinned: !RELEASE_POINTER.test(matchedImage),
+      });
     }
   }
   return found;
+}
+
+/**
+ * A pinned image is proved against its own tag, so the proof is only as good as that tag is
+ * fixed. `latest`, or no tag at all, moves: comparing it with itself is the "`latest` against
+ * `latest`" that proves nothing, which the release tag exists to avoid for the other images.
+ */
+function movesUnderfoot(image: string): boolean {
+  const tag = IMAGE_TAG_PART.exec(image)?.groups?.tag;
+  return tag === undefined || tag === "latest";
 }
 
 /**
@@ -341,7 +381,7 @@ export function releasedServices(
  * entries rather than from a list of names kept here. That declaration is what already makes
  * the stack wait for the job, so it is the one place the intent is stated; a list here would
  * be a second source of truth, and the failure when they disagree is a green deploy that
- * never ran its migration. Line-wise for the same reason as `releasedServices` above.
+ * never ran its migration. Line-wise for the same reason as `publishedServices` above.
  */
 export function oneShotServices(composeFile: string): Set<string> {
   const found = new Set<string>();
@@ -492,15 +532,26 @@ export async function preflight(
   }
   deps.log(`  ${COMPOSE_SOURCE.branch} carries this checkout's ${SERVER_COMPOSE}`);
 
-  const services = releasedServices(expected);
-  if (services.length === 0) {
+  const services = publishedServices(expected);
+  if (!services.some(({ pinned }) => !pinned)) {
     throw new Error(
-      `${SERVER_COMPOSE} references no ${RELEASED_IMAGE_PREFIX}* image. The host deploys ` +
-        "the images a release published and `verify` proves by digest; it does not build.",
+      `${SERVER_COMPOSE} references no ${PUBLISHED_IMAGE_PREFIX}* image that follows IMAGE_TAG. ` +
+        "The host deploys the images a release published and `verify` proves by digest; it " +
+        "does not build.",
     );
   }
-  for (const { service, image } of services) {
-    deps.log(`  ${service} -> ${image}`);
+  const moving = services
+    .filter(({ pinned, image }) => pinned && movesUnderfoot(image))
+    .map(({ service, image }) => `${service} to ${image}`);
+  if (moving.length > 0) {
+    throw new Error(
+      `${SERVER_COMPOSE} pins ${moving.join(", ")}, ` +
+        "a tag that moves. An image that does not follow IMAGE_TAG must name a fixed tag, or " +
+        "`verify` compares a moving pointer with itself and proves nothing.",
+    );
+  }
+  for (const { service, image, pinned } of services) {
+    deps.log(`  ${service} -> ${image}${pinned ? " (pinned, built outside the release)" : ""}`);
   }
 
   const missing = REQUIRED_COMMAND_FLAGS.filter((flag) => !compose.command.includes(flag));
@@ -579,6 +630,11 @@ async function publishedConfigDigest(deps: Deps, image: string, token: string): 
  * and both should fail here rather than pass quietly: `latest` moved after this deploy
  * pulled, or an operator pinned `IMAGE_TAG` to an older tag for a rollback and never put it
  * back, in which case the host is knowingly not running this release.
+ *
+ * A PINNED image -- one whose reference does not follow `IMAGE_TAG`, the Postgres image -- is
+ * proved against its own tag, whatever the release: that tag is published once and never
+ * overwritten, so it is as immutable as `vX.Y.Z`, and asking ghcr for the release tag instead
+ * would ask for an image nobody built. `preflight` refuses a pinned tag that moves.
  *
  * Empty `releaseTag` keeps the old behaviour for an operator running `verify` by hand.
  */
@@ -670,9 +726,9 @@ export async function verify(
 ): Promise<void> {
   const compose = await composeRecord(cfg, deps);
   const env = releaseTag === "" ? process.env : { ...process.env, IMAGE_TAG: releaseTag };
-  const services = releasedServices(composeFile, env);
+  const services = publishedServices(composeFile, env);
   if (services.length === 0) {
-    throw new Error("nothing to verify: no released images in compose");
+    throw new Error("nothing to verify: no published images in compose");
   }
   const oneShot = oneShotServices(composeFile);
 
@@ -682,7 +738,7 @@ export async function verify(
   });
 
   const problems: string[] = [];
-  for (const { service, image } of services) {
+  for (const { service, image, pinned } of services) {
     const checked = await verifyService({
       cfg,
       deps,
@@ -698,9 +754,8 @@ export async function verify(
       continue;
     }
     const ran = oneShot.has(service) ? "ran to completion on" : "runs";
-    deps.log(
-      `  ${service} ${ran} the published image ${image} (${checked.digest.slice(0, 19)}...)`,
-    );
+    const kind = pinned ? "pinned" : "published";
+    deps.log(`  ${service} ${ran} the ${kind} image ${image} (${checked.digest.slice(0, 19)}...)`);
   }
 
   if (problems.length > 0) {

@@ -490,3 +490,10 @@
 ## [2026-11-06] ingest | ADR 0155 A Search Ranks Through a BM25 Index per Tenant, Behind a Door
 ## [2026-11-06] ingest | ADR 0155 A Search Ranks Through a BM25 Index per Tenant, Behind a Door
 ## [2026-11-06] ingest | Runbook Deployment
+## [2026-11-06] ingest | Runbook Deployment
+## [2026-11-06] ingest | Runbook: Installing Undercroft
+## [2026-11-06] ingest | Architecture
+## [2026-11-06] ingest | Runbook Sign-In Setup
+## [2026-11-06] ingest | Runbook Deployment
+## [2026-11-06] ingest | Architecture
+## [2026-11-06] ingest | Architecture
