@@ -1,40 +1,47 @@
--- The fold, spelled for speed: the same output, a fraction of the time. ADR 0154.
+-- The fold, spelled for speed, and folded once: the same output, a fraction of the time.
+-- ADR 0154.
 --
 -- WHY. `lake.search` ran into the worker's 15 s statement timeout in production on an ordinary
--- name, in a tenant of about 250,000 records and 178,000 readable documents. The candidate
--- lookups (530) were not the problem -- on a bench of real Postgres 17 they take about 45 ms
--- together, through the index. The time was all in what runs AFTER them, over the newest
--- matches: ranking (`ts_rank_cd` over a rebuilt `raw.search_tsv` / `raw.record_tsv`) and
--- `raw.search_excerpt`. Both are dominated by `raw.fold`.
+-- name. Measured read-only on production, in a tenant of 191,250 documents and 246,221 records
+-- (Postgres 17.11), a search for `DO HOAI THUONG` matched 10 records and 531 documents, and the
+-- candidate lookups (530) found them through the index in 8 ms and 11 ms. The whole statement
+-- took 17.07 s. Nearly all of it was what runs AFTER the lookups: ranking the 100 newest
+-- documents (`ts_rank_cd` over a rebuilt `raw.search_tsv`; they averaged 36,037 characters)
+-- took 9.6-10.0 s, and the excerpts for the 21-row page about 6.4-7.25 s. Both are dominated by
+-- `raw.fold`: folding those 100 documents alone took 4.17 s.
 --
 -- 190 spelled the fold as `lower(translate(normalize(t, NFC), <list>, <list>))`. Postgres's
 -- `translate` compares each character of the input against the whole from-list in turn, so it
 -- costs O(characters x 150), and an ASCII character -- the majority of any document, Vietnamese
--- included -- walks the full list without matching. On one 200,000-character body: the fold
--- took 93 ms, `raw.search_tsv` 207 ms (it folds twice), and `raw.search_excerpt` 1,078 ms,
--- because it folded the body once in its WHERE and once in its SELECT for every query term.
+-- included -- walks the full list without matching. And 190 folded the same text more than once:
+-- `raw.search_tsv` twice, `raw.record_tsv` twice, and `raw.search_excerpt` once per query term
+-- and then once more per term.
 --
 -- WHAT CHANGES.
 --
 --   1. `raw.fold` is one `regexp_replace` per target letter, each with a bracket class of the
 --      letters that become it. A class is matched in one step per input character, so each pass
---      is linear, and nine passes cost less than one `translate` over the list: 20 ms instead
---      of 96 ms on the body above.
---   2. `raw.search_excerpt` folds the body ONCE and finds every term in that one folded copy.
+--      is linear, and nine passes cost far less than one `translate` over the list.
+--   2. `raw.search_tsv`, `raw.record_tsv` and `raw.search_excerpt` each fold their text EXACTLY
+--      ONCE, behind an `OFFSET 0` fence (below).
 --
--- Measured on that bench (40,000 documents, 150,000 records), the whole search statement went
--- from 4.77 s to 1.25 s.
+-- Measured on production with the new fold alone: folding the 100 documents 4.17 s -> 1.04 s,
+-- ranking them 9.97 s -> 3.62 s (the same `ts_rank_cd` sum), and the page's excerpts about
+-- 6.4 s -> 0.2 s (the same total length). On a bench of real Postgres 17 (one 200,000-character
+-- body), folding once besides: `raw.search_tsv` 70 ms -> 47 ms, and the excerpt for
+-- `DO HOAI THUONG` 99 ms -> 29 ms, each with an identical md5.
 --
--- THE OUTPUT IS UNCHANGED, AND THAT IS LOAD-BEARING. Both GIN indexes in 190 were built by
--- calling `raw.fold` through `raw.search_tsv` and `raw.record_tsv`. Postgres trusts an
--- IMMUTABLE function to answer the same forever; replace its body with one that answers
--- differently and the indexes are silently stale -- a row found by one spelling and missed by
--- the other, with no error anywhere. So the mapping below is exactly 190's, letter for letter
--- and in both cases, and nothing here needs a reindex. The equivalence was checked on the bench
--- for every code point from 32 to 8,000 (Latin-1, Latin Extended, the combining marks and the
--- whole Vietnamese block U+1E00-1EFF) and over 3,000 documents; `rawSearch.test.ts` pins the
--- mapping itself, every letter written out, and `scripts/fold.test.ts` reads THIS file, the
--- definition that now runs, against the browser's copy.
+-- THE OUTPUT IS UNCHANGED, AND THAT IS LOAD-BEARING. Both GIN indexes in 190 hold the output of
+-- `raw.search_tsv` and `raw.record_tsv`, which call `raw.fold`. Postgres trusts an IMMUTABLE
+-- function to answer the same forever; replace its body with one that answers differently and
+-- the indexes are silently stale -- a row found by one spelling and missed by the other, with no
+-- error anywhere. So the mapping below is exactly 190's, letter for letter and in both cases,
+-- every function here answers byte for byte what 190's did, and nothing needs a reindex. The
+-- fold's equivalence was checked on the bench for every code point from 32 to 8,000 (Latin-1,
+-- Latin Extended, the combining marks and the whole Vietnamese block U+1E00-1EFF) and over
+-- 3,000 documents; `rawSearch.test.ts` pins the mapping itself, every letter written out, and
+-- `scripts/fold.test.ts` reads THIS file, the definition that now runs, against the browser's
+-- copy.
 --
 -- What 190 says about the fold still holds, because the output is the same:
 --
@@ -52,26 +59,40 @@
 -- `\`: inside a bracket expression each of those means something else, and the class would
 -- silently match a different set.
 --
--- THE EXCERPT FOLDS ONCE. It folds `src` -- the NFC original -- rather than the raw body. That
--- is the same answer, because `raw.fold` normalizes to NFC first and `normalize` is idempotent:
+-- WHY `OFFSET 0`. Writing the fold once in a subquery is not enough to run it once. The planner
+-- pulls a simple subquery -- a LATERAL one included -- up into its parent and substitutes the
+-- subquery's expression at EVERY reference to its column. So `(SELECT raw.fold(x) AS f) f` with
+-- `f.f` used twice folds twice, and in an excerpt that read the folded column inside the
+-- per-term aggregate, the fold ran again for every term. A subquery with `OFFSET` is never
+-- pulled up -- the documented way to fence one -- so its expression is evaluated once and the
+-- parent reads the result. Without the fence these bodies would read as folding once and not
+-- do it, which is exactly what the first version of this file did.
+--
+-- THE EXCERPT. It folds `src` -- the NFC original -- rather than the raw body. That is the same
+-- answer, because `raw.fold` normalizes to NFC first and `normalize` is idempotent:
 -- `fold(normalize(x, NFC)) = fold(x)`. Its other promises are 190's: the window is cut from the
 -- original; a term the text does not hold is ignored rather than counted as offset 0; and when
--- no term appears literally the answer is the head of the text, not a guessed offset. Checked
--- on the bench against 190's body for 500 documents and six queries -- bare terms, a quoted
--- phrase, a negation, no match, a query typed with diacritics -- with identical excerpts.
+-- no term appears literally the answer is the head of the text, not a guessed offset.
 --
--- WHAT DOES NOT CHANGE. `raw.search_tsv` and `raw.record_tsv` -- the functions the indexes are
--- declared on -- keep their bodies. Folding once inside them was measured and bought nothing
--- (69 ms against 72 ms), and it is not worth touching the two functions an index matches by
--- expression for no gain.
+-- THE VECTORS, AND THE INDEXES DECLARED ON THEM. With a FROM clause, `raw.search_tsv` and
+-- `raw.record_tsv` cannot be inlined by the planner; they stay calls. 190's bodies were not
+-- inlined either -- with them, the plan's index condition already reads `raw.search_tsv(text)`
+-- -- so nothing about how the planner sees the index changes. It still matches: the planner
+-- reads an index's expression and a query's `@@` operand through the same preprocessing, so
+-- `raw.search_tsv(text)` on the index and in the statement are the same call. That is a claim,
+-- and the gate is what proves it: "the indexes are live" in `rawSearch.test.ts` (both indexes,
+-- one on a partition made after the migration ran) and the tests that the candidate lookups
+-- reach the index as a tenant's login. `raw.record_tsv` keeps 190's CASE
+-- exactly: a payload over the cap falls back to `raw.search_tsv` over its text, and is never
+-- folded and re-read as jsonb, which 190 never did for it either.
 --
 -- GRANTS. None. `CREATE OR REPLACE` keeps a function's owner and its ACL, so the grants 190
--- wrote and `repeatable/010_provision_tenant.sql` restates still name these two signatures,
--- which are unchanged.
+-- wrote and `repeatable/010_provision_tenant.sql` restates still name these four signatures,
+-- which are unchanged, as are their attributes.
 --
 -- WHY A NUMBERED FILE AND NOT `repeatable/`. A repeatable file is a definition meant to be
--- edited in place (ADR 0036). This function must never be: any change to what it answers is a
--- reindex, and has to arrive as a deliberate migration that says so.
+-- edited in place (ADR 0036). These functions must never be: any change to what they answer is
+-- a reindex, and has to arrive as a deliberate migration that says so.
 
 CREATE OR REPLACE FUNCTION raw.fold(t text) RETURNS text
     LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
@@ -92,14 +113,39 @@ CREATE OR REPLACE FUNCTION raw.fold(t text) RETURNS text
             '[çÇ]', 'c', 'g'))
 $$;
 
+CREATE OR REPLACE FUNCTION raw.search_tsv(t text) RETURNS tsvector
+    LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
+    SELECT to_tsvector('simple', f.f) || to_tsvector('english', f.f)
+    FROM (SELECT raw.fold(left(t, raw.search_cap())) AS f OFFSET 0) f
+$$;
+
+-- `p::text` is fenced too: it is read for the length test and again for the fold, or for the
+-- fallback. The fold and the jsonb parse sit inside the THEN branch, so an oversized payload
+-- never pays for either.
+CREATE OR REPLACE FUNCTION raw.record_tsv(p jsonb) RETURNS tsvector
+    LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
+    SELECT CASE
+        WHEN length(r.t) <= raw.search_cap() THEN (
+            SELECT jsonb_to_tsvector('simple', f.j, '["string","numeric"]')
+                || jsonb_to_tsvector('english', f.j, '["string","numeric"]')
+            FROM (SELECT raw.fold(r.t)::jsonb AS j OFFSET 0) f
+        )
+        ELSE raw.search_tsv(r.t)
+    END
+    FROM (SELECT p::text AS t OFFSET 0) r
+$$;
+
 CREATE OR REPLACE FUNCTION raw.search_excerpt(body text, q text, radius integer DEFAULT 90)
     RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
     SELECT CASE WHEN s.at = 0
                 THEN left(b.src, radius * 2)
                 ELSE substr(b.src, greatest(s.at - radius, 1), radius * 2)
            END
-    FROM (SELECT normalize(left(body, raw.search_cap()), NFC) AS src) b0
-    CROSS JOIN LATERAL (SELECT b0.src, raw.fold(b0.src) AS folded) b
+    FROM (
+        SELECT b0.src, raw.fold(b0.src) AS folded
+        FROM (SELECT normalize(left(body, raw.search_cap()), NFC) AS src OFFSET 0) b0
+        OFFSET 0
+    ) b
     CROSS JOIN LATERAL (
         -- `nullif(..., 0)`: a term the text lacks is not a match at offset 0.
         SELECT coalesce(min(nullif(position(term IN b.folded), 0)), 0) AS at

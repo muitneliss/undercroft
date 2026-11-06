@@ -36,20 +36,18 @@ import { TenantNotProvisioned } from "./tenantSession.ts";
  * JSON payload of a kilobyte or two. A document's text runs to 200,000 characters
  * (`raw.search_cap()`). So the caps differ by kind rather than sharing one number.
  *
- * Measured on real Postgres 17 with a 1 GB memory limit, as production runs it, over a
- * Vietnamese corpus of 40,000 documents and 150,000 records (ADR 0154). The candidate lookups
- * take about 45 ms together; the rest is ranking and the page's excerpts. With the fold as 190
- * spelled it, the statement took 4.77 s (records alone 1.84 s, documents alone 5.35 s), and
- * production met the timeout. With the fold respelled in 670 and the excerpt folding once, it
- * takes 1.25 s (records 0.56 s, documents 0.89 s). On one full 200,000-character document the
- * fold is now about 20 ms where it was 96 ms; rebuilding the vector, which is what ranking it
- * costs, about 72 ms where it was 207 ms; and the excerpt folds the body once, not once per
- * query term, where it took over a second.
+ * Measured read-only on production (ADR 0154), in a tenant of 191,250 documents and 246,221
+ * records, for a name that matched 10 records and 531 documents. The candidate lookups took 8 ms
+ * and 11 ms; the rest is ranking and the page's excerpts. With the fold as 190 spelled it, the
+ * statement took 17.07 s: ranking the 100 newest documents (averaging 36,037 characters) took
+ * about 10 s, and the 21-row page's excerpts about 6.4-7.25 s. With the fold respelled in 670,
+ * ranking them took 3.62 s and the excerpts about 0.2 s; 670 also folds each text once rather
+ * than twice, which a bench measured as a further third off building a vector.
  *
- * The worst case is a lake made entirely of full-size documents: 100 of them rank in about 7 s
- * plus the page's excerpts. That is inside the timeout on the bench's CPU, and production's may
- * be slower. A cap set below it would rank fewer matches for the same question; past the
- * budget, the timeout's refusal says what happened and to narrow the question.
+ * The worst case is a lake whose 100 newest matches all sit at the 200,000-character cap. On
+ * production's CPU that ranks in about 13 s with 670 in full, before the page's excerpts: under
+ * the timeout with little room. A cap set below it would rank fewer matches for every question;
+ * past the budget, the timeout's refusal says what happened and to narrow the question.
  */
 export const RANKED_PER_KIND: Readonly<Record<SearchKind, number>> = {
   record: 2000,
