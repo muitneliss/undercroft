@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.82.1](https://github.com/muitneliss/undercroft/compare/v1.82.0...v1.82.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **db:** fold accents in a fifth of the time so lake.search stops timing out ([#524](https://github.com/muitneliss/undercroft/issues/524)) ([d19b2b7](https://github.com/muitneliss/undercroft/commit/d19b2b7af93d84cfb913e058cd1eabbbd7e52e98))
+
 ## [1.82.0](https://github.com/muitneliss/undercroft/compare/v1.81.0...v1.82.0) (2026-11-03)
 
 
