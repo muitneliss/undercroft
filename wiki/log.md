@@ -501,3 +501,4 @@
 ## [2026-11-06] ingest | Runbook Deployment
 ## [2026-11-06] ingest | ADR 0156 BM25 Search, as Measured Before It Shipped
 ## [2026-11-06] ingest | Runbook Deployment
+## [2026-11-06] ingest | ADR 0156 BM25 Search, as Measured Before It Shipped

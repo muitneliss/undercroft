@@ -5,7 +5,7 @@ date: 2026-11-06
 tags: []
 source: docs/adr/0156-bm25-search-as-measured-before-it-shipped.md
 source_path: docs/adr/0156-bm25-search-as-measured-before-it-shipped.md
-source_hash: b823cef4a34107ce19c4871b8f3cab6d6826ff080de20b17d8b9b5718a64c1ea
+source_hash: 34517f7566bfe8b6c8a21ac2bc55112d83f2fe0c9c240df26eb10bb56848b34e
 ingested: 2026-11-06
 ---
 
