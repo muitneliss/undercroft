@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.83.0](https://github.com/muitneliss/undercroft/compare/v1.82.1...v1.83.0) (2026-11-06)
+
+
+### Features
+
+* **deploy:** run Postgres on the first-party image with pg_textsearch preloaded ([#531](https://github.com/muitneliss/undercroft/issues/531)) ([f05988f](https://github.com/muitneliss/undercroft/commit/f05988fa407b5558f8e2fc80c117bf43f3b79987))
+
 ## [1.82.1](https://github.com/muitneliss/undercroft/compare/v1.82.0...v1.82.1) (2026-11-06)
 
 
