@@ -17,9 +17,23 @@
  * pays for one boot and one `migrate()` per process, dumps the data directory, and starts
  * every later database from that copy in about 60ms. Each test still owns a private
  * database, so isolation, `become` and the grant model are exactly what they were.
+ *
+ * WHY EVERY DATABASE CARRIES pg_textsearch. A search ranks through a BM25 index behind a door
+ * (ADR 0155), and the gate has to prove that door, not leave it to production. PGlite loads an
+ * extension from the object passed to its constructor and from nowhere else: a data directory
+ * dumped from a database that loaded it does not even start without it ("PGlite failed to
+ * initialize properly"). So {@link boot} is the one place a PGlite is built, and the snapshot is
+ * restored with the extension it was seeded with. It is loaded, not created: a database has it
+ * only once a migration or a test says `CREATE EXTENSION`.
+ *
+ * The extension package demands one PGlite release exactly (a peer dependency of
+ * `@electric-sql/pglite-pg_textsearch`), which is why `@electric-sql/pglite` is pinned to that
+ * version and moves only together with it. That release runs PostgreSQL 18 while production
+ * runs 17; ADR 0155 records the divergence and the fixture that agreed across it.
  */
 
 import { PGlite } from "@electric-sql/pglite";
+import { pg_textsearch } from "@electric-sql/pglite-pg_textsearch";
 import type { QueryResult, SqlExecutor } from "./executor.ts";
 import { migrate } from "./migrate.ts";
 
@@ -53,13 +67,19 @@ export interface TestDatabase extends SqlExecutor {
 
 /** A fresh, empty database: no roles, no schema. For the suite that tests `migrate` itself. */
 export async function createTestDatabase(): Promise<TestDatabase> {
-  return await open(new PGlite());
+  return await open(boot());
+}
+
+/** A PGlite with the extensions the gate proves, empty or restored from a snapshot. */
+function boot(loadDataDir?: File | Blob): PGlite {
+  const extensions = { pg_textsearch };
+  return new PGlite(loadDataDir === undefined ? { extensions } : { extensions, loadDataDir });
 }
 
 let migrated: Promise<File | Blob> | undefined;
 
 async function migratedDataDir(): Promise<File | Blob> {
-  const seed = new PGlite();
+  const seed = boot();
   const db = await open(seed);
   await migrate(db);
   const dataDir = await seed.dumpDataDir("none");
@@ -78,7 +98,7 @@ export async function createMigratedTestDatabase(): Promise<TestDatabase> {
     migrated = undefined;
     throw error;
   });
-  return await open(new PGlite({ loadDataDir: await migrated }));
+  return await open(boot(await migrated));
 }
 
 async function open(db: PGlite): Promise<TestDatabase> {

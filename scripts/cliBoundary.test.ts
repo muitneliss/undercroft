@@ -39,6 +39,11 @@ const FIXTURES: Record<string, string> = {
   "apps/cli/src/handlers/reexport.ts": `
     export { createAuth } from "better-auth";
   `,
+  // A driver is its family: PGlite's extension package opens a database as PGlite does.
+  "apps/cli/src/services/localDatabase.ts": `
+    import { pg_textsearch } from "@electric-sql/pglite-pg_textsearch";
+    export const extensions = { pg_textsearch };
+  `,
 
   // Quiet: the transport, a type-only import, a shared package, and the two exempt places.
   "apps/cli/src/handlers/remote.ts": `
@@ -48,6 +53,11 @@ const FIXTURES: Record<string, string> = {
     export const link = httpLink;
     export type Router = AppRouter;
     export const locale = DEFAULT_LOCALE;
+  `,
+  // The quiet twin of localDatabase.ts: the same package, by type alone.
+  "apps/cli/src/services/extensionShape.ts": `
+    import type { pg_textsearch } from "@electric-sql/pglite-pg_textsearch";
+    export type Extension = typeof pg_textsearch;
   `,
   "apps/cli/src/cli.test.ts": `
     import { startControlPlane } from "@undercroft/control-plane/testing";
@@ -118,11 +128,19 @@ describe("the CLI cannot open a second way into the platform", () => {
   it("re-exporting Better Auth is refused", () => {
     expect(firedOn("apps/cli/src/handlers/reexport.ts")).toBe(true);
   });
+
+  it("importing a PGlite extension package is refused", () => {
+    expect(firedOn("apps/cli/src/services/localDatabase.ts")).toBe(true);
+  });
 });
 
 describe("the CLI's legitimate imports are left alone", () => {
   it("the HTTP transport, a type-only router import and a shared package are not refused", () => {
     expect(firedOn("apps/cli/src/handlers/remote.ts")).toBe(false);
+  });
+
+  it("the same extension package imported by type alone is not refused", () => {
+    expect(firedOn("apps/cli/src/services/extensionShape.ts")).toBe(false);
   });
 
   it("the suite may start the real control plane", () => {

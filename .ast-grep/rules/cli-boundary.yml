@@ -10,7 +10,9 @@
 # So the shipped source may not import, BY VALUE, anything that could open that door: the
 # control plane itself, the database seam and its drivers, the crypto package that holds the
 # sealing key, the lake store, the connector runtime, or Better Auth. A TYPE import is allowed
-# (`import type { AppRouter } ...`): it is erased at compile time and ships nothing.
+# (`import type { AppRouter } ...`): it is erased at compile time and ships nothing. A driver is
+# its whole family: PGlite's own entries and its extension packages
+# (`@electric-sql/pglite-pg_textsearch`, ADR 0155) open a database exactly as PGlite does.
 #
 # Exempt, and why:
 #   **/*.test.ts     -- a test is a composition root. `cli.test.ts` starts the real control
@@ -33,7 +35,7 @@ ignores:
 utils:
   forbidden:
     kind: string
-    regex: '^["''](@undercroft/(control-plane|db|crypto|lake|connector-runtime)(/[^"'']*)?|pg|pg-[a-z-]+|@electric-sql/pglite|better-auth(/[^"'']*)?)["'']$'
+    regex: '^["''](@undercroft/(control-plane|db|crypto|lake|connector-runtime)(/[^"'']*)?|pg|pg-[a-z-]+|@electric-sql/pglite([-/][^"'']+)?|better-auth(/[^"'']*)?)["'']$'
 rule:
   any:
     # `import { x } from "..."`, but not `import type { x } from "..."`.

@@ -109,6 +109,11 @@ rule:
 # migrations and the same grant assertions execute against a real `pg` pool in production
 # and against Postgres-compiled-to-WASM in the gate. A second `new Pool` anywhere would be
 # a second definition of how this codebase talks to Postgres.
+#
+# "PGlite" is the family, not one package name: its own entries (`@electric-sql/pglite/vector`)
+# and its extension packages (`@electric-sql/pglite-pg_textsearch`, ADR 0155) are what a second
+# `new PGlite` would be built from, so they belong to testing.ts as the driver itself does.
+# Pinned from both sides by `scripts/layering.test.ts`.
 id: layer-no-driver-import
 language: typescript
 severity: error
@@ -128,4 +133,4 @@ rule:
   kind: import_statement
   has:
     kind: string
-    regex: '^"(pg|pg-[a-z-]+|@electric-sql/pglite)"$'
+    regex: '^"(pg|pg-[a-z-]+|@electric-sql/pglite([-/][^"]+)?)"$'

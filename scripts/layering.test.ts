@@ -122,6 +122,17 @@ const FIXTURES: Record<string, string> = {
     import { Pool } from "pg";
     export const x = Pool;
   `,
+  // PGlite's extension packages are PGlite (ADR 0155): matching the bare name alone would let
+  // a second, extension-loaded database be built beside the seam.
+  "apps/demo/src/repos/loadsExtension.ts": `
+    import { pg_textsearch } from "@electric-sql/pglite-pg_textsearch";
+    export const x = pg_textsearch;
+  `,
+  "packages/db/src/testing.ts": `
+    import { PGlite } from "@electric-sql/pglite";
+    import { pg_textsearch } from "@electric-sql/pglite-pg_textsearch";
+    export const x = [PGlite, pg_textsearch];
+  `,
 };
 
 interface Finding {
@@ -243,5 +254,13 @@ describe("dependencies arrive as arguments", () => {
 
   it("importing it inside the seam is not", () => {
     expect(rulesOn("packages/db/src/pool.ts")).toEqual([]);
+  });
+
+  it("importing a PGlite extension outside its seam is refused", () => {
+    expect(rulesOn("apps/demo/src/repos/loadsExtension.ts")).toContain("layer-no-driver-import");
+  });
+
+  it("importing PGlite and its extension inside the seam is not", () => {
+    expect(rulesOn("packages/db/src/testing.ts")).toEqual([]);
   });
 });

@@ -29,6 +29,13 @@ tasks:
       # fails rather than quietly resolving something newer.
       - bun install --frozen-lockfile
 
+  lock:
+    desc: Re-resolve bun.lock after a package.json's dependencies were edited by hand (a dependabot bump needs no step; a pin a change chooses does).
+    cmds:
+      # The one install allowed to write bun.lock. A change chooses a pin in package.json and
+      # this records it; commit the two together, so `dev:install` and CI install exactly that.
+      - bun install
+
   env:
     desc: Bootstrap deploy/compose/.env from the example, if it doesn't exist yet.
     run: once

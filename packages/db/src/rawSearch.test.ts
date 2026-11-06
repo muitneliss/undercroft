@@ -2,9 +2,11 @@
  * Full-text search over the raw lake, pinned: the fold, the two indexes, and the isolation.
  *
  * These run in the gate because PGlite is real Postgres: the same `normalize`, the same
- * `regexp_replace`, the same GIN planner. There is no extension to install, which is the point --
+ * `regexp_replace`, the same GIN planner. The fold needs no extension, which is the point --
  * `unaccent` is the usual answer to Vietnamese diacritics and PGlite does not ship it, so a
- * design that needed it would be enforced nowhere until production.
+ * design that needed it would be enforced nowhere until production. BM25 ranking does need one,
+ * pg_textsearch (ADR 0155), and was chosen over the alternatives because PGlite ships it: the
+ * gate loads it, and "the gate's database ranks with pg_textsearch" below proves it ranks.
  *
  * The fold's mapping is pinned letter by letter, because the GIN indexes were built with it: a
  * respelling of `raw.fold` (670 did one, for speed, ADR 0154) that answered differently would
@@ -338,6 +340,31 @@ describe("the indexes are live", () => {
       ["hop dong"],
     );
     expect(plan).toContain("document_text_search");
+  });
+});
+
+describe("the gate's database ranks with pg_textsearch", () => {
+  // ADR 0155 ranks a search through a BM25 index, and the gate can prove that only if its PGlite
+  // carries the extension (`testing.ts` loads it into every database it opens). Until the door's
+  // migration creates the extension, this is the one test that does; the door's own tests, which
+  // rank through it as a tenant's login, will cover this and replace it.
+  sharedDatabase();
+
+  it("creates the extension and orders by BM25 score through the index", async () => {
+    await db.exec(`
+      CREATE EXTENSION IF NOT EXISTS pg_textsearch;
+      CREATE TABLE public.bm25_probe (id int PRIMARY KEY, body text NOT NULL);
+      INSERT INTO public.bm25_probe VALUES
+        (1, 'contract signed'), (2, 'invoice paid'), (3, 'contract contract renewal');
+      CREATE INDEX bm25_probe_body ON public.bm25_probe USING bm25 (body)
+        WITH (text_config = 'simple');
+    `);
+    const { rows } = await db.query<{ id: number }>(
+      `SELECT id FROM public.bm25_probe
+        ORDER BY body <@> to_bm25query('contract', 'bm25_probe_body') LIMIT 2`,
+    );
+    // Twice the term in a document barely longer outranks it once; the row without it is last.
+    expect(rows.map((r) => r.id)).toEqual([3, 1]);
   });
 });
 
