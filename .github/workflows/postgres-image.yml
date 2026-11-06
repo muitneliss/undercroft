@@ -1,0 +1,60 @@
+# Publish the Postgres image, postgres:17-alpine plus pg_textsearch (ADR 0155), under the tag
+# its recipe names: `ghcr.io/<owner>/undercroft-postgres:<PG_MAJOR>-pgts<PG_TEXTSEARCH_VERSION>`.
+#
+# Its own workflow, not a job in build-images.yml, because its lifecycle is the opposite one.
+# The worker and control plane are built per release under `IMAGE_TAG`; this image is built per
+# RECIPE, on the push to `main` that changes it, and outside the release. Compose deploys from
+# `main` (ADR 0049), so the tag must exist before the compose change that names it merges, and
+# must still exist when a rollback runs `main`'s compose against an older release's images --
+# which a release-built tag would not.
+#
+# The tag is immutable by contract: `task build:postgres-image-publish` skips a tag that already
+# exists and fails when it cannot tell. A recipe change ships by changing an ARG in
+# `deploy/Dockerfile.postgres`, which changes the tag; this workflow never overwrites one.
+name: postgres-image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/Dockerfile.postgres"
+      - ".github/workflows/postgres-image.yml"
+  workflow_dispatch:
+
+# One publish at a time, never cancelled midway: two runs that both found the tag absent would
+# both push it, and the second would replace the first's digest under the same name.
+concurrency:
+  group: postgres-image
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # Emulates arm64 on this amd64 runner, for the second platform: the host is amd64, and a
+      # desktop install on Apple Silicon or an ARM server pulls arm64 (ADR 0094).
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The task touches only docker and the Dockerfile, so there is no bun on this runner.
+      - uses: go-task/setup-task@v2
+
+      - name: publish the image unless its tag exists
+        run: task build:postgres-image-publish OWNER=${{ github.repository_owner }}

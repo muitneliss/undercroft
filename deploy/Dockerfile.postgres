@@ -1,0 +1,48 @@
+# Postgres, plus pg_textsearch -- the platform's `postgres` service once compose names it.
+#
+# Why our own image: ADR 0155 ranks `lake.search`'s documents through a BM25 index per tenant,
+# and the only BM25 index Postgres offers is an extension upstream images do not carry. It is
+# built here with PGXS on the same `postgres:17-alpine` the stack already runs, so the major
+# version and musl's collation stay what the data volume was written with; the image grows by
+# about 3 MB (416 -> 419 MB in the spike).
+#
+# Why the CMD: pg_textsearch must be in `shared_preload_libraries` -- `CREATE EXTENSION` alone
+# is refused without it -- and a preload can only be set when the server starts. The memory
+# limit is the extension's own pool, sized under the service's 1g compose limit: with 256MB the
+# spike's heaviest search peaked at 409 MiB for the whole container. Raise one only with the
+# other. The CMD is the whole server command line, so a compose `command:` would silently drop
+# both; the service sets none.
+#
+# Why the tag is pinned by these contents and never by `IMAGE_TAG`: compose deploys from
+# `main` (ADR 0049) while the images come from a release, so a rollback to a release older than
+# this image must still find the tag `main`'s compose names. The tag is therefore
+# `<PG_MAJOR>-pgts<PG_TEXTSEARCH_VERSION>`, read from the ARGs below by `task
+# build:postgres-image` and by `.github/workflows/postgres-image.yml`, and published once:
+# the workflow refuses to overwrite a tag that exists. A change to this recipe that should
+# reach a server must therefore change one of those ARGs, which is what makes it a new tag.
+# Change them in this file, never with `--build-arg`, or the tag stops describing the image.
+#
+# The base is not pinned by digest, like the repo's other images; the immutable tag is what
+# fixes the bytes, since the image behind it is built once and never rebuilt.
+ARG PG_MAJOR=17
+ARG PG_TEXTSEARCH_VERSION=1.5.1
+# sha256 of GitHub's archive of the tag. A mismatch fails the build rather than compiling
+# whatever the URL now serves into a database server.
+ARG PG_TEXTSEARCH_SHA256=2e7fb76ed96176afc6d16cc5d095ced2cb233ff27fbeaa8c7bfffc82e02f7498
+
+FROM postgres:${PG_MAJOR}-alpine AS build
+ARG PG_TEXTSEARCH_VERSION
+ARG PG_TEXTSEARCH_SHA256
+# `with_llvm=no`: the base's PGXS would also emit JIT bitcode, which nothing here uses.
+RUN apk add --no-cache --virtual .build build-base clang llvm curl \
+    && curl -fsSL -o /tmp/pg_textsearch.tar.gz \
+        "https://github.com/timescale/pg_textsearch/archive/refs/tags/v${PG_TEXTSEARCH_VERSION}.tar.gz" \
+    && echo "${PG_TEXTSEARCH_SHA256}  /tmp/pg_textsearch.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/pg_textsearch.tar.gz -C /tmp \
+    && cd "/tmp/pg_textsearch-${PG_TEXTSEARCH_VERSION}" \
+    && make -j"$(nproc)" with_llvm=no \
+    && make install with_llvm=no DESTDIR=/out
+
+FROM postgres:${PG_MAJOR}-alpine
+COPY --from=build /out/usr/local/ /usr/local/
+CMD ["postgres", "-c", "shared_preload_libraries=pg_textsearch", "-c", "pg_textsearch.memory_limit=256MB"]

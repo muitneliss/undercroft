@@ -1,6 +1,25 @@
 # Producing artifacts: the SPA bundle, generated assets/schemas, and local Docker images.
 version: "3"
 
+vars:
+  POSTGRES_DOCKERFILE: "{{.ROOT_DIR}}/deploy/Dockerfile.postgres"
+  # The Postgres image's tag, `<PG_MAJOR>-pgts<PG_TEXTSEARCH_VERSION>`, read from the
+  # Dockerfile's own ARGs so the recipe and its name cannot disagree. This is the one place the
+  # tag is derived; the local build and the publish below both use it. An ARG that cannot be
+  # read fails the task rather than producing a tag with a hole in it. ADR 0155.
+  POSTGRES_IMAGE_TAG:
+    sh: |
+      major="$(sed -n 's/^ARG PG_MAJOR=//p' "{{.POSTGRES_DOCKERFILE}}")"
+      pgts="$(sed -n 's/^ARG PG_TEXTSEARCH_VERSION=//p' "{{.POSTGRES_DOCKERFILE}}")"
+      if [ -z "$major" ] || [ -z "$pgts" ]; then
+        echo "cannot read ARG PG_MAJOR / PG_TEXTSEARCH_VERSION from {{.POSTGRES_DOCKERFILE}}" >&2
+        exit 1
+      fi
+      echo "${major}-pgts${pgts}"
+  # OWNER defaults to the namespace the compose files name; the workflow passes the repository
+  # owner, so a fork publishes under its own, as build-images.yml does.
+  POSTGRES_IMAGE: 'ghcr.io/{{.OWNER | default "muitneliss"}}/undercroft-postgres:{{.POSTGRES_IMAGE_TAG}}'
+
 tasks:
   ui:
     desc: Build the SPA bundle (vite build). Also the build:ui step of the gate.
@@ -85,3 +104,37 @@ tasks:
   images:
     desc: Build both first-party Docker images locally. CI publishes the real ones via build-images.yml.
     deps: [worker-image, control-plane-image]
+
+  # Not in `images`: those two are built per release, this one per recipe, and compiling the
+  # extension is minutes a release-image check should not pay.
+  postgres-image:
+    desc: >-
+      Build the Postgres image (postgres:17-alpine + pg_textsearch, deploy/Dockerfile.postgres) for
+      this machine, tagged with the content-pinned ref it is published under. ADR 0155.
+    cmds:
+      # No build context: the image takes nothing from the repository but its Dockerfile, and
+      # an empty context keeps deploy/compose/.env out of the daemon.
+      - docker build -t "{{.POSTGRES_IMAGE}}" - < "{{.POSTGRES_DOCKERFILE}}"
+      - echo "built {{.POSTGRES_IMAGE}}"
+
+  postgres-image-publish:
+    desc: >-
+      Build the Postgres image for linux/amd64 and linux/arm64 and push it, unless its tag already
+      exists -- the tag is immutable. Needs buildx, QEMU and a ghcr.io login; run by
+      .github/workflows/postgres-image.yml. OWNER=<namespace> overrides muitneliss.
+    cmds:
+      # Three outcomes, never guessed between: the tag exists (skip), the registry says it is not
+      # found (build), anything else -- a refused login, a network failure -- fails, because
+      # treating "could not ask" as "absent" would overwrite a tag a server may be running.
+      - |
+        if out="$(docker buildx imagetools inspect "{{.POSTGRES_IMAGE}}" 2>&1)"; then
+          echo "{{.POSTGRES_IMAGE}} already exists; not overwriting it. A recipe change must change PG_MAJOR or PG_TEXTSEARCH_VERSION in deploy/Dockerfile.postgres."
+          exit 0
+        fi
+        case "$out" in
+          *": not found"*) ;;
+          *) echo "cannot tell whether {{.POSTGRES_IMAGE}} exists:" >&2; echo "$out" >&2; exit 1 ;;
+        esac
+        docker buildx build --platform linux/amd64,linux/arm64 --push \
+          -t "{{.POSTGRES_IMAGE}}" - < "{{.POSTGRES_DOCKERFILE}}"
+        echo "pushed {{.POSTGRES_IMAGE}}"
