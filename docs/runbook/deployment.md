@@ -53,6 +53,30 @@ happened once:
 Keep the two files in step. A change to the development file that is not mirrored to the
 server file will not survive a deploy.
 
+## The Postgres image
+
+`deploy/Dockerfile.postgres` is `postgres:17-alpine` plus the pg_textsearch extension, which
+ranks `lake.search` through a BM25 index (ADR 0155). Its command preloads the extension
+(`shared_preload_libraries=pg_textsearch`) and caps its memory at
+`pg_textsearch.memory_limit=256MB`, sized under the service's `1g` limit.
+
+It is published as `ghcr.io/muitneliss/undercroft-postgres:17-pgts1.5.1`. The tag is pinned by
+the recipe, `<PG_MAJOR>-pgts<PG_TEXTSEARCH_VERSION>` read from the Dockerfile's ARGs, and never
+follows `IMAGE_TAG`. The compose file ships from `main` while the images ship from a release,
+so a rollback to an older release must still find the tag `main`'s compose names.
+
+- **Publishing** is `.github/workflows/postgres-image.yml`, outside the release: it runs on a
+  push to `main` that changes the Dockerfile, or by hand from the Actions tab. It runs
+  `task build:postgres-image-publish`, which builds `linux/amd64` and `linux/arm64` and
+  pushes.
+- **A tag is never overwritten.** If the tag exists the workflow says so and pushes nothing;
+  if the registry cannot be asked, it fails rather than assume the tag is absent.
+- **A recipe change must bump the tag**: change `PG_MAJOR` or `PG_TEXTSEARCH_VERSION` (and
+  the archive's `PG_TEXTSEARCH_SHA256`) in the Dockerfile, never a `--build-arg`. A change
+  that leaves both alone is never published, by design. Merge it, let the workflow publish
+  the new tag, and only then point compose at it.
+- **Locally**, `task build:postgres-image` builds it for your machine under the same tag.
+
 ## How a deploy happens
 
 **Automatically, on a release.** Merge the release-please PR → `version` bumps, a tag is cut

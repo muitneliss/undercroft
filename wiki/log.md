@@ -489,3 +489,4 @@
 ## [2026-11-06] ingest | ADR 0155 A Search Ranks Through a BM25 Index per Tenant, Behind a Door
 ## [2026-11-06] ingest | ADR 0155 A Search Ranks Through a BM25 Index per Tenant, Behind a Door
 ## [2026-11-06] ingest | ADR 0155 A Search Ranks Through a BM25 Index per Tenant, Behind a Door
+## [2026-11-06] ingest | Runbook Deployment
