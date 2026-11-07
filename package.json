@@ -1,6 +1,6 @@
 {
   "name": "undercroft",
-  "version": "1.84.0",
+  "version": "1.85.0",
   "devDependencies": {
     "@ast-grep/cli": "0.51.0",
     "@biomejs/biome": "2.6.4",

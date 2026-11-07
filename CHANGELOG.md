@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.85.0](https://github.com/muitneliss/undercroft/compare/v1.84.0...v1.85.0) (2026-11-07)
+
+
+### Features
+
+* **worker:** rank documents through the BM25 door, ADR 0123's way when it cannot answer (ADR 0157) ([#536](https://github.com/muitneliss/undercroft/issues/536)) ([cb618df](https://github.com/muitneliss/undercroft/commit/cb618df923152e682a730d6c0f25e144bb44681d))
+
 ## [1.84.0](https://github.com/muitneliss/undercroft/compare/v1.83.0...v1.84.0) (2026-11-07)
 
 
