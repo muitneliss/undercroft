@@ -174,3 +174,16 @@ export {
   type PublishedVersion,
   updateKindDescription,
 } from "./documentKinds.ts";
+export {
+  buildSearchIndex,
+  dropSearchIndex,
+  dropStrayIndex,
+  recordSearchIndexBuild,
+  reindexSearchIndex,
+  type SearchIndexConfig,
+  type SearchIndexState,
+  searchIndexStates,
+  strayInvalidSearchIndexes,
+  tryLockSearchIndexing,
+  unlockSearchIndexing,
+} from "./searchIndexes.ts";

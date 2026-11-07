@@ -159,6 +159,7 @@
 - [ADR 0153 Biome 2.6 Is Adopted Rule by Rule](sources/adr-0153-biome-2-6-is-adopted-rule-by-rule.md)
 - [ADR 0154 The Fold Is Spelled for Speed, and Answers Exactly as Before](sources/adr-0154-the-fold-is-spelled-for-speed-and-answers-exactly-as-before.md)
 - [ADR 0155 A Search Ranks Through a BM25 Index per Tenant, Behind a Door](sources/adr-0155-a-search-ranks-through-a-bm25-index-per-tenant-behind-a-door.md)
+- [ADR 0156 BM25 Search, as Measured Before It Shipped](sources/adr-0156-bm25-search-as-measured-before-it-shipped.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

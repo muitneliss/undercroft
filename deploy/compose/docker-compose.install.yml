@@ -295,6 +295,22 @@ services:
         limits:
           memory: 256m
 
+  # The tenants' BM25 search indexes, a pass at start and one every six hours, as the bootstrap
+  # superuser. Long-running on purpose, and depended on by nothing: see the server file.
+  search-index:
+    <<: *restart
+    image: ghcr.io/muitneliss/undercroft-control-plane:${IMAGE_TAG:?set in .env}
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    command: ["bun", "run", "search-index", "--repeat"]
+    environment:
+      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD:?set in .env}@undercroft-postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
   # The Kestra flows, baked into the control-plane image and pushed through Kestra's API.
   kestra-flows:
     image: ghcr.io/muitneliss/undercroft-control-plane:${IMAGE_TAG:?set in .env}

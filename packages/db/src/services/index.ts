@@ -52,3 +52,12 @@ export {
   type UndeclaredCode,
 } from "./modelLineage.ts";
 export { type LineageDirection, type LineageTarget, lineageAround } from "./lineageAround.ts";
+export {
+  indexSearch,
+  REINDEX_GROWTH,
+  REINDEX_MIN_GROWTH_BYTES,
+  type SearchIndexAction,
+  type SearchIndexingDeps,
+  type SearchIndexPass,
+  upkeepOf,
+} from "./searchIndexing.ts";

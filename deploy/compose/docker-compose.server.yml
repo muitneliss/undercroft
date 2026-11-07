@@ -432,6 +432,33 @@ services:
         limits:
           memory: 256m
 
+  # The tenants' BM25 search indexes (ADR 0155, ADR 0156). A tenant that already holds documents
+  # can only be indexed CONCURRENTLY, which no migration can do, so this builds what is missing,
+  # rebuilds what a killed build left invalid and reindexes what has grown -- a pass at start and
+  # one every six hours. Nothing depends on it: the first build of a large tenant takes minutes,
+  # and the search ranks the old way until it is done.
+  #
+  # LONG-RUNNING ON PURPOSE, unlike `db-migrate`. `up --wait` fails on a container that nothing
+  # depends on and has already exited, and a pass with nothing to do exits in a second; one that
+  # is still running passes. `packages/db/src/searchIndexCli.ts` records the measurement. A deploy
+  # that stops it mid-build leaves an invalid index, which the next pass drops and builds again.
+  search-index:
+    <<: *restart
+    image: ghcr.io/muitneliss/undercroft-control-plane:${IMAGE_TAG:-latest}
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    command: ["bun", "run", "search-index", "--repeat"]
+    environment:
+      # As the bootstrap superuser, like `db-migrate`: building on `raw.document_text` needs the
+      # table's owner (`GRANT MAINTAIN` lets a role reindex, not create).
+      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD:?set in .env}@undercroft-postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+    deploy:
+      resources:
+        limits:
+          # The process is a Postgres client and nothing more; the build's memory is Postgres's.
+          memory: 128m
+
   # The Kestra flows, delivered by the deploy. The host's checkout is `main`, not the release,
   # and Kestra reads flows from its own database, so `flows/` is baked into the control-plane
   # image and this one-shot pushes each file through Kestra's API -- creating or updating

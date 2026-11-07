@@ -10,6 +10,14 @@ tasks:
     cmds:
       - bun run migrate
 
+  search-index:
+    # One pass of the `search-index` service (packages/db/src/searchIndexCli.ts): build the BM25
+    # indexes that are missing, rebuild the invalid, reindex the grown. As the bootstrap role, like
+    # migrate -- building on raw.document_text needs the table's owner. ADR 0155, ADR 0156.
+    desc: Build, mend and measure every tenant's BM25 search indexes in whatever UNDERCROFT_POSTGRES_DSN points at (the bootstrap role), once.
+    cmds:
+      - bun run search-index
+
   invite:
     desc: "Invite a user. Usage: UNDERCROFT_POSTGRES_DSN=... task db:invite -- you@x.test --tenant CASE-0001 --role admin [--create-tenant]"
     cmds:

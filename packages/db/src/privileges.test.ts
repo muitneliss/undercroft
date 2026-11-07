@@ -8,6 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import type { SqlExecutor } from "./executor.ts";
+import { provisionScope } from "./repos/tenantRoles.ts";
 import { createMigratedTestDatabase, type TestDatabase } from "./testing.ts";
 
 let db: TestDatabase;
@@ -368,6 +369,165 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
         });
       }
     }
+  });
+
+  it("only a tenant's dbt login may call the BM25 door, its filter and its readiness", async () => {
+    // The twin of the test above, for 680 (ADR 0155): SECURITY DEFINER, so the grant in
+    // `provision_tenant` is the whole of who may rank through a tenant's indexes.
+    const door = [
+      "SELECT * FROM raw.search_document_bm25(current_user, 'n', 1)",
+      "SELECT * FROM raw.search_document_matches(current_user, 'n')",
+      "SELECT raw.search_document_bm25_ready(current_user)",
+    ];
+    for (const sql of door) {
+      await db.asRole("undercroft_dbt_case_0042", (tx) => tx.query(sql));
+      for (const role of [
+        "undercroft_app",
+        "undercroft_worker",
+        "undercroft_dbt",
+        "undercroft_bi",
+        "undercroft_bi_case_0042",
+      ]) {
+        await db.asRole(role, async (tx) => {
+          await expectDenied(() => tx.query(sql));
+        });
+      }
+    }
+  });
+
+  it("no BI, scope or platform login may use the schema the BM25 extension lives in", async () => {
+    // A tenant's dbt login is the one exception, and the next test says what it may do there.
+    const scope = await provisionScope(db, "CASE-0042", ["fct_sales"]);
+    const { rows: home } = await db.query<{ schema: string }>(
+      `SELECT extnamespace::regnamespace::text AS schema FROM pg_extension
+       WHERE extname = 'pg_textsearch'`,
+    );
+    expect(home).toEqual([{ schema: "search_ext" }]);
+    const { rows } = await db.query<{ role: string; usage: boolean }>(
+      `SELECT r.role, has_schema_privilege(r.role, 'search_ext', 'USAGE') AS usage
+       FROM (SELECT role_name::text AS role FROM ops.tenant_role WHERE kind = 'bi'
+             UNION SELECT role_name::text FROM ops.tenant_scope
+             UNION SELECT unnest(ARRAY['undercroft_app', 'undercroft_worker', 'undercroft_dbt',
+                                       'undercroft_bi', 'undercroft_owner'])) r
+       ORDER BY r.role`,
+    );
+    expect(rows.map((r) => r.role)).toContain(scope);
+    expect(rows.filter((r) => r.usage)).toEqual([]);
+    expect(rows.length).toBe(8);
+  });
+
+  it("a tenant's dbt login resolves names in that schema and may run none of its functions", async () => {
+    // USAGE is there for the extension's planner hook, which finds its cached-score stub by
+    // unqualified name (ADR 0156); EXECUTE is what keeps the membership oracle shut. Every
+    // function in the schema is enumerated, so one a future extension release adds -- with
+    // Postgres's default EXECUTE for PUBLIC -- fails here rather than reaching a tenant.
+    const { rows } = await db.query<{
+      login: string;
+      usage: boolean;
+      functions: number;
+      runnable: string[];
+    }>(
+      `SELECT t.role_name::text AS login,
+              has_schema_privilege(t.role_name, 'search_ext', 'USAGE') AS usage,
+              count(p.oid)::int AS functions,
+              coalesce(array_agg(p.proname::text ORDER BY p.proname)
+                       FILTER (WHERE has_function_privilege(t.role_name, p.oid, 'EXECUTE')), '{}')
+                AS runnable
+       FROM ops.tenant_role t
+       CROSS JOIN pg_proc p
+       WHERE t.kind = 'dbt' AND p.pronamespace = 'search_ext'::regnamespace
+       GROUP BY t.role_name
+       ORDER BY 1`,
+    );
+    expect(rows.map(({ login, usage, runnable }) => ({ login, usage, runnable }))).toEqual([
+      { login: "undercroft_dbt_case_0042", usage: true, runnable: [] },
+      { login: "undercroft_dbt_case_0043", usage: true, runnable: [] },
+    ]);
+    // Not vacuous: the scoring function, `to_bm25query` and the stub are all in there.
+    expect(rows[0]?.functions).toBeGreaterThan(30);
+  });
+
+  it("a tenant's dbt login has the extension on its own default path, and re-provisioning restores it", async () => {
+    // Set on the ROLE, where a backend reads it before its first statement: the planner hook is
+    // settled by then, and a `SET` inside the session comes too late (ADR 0156). PGlite runs one
+    // backend, started as the superuser, so the gate cannot show the hook itself or the latency
+    // it buys -- only that the setting a real backend would start with is there.
+    async function settings(): Promise<string[]> {
+      const { rows } = await db.query<{ setconfig: string[] }>(
+        `SELECT s.setconfig FROM pg_db_role_setting s JOIN pg_roles r ON r.oid = s.setrole
+          WHERE r.rolname = 'undercroft_dbt_case_0042'`,
+      );
+      return rows.flatMap((row) => row.setconfig);
+    }
+    const path = 'search_path="$user", public, search_ext';
+    expect(await settings()).toContain(path);
+
+    await db.exec("ALTER ROLE undercroft_dbt_case_0042 RESET search_path");
+    expect(await settings()).not.toContain(path);
+    await db.query("SELECT ops.provision_tenant('CASE-0042')");
+
+    expect(await settings()).toContain(path);
+  });
+
+  it("a tenant cannot score its own table's text against another tenant's index", async () => {
+    // The spike's probe: one customer's dbt login writes a table -- which a model is -- and asks
+    // another customer's BM25 statistics about each word in it. A word the other customer holds
+    // scores below zero and one it lacks scores zero: a membership oracle no row policy can stop.
+    await db.exec(
+      `INSERT INTO raw.document_text (source, tenant_id, document_id, source_sha256, method,
+         text, chars, extracted_at, run_id)
+       VALUES ('demo', 'CASE-0042', 'd1', repeat('0', 64), 'pdf_text', 'zebra crossing', 14,
+               now(), 'r')`,
+    );
+    await db.asRole("undercroft_dbt_case_0043", (tx) =>
+      tx.exec(
+        "CREATE TABLE analytics_case_0043.probe AS SELECT unnest(ARRAY['zebra', 'okapi']) AS word",
+      ),
+    );
+    const { rows: named } = await db.query<{ index: string }>(
+      "SELECT format('raw.%I', raw.search_index_name('CASE-0042', 'simple')) AS index",
+    );
+    const probe = `SELECT word, word OPERATOR(search_ext.<@>)
+                          search_ext.to_bm25query(word, '${named[0]?.index ?? ""}') AS score
+                   FROM analytics_case_0043.probe ORDER BY word`;
+
+    // The quiet side, which makes the firing side mean something: whoever CAN reach the
+    // extension gets the oracle's answer.
+    const { rows: oracle } = await db.query<{ word: string; score: number }>(probe);
+    expect(oracle.map((r) => [r.word, r.score < 0])).toEqual([
+      ["okapi", false],
+      ["zebra", true],
+    ]);
+
+    const refusal = await db.asRole("undercroft_dbt_case_0043", async (tx) => {
+      try {
+        await tx.query(probe);
+        return "";
+      } catch (error) {
+        return (error as Error).message;
+      }
+    });
+    // Refused by EXECUTE, not by USAGE: the login may name the extension, and run none of it.
+    expect(refusal).toMatch(/permission denied for function/u);
+  });
+
+  it("the worker lands extracted text for a tenant whose search indexes exist", async () => {
+    // Postgres checks EXECUTE on an index expression's function for whoever writes the row, and
+    // the english index is declared on `raw.search_text_english` (680).
+    const { rows } = await db.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM pg_class
+       WHERE relname IN (raw.search_index_name('CASE-0042', 'simple'),
+                         raw.search_index_name('CASE-0042', 'english'))`,
+    );
+    expect(rows).toEqual([{ n: 2 }]);
+    await db.asRole("undercroft_worker", (tx) =>
+      tx.exec(
+        `INSERT INTO raw.document_text (source, tenant_id, document_id, source_sha256, method,
+           text, chars, extracted_at, run_id)
+         VALUES ('demo', 'CASE-0042', 'd2', repeat('0', 64), 'pdf_text', 'Hợp đồng', 8, now(), 'r');
+         UPDATE raw.document_text SET text = 'Hợp đồng thuê' WHERE document_id = 'd2'`,
+      ),
+    );
   });
 
   it("only the worker may extend a password", async () => {
