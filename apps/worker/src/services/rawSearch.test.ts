@@ -261,36 +261,156 @@ describe("a tenant that was never provisioned", () => {
   });
 });
 
-// #447, ADR 0123. A common word matched tens of thousands of rows and each was ranked and
-// excerpted, so the search ran into its time limit. Each kind now ranks its newest matches
-// only, and the answer says when that cut any.
-describe("a word that matches more than a search ranks", () => {
+/** Drop the tenant's BM25 indexes, as a search before `search-index` reached it would find them. */
+async function dropBm25Indexes(tenantId: string): Promise<void> {
+  await db.asSuperuser(async (tx) => {
+    const { rows } = await tx.query<{ name: string }>(
+      "SELECT raw.search_index_name($1, c)::text AS name FROM raw.search_index_configs() AS c",
+      [tenantId],
+    );
+    for (const { name } of rows) {
+      await tx.query(`DROP INDEX raw."${name}"`);
+    }
+  });
+}
+
+/** `count` documents matching `hop dong` weakly, dated a day apart from 2026-01-02 on. */
+async function landWeakMatches(count: number): Promise<void> {
+  await db.asSuperuser(async (tx) => {
+    await tx.query(
+      `INSERT INTO raw.documents (source, tenant_id, document_id, lake_key, sha256, byte_length,
+         observed_at, run_id)
+       SELECT 'demo', $1, 'd' || g, 'k', repeat('0', 64), 10,
+              timestamptz '2026-01-01' + g * interval '1 day', 'r'
+       FROM generate_series(1, $2::int) g`,
+      [TENANT, count],
+    );
+    await tx.query(
+      `INSERT INTO raw.document_text (source, tenant_id, document_id, source_sha256, method,
+         text, chars, truncated, extracted_at, run_id)
+       SELECT 'demo', $1, 'd' || g, repeat('0', 64), 'pdf_text',
+              'Biên bản giao nhận hàng hoá kèm theo Hợp đồng số ' || g || ' và các phụ lục khác',
+              60, false, timestamptz '2026-01-01' + g * interval '1 day', 'r'
+       FROM generate_series(1, $2::int) g`,
+      [TENANT, count],
+    );
+  });
+}
+
+function documentIds(hits: Awaited<ReturnType<typeof searchRaw>>["hits"]): string[] {
+  return hits.map((h) => (h.kind === "document" ? h.documentId : `record/${h.sourceRecordId}`));
+}
+
+// ADR 0155, ADR 0156. A document search ranks through the tenant's BM25 indexes, every match by
+// relevance; ADR 0123's newest-100 cap was the cost of re-scoring from the text, and it goes.
+describe("documents rank by relevance through the BM25 door", () => {
   const CAP = RANKED_PER_KIND.document;
 
-  beforeEach(async () => {
-    // One more document than the cap, a day apart, so "the newest" has one right answer: every
-    // one but `d1`.
-    await db.asSuperuser(async (tx) => {
-      await tx.query(
-        `INSERT INTO raw.documents (source, tenant_id, document_id, lake_key, sha256, byte_length,
-           observed_at, run_id)
-         SELECT 'demo', $1, 'd' || g, 'k', repeat('0', 64), 10,
-                timestamptz '2026-01-01' + g * interval '1 day', 'r'
-         FROM generate_series(1, $2::int) g`,
-        [TENANT, CAP + 1],
-      );
-      await tx.query(
-        `INSERT INTO raw.document_text (source, tenant_id, document_id, source_sha256, method,
-           text, chars, truncated, extracted_at, run_id)
-         SELECT 'demo', $1, 'd' || g, repeat('0', 64), 'pdf_text', 'Hợp đồng số ' || g, 12, false,
-                timestamptz '2026-01-01' + g * interval '1 day', 'r'
-         FROM generate_series(1, $2::int) g`,
-        [TENANT, CAP + 1],
-      );
+  it("puts a more relevant older document above newer weak matches, past where the cap was", async () => {
+    // The oldest document of all, and the only one about the contract. ADR 0123 ranked only the
+    // newest 100 matches, so with 100 newer ones it was on no page at all.
+    await landDocument(TENANT, "strong", "Hợp đồng thuê nhà. Hợp đồng ký ngày 1.");
+    await db.asSuperuser((tx) =>
+      tx.query(
+        "UPDATE raw.documents SET observed_at = '2025-01-01' WHERE tenant_id = $1 AND document_id = 'strong'",
+        [TENANT],
+      ),
+    );
+    await landWeakMatches(CAP);
+
+    const found = await searchRaw(deps, {
+      tenantId: TENANT,
+      q: "hop dong",
+      kinds: ["document"],
+      limit: 5,
+      offset: 0,
     });
+
+    expect(documentIds(found.hits)[0]).toBe("strong");
+    // Every match was ranked, so nothing is said to have been cut.
+    expect(found.capped).toEqual([]);
+    expect(found.truncated).toBe(true);
+  });
+
+  it("ranks every match and pages over them without skipping or repeating one", async () => {
+    await landWeakMatches(CAP + 1);
+    const seen: string[] = [];
+    for (let offset = 0; offset <= CAP + 1; offset += MAX_SEARCH_HITS) {
+      const page = await searchRaw(deps, {
+        tenantId: TENANT,
+        q: "hop dong",
+        kinds: ["document"],
+        limit: MAX_SEARCH_HITS,
+        offset,
+      });
+      // The quiet side of the cap: through the door no page says a kind was cut, the empty
+      // one past the end included.
+      expect(page.capped).toEqual([]);
+      seen.push(...documentIds(page.hits));
+    }
+    expect(seen).toHaveLength(CAP + 1);
+    expect(new Set(seen).size).toBe(CAP + 1);
+    // The oldest match is on a page, which ADR 0123's newest-100 never put it on.
+    expect(seen).toContain("d1");
+  });
+
+  it("interleaves the kinds by place, so a page of both holds each kind's best", async () => {
+    // Scores of the two kinds measure different things, and the door returns none: the page
+    // takes each kind's first, then each kind's second. Without it, one kind could fill the page
+    // and the other's best match would be on page two.
+    for (let i = 0; i < 3; i += 1) {
+      await landRecord(TENANT, `r${String(i)}`, `{"note":"Hợp đồng số ${String(i)}"}`);
+      await landDocument(TENANT, `d${String(i)}`, `Hợp đồng thuê nhà số ${String(i)}`);
+    }
+    const found = await searchRaw(deps, {
+      tenantId: TENANT,
+      q: "hop dong",
+      kinds: ["record", "document"],
+      limit: 2,
+      offset: 0,
+    });
+    expect(found.hits.map((h) => h.kind)).toEqual(["document", "record"]);
+    expect(found.truncated).toBe(true);
+  });
+});
+
+// ADR 0156 decision 5. The door cannot answer while the tenant's indexes are missing or being
+// built, and refuses a page it cannot fill truthfully. The search then answers ADR 0123's way:
+// never an error to the reader, and its `capped` says when it ranked only the newest.
+describe("when the BM25 door cannot answer, ADR 0123's way answers instead", () => {
+  const CAP = RANKED_PER_KIND.document;
+
+  it("answers while the indexes are missing, as before", async () => {
+    await landDocument(TENANT, "d1", "Điều khoản thanh toán của Hợp đồng thuê nhà số 42.");
+    await dropBm25Indexes(TENANT);
+    const found = await searchRaw(deps, {
+      tenantId: TENANT,
+      q: "hop dong",
+      kinds: ["document"],
+      limit: 10,
+      offset: 0,
+    });
+    expect(documentIds(found.hits)).toEqual(["d1"]);
+    expect(found.capped).toEqual([]);
+  });
+
+  it("answers a query the door refuses: a negation with nothing positive to rank by", async () => {
+    // The door raises 55000 for `-xe` alone (more match than it can rank); the reader is answered.
+    await landDocument(TENANT, "car", "Hợp đồng thuê xe");
+    await landDocument(TENANT, "house", "Hợp đồng thuê nhà");
+    const found = await searchRaw(deps, {
+      tenantId: TENANT,
+      q: "-xe",
+      kinds: ["document"],
+      limit: 10,
+      offset: 0,
+    });
+    expect(documentIds(found.hits)).toEqual(["house"]);
   });
 
   it("ranks the newest, says so, and pages over them without skipping or repeating one", async () => {
+    await landWeakMatches(CAP + 1);
+    await dropBm25Indexes(TENANT);
     const seen: string[] = [];
     for (let offset = 0; offset <= CAP; offset += MAX_SEARCH_HITS) {
       const page = await searchRaw(deps, {
@@ -303,7 +423,7 @@ describe("a word that matches more than a search ranks", () => {
       // Every page says it, the empty one past the end included: that is the page on which
       // "no more hits" would otherwise be read as "nothing else matched".
       expect(page.capped).toEqual([{ kind: "document", ranked: CAP }]);
-      seen.push(...page.hits.map((h) => (h.kind === "document" ? h.documentId : "")));
+      seen.push(...documentIds(page.hits));
     }
     expect(seen).toHaveLength(CAP);
     expect(new Set(seen).size).toBe(CAP);
@@ -311,6 +431,8 @@ describe("a word that matches more than a search ranks", () => {
   });
 
   it("names only the kind that was cut", async () => {
+    await landWeakMatches(CAP + 1);
+    await dropBm25Indexes(TENANT);
     await landRecord(TENANT, "r1", '{"note":"Hợp đồng thuê nhà"}');
     const found = await searchRaw(deps, {
       tenantId: TENANT,
@@ -366,10 +488,33 @@ describe("a search Postgres stopped at its time limit", () => {
   });
 });
 
-describe("searchRaw narrowed to the streams a reader reaches (ADR 0142)", () => {
+describe.each([
+  ["through the BM25 door", false],
+  ["ADR 0123's way, the indexes missing", true],
+] as const)("searchRaw narrowed to the streams a reader reaches (ADR 0142), %s", (_, missing) => {
   beforeEach(async () => {
     await landRecord(TENANT, "1", '{"deal_name":"Hợp đồng thuê nhà"}');
     await landDocument(TENANT, "d1", "Hợp đồng thuê nhà số 42.");
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `INSERT INTO raw.documents (source, tenant_id, document_id, lake_key, sha256, byte_length,
+           observed_at, run_id)
+         VALUES ('drive', $1, 'f1', 'k', repeat('0', 64), 10, now(), 'r')`,
+        [TENANT],
+      ),
+    );
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `INSERT INTO raw.document_text (source, tenant_id, document_id, source_sha256, method,
+           text, chars, truncated, extracted_at, run_id)
+         VALUES ('drive', $1, 'f1', repeat('0', 64), 'pdf_text', 'Hợp đồng thuê kho', 17, false,
+                 now(), 'r')`,
+        [TENANT],
+      ),
+    );
+    if (missing) {
+      await dropBm25Indexes(TENANT);
+    }
     await db.asSuperuser((tx) =>
       tx.query(
         `INSERT INTO raw.records (source, tenant_id, entity, source_record_id, payload,
@@ -405,9 +550,14 @@ describe("searchRaw narrowed to the streams a reader reaches (ADR 0142)", () => 
     });
     const source = await searchRaw(deps, { ...ask, streams: [{ source: "demo", entity: null }] });
     const none = await searchRaw(deps, { ...ask, streams: [] });
+    const drive = await searchRaw(deps, {
+      ...ask,
+      streams: [{ source: "drive", entity: "documents" }],
+    });
 
     expect(found(deals.hits)).toEqual(["deals/1"]);
     expect(found(documents.hits)).toEqual(["doc/d1"]);
+    expect(found(drive.hits)).toEqual(["doc/f1"]);
     expect(found(source.hits)).toEqual(["companies/c1", "deals/1", "doc/d1"]);
     expect(none.hits).toEqual([]);
   });
@@ -415,6 +565,6 @@ describe("searchRaw narrowed to the streams a reader reaches (ADR 0142)", () => 
   it("with no narrowing, finds in the whole lake as before", async () => {
     const whole = await searchRaw(deps, ask);
 
-    expect(found(whole.hits)).toEqual(["companies/c1", "deals/1", "doc/d1"]);
+    expect(found(whole.hits)).toEqual(["companies/c1", "deals/1", "doc/d1", "doc/f1"]);
   });
 });

@@ -103,7 +103,7 @@ export const procedureSentences: SentenceTable = {
     "Các tài liệu thô của một nguồn, hoặc những tài liệu một lần chạy đã ghi. Chỉ nguồn có tài liệu bạn xem được; nguồn khác là một trang trống.",
   "lake.query": "Chạy một câu SELECT trên hồ dữ liệu thô.",
   "lake.search":
-    "Tìm kiếm toàn văn trên hồ dữ liệu thô. Mỗi loại chỉ xếp hạng các kết quả khớp mới nhất, và câu trả lời nói rõ khi bị cắt. Chỉ trong những luồng bạn xem được, lọc trước khi xếp hạng.",
+    "Tìm kiếm toàn văn trên hồ dữ liệu thô. Tài liệu được xếp hạng theo mức liên quan trên mọi kết quả khớp, bản ghi trong các kết quả khớp mới nhất; khi một loại chỉ được xếp hạng trong các kết quả mới nhất -- bản ghi vượt giới hạn, hoặc tài liệu khi chỉ mục tìm kiếm chưa trả lời được -- câu trả lời nói rõ trong capped. Chỉ trong những luồng bạn xem được, lọc trước khi xếp hạng.",
   "lake.querySchema":
     "Các bảng và cột mà lake query đọc được; tables cho đúng những bảng đó, match lọc theo một đoạn tên (không phân biệt hoa thường), columns: false chỉ lấy tên bảng.",
   "documentKinds.list":

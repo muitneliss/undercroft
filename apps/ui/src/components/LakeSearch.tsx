@@ -153,8 +153,10 @@ function Results({ tenantId, query }: { tenantId: string; query: string }): Reac
     <div className="stack">
       <Hits hits={found.data.hits} query={query} />
       {found.data.truncated ? <p className="note">{t("lake.searchMore")}</p> : null}
-      {/* A kind with more matches than a search ranks (ADR 0123). Said, because the hits above
-          are the best of its newest matches and not of all of them. */}
+      {/* A kind ranked only among its newest matches, and more matched (ADR 0123): records past
+          their cap, or documents when the search index could not answer and the search ranked
+          them the older way (ADR 0155, ADR 0156). Said, because the hits above are then the
+          best of the newest and not of all of them. */}
       {found.data.capped.map((cut) => (
         <p className="note" key={cut.kind}>
           {cut.kind === "record"

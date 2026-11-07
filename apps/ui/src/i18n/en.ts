@@ -708,9 +708,9 @@ export const en = {
     searchCappedRecords_other:
       "More than {{count, number}} records match; only the newest {{count, number}} were ranked. Add a word to narrow it down.",
     searchCappedDocuments_one:
-      "More than {{count, number}} document matches; only the newest {{count, number}} was ranked. Add a word to narrow it down.",
+      "More than {{count, number}} document matches, but the search index could not rank this search, so only the newest {{count, number}} was ranked. Add a word to narrow it down.",
     searchCappedDocuments_other:
-      "More than {{count, number}} documents match; only the newest {{count, number}} were ranked. Add a word to narrow it down.",
+      "More than {{count, number}} documents match, but the search index could not rank this search, so only the newest {{count, number}} were ranked. Add a word to narrow it down.",
     searchColWhere: "Where",
     searchColMatch: "What matched",
     searchKindRecord: "Record",

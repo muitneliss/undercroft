@@ -167,7 +167,8 @@ export async function fetchExportRows(exec: SqlExecutor, rows: number): Promise<
  * out, and the symptom of leaving it out is a tenant's dbt login -- which CAN create in its own
  * two schemas -- running whatever it was handed. `searchLake` is the other caller; it passes no
  * `schema` because it names its tables in full, and an unqualified name in OUR SQL resolving
- * somewhere unexpected is not a hazard this repo has.
+ * somewhere unexpected is not a hazard this repo has. It must not pass one either: the BM25
+ * door's planner hook needs the login's own default path (ADR 0156 decision 8, `rawSearch.ts`).
  *
  * Always rolled back: nothing a read-only transaction did needs keeping, and a ROLLBACK after a
  * failed statement is what returns the connection to a usable state.

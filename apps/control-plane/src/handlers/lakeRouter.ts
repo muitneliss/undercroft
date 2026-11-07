@@ -166,8 +166,11 @@ export const lakeRouter = router({
    * ADR 0026, which made it admin-only; ADR 0139 opened it to `lake:read`, which is exactly the
    * set of people the console beside it already admits.
    *
-   * Narrowed to the streams the reader reaches (ADR 0142) inside the worker's lookups, before a
-   * match is ranked or counted, so its pages and its `capped` note describe their lake alone.
+   * Narrowed to the streams the reader reaches (ADR 0142) inside the worker's lookups and its
+   * BM25 door (ADR 0155), before a match is ranked or counted, so its pages and its `capped`
+   * note describe their lake alone. Documents rank by relevance through the door, records among
+   * their newest matches; `capped` names a kind ranked only among its newest -- documents only
+   * when the door could not answer (ADR 0156).
    */
   search: requirePermission("lake:read")
     .input(

@@ -74,7 +74,8 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
   are exported, and a signed OpenAttestation record is verified before any of it is read;
   [the file-format reference](docs/reference/file-formats.md) lists every type.
 - **Search the whole lake.** One box over both payloads and document text, folded so that
-  Vietnamese matches with or without tone marks, and stemmed for English.
+  Vietnamese matches with or without tone marks, and stemmed for English. Documents are ranked
+  by relevance across every match, through a BM25 index of each customer's own.
 - **The BI is first-party.** Questions and dashboards live in the Reports division, and
   every one runs as the tenant's own read-only login — not as the web process. A question
   is a saved query over the built models plus how to draw it, what other BI tools call a
