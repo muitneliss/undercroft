@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.84.0](https://github.com/muitneliss/undercroft/compare/v1.83.0...v1.84.0) (2026-11-07)
+
+
+### Features
+
+* **db:** a BM25 door per tenant and the search-index service that keeps its indexes (ADR 0156) ([#533](https://github.com/muitneliss/undercroft/issues/533)) ([5a12b11](https://github.com/muitneliss/undercroft/commit/5a12b112a8369481163769d4f30cc02d3a30b775))
+
+## [1.83.0](https://github.com/muitneliss/undercroft/compare/v1.82.1...v1.83.0) (2026-11-06)
+
+
+### Features
+
+* **deploy:** run Postgres on the first-party image with pg_textsearch preloaded ([#531](https://github.com/muitneliss/undercroft/issues/531)) ([f05988f](https://github.com/muitneliss/undercroft/commit/f05988fa407b5558f8e2fc80c117bf43f3b79987))
+
 ## [1.82.1](https://github.com/muitneliss/undercroft/compare/v1.82.0...v1.82.1) (2026-11-06)
 
 

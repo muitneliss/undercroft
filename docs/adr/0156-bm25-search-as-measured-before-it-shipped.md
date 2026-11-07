@@ -158,8 +158,12 @@ search_ext`, so no name it resolves today resolves to anything else), and the do
      probe answers the oracle to a role that may run the extension and is refused to a tenant's
      dbt login.
    - **Upstream:** pg_textsearch should resolve these OIDs in its own extension schema rather
-     than through `search_path`. An issue for timescale/pg_textsearch is drafted and waits on the
-     go-ahead to file it.
+     than through `search_path`. timescale/pg_textsearch#551 already reports the per-row
+     re-scoring; the root cause in `get_bm25_oids()`, the `bm25_get_current_score() does not
+exist` error inside a `SECURITY DEFINER` function, and the unenforced explicit index name
+     were added to it as a comment, with a reproduction on a clean database. When it is fixed,
+     the role-level path and the functions' `search_ext` entry can be reconsidered; the revoked
+     EXECUTE stays either way.
 
 ## Options rejected
 
