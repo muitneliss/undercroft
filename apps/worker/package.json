@@ -21,7 +21,7 @@
     "@undercroft/lake": "workspace:*",
     "@undercroft/telemetry": "workspace:*",
     "did-resolver": "6.0.0",
-    "hono": "4.13.14"
+    "hono": "4.13.16"
   },
   "devDependencies": {
     "@tradetrust-tt/tradetrust": "6.10.4"

@@ -6,11 +6,11 @@
   "dependencies": {
     "@undercroft/core": "workspace:*",
     "@undercroft/setup": "workspace:*",
-    "electrobun": "2.0.5",
-    "i18next": "26.5.12",
+    "electrobun": "2.0.6",
+    "i18next": "26.7.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "zustand": "5.0.16"
+    "zustand": "5.1.0"
   },
   "devDependencies": {
     "@types/react": "19.3.0",
