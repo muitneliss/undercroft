@@ -7,6 +7,6 @@
     "@clack/prompts": "1.8.1",
     "@undercroft/core": "workspace:*",
     "@undercroft/setup": "workspace:*",
-    "i18next": "26.5.12"
+    "i18next": "26.7.2"
   }
 }
