@@ -4,16 +4,16 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@clack/core": "1.5.1",
-    "@clack/prompts": "1.8.1",
-    "@oclif/core": "5.1.11",
+    "@clack/core": "1.6.0",
+    "@clack/prompts": "1.9.0",
+    "@oclif/core": "5.1.12",
     "@undercroft/core": "workspace:*",
-    "i18next": "26.7.2"
+    "i18next": "27.2.2"
   },
   "devDependencies": {
     "@undercroft/control-plane": "workspace:*",
     "@undercroft/db": "workspace:*",
-    "ai": "7.0.164",
+    "ai": "7.0.178",
     "zod": "4.6.7"
   }
 }
