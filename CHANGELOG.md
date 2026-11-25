@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.86.0](https://github.com/muitneliss/undercroft/compare/v1.85.0...v1.86.0) (2026-11-25)
+
+
+### Features
+
+* **lake:** compact the flip-flop history a spec declares redundant, reported before it deletes (ADR 0160) ([#548](https://github.com/muitneliss/undercroft/issues/548)) ([8784b7b](https://github.com/muitneliss/undercroft/commit/8784b7b4bedbee93d1d97241805b994a3a22f7e7))
+* **runs:** keep a transform's dbt steps for 7 days, pruned in bounded batches and reported (ADR 0159) ([#547](https://github.com/muitneliss/undercroft/issues/547)) ([5ce4d76](https://github.com/muitneliss/undercroft/commit/5ce4d767e906a23d7f5fb6bc260d82644294a202))
+
+
+### Bug Fixes
+
+* **connectors:** land a declared unordered array in one order, so a shuffled set is unchanged (ADR 0158) ([#545](https://github.com/muitneliss/undercroft/issues/545)) ([8d3bb53](https://github.com/muitneliss/undercroft/commit/8d3bb53b49ff024ad8d90e4f5f12e9240d8b9f46))
+
 ## [1.85.0](https://github.com/muitneliss/undercroft/compare/v1.84.0...v1.85.0) (2026-11-12)
 
 
