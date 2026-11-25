@@ -104,6 +104,11 @@ export interface Run {
    * opposite fact and the one that makes a healthy drain look like a fault.
    */
   readonly pendingBefore: number | null;
+  /**
+   * When the retention prune cleared this run's dbt steps (ADR 0159), or `null` when it has not.
+   * Set only by the prune, so a run that recorded no steps is never said to have lost them.
+   */
+  readonly stepsPrunedAt: string | null;
 }
 
 /**
@@ -466,6 +471,55 @@ export async function pruneRefusals(exec: SqlExecutor, keepDays: number): Promis
     [keepDays],
   );
   return rows[0]?.removed ?? 0;
+}
+
+/** What one step prune did, for the run journal: never a silent prune (`raw-lake.md`). */
+export interface StepPrune {
+  /** Step rows removed. */
+  readonly removed: number;
+  /** Runs whose steps those were; each is stamped `stepsPrunedAt`. */
+  readonly runs: number;
+  /** Runs past the window still holding steps, left for a later call by the bound below. */
+  readonly remaining: number;
+}
+
+/**
+ * About how many step rows one prune removes. Whole runs go, oldest first, until this many have;
+ * the first prune on production met ~2.5M rows past the window, and one DELETE of all of them
+ * would have held a transform run open and written a GB of WAL in one transaction. At ~2.7k
+ * steps a run this clears the backlog over a few days of ordinary runs, and a steady-state call
+ * removes one run's worth. ADR 0159.
+ */
+const STEP_PRUNE_ROWS = 50_000;
+
+/**
+ * Clear the dbt steps of one tenant's transform runs older than `keepDays`, a bounded batch per
+ * call, and answer what went.
+ *
+ * A run that is still a model's newest evidence -- its last build, its last published build, its
+ * last held build, which `lastBuildPerModel` and `latestTestsPerModel` read however old they are
+ * -- keeps its steps; `690_run_step_retention.sql` argues the exception and owns the statement.
+ */
+export async function pruneSteps(
+  exec: SqlExecutor,
+  tenantId: string,
+  keepDays: number,
+): Promise<StepPrune> {
+  const { rows } = await exec.query<{
+    removed: number;
+    cleared_runs: number;
+    remaining_runs: number;
+  }>("SELECT removed, cleared_runs, remaining_runs FROM ops.prune_run_steps($1, $2, $3)", [
+    tenantId,
+    keepDays,
+    STEP_PRUNE_ROWS,
+  ]);
+  const [row] = rows;
+  return {
+    removed: row?.removed ?? 0,
+    runs: row?.cleared_runs ?? 0,
+    remaining: row?.remaining_runs ?? 0,
+  };
 }
 
 export async function recordSteps(
@@ -844,11 +898,12 @@ interface RunRow {
   ended_at: Date | string | null;
   release_tag: string;
   pending_before: number | null;
+  steps_pruned_at: Date | string | null;
 }
 
 const RUN_COLUMNS = `id, tenant_id, source, verb, trigger, ${KIND_OF_ROW} AS kind, triggered_by,
   parent_run_id, status, created, changed, unchanged, refused, tests_failed, error, started_at,
-  ended_at, release_tag, pending_before`;
+  ended_at, release_tag, pending_before, steps_pruned_at`;
 
 function toRun(row: RunRow): Run {
   return {
@@ -871,6 +926,8 @@ function toRun(row: RunRow): Run {
     endedAt: row.ended_at === null ? null : new Date(row.ended_at).toISOString(),
     releaseTag: row.release_tag,
     pendingBefore: row.pending_before,
+    stepsPrunedAt:
+      row.steps_pruned_at === null ? null : new Date(row.steps_pruned_at).toISOString(),
   };
 }
 

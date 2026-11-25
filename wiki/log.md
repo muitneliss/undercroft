@@ -507,3 +507,5 @@
 ## [2026-11-25] ingest | Runbook Deployment
 ## [2026-11-25] ingest | ADR 0160 The Lake Compacts What a Spec Says Is the Same Record, and Says What It Removed
 ## [2026-11-25] ingest | Runbook Deployment
+## [2026-11-25] ingest | ADR 0159 A Transform Keeps Its dbt Steps for Seven Days
+## [2026-11-25] ingest | What an ingest run counts

@@ -40,7 +40,7 @@ import {
 import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { type ConnectionConfig, configOf } from "./connections.ts";
 import { type RunWait, settled } from "./runWait.ts";
-import { reportSteps, type StepQuery, type StepReport } from "./stepReport.ts";
+import { reportSteps, type StepQuery, type StepReport, type StepSummary } from "./stepReport.ts";
 import type { TriggerOutcome, WorkerClient } from "./workerClient.ts";
 
 export type { RunFilter, RunKind } from "@undercroft/db/repos";
@@ -100,7 +100,15 @@ export interface RunLink {
  * One run in full. Its dbt steps are a {@link StepReport}: a summary of every step, then the
  * page of them the caller asked for (`stepReport.ts`).
  */
-export interface RunDetail extends RunView, StepReport {
+export interface RunDetail extends RunView, Omit<StepReport, "stepSummary"> {
+  /**
+   * Every step counted, or `null` when the retention prune cleared this run's steps (ADR 0159).
+   *
+   * Null rather than a summary of the empty table that is left, because that summary reads
+   * "0 steps, 0 failing" -- a count of something nobody counted. A run that recorded no steps
+   * at all (a build that broke before dbt ran) still answers a summary of zero, which is true.
+   */
+  readonly stepSummary: StepSummary | null;
   readonly entityCounts: RunEntity[];
   readonly refusals: (RunRefusal & { at: string })[];
   /**
@@ -254,6 +262,11 @@ export async function trigger(
   return outcome;
 }
 
+/** The steps half of a run whose steps the prune cleared: nothing listed, nothing counted. */
+function stepsPruned(): Pick<RunDetail, "stepSummary" | "steps" | "nextStepCursor"> {
+  return { stepSummary: null, steps: [], nextStepCursor: null };
+}
+
 /** What `get` is asked: which steps to list, and whether to wait for the run to settle first. */
 export interface RunRead {
   readonly steps: StepQuery;
@@ -292,7 +305,7 @@ export async function get(
   ]);
   return {
     ...present(run, entities),
-    ...reportSteps(steps, read.steps),
+    ...(run.stepsPrunedAt === null ? reportSteps(steps, read.steps) : stepsPruned()),
     entityCounts: entities,
     refusals,
     reasonCounts,

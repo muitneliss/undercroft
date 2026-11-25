@@ -310,6 +310,8 @@ export interface LastBuild {
  *
  * A step is dbt's own record of one node; its `name` is the model name. The newest by the
  * run's start is the one the editor shows beside the model, whatever the run's trigger.
+ * The step prune keeps that run however old it is (ADR 0159, `690_run_step_retention.sql`, which
+ * restates this `DISTINCT ON`), so a model not built this week does not read "never built".
  */
 export async function lastBuildPerModel(
   exec: SqlExecutor,

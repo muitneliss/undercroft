@@ -17,6 +17,10 @@
  * as no record rather than as a pass.
  *
  * Rows only. What counts as failing, passing or unknown is the caller's to decide.
+ *
+ * The step prune (ADR 0159) keeps the runs this reads however old they are: the newest served
+ * and the newest held build of each model. `690_run_step_retention.sql` restates the two
+ * `DISTINCT ON`s below; change one and change the other, or an old model reads "never published".
  */
 
 import type { SqlExecutor } from "../executor.ts";

@@ -162,6 +162,7 @@
 - [ADR 0156 BM25 Search, as Measured Before It Shipped](sources/adr-0156-bm25-search-as-measured-before-it-shipped.md)
 - [ADR 0157 A Search Page Interleaves Its Kinds by Place, and capped Names the Older Path](sources/adr-0157-a-search-page-interleaves-its-kinds-by-place-and-capped-names-the-older-path.md)
 - [ADR 0158 A Spec Names the Arrays That Are Sets, and the Runtime Lands Them in One Order](sources/adr-0158-a-spec-names-the-arrays-that-are-sets-and-the-runtime-lands-them-in-one-order.md)
+- [ADR 0159 A Transform Keeps Its dbt Steps for Seven Days](sources/adr-0159-a-transform-keeps-its-dbt-steps-for-seven-days.md)
 - [ADR 0160 The Lake Compacts What a Spec Says Is the Same Record, and Says What It Removed](sources/adr-0160-the-lake-compacts-what-a-spec-says-is-the-same-record-and-says-what-it-removed.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
