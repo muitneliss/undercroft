@@ -19,6 +19,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
+import { runExtract } from "../extract/runExtract.ts";
 import { CHUNK } from "../landing.ts";
 import { createRunJournal, type RunJournal } from "../runJournal.ts";
 import { createGoogleApi } from "./api.ts";
@@ -402,8 +403,9 @@ describe("gmail", () => {
     expect(landed).toContain("billing@acme.test");
   });
 
-  it("the catalogue carries no filename, subject or address", async () => {
-    // raw.documents is granted to dbt, so anything here is one model from a dashboard.
+  it("the catalogue carries the attachment's name and the message's link, never its subject or address", async () => {
+    // raw.documents is granted to dbt, so anything here is one model from a dashboard. The
+    // file's name and link are there by the owner's decision (ADR 0161); nothing else is.
     await connect("gmail", { labels: [] });
     fetcher
       .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
@@ -412,9 +414,14 @@ describe("gmail", () => {
 
     await collect("gmail");
 
-    const { rows } = await db.query<{ metadata: unknown }>("SELECT metadata FROM raw.documents");
-    const asText = JSON.stringify(rows[0]?.metadata);
-    expect(asText).not.toContain("invoice-m1.pdf");
+    const { rows } = await db.query<{ row: unknown }>(
+      "SELECT to_jsonb(d) AS row FROM raw.documents d WHERE document_id NOT LIKE '%:body'",
+    );
+    const asText = JSON.stringify(rows[0]?.row);
+    expect(rows[0]?.row).toMatchObject({
+      file_name: "invoice-m1.pdf",
+      source_url: "https://mail.google.com/mail/u/0/#all/m1",
+    });
     expect(asText).not.toContain("billing@acme.test");
     expect(asText).not.toContain("Invoice m1");
   });
@@ -1354,6 +1361,47 @@ describe("drive", () => {
     expect(rows.map((r) => r.document_id)).toEqual(["f1", "f2"]);
     // And nothing was downloaded twice, which is the saving the skip exists for.
     expect(fetcher.calls.filter((c) => c.url.endsWith("?alt=media"))).toHaveLength(2);
+  });
+
+  it("a file whose bytes were purged once read is not downloaded again while unchanged", async () => {
+    // ADR 0161: what decides "unchanged" is `raw.records` and the lake's manifests, never the
+    // blob, so a purge must not turn a steady-state Drive into one downloaded every run.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1"), { body: { files: [file("f1")] } })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+    await collect("drive");
+    await runExtract(
+      {
+        exec: db,
+        lake,
+        transactor: (fn) => fn(db),
+        spawn: () =>
+          Promise.resolve({
+            exitCode: 0,
+            stdout: "A statement of account. ".repeat(8),
+            stderr: "",
+          }),
+      },
+      { tenantId: TENANT, source: "drive", runId: "run-extract" },
+    );
+
+    const second = await collect("drive");
+
+    expect(second.records).toMatchObject({ landed: 0, skipped: 1 });
+    expect(fetcher.calls.filter((c) => c.url.endsWith("?alt=media"))).toHaveLength(1);
+    const { rows } = await db.query(
+      "SELECT file_name, source_url, bytes_purge_outcome FROM raw.documents",
+    );
+    expect(rows).toEqual([
+      {
+        file_name: "statement-f1.pdf",
+        source_url: "https://drive.google.com/file/d/f1/view",
+        bytes_purge_outcome: "deleted",
+      },
+    ]);
   });
 
   it("a file whose modifiedTime moved IS read again", async () => {

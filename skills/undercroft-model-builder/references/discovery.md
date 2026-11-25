@@ -80,7 +80,10 @@ Read these when the request touches them:
   models you are weighing, or `match` with a fragment of their names; `columns: false` lists
   the names alone. A table you name that is not built is refused as `NOT_FOUND`, naming it.
 - `lake.records` for a sample of an entity's payloads, and `lake.documents` for the files
-  and attachments a source landed.
+  and attachments a source landed -- each with its `fileName` and `sourceUrl`, which a model
+  reads as `raw.documents.file_name` and `source_url`. A document's bytes are deleted once
+  its text has been read (`bytesPurgedAt`), so its row in `raw.document_text` is the only
+  reading there will be; to see the file itself, open `sourceUrl`.
 - `lake.querySchema` and `lake.query` for a count or a distribution (section 3). Narrow
   `lake.querySchema` with `tables` the way you narrow `bi.schema`.
 

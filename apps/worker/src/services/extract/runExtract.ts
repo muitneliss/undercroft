@@ -27,9 +27,14 @@
  * numbers below are DOCUMENTS, taken from what the write reports, while the pacing and the
  * journal's total are READS. The two used to be one number and now differ by the duplication.
  *
- * THE JOURNAL NAMES NOTHING. `runJournal` caps an event at 60 characters and `pii.md` keeps
- * filenames out of Postgres entirely; what is narrated here is counts and opaque document
- * ids, which is what the rest of the ledger carries too.
+ * AND THEN THE BYTES GO. Once every document holding a digest has been answered for, and the
+ * passes that read bytes again have what they need, the pass deletes them from the lake and
+ * records it on each document (`purge.ts`, ADR 0161). A document's file lives at its source; the
+ * catalogue keeps its name and its link there.
+ *
+ * THE JOURNAL NAMES NOTHING. `runJournal` caps an event at 60 characters, and a run's feed is
+ * not where a file's name belongs even now that `raw.documents` holds one; what is narrated
+ * here is counts and opaque document ids, which is what the rest of the ledger carries too.
  */
 
 import { tmpdir } from "node:os";
@@ -57,6 +62,7 @@ import {
 } from "./extractText.ts";
 import { type ArchiveLander, archiveLander, type MembersLanded } from "./archiveMembers.ts";
 import { DOCUMENTS, LAKE_UNREADABLE, passCounts } from "./passCounts.ts";
+import { PURGE_PER_PASS, type Purged, purgeSettled } from "./purge.ts";
 import { readBytes } from "./readDocument.ts";
 import { backfillWorkbooks, type WorkbookWriter, workbookWriter } from "./workbookRows.ts";
 
@@ -126,6 +132,8 @@ export interface ExtractResult {
   readonly reasonCounts: readonly RunReasonCount[];
   /** How many documents were waiting in total when this run drew its batch. */
   readonly pendingBefore: number;
+  /** The bytes this pass removed from the lake once nothing needed them (ADR 0161). */
+  readonly purged: Purged;
 }
 
 /** Where one pass's reads put what they need to: bytes on disk, a workbook's rows, members. */
@@ -260,6 +268,35 @@ async function readBatch(
   return { rows, workbooks, members: await archives.finish() };
 }
 
+/**
+ * Delete the bytes nothing needs any more, and say so in counts (ADR 0161).
+ *
+ * Last, after every read that needs bytes: this pass's own, the relay (which reads none) and the
+ * workbook backfill. What it removes is what is now settled in this scope, which includes what
+ * earlier passes settled but could not purge while a holder elsewhere was unread.
+ */
+async function purgeRead(
+  deps: ExtractRunDeps,
+  scope: { tenantId: string; source: string },
+  at: { extractedAt: string; runId: string },
+): Promise<Purged> {
+  const purged = await purgeSettled(deps, scope, {
+    limit: PURGE_PER_PASS,
+    purgedAt: at.extractedAt,
+    by: { runId: at.runId, verb: "extract" },
+  });
+  if (purged.digests > 0) {
+    (deps.journal ?? SILENT_JOURNAL).info("document_bytes_purged", {
+      entity: DOCUMENTS,
+      digests: purged.digests,
+      documents: purged.documents,
+      bytes: purged.bytes,
+      absent: purged.absent,
+    });
+  }
+  return purged;
+}
+
 export async function runExtract(
   deps: ExtractRunDeps,
   input: { tenantId: string; source: string; runId: string },
@@ -308,6 +345,7 @@ export async function runExtract(
   journal.info("documents_extracted", { entity: DOCUMENTS, read, refused, unreadable, relaid });
 
   await finishWorkbooks(deps, pass, workbooks);
+  const purged = await purgeRead(deps, scope, { extractedAt, runId: input.runId });
 
   return {
     runId: input.runId,
@@ -315,5 +353,6 @@ export async function runExtract(
     ...counts,
     relaid,
     pendingBefore,
+    purged,
   };
 }

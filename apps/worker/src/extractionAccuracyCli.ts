@@ -35,7 +35,7 @@ import { join, resolve } from "node:path";
 import process from "node:process";
 
 import { asExecutor, createPool } from "@undercroft/db";
-import { LakeStore, S3ObjectStore } from "@undercroft/lake";
+import { BlobAbsent, LakeStore, S3ObjectStore } from "@undercroft/lake";
 
 import { type ExtractionScan, scanExtractions } from "./repos/documentText.ts";
 import { type Gap, type GoldScore, scoreGold } from "./services/extract/accuracy.ts";
@@ -128,6 +128,11 @@ const NO_OBJECT_STORE: Gap = {
   why: "the oracle needs each document's own bytes and no object store is configured. Set UNDERCROFT_S3_BUCKET_RAW and its credentials.",
 };
 
+const NO_HELD_OOXML: Gap = {
+  what: "recall of real OOXML documents",
+  why: "no extracted OOXML document still has its bytes in the lake: they are purged once read (ADR 0161), so the oracle can only score a document between its landing and its purge.",
+};
+
 /** The lake, if this process was given one. `null` rather than a half-configured store. */
 function openLake(): LakeStore | null {
   const bucket = process.env.UNDERCROFT_S3_BUCKET_RAW;
@@ -155,29 +160,40 @@ async function runOracle(
 ): Promise<{ recall: RecallSummary; gaps: Gap[] }> {
   const results: (OoxmlRecall | null)[] = [];
   let unreadable = 0;
+  let purged = 0;
 
   for (const row of sample) {
     try {
       results.push(ooxmlRecall(await lake.read(row.lakeKey), row.text));
-    } catch {
+    } catch (error) {
       // The catalogue says the bytes are there and the lake disagrees. Counted, not scored: a
-      // document nobody could fetch is not a document a reader got wrong.
-      unreadable += 1;
+      // document nobody could fetch is not a document a reader got wrong. A blob purged after
+      // the sample was drawn is counted apart, because that is the lake doing as it was told.
+      if (error instanceof BlobAbsent) {
+        purged += 1;
+      } else {
+        unreadable += 1;
+      }
     }
   }
 
-  return {
-    recall: summariseRecall(results),
-    gaps:
-      unreadable === 0
-        ? []
-        : [
-            {
-              what: `${unreadable} OOXML documents the object store could not return`,
-              why: "their bytes were not fetchable, so the oracle has no opinion about them either way.",
-            },
-          ],
-  };
+  const gaps: Gap[] = [];
+  if (sample.length === 0) {
+    gaps.push(NO_HELD_OOXML);
+  }
+  if (purged > 0) {
+    gaps.push({
+      what: `${purged} OOXML documents whose bytes were purged while this ran`,
+      why: "a document's bytes leave the lake once it has been read (ADR 0161), so there is nothing left to score it against.",
+    });
+  }
+  if (unreadable > 0) {
+    gaps.push({
+      what: `${unreadable} OOXML documents the object store could not return`,
+      why: "their bytes were not fetchable, so the oracle has no opinion about them either way.",
+    });
+  }
+  return { recall: summariseRecall(results), gaps };
 }
 
 async function readCorpus(dsn: string): Promise<Corpus> {
@@ -195,6 +211,7 @@ async function readCorpus(dsn: string): Promise<Corpus> {
     const sample = await scanExtractions(exec, {
       limit: OOXML_SAMPLE,
       contentTypes: OOXML_TYPES,
+      bytesHeld: true,
     });
     return { ...shared, ...(await runOracle(lake, sample)) };
   } finally {

@@ -33,6 +33,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { deactivatedTenants, type DueCandidate, listDueCandidates } from "@undercroft/db/repos";
 
 import { staleLayoutScopes } from "../repos/documentLayout.ts";
+import { purgeableScopes } from "../repos/documentPurge.ts";
 import { pendingScopes } from "../repos/documentText.ts";
 import { owedWorkbookScopes } from "../repos/workbookBacklog.ts";
 import {
@@ -40,6 +41,7 @@ import {
   CURRENT_READER_VERSION,
   RELAYABLE_METHODS,
 } from "./extract/extractText.ts";
+import { CURRENT_SETTLEMENT } from "./extract/purge.ts";
 import { CURRENT_ROWS_VERSION, TABULAR_TYPES, WORKBOOK_METHODS } from "./extract/workbookRows.ts";
 
 export interface DuePair {
@@ -108,7 +110,7 @@ export async function listDue(exec: SqlExecutor, now: Date = new Date()): Promis
  * nothing, which is the one thing this function exists not to do.
  */
 export async function listExtractDue(exec: SqlExecutor): Promise<DueList> {
-  const [unread, unlaid, owed] = await Promise.all([
+  const [unread, unlaid, owed, purgeable] = await Promise.all([
     pendingScopes(exec, { readerVersion: CURRENT_READER_VERSION }),
     // A text written under an older layout is outstanding work too, and a scope may hold
     // nothing else: the tenant whose only change is that its templates became known.
@@ -123,9 +125,16 @@ export async function listExtractDue(exec: SqlExecutor): Promise<DueList> {
       tabularTypes: TABULAR_TYPES,
       rowsVersion: CURRENT_ROWS_VERSION,
     }),
+    // And bytes no document needs any more (ADR 0161): the owner's decision is that they do not
+    // stay, and a digest whose last holder was read in ANOTHER scope's pass has nothing else to
+    // start a run where it is held. Gone once purged, so it cannot tick for ever.
+    purgeableScopes(exec, CURRENT_SETTLEMENT),
   ]);
   const due = new Map(
-    [...unread, ...unlaid, ...owed].map((pair) => [`${pair.tenantId}\u0000${pair.source}`, pair]),
+    [...unread, ...unlaid, ...owed, ...purgeable].map((pair) => [
+      `${pair.tenantId}\u0000${pair.source}`,
+      pair,
+    ]),
   );
   return startable(
     exec,

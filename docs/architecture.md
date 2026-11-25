@@ -38,7 +38,7 @@ flowchart LR
     end
     subgraph projection["Projections: drop and rebuild"]
         records[("raw.records<br/>newest observation per record")]
-        docs[("raw.documents<br/>catalogue, opaque metadata")]
+        docs[("raw.documents<br/>catalogue, name, link, purge record")]
         text[("raw.document_text<br/>extracted text")]
         analytics[("analytics_slug<br/>the tenant's dbt models")]
         dq[("dq_slug<br/>stored test failures")]
@@ -347,8 +347,12 @@ caller:
 | `documents/{source}/{tenant}/{documentId}`      | A document's source key                               |
 
 Retention is unbounded by default. `prune()` reports what it removed and never deletes a blob.
-Names that a person wrote, such as a filename, a subject or a folder, go in the manifest's
-`extra`. dbt and BI cannot reach the manifest. They never go in Postgres (`.claude/rules/pii.md`).
+The one blob that is deleted is a document's, once the extract pass has had its go at it:
+`purgeBlobs()` writes a `_reports/blob-purge/` report first and keeps every manifest
+([ADR 0161](adr/0161-a-documents-bytes-are-purged-once-extraction-has-had-its-go.md)). Names
+that a person wrote, such as a subject or a folder, go in the manifest's `extra`, which dbt and
+BI cannot reach. The file's own name is the exception: it is in `raw.documents.file_name` too,
+so a person can find the file once its bytes are gone (`.claude/rules/pii.md`).
 
 ### Postgres
 
@@ -393,12 +397,16 @@ Any other failure raises.
 ### Documents and extracted text
 
 A document's bytes land in the lake and its catalogue row lands in `raw.documents`, which holds
-only opaque ids, types and counts. The extract verb reads each distinct digest once and writes
+opaque ids, types and counts, the file's name and its link at the source. Once the extract verb
+has read or refused a document -- and written its workbook rows or landed its archive's members
+-- its bytes are purged, and the row records when
+([ADR 0161](adr/0161-a-documents-bytes-are-purged-once-extraction-has-had-its-go.md)); its text
+is then the only reading there will be. The extract verb reads each distinct digest once and writes
 `raw.document_text`, giving either a method or a reason it could not read. PDFs go through
 `pdftotext`. Scans and images go through `pdftoppm` and Tesseract (`vie+eng`). `.docx`, `.xlsx`
 and legacy `.doc` are read in process. The full list is in
 [the file-format reference](reference/file-formats.md). Raising the reader version offers every
-unread document again ([ADR 0024](adr/0024-extracted-text-is-readable-by-dbt.md),
+unread document whose bytes are still held again ([ADR 0024](adr/0024-extracted-text-is-readable-by-dbt.md),
 [ADR 0028](adr/0028-a-workbook-is-read-in-process-and-extract-is-scheduled-by-backlog.md)).
 
 ### Transform and reporting

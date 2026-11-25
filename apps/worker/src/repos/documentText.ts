@@ -114,6 +114,13 @@ interface Scope {
  * bounded to the refusals: on production, 1,190 documents once, and not the 409 good ones every
  * time.
  *
+ * A DOCUMENT WHOSE BYTES WERE PURGED IS NEVER PENDING (`bytes_purged_at`, ADR 0161). Its bytes
+ * left the lake once a reader had had its go at them, so a newer generation re-queuing its
+ * refusal would read nothing and overwrite the reason it was refused for with
+ * `lake-object-unreadable` -- the 2,602-document hazard again, with a reason in place of a text.
+ * It keeps the answer it has. New bytes landing for it clear the purge (`rawDocuments.ts`), so a
+ * changed file is still read.
+ *
  * Spelled `t.method IS NULL` rather than `t.reason IS NOT NULL`, which selects the same rows
  * today -- the `document_text_said_why` CHECK means one is null exactly when the other is not --
  * but says the property itself. A future reader that records a method AND a caveat (text read,
@@ -126,6 +133,7 @@ const PENDING_JOIN = `FROM raw.documents d
         AND t.tenant_id = d.tenant_id
         AND t.document_id = d.document_id
       WHERE d.deleted_at IS NULL
+        AND d.bytes_purged_at IS NULL
         AND (t.document_id IS NULL
           OR t.source_sha256 <> d.sha256
           OR (t.method IS NULL AND t.reader_version < $1))`;
@@ -254,13 +262,25 @@ export interface ExtractionScan {
  * types it can actually score -- a rare case needs targeted sampling, or a uniform sample of a
  * mostly-PDF corpus answers it with a handful of documents.
  *
- * An INNER join, deliberately: `sourceBytes` is the catalogue's, and a text row whose document
- * has been purged has no source to be measured against. There should be none; if there are,
- * they are a different defect from the one this is looking for.
+ * An INNER join, deliberately: `sourceBytes` is the catalogue's, and a text row whose catalogue
+ * row is gone has no source to be measured against. There should be none; if there are, they are
+ * a different defect from the one this is looking for.
+ *
+ * `bytesHeld` narrows the sample to documents whose bytes are still in the lake, for a measure
+ * that reads them again (the OOXML oracle). Since ADR 0161 a document's bytes are purged once
+ * read, so without it that sample is of files nobody can open.
  */
 export async function scanExtractions(
   exec: SqlExecutor,
-  { limit, contentTypes }: { readonly limit: number; readonly contentTypes: readonly string[] },
+  {
+    limit,
+    contentTypes,
+    bytesHeld = false,
+  }: {
+    readonly limit: number;
+    readonly contentTypes: readonly string[];
+    readonly bytesHeld?: boolean;
+  },
 ): Promise<ExtractionScan[]> {
   const { rows } = await exec.query<{
     method: string | null;
@@ -280,9 +300,10 @@ export async function scanExtractions(
         AND d.document_id = t.document_id
       WHERE d.deleted_at IS NULL
         AND (cardinality($1::text[]) = 0 OR d.content_type = ANY($1::text[]))
+        AND (NOT $3::boolean OR d.bytes_purged_at IS NULL)
       ORDER BY md5(t.source || t.tenant_id || t.document_id)
       LIMIT $2`,
-    [contentTypes, limit],
+    [contentTypes, limit, bytesHeld],
   );
 
   return rows.map((row) => ({
@@ -495,9 +516,10 @@ export async function countPendingDocuments(
  * out. Text has no second gate. `source` is scoped with it because it is in the primary key;
  * reusing a Gmail attachment's text for the same tenant's Drive copy is a separate argument.
  *
- * Replaced rather than versioned: this table is a projection of the lake, and the only
- * interesting version of a document's text is the one taken from the bytes it currently has.
- * History lives where history is durable, which is the lake (`raw-lake.md`).
+ * Replaced rather than versioned: the only interesting version of a document's text is the one
+ * taken from the bytes it currently has. It is no longer a projection that can be rebuilt,
+ * though: once a document's bytes are purged (ADR 0161) its row here is the only reading of it
+ * there will ever be, which is one more reason a purged document is never re-offered.
  *
  * The stamp's `readerVersion` is written on EVERY row, refusals and copies included -- that is
  * what takes a re-queued refusal back out of the backlog once this generation has had its go at

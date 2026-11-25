@@ -57,6 +57,7 @@ import type {
   RecordProbe,
   StoredDigests,
 } from "./harvest.ts";
+import { driveFileLink } from "./sourceLinks.ts";
 
 /**
  * Why a picked FOLDER yielded nothing.
@@ -306,11 +307,13 @@ async function* take(
 }
 
 /**
- * The document that lands in the lake, and the split that keeps names out of Postgres.
+ * The document that lands in the lake, and which of its names reach Postgres.
  *
- * `metadata` reaches dbt and therefore a dashboard: ids, types and counts only. `manifest`
- * reaches the lake alone, which dbt and BI cannot read, and is where everything a person
- * named goes. Two arguments rather than one object, so the boundary is visible here. ADR 0015.
+ * `metadata` reaches dbt and therefore a dashboard: ids, types and counts only. The file's own
+ * name and its link reach `raw.documents` too, because its bytes leave the lake once read and
+ * those are how a person finds it again (ADR 0161). `manifest` reaches the lake alone, which
+ * dbt and BI cannot read, and is where the folder a person picked it from goes. Separate
+ * fields rather than one object, so the boundary is visible here.
  *
  * **A Google Doc, Sheet or Slides file is EXPORTED, never downloaded.** It has no bytes of its
  * own -- `alt=media` refuses it -- so what lands is the export, catalogued under the export's
@@ -338,8 +341,9 @@ function toDocument(
       parents: file.parents, // Folder ids, not folder names.
       pickedVia: picked.kind,
     },
+    fileName: file.name,
+    link: driveFileLink(file.id),
     manifest: {
-      filename: file.name,
       pickedFrom: picked.name,
       fileId: file.id,
     },

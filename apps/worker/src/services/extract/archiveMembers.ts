@@ -6,8 +6,8 @@
  * create-only path every document takes, its catalogue row is written by the one function that
  * writes them, and the size ceiling is the one every document meets (`documentSink.ts`). This
  * file adds only what is true of a member: its id is its archive's plus its position, its
- * name goes to the lake manifest and nowhere else, and it lands under every document holding
- * the archive's digest -- a pass reads a digest once.
+ * name is its path inside the archive and its link is the archive's (ADR 0161), and it lands
+ * under every document holding the archive's digest -- a pass reads a digest once.
  *
  * ONE MEMBER'S BYTES AT A TIME. The sink is flushed after each member, so the pass holds one
  * inflated member however many an archive has, under the `--smol` heap a read is sized for.
@@ -23,7 +23,7 @@ import {
   tombstoneStaleMembers,
 } from "../../repos/rawDocuments.ts";
 import { createDocumentSink, DOCUMENT_ENTITY } from "../documentSink.ts";
-import type { DocumentLanding } from "../landing.ts";
+import type { DocumentLanding, DocumentSink } from "../landing.ts";
 import type { RunJournal } from "../runJournal.ts";
 import { type Archive, type ArchiveMember, MEMBER_UNREADABLE } from "./archive.ts";
 
@@ -45,6 +45,9 @@ export interface ArchiveLander {
   /** Land anything still held, and say -- to the journal, in counts -- what came of every member. */
   readonly finish: () => Promise<MembersLanded>;
 }
+
+/** A document holding an archive's bytes, and where it is opened at the source. */
+type Holder = Awaited<ReturnType<typeof documentsHolding>>[number];
 
 function memberId(archiveId: string, member: ArchiveMember): string {
   return `${archiveId}/${String(member.position)}`;
@@ -77,6 +80,34 @@ function refusedUnder(
   }));
 }
 
+/**
+ * One member landed under every document holding its archive, then flushed: one inflated member
+ * held at a time. It is named by its path inside the archive and opened through the archive's
+ * own link -- the source holds the archive, not the member, so that is where a person finds it
+ * (ADR 0161).
+ */
+async function landMember(
+  sink: DocumentSink,
+  holders: readonly Holder[],
+  member: ArchiveMember,
+): Promise<void> {
+  const fetchBytes = inflatedOnce(member);
+  for (const holder of holders) {
+    await sink.add({
+      documentId: memberId(holder.documentId, member),
+      contentType: member.type,
+      declaredBytes: member.declaredBytes,
+      metadata: { archiveDocumentId: holder.documentId, archiveMember: member.position },
+      fileName: member.name,
+      link: holder.sourceUrl,
+      manifest: {},
+      sourceUpdatedAt: null,
+      fetchBytes,
+    });
+  }
+  await sink.flush();
+}
+
 export function archiveLander(
   deps: { readonly lake: LakeStore; readonly exec: SqlExecutor; readonly journal: RunJournal },
   at: DocumentLanding,
@@ -95,30 +126,15 @@ export function archiveLander(
   );
   let leftInArchive = 0;
 
-  async function landMember(holders: readonly string[], member: ArchiveMember): Promise<void> {
-    const fetchBytes = inflatedOnce(member);
-    for (const archiveId of holders) {
-      await sink.add({
-        documentId: memberId(archiveId, member),
-        contentType: member.type,
-        declaredBytes: member.declaredBytes,
-        metadata: { archiveDocumentId: archiveId, archiveMember: member.position },
-        manifest: { filename: member.name },
-        sourceUpdatedAt: null,
-        fetchBytes,
-      });
-    }
-    await sink.flush();
-  }
-
   return {
     async land(archive, contents): Promise<void> {
-      const holders = await documentsHolding(deps.exec, identity, archive.sha256);
+      const holding = await documentsHolding(deps.exec, identity, archive.sha256);
+      const holders = holding.map((holder) => holder.documentId);
       const kept: string[] = [];
       leftInArchive += contents.leftInArchive * holders.length;
       for (const member of contents.members) {
         if (member.refusal === null) {
-          await landMember(holders, member);
+          await landMember(sink, holding, member);
           kept.push(...holders.map((archiveId) => memberId(archiveId, member)));
         } else {
           refusals.push(...refusedUnder(holders, member, member.refusal));

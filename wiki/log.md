@@ -509,3 +509,7 @@
 ## [2026-11-25] ingest | Runbook Deployment
 ## [2026-11-25] ingest | ADR 0159 A Transform Keeps Its dbt Steps for Seven Days
 ## [2026-11-25] ingest | What an ingest run counts
+## [2026-11-25] ingest | ADR 0161 A Document's Bytes Are Purged Once Extraction Has Had Its Go
+## [2026-11-25] ingest | Architecture
+## [2026-11-25] ingest | Runbook Deployment
+## [2026-11-25] ingest | File formats a Gmail or Drive connection can land

@@ -16,20 +16,25 @@ This is an open-source repository. Nothing about a real customer belongs in it.
   substring ignore rules are banned — they once swallowed a legitimate secrets module.
 - **NEVER commit real data.** `data/` and any `fixtures/live/` are gitignored.
 
-- **NEVER put a name a human wrote into `raw.documents` or a lake key.** That table is
-  granted to `undercroft_dbt`, so every column in it -- `lake_key` included -- is one
-  `dbt run` from a dashboard. A filename, a mail subject, an address or a folder name goes
-  in the **lake manifest** (`extra` on `LakeStore.put`), which lives in the access-controlled
-  object store that dbt and BI cannot reach at all. `raw.documents.metadata` carries only
-  opaque provider ids, timestamps, enumerated types and counts. `landDocuments` takes
-  `metadata` and `manifest` as two separate arguments so the split is visible at every call
-  site; see `apps/worker/src/services/landDocument.ts` and ADR 0015.
+- **NEVER put a name a human wrote into `raw.documents` or a lake key -- except the file's own
+  name, in `raw.documents.file_name` (ADR 0161).** That table is granted to `undercroft_dbt`,
+  so every column in it -- `lake_key` included -- is one `dbt run` from a dashboard. A
+  document's bytes are purged once extraction has had its go at them, so the owner decided the
+  catalogue keeps what a person needs to find the file again: its name (`file_name`) and its
+  link at the source (`source_url`), readable by dbt deliberately. That is the whole of the
+  exception. A mail subject, an address or a folder name still goes in the **lake manifest**
+  (`extra` on `LakeStore.put`), which lives in the access-controlled object store that dbt and
+  BI cannot reach at all; a lake key still never carries a name; and `raw.documents.metadata`
+  carries only opaque provider ids, timestamps, enumerated types and counts. `DocumentToLand`
+  takes `metadata`, `fileName`, `link` and `manifest` as separate fields so the split is
+  visible at every call site; see `apps/worker/src/services/landDocument.ts`. ADR 0161
+  supersedes ADR 0015 on the file name and nothing else.
 
-  **`raw.document_text` is the one named exception, and only for the text itself.** A
-  document's extracted content necessarily holds every name a human wrote in it, and ADR 0024
-  permits that in that table alone, because forbidding it forbids the feature the table
-  exists for. It does not loosen the rule above by a single column: `raw.documents` stays
-  opaque, and a filename still never reaches Postgres. What keeps the text off a dashboard is
+  **`raw.document_text` is the one named exception for content, and only for the text
+  itself.** A document's extracted content necessarily holds every name a human wrote in it,
+  and ADR 0024 permits that in that table alone, because forbidding it forbids the feature the
+  table exists for. It does not loosen the rule above by a single column: `raw.documents` holds
+  the file's name and link and nothing else a person wrote. What keeps the text off a dashboard is
   that `undercroft_bi` is revoked the whole `raw` schema, so it is reachable only through a
   model the customer wrote — **never grant the BI role anything in `raw`**.
 

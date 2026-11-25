@@ -12,6 +12,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
+import { upsertDocuments } from "../../repos/rawDocuments.ts";
 import { listExtractDue } from "../schedule.ts";
 import type { Spawn } from "../transform.ts";
 import { cfbOf } from "./cfbTesting.ts";
@@ -92,6 +93,41 @@ async function landDocument(input: {
     ],
   );
   return put.sha256;
+}
+
+/** New bytes for a document already landed, written as an ingest of an edited file writes them. */
+async function reland(documentId: string, bytes: Uint8Array): Promise<string> {
+  const lakeKey = `documents/${SOURCE}/${TENANT}/${documentId}`;
+  const put = await lake.put(lakeKey, bytes, { runId: "run-reland" });
+  await upsertDocuments(db, { source: SOURCE, tenantId: TENANT }, [
+    {
+      documentId,
+      lakeKey,
+      sha256: put.sha256,
+      byteLength: String(bytes.byteLength),
+      contentType: "application/pdf",
+      metadataJson: "{}",
+      observedAt: new Date().toISOString(),
+      runId: "run-reland",
+      fileName: null,
+      sourceUrl: null,
+    },
+  ]);
+  return put.sha256;
+}
+
+/** The same bytes catalogued by ANOTHER customer, who has not read them yet. */
+const OTHER_TENANT = "CASE-0043";
+async function landedElsewhere(bytes: Uint8Array): Promise<void> {
+  const lakeKey = `documents/${SOURCE}/${OTHER_TENANT}/twin`;
+  const put = await lake.put(lakeKey, bytes, { runId: "run-seed" });
+  await db.query(
+    `INSERT INTO raw.documents
+       (source, tenant_id, document_id, lake_key, sha256, byte_length, content_type,
+        observed_at, run_id)
+     VALUES ($1, $2, 'twin', $3, $4, $5, 'application/pdf', now(), 'run-seed')`,
+    [SOURCE, OTHER_TENANT, lakeKey, put.sha256, String(bytes.byteLength)],
+  );
 }
 
 function extract(spawn: Spawn, runId = "run-extract-1", source = SOURCE) {
@@ -439,20 +475,18 @@ describe("a second pass", () => {
     });
     await extract(spawnAnswering("first version of the agreement, at some length, to pass"));
 
-    // The same document, new bytes: what a re-ingest of an edited file leaves behind.
-    await db.asSuperuser((tx) =>
-      tx.query("UPDATE raw.documents SET sha256 = $1 WHERE document_id = $2", [
-        "f".repeat(64),
-        documentId,
-      ]),
-    );
+    // The same document, new bytes: what a re-ingest of an edited file leaves behind -- the
+    // first bytes were purged once read (ADR 0161), and the new ones are in the lake until the
+    // pass reads them, then purged in their turn.
+    const edited = await reland(documentId, new TextEncoder().encode("%PDF-1.7\n% v2\n%%EOF\n"));
     const second = await extract(spawnAnswering(A_PAGE), "run-extract-2");
 
     expect(second.read).toBe(1);
+    expect(second.purged).toMatchObject({ digests: 1, documents: 1 });
     const { rows } = await db.query<{ source_sha256: string; run_id: string }>(
       "SELECT source_sha256, run_id FROM raw.document_text",
     );
-    expect(rows[0]?.source_sha256).toBe("f".repeat(64));
+    expect(rows[0]?.source_sha256).toBe(edited);
     expect(rows[0]?.run_id).toBe("run-extract-2");
   });
 });
@@ -461,13 +495,15 @@ describe("a pass after the readers changed", () => {
   /**
    * Land a document, read it once, then age its row to the generation before this one --
    * which is what a release that bumps `CURRENT_READER_VERSION` does to every existing row.
+   *
+   * Its bytes are held by another customer's unread document too, so the first pass cannot
+   * purge them (ADR 0161) and a newer reader still has something to read. A refusal whose bytes
+   * WERE purged is the next suite's.
    */
   async function aged(input: { documentId: string; contentType: string }): Promise<void> {
-    await landDocument({
-      documentId: input.documentId,
-      bytes: new TextEncoder().encode("%PDF-1.7\n%%EOF\n"),
-      contentType: input.contentType,
-    });
+    const bytes = new TextEncoder().encode("%PDF-1.7\n%%EOF\n");
+    await landedElsewhere(bytes);
+    await landDocument({ documentId: input.documentId, bytes, contentType: input.contentType });
     await extract(spawnAnswering(A_PAGE));
     await db.asSuperuser((tx) =>
       tx.query("UPDATE raw.document_text SET reader_version = reader_version - 1"),
@@ -489,6 +525,98 @@ describe("a pass after the readers changed", () => {
     expect(third).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
     // PDF bytes under an Excel label: the label says spreadsheet, the bytes say otherwise.
     expect((await textRows())[0]?.reason).toBe("workbook-not-a-workbook");
+  });
+});
+
+describe("a document's bytes, once extraction has had its go (ADR 0161)", () => {
+  const PDF = new TextEncoder().encode("%PDF-1.7\n%%EOF\n");
+
+  async function purgeOf(documentId: string): Promise<unknown> {
+    const { rows } = await db.query(
+      `SELECT bytes_purged_at IS NOT NULL AS purged, bytes_purge_outcome AS outcome,
+              bytes_purge_report LIKE '_reports/blob-purge/%' AS reported
+         FROM raw.documents WHERE document_id = $1`,
+      [documentId],
+    );
+    return rows[0];
+  }
+
+  it("are deleted from the lake, and the document says so", async () => {
+    await landDocument({ documentId: "f1", bytes: PDF, contentType: "application/pdf" });
+
+    const result = await extract(spawnAnswering(A_PAGE));
+
+    expect(result.purged).toMatchObject({ digests: 1, documents: 1, bytes: PDF.byteLength });
+    await expect(lake.read(`documents/${SOURCE}/${TENANT}/f1`)).rejects.toThrow(/purged/u);
+    expect(await purgeOf("f1")).toEqual({ purged: true, outcome: "deleted", reported: true });
+    expect((await textRows())[0]?.text).toBe(A_PAGE);
+  });
+
+  it("are deleted after a refusal too, and what it was refused for stays to trace it by", async () => {
+    await landDocument({
+      documentId: "f2",
+      bytes: legacyWorkbook("f2"),
+      contentType: "application/vnd.ms-excel",
+    });
+
+    await extract(spawnAnswering(A_PAGE));
+
+    expect(await purgeOf("f2")).toEqual({ purged: true, outcome: "deleted", reported: true });
+    const { rows } = await db.query(
+      `SELECT t.reason, t.reader_version > 0 AS generation, d.content_type, d.byte_length > 0 AS sized,
+              t.source_sha256 = d.sha256 AS same_bytes
+         FROM raw.document_text t JOIN raw.documents d USING (source, tenant_id, document_id)`,
+    );
+    expect(rows).toEqual([
+      {
+        reason: "xls-biff5-unsupported",
+        generation: true,
+        content_type: "application/vnd.ms-excel",
+        sized: true,
+        same_bytes: true,
+      },
+    ]);
+  });
+
+  it("stay while another customer's document holding them is unread", async () => {
+    await landedElsewhere(PDF);
+    await landDocument({ documentId: "f1", bytes: PDF, contentType: "application/pdf" });
+
+    const first = await extract(spawnAnswering(A_PAGE));
+
+    expect(first.purged.digests).toBe(0);
+    expect(await purgeOf("f1")).toEqual({ purged: false, outcome: null, reported: null });
+    expect(new TextDecoder().decode(await lake.read(`documents/${SOURCE}/${TENANT}/f1`))).toBe(
+      new TextDecoder().decode(PDF),
+    );
+
+    // The other customer's pass reads its copy, and the bytes go for both.
+    await runExtract(
+      { exec: db, lake, spawn: spawnAnswering(A_PAGE), transactor },
+      { tenantId: OTHER_TENANT, source: SOURCE, runId: "run-extract-other" },
+    );
+    expect(await purgeOf("f1")).toEqual({ purged: true, outcome: "deleted", reported: true });
+    expect(await purgeOf("twin")).toEqual({ purged: true, outcome: "deleted", reported: true });
+  });
+
+  it("once purged, a refusal is not offered to a newer reader, and nothing is due", async () => {
+    await landDocument({
+      documentId: "f2",
+      bytes: legacyWorkbook("f2"),
+      contentType: "application/vnd.ms-excel",
+    });
+    await extract(spawnAnswering(A_PAGE));
+    // What a release bumping `CURRENT_READER_VERSION` does to every row.
+    await db.asSuperuser((tx) =>
+      tx.query("UPDATE raw.document_text SET reader_version = reader_version - 1"),
+    );
+
+    const again = await extract(spawnAnswering(A_PAGE), "run-extract-2");
+
+    // Offered, it would read nothing and overwrite the reason with `lake-object-unreadable`.
+    expect(again).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
+    expect((await textRows())[0]?.reason).toBe("xls-biff5-unsupported");
+    expect((await listExtractDue(db)).due).toEqual([]);
   });
 });
 

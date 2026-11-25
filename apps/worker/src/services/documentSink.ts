@@ -212,11 +212,12 @@ export function createDocumentSink(
 /**
  * The catalogue row for a document whose bytes reached the lake.
  *
- * Only `metadata` crosses into Postgres. `raw.documents` is granted to `undercroft_dbt`, so
- * every column here is one `dbt run` from a dashboard; a filename, a subject or a folder name
- * stays in the lake manifest, which dbt and BI cannot reach at all. `.claude/rules/pii.md`,
- * ADR 0015. A skipped or failed document gets no row: it has no bytes to point at, and a row
- * claiming otherwise is worse than no row.
+ * `metadata`, the file's name and its link cross into Postgres. `raw.documents` is granted to
+ * `undercroft_dbt`, so every column here is one `dbt run` from a dashboard: the name and the link
+ * are there because the bytes will not be (ADR 0161, superseding ADR 0015 on the name), and a
+ * subject, an address or a folder name still stays in the lake manifest alone
+ * (`.claude/rules/pii.md`). A skipped or failed document gets no row: it has no bytes to point
+ * at, and a row claiming otherwise is worse than no row.
  */
 function catalogueRow(
   document: DocumentToLand,
@@ -233,6 +234,8 @@ function catalogueRow(
       ...document.metadata,
       sourceUpdatedAt: document.sourceUpdatedAt,
     }),
+    fileName: document.fileName,
+    sourceUrl: document.link,
     observedAt: at.observedAt,
     runId: at.runId,
   };

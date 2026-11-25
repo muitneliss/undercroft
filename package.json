@@ -42,6 +42,7 @@
     "extract:accuracy": "bun run apps/worker/src/extractionAccuracyCli.ts",
     "semantic:probe": "bun run apps/worker/src/semanticProbeCli.ts",
     "lake:compact": "bun run apps/worker/src/lakeCompactionCli.ts",
+    "document:purge": "bun run apps/worker/src/documentPurgeCli.ts",
     "format": "biome format --write . && prettier --write .",
     "format:check": "biome format . && prettier --check .",
     "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",

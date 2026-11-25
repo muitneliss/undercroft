@@ -18,7 +18,7 @@
  * ## What reaches Postgres
  *
  * `raw.documents.metadata` is `{ entity, sourceRecordId, part }`: opaque ids and an enumerated
- * name, which is all `.claude/rules/pii.md` lets that table hold. The text reaches Postgres only as
+ * name; `file_name` and `source_url` are null, and why is at `toLand`. The text reaches Postgres only as
  * the document's `raw.document_text.text`, through the extract verb, which the BI role cannot read.
  * The manifest is empty: nothing about the record needs saying that the record does not say.
  *
@@ -103,6 +103,12 @@ function toLand(record: RawRecordOut, document: RecordDocument): DocumentToLand 
     contentType: document.contentType,
     declaredBytes: String(Buffer.byteLength(document.text, "utf8")),
     metadata: { entity: record.entity, sourceRecordId: record.sourceRecordId, part: document.part },
+    // Text written on a record is not a file, so it has no name. Nor a link: a HubSpot record's
+    // address needs the portal id, which nothing a spec run lands carries, and a link built
+    // without it would open somebody else's portal or nothing (ADR 0161). The record is found
+    // by `metadata.sourceRecordId` in `raw.records`.
+    fileName: null,
+    link: null,
     manifest: {},
     sourceUpdatedAt: record.sourceUpdatedAt,
     fetchBytes: (): Promise<Uint8Array> => Promise.resolve(Buffer.from(document.text, "utf8")),

@@ -68,8 +68,11 @@ export interface DocumentSummary {
    * count is, because the row count is at least a true count of rows; a doubled byte total is
    * true of nothing. Nor is the error recoverable from the two counts beside it -- duplicates
    * are not uniformly sized, so the 2.2:1 row ratio does not carry over to bytes.
+   * HELD, not landed: a digest every row of which is purged (ADR 0161) is not on the disk.
    */
   readonly bytes: number;
+  /** Rows whose bytes were purged after extraction (ADR 0161): the lake cannot re-read them. */
+  readonly purged: number;
   /**
    * How many of them an extract run could actually read into text -- a truncated read
    * included, because a cut document still has text and says so on its own row.
@@ -136,17 +139,6 @@ export interface RawRecord {
   readonly deletedAt: string | null;
 }
 
-export interface RawDocument {
-  readonly source: string;
-  readonly documentId: string;
-  readonly contentType: string;
-  readonly bytes: number;
-  readonly sha256: string;
-  readonly observedAt: string;
-  readonly runId: string;
-  readonly deletedAt: string | null;
-}
-
 function iso(value: Date | string): string {
   return new Date(value).toISOString();
 }
@@ -194,6 +186,7 @@ export async function summariseDocuments(
     documents: number;
     distinct_blobs: number;
     bytes: number;
+    purged: number;
     readable: number;
     refused: number;
     waiting: number;
@@ -227,8 +220,10 @@ export async function summariseDocuments(
     `WITH catalogued AS (
        SELECT d.source, d.sha256, d.byte_length, d.observed_at, t.method, t.reason,
               t.document_id IS NOT NULL AS was_read,
+              d.bytes_purged_at IS NOT NULL AS purged,
               row_number() OVER (PARTITION BY d.source, d.sha256
-                                 ORDER BY d.document_id) AS nth_of_digest
+                                 ORDER BY d.bytes_purged_at IS NOT NULL, d.document_id)
+                AS nth_of_digest
        FROM raw.documents d
        LEFT JOIN raw.document_text t
          ON t.source = d.source
@@ -253,7 +248,9 @@ export async function summariseDocuments(
        SELECT source,
               count(*)::int AS documents,
               count(DISTINCT sha256)::int AS distinct_blobs,
-              coalesce(sum(byte_length) FILTER (WHERE nth_of_digest = 1), 0)::float8 AS bytes,
+              coalesce(sum(byte_length) FILTER (WHERE nth_of_digest = 1 AND NOT purged), 0)
+                ::float8 AS bytes,
+              count(*) FILTER (WHERE purged)::int AS purged,
               count(method)::int AS readable,
               count(*) FILTER (WHERE was_read AND method IS NULL)::int AS refused,
               count(*) FILTER (WHERE NOT was_read)::int AS waiting,
@@ -272,6 +269,7 @@ export async function summariseDocuments(
     documents: r.documents,
     distinctBlobs: r.distinct_blobs,
     bytes: r.bytes,
+    purged: r.purged,
     readable: r.readable,
     refused: r.refused,
     waiting: r.waiting,
@@ -368,86 +366,6 @@ export async function countRecordsOfRun(
     `SELECT count(*)::int AS n FROM raw.records
      WHERE tenant_id = $1 AND source = $2 AND entity = $3 AND run_id = $4`,
     [tenantId, stream.source, stream.entity, stream.runId],
-  );
-  return rows[0]?.n ?? 0;
-}
-
-interface DocumentRow {
-  source: string;
-  document_id: string;
-  content_type: string;
-  bytes: number;
-  sha256: string;
-  observed_at: Date | string;
-  run_id: string;
-  deleted_at: Date | string | null;
-}
-
-const DOCUMENT_COLUMNS = `source, document_id, content_type, byte_length::float8 AS bytes,
-  sha256, observed_at, run_id, deleted_at`;
-
-function toDocument(r: DocumentRow): RawDocument {
-  return {
-    source: r.source,
-    documentId: r.document_id,
-    contentType: r.content_type,
-    bytes: r.bytes,
-    sha256: r.sha256,
-    observedAt: iso(r.observed_at),
-    runId: r.run_id,
-    deletedAt: isoOrNull(r.deleted_at),
-  };
-}
-
-/**
- * The document catalogue for one source, newest first, a page at a time -- all of it, or only
- * the rows that name one run, as {@link listRecords} reads a run.
- *
- * The catalogue row only: content type, size, digest, when. Not the bytes, which are in the
- * object store, and not `metadata` -- opaque provider ids by contract (ADR 0015), but the
- * contract is what keeps names out of it and a browser is not the place to test it.
- */
-export async function listDocuments(
-  exec: SqlExecutor,
-  tenantId: string,
-  stream: { source: string; runId?: string | null },
-  page: { limit: number; cursor?: string | null },
-): Promise<Page<RawDocument>> {
-  const after = decodeCursor(page.cursor);
-  const { rows } = await exec.query<DocumentRow>(
-    `SELECT ${DOCUMENT_COLUMNS} FROM raw.documents
-     WHERE tenant_id = $1 AND source = $2
-       AND ($4::text IS NULL OR run_id = $4::text)
-       AND ($5::timestamptz IS NULL OR (observed_at, document_id) < ($5::timestamptz, $6::text))
-     ORDER BY observed_at DESC, document_id DESC LIMIT $3`,
-    [
-      tenantId,
-      stream.source,
-      page.limit + 1,
-      stream.runId ?? null,
-      after?.at ?? null,
-      after?.id ?? null,
-    ],
-  );
-  const items = rows.slice(0, page.limit).map(toDocument);
-  const last = items.at(-1);
-  const nextCursor =
-    rows.length > page.limit && last !== undefined
-      ? encodeCursor(last.observedAt, last.documentId)
-      : null;
-  return { items, nextCursor };
-}
-
-/** How many of one source's catalogue rows still name this run. See {@link countRecordsOfRun}. */
-export async function countDocumentsOfRun(
-  exec: SqlExecutor,
-  tenantId: string,
-  stream: { source: string; runId: string },
-): Promise<number> {
-  const { rows } = await exec.query<{ n: number }>(
-    `SELECT count(*)::int AS n FROM raw.documents
-     WHERE tenant_id = $1 AND source = $2 AND run_id = $3`,
-    [tenantId, stream.source, stream.runId],
   );
   return rows[0]?.n ?? 0;
 }

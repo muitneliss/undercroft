@@ -7,7 +7,20 @@ below). `packages/contracts/src/fileFormatsDoc.test.ts` fails the gate when the 
 format that has no section here, or when a section's specification link or reading level
 disagrees with the catalogue in `packages/contracts/src/fileFormats.ts`.
 
-Every file that lands keeps its bytes whole in the raw lake, whatever the reading level says.
+Every file lands whole in the raw lake, whatever the reading level says, and stays there until
+the extract pass has read or refused it and written its rows or landed its members. Then its
+bytes are deleted, and `raw.documents` keeps what traces it back to its source
+([ADR 0161](../adr/0161-a-documents-bytes-are-purged-once-extraction-has-had-its-go.md)):
+
+| Column                                                         | Holds                                                                                                                            |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `file_name`                                                    | The source's name for the file; a member's path inside its archive. Empty for a mail's body and a HubSpot note, which have none. |
+| `source_url`                                                   | Where it opens: a Drive file's page, the Gmail message, an archive member's archive. Empty where none can be derived.            |
+| `metadata->>'sourceUpdatedAt'`, `observed_at`                  | When the source last changed it, and when it was landed.                                                                         |
+| `bytes_purged_at`, `bytes_purge_outcome`, `bytes_purge_report` | When its bytes were deleted, whether they were there to delete (`deleted` or `absent`), and the lake report that named them.     |
+
+A purged document is never read again, so a newer reader or a newer rows generation does not
+reach it: its row in `raw.document_text` -- its text, or why it could not be read -- is final.
 The reading level describes what becomes searchable text, and, for `table`, what becomes rows.
 
 | Reading level | Meaning                                                                                       |

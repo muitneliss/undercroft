@@ -470,11 +470,27 @@ describe("GET /v1/runs/extract-due", () => {
     });
   });
 
-  it("stops listing a pair once its documents are read, so the tick does not run forever", async () => {
+  it("lists a pair whose read documents still hold their bytes, which a pass purges", async () => {
+    // ADR 0161: bytes nothing needs any more are outstanding work, or a digest whose last
+    // reader was in another scope's pass would keep its bytes until something else ran here.
+    await landed("doc-1", SHA_A);
+    await readFrom("doc-1", SHA_A);
+
+    expect(await (await extractDue()).json()).toEqual({
+      due: [{ tenantId: "CASE-1", source: "drive" }],
+      skipped: [],
+    });
+  });
+
+  it("stops listing a pair once its documents are read and purged, so the tick does not run forever", async () => {
     // The half of the guard that makes an hourly schedule cheap rather than wasteful: a
     // settled tenant must fall off the list, or every tick starts a run that finds nothing.
     await landed("doc-1", SHA_A);
     await readFrom("doc-1", SHA_A);
+    await db.query(
+      `UPDATE raw.documents SET bytes_purged_at = now(), bytes_purge_outcome = 'deleted',
+              bytes_purge_report = '_reports/blob-purge/x.json'`,
+    );
 
     expect(await (await extractDue()).json()).toEqual({ due: [], skipped: [] });
   });
