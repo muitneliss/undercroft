@@ -18,7 +18,6 @@ import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
 import {
   type Clock,
   ConnectorError,
-  canonicalJson,
   createPacer,
   getPath,
   getStringPath,
@@ -35,6 +34,7 @@ import { type RecordDocument, splitDocuments } from "./documents.ts";
 import { alreadyRead, checkIncremental, incrementalAt, sinceCarriedIn } from "./incremental.ts";
 import { startNaming } from "./listing.ts";
 import { EntityNotGranted, refusedScopes } from "./refusal.ts";
+import { canonicalPayload } from "./unordered.ts";
 
 export interface RawRecordOut {
   readonly source: string;
@@ -319,7 +319,8 @@ export function keyOf(reader: Reader, record: unknown): string {
  * and the record still lands. The payload keeps the value exactly as the source wrote it.
  *
  * The one place every read's records pass through on their way out, which is why the declared
- * document fields are taken out here and nowhere else: no request shape can route around it.
+ * document fields are taken out here and nowhere else: no request shape can route around it. The
+ * same holds for the arrays it declares unordered, which are put in one order here (ADR 0158).
  */
 export function outOf(reader: Reader, id: string, record: unknown): RawRecordOut {
   const { spec, entity } = reader;
@@ -331,7 +332,7 @@ export function outOf(reader: Reader, id: string, record: unknown): RawRecordOut
     entity: entity.name,
     sourceRecordId: id,
     sourceUpdatedAt: updatedAt === null ? null : isoInstant(updatedAt),
-    payloadText: canonicalJson(payload),
+    payloadText: canonicalPayload(payload, entity.unorderedArrays ?? []),
     incrementalAt: incrementalAt(entity, record),
     documents,
   };
