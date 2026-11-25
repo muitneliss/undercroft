@@ -1643,6 +1643,8 @@ export const en = {
         "Could not clear old dbt steps ({{errorType}}). This run is unaffected; the next one tries again.",
       bytesPurged:
         "Deleted the files of {{documents}} documents from the lake ({{bytes}}) now that they have been read; each keeps its name, its link at the source and what reading it found.",
+      bytesPurgeFailed:
+        "Could not delete the files already read from the lake ({{errorType}}). What this run read is kept; the next run tries again.",
       unknown: "Event {{event}}.",
     },
 

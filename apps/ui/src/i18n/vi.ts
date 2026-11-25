@@ -1991,6 +1991,8 @@ export const vi = {
         "Không dọn được các bước dbt cũ ({{errorType}}). Lần chạy này không bị ảnh hưởng; lần sau sẽ thử lại.",
       bytesPurged:
         "Đã xoá tệp của {{documents}} tài liệu khỏi kho dữ liệu thô ({{bytes}}) vì đã đọc xong; mỗi tài liệu vẫn giữ tên, đường dẫn về nơi gốc và kết quả đọc.",
+      bytesPurgeFailed:
+        "Không xoá được các tệp đã đọc khỏi kho dữ liệu thô ({{errorType}}). Những gì lần chạy này đọc được vẫn giữ nguyên; lần sau sẽ thử lại.",
       unknown: "Sự kiện {{event}}.",
     },
 

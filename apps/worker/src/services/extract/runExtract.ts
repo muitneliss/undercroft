@@ -39,6 +39,8 @@
 
 import { tmpdir } from "node:os";
 
+import { describeError } from "@undercroft/core";
+
 import type { SqlExecutor } from "@undercroft/db";
 import type { RunReasonCount, RunRefusal } from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
@@ -62,7 +64,7 @@ import {
 } from "./extractText.ts";
 import { type ArchiveLander, archiveLander, type MembersLanded } from "./archiveMembers.ts";
 import { DOCUMENTS, LAKE_UNREADABLE, passCounts } from "./passCounts.ts";
-import { PURGE_PER_PASS, type Purged, purgeSettled } from "./purge.ts";
+import { NOTHING_PURGED, PURGE_PER_PASS, type Purged, purgeSettled } from "./purge.ts";
 import { readBytes } from "./readDocument.ts";
 import { backfillWorkbooks, type WorkbookWriter, workbookWriter } from "./workbookRows.ts";
 
@@ -274,27 +276,38 @@ async function readBatch(
  * Last, after every read that needs bytes: this pass's own, the relay (which reads none) and the
  * workbook backfill. What it removes is what is now settled in this scope, which includes what
  * earlier passes settled but could not purge while a holder elsewhere was unread.
+ *
+ * A purge that fails does not fail the pass: the texts are written and the counts are true, and
+ * a run marked failed for them would say otherwise. It is said instead, and what it left is
+ * still settled, so the next pass -- which the scheduler starts for it -- tries again. A purge
+ * cut off part way is finished then too, recorded `absent` (`purge.ts`).
  */
 async function purgeRead(
   deps: ExtractRunDeps,
   scope: { tenantId: string; source: string },
   at: { extractedAt: string; runId: string },
 ): Promise<Purged> {
-  const purged = await purgeSettled(deps, scope, {
-    limit: PURGE_PER_PASS,
-    purgedAt: at.extractedAt,
-    by: { runId: at.runId, verb: "extract" },
-  });
-  if (purged.digests > 0) {
-    (deps.journal ?? SILENT_JOURNAL).info("document_bytes_purged", {
-      entity: DOCUMENTS,
-      digests: purged.digests,
-      documents: purged.documents,
-      bytes: purged.bytes,
-      absent: purged.absent,
+  const journal = deps.journal ?? SILENT_JOURNAL;
+  try {
+    const purged = await purgeSettled(deps, scope, {
+      limit: PURGE_PER_PASS,
+      purgedAt: at.extractedAt,
+      by: { runId: at.runId, verb: "extract" },
     });
+    if (purged.digests > 0) {
+      journal.info("document_bytes_purged", {
+        entity: DOCUMENTS,
+        digests: purged.digests,
+        documents: purged.documents,
+        bytes: purged.bytes,
+        absent: purged.absent,
+      });
+    }
+    return purged;
+  } catch (error) {
+    journal.warn("document_bytes_purge_failed", { entity: DOCUMENTS, ...describeError(error) });
+    return NOTHING_PURGED;
   }
-  return purged;
 }
 
 export async function runExtract(

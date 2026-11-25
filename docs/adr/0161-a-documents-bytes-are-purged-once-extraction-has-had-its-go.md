@@ -62,7 +62,8 @@ not keep a second copy of them once it has read them.
    when; `raw.documents` keeps the content type, the size, the digest, and now the name and link.
 6. **Where it runs.** At the end of every extract pass, for up to 1,000 digests held by that
    pass's (tenant, source), reported as a `document_bytes_purged` journal event with counts and
-   bytes. The scheduler counts a scope holding a purgeable digest as due (`purgeableScopes`), so a
+   bytes. A purge that fails is journalled `document_bytes_purge_failed` and does not fail the
+   pass, whose texts are written and whose counts are true; the next pass tries again. The scheduler counts a scope holding a purgeable digest as due (`purgeableScopes`), so a
    digest whose last reader was in another scope does not wait for unrelated work. For the backlog
    on the day this ships there is `task db:document-purge`: it backfills `file_name` and
    `source_url` from the lake manifests, reports what is still unread and why, and purges every

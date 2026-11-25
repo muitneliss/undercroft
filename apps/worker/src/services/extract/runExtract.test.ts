@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { createStampSource, TestClock } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
+import { InMemoryObjectStore, LakeStore, type ObjectStore } from "@undercroft/lake";
 
 import { upsertDocuments } from "../../repos/rawDocuments.ts";
 import { listExtractDue } from "../schedule.ts";
@@ -597,6 +597,27 @@ describe("a document's bytes, once extraction has had its go (ADR 0161)", () => 
     );
     expect(await purgeOf("f1")).toEqual({ purged: true, outcome: "deleted", reported: true });
     expect(await purgeOf("twin")).toEqual({ purged: true, outcome: "deleted", reported: true });
+  });
+
+  it("a purge the object store refuses does not fail the pass, and claims nothing", async () => {
+    // A real store whose deletes fail, as MinIO's do while it is down: the pass's texts are
+    // written and true, so it must not end failed for them -- and no document may say its bytes
+    // are gone while they are still there.
+    const backing = new InMemoryObjectStore();
+    const refusing: ObjectStore = {
+      get: (key) => backing.get(key),
+      put: (key, data) => backing.put(key, data),
+      exists: (key) => backing.exists(key),
+      list: (prefix, startAfter) => backing.list(prefix, startAfter),
+      delete: () => Promise.reject(new Error("object store unavailable")),
+    };
+    lake = new LakeStore(refusing, { stamps: createStampSource(new TestClock()) });
+    await landDocument({ documentId: "f1", bytes: PDF, contentType: "application/pdf" });
+
+    const result = await extract(spawnAnswering(A_PAGE));
+
+    expect(result).toMatchObject({ read: 1, purged: { digests: 0, documents: 0 } });
+    expect(await purgeOf("f1")).toEqual({ purged: false, outcome: null, reported: null });
   });
 
   it("once purged, a refusal is not offered to a newer reader, and nothing is due", async () => {

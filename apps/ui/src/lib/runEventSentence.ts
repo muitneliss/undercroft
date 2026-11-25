@@ -234,8 +234,11 @@ function removalSentence(
   { event, detail }: Pick<RunEventView, "event" | "detail">,
   n: (key: string) => string,
 ): string {
-  if (event === "run_steps_prune_failed") {
-    return t("journal.event.stepsPruneFailed", { errorType: String(detail.errorType ?? "") });
+  if (event === "run_steps_prune_failed" || event === "document_bytes_purge_failed") {
+    const errorType = String(detail.errorType ?? "");
+    return event === "run_steps_prune_failed"
+      ? t("journal.event.stepsPruneFailed", { errorType })
+      : t("journal.event.bytesPurgeFailed", { errorType });
   }
   if (event === "document_bytes_purged") {
     const { bytes } = detail;
@@ -304,6 +307,7 @@ export function eventSentence(
     case "run_steps_pruned":
     case "run_steps_prune_failed":
     case "document_bytes_purged":
+    case "document_bytes_purge_failed":
       return removalSentence(t, locale, event, n);
     default:
       return t("journal.event.unknown", { event: event.event });

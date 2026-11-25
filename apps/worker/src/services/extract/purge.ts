@@ -66,7 +66,14 @@ export interface Purged {
   readonly report: string | null;
 }
 
-const NOTHING: Purged = { digests: 0, documents: 0, bytes: 0, absent: 0, report: null };
+/** A purge that removed nothing. */
+export const NOTHING_PURGED: Purged = {
+  digests: 0,
+  documents: 0,
+  bytes: 0,
+  absent: 0,
+  report: null,
+};
 
 /**
  * Purge up to `limit` digests held by `scope` whose every holder is settled.
@@ -88,7 +95,7 @@ export async function purgeSettled(
     limit: request.limit,
   });
   if (digests.length === 0) {
-    return NOTHING;
+    return NOTHING_PURGED;
   }
 
   const purge = await deps.lake.purgeBlobs(
