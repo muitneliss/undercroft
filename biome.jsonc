@@ -1207,6 +1207,18 @@
       "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
     },
 
+    // The lake has ONE writer, and CLAUDE.md's rule 3 names it: every object that enters or
+    // leaves the raw lake does so through a method of `LakeStore`. Its length is therefore the
+    // number of things the lake can be asked to do -- put, read, journal, prune and, since ADR
+    // 0160, compact and report, which took it from under 300 to 409 counted lines. Cutting it in
+    // two would give the lake a second module that writes to the object store, which is the
+    // second writer the rule exists to prevent; the rule-free part of compaction is already
+    // its own module (`compaction.ts`).
+    {
+      "includes": ["packages/lake/src/store.ts"],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
+    },
+
     // The UI has exactly ONE store, and `state.md` names the file: `apps/ui/src/store.ts`,
     // `useUiStore`. That is the whole rule -- client state has one owner, and `useState` is
     // banned because a second owner is how two values that should be one drift apart.

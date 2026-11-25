@@ -26,10 +26,12 @@
 
 import { createStampSource, isStamp, type StampSource, systemClock } from "@undercroft/core";
 import { byCodeUnit } from "@undercroft/core/order";
+import { type Canonicaliser, type Considered, redundantStamps } from "./compaction.ts";
 import type { ObjectStore } from "./objectStore.ts";
 import {
   blobKey as blobKeyOf,
   journalKey as journalKeyOf,
+  reportKey as reportKeyOf,
   sha256Hex,
   validateSourceKey as validateSourceKeyOf,
   validateStream,
@@ -87,6 +89,25 @@ export interface JournalEntry {
   readonly sourceKey: string;
   readonly stamp: string;
   readonly sha256: string;
+}
+
+const MANIFEST_SUFFIX = "/manifest.json";
+
+/**
+ * What `applyCompaction` will remove at one key, and the reading it was decided on.
+ *
+ * A value, so a dry run is simply a plan nobody applies, and a caller can record it before
+ * anything is deleted.
+ */
+export interface CompactionPlan {
+  readonly stream: string;
+  readonly sourceKey: string;
+  /** The newest stamp considered; nothing after it is touched. `null` considers nothing. */
+  readonly through: string | null;
+  /** Every stamp at or before `through` when the plan was made, oldest first. */
+  readonly examined: readonly string[];
+  /** The observations to remove, oldest first, with the digest each journal pointer names. */
+  readonly remove: readonly { readonly stamp: string; readonly sha256: string }[];
 }
 
 /** One observation: the payload bytes and the manifest that describes them. */
@@ -258,15 +279,20 @@ export class LakeStore {
   /** Observation stamps at this key, oldest first. Anything not a stamp is not ours. */
   async versions(sourceKey: string): Promise<string[]> {
     const key = LakeStore.validateSourceKey(sourceKey);
-    const stamps = new Set<string>();
+    return [...(await this.#objectsByStamp(key)).keys()].sort(byCodeUnit);
+  }
+
+  /** Every object under each observation of `key`, by stamp, from one listing. */
+  async #objectsByStamp(key: string): Promise<Map<string, string[]>> {
+    const byStamp = new Map<string, string[]>();
     for (const obj of await this.#store.list(`${key}/`)) {
       const rest = obj.slice(key.length + 1);
       const head = rest.split("/", 1)[0] ?? "";
       if (isStamp(head)) {
-        stamps.add(head);
+        byStamp.set(head, [...(byStamp.get(head) ?? []), obj]);
       }
     }
-    return [...stamps].sort(byCodeUnit);
+    return byStamp;
   }
 
   async manifest(sourceKey: string, stamp: string): Promise<Record<string, unknown>> {
@@ -294,18 +320,23 @@ export class LakeStore {
    */
   async #observationAt(key: string, stamp: string): Promise<Observation> {
     const man = await this.manifest(key, stamp);
+    return { bytes: await this.#verifiedBytes(`${key}/${stamp}`, man), manifest: man };
+  }
+
+  /** The bytes a manifest names, refused unless they hash to what it says. */
+  async #verifiedBytes(version: string, man: Record<string, unknown>): Promise<Uint8Array> {
     const { blobKey } = man;
     if (typeof blobKey !== "string") {
-      throw new Error(`manifest for ${key}/${stamp} has no blobKey`);
+      throw new Error(`manifest for ${version} has no blobKey`);
     }
     const data = await this.#store.get(blobKey);
     const actual = await sha256Hex(data);
     if (actual !== man.sha256) {
       throw new ObjectExists(
-        `blob for ${key}/${stamp} is corrupt: manifest says ${String(man.sha256)}, bytes hash to ${actual}`,
+        `blob for ${version} is corrupt: manifest says ${String(man.sha256)}, bytes hash to ${actual}`,
       );
     }
-    return { bytes: data, manifest: man };
+    return data;
   }
 
   /**
@@ -401,5 +432,120 @@ export class LakeStore {
       removed.push(stamp);
     }
     return removed;
+  }
+
+  // -- compaction -----------------------------------------------------------
+  //
+  // Removing observations that repeat the one kept before them, which ADR 0158's Consequences
+  // left as "a separate, explicit compaction step". ADR 0160 argues each choice below; the rule
+  // itself is `compaction.ts`. It is split into a plan and its application because a dry run IS
+  // the plan, and because the caller records the plan durably BEFORE anything is deleted -- so
+  // an interrupted run has still said what it set out to remove.
+
+  /** The source keys holding at least one observation in `stream`, sorted. One listing. */
+  async recordKeys(stream: string): Promise<string[]> {
+    const prefix = `${validateStream(stream)}/`;
+    const keys = new Set<string>();
+    for (const obj of await this.#store.list(prefix)) {
+      if (!obj.endsWith(MANIFEST_SUFFIX)) {
+        continue;
+      }
+      const version = obj.slice(0, -MANIFEST_SUFFIX.length);
+      const cut = version.lastIndexOf("/");
+      if (isStamp(version.slice(cut + 1))) {
+        keys.add(version.slice(0, cut));
+      }
+    }
+    return [...keys].sort(byCodeUnit);
+  }
+
+  /**
+   * What compacting `sourceKey` would remove, deleting nothing.
+   *
+   * Only observations stamped at or before `through` are considered -- the caller's word for
+   * how far the loader has projected the stream (`raw.load_cursor`), so nothing the loader has
+   * yet to read is touched, and `null` (never loaded) considers nothing. A blob is read once per
+   * digest: a key flip-flopping between two payloads costs two reads, not thirty.
+   */
+  async planCompaction(
+    stream: string,
+    sourceKey: string,
+    canonical: Canonicaliser,
+    through: string | null,
+  ): Promise<CompactionPlan> {
+    const key = LakeStore.validateSourceKey(sourceKey);
+    if (!key.startsWith(`${validateStream(stream)}/`)) {
+      throw new RangeError(`${JSON.stringify(key)} is not a record of stream ${stream}`);
+    }
+    const examined =
+      through === null ? [] : (await this.versions(key)).filter((stamp) => stamp <= through);
+    const digests = new Map<string, string>();
+    const texts = new Map<string, string | null>();
+    const considered: Considered[] = [];
+    for (const stamp of examined) {
+      const man = await this.manifest(key, stamp);
+      const digest = String(man.sha256);
+      if (!texts.has(digest)) {
+        texts.set(digest, canonical(await this.#verifiedBytes(`${key}/${stamp}`, man)));
+      }
+      digests.set(stamp, digest);
+      considered.push({ stamp, canonical: texts.get(digest) ?? null });
+    }
+    const remove = redundantStamps(considered).map((stamp) => ({
+      stamp,
+      sha256: digests.get(stamp) ?? "",
+    }));
+    return { stream: validateStream(stream), sourceKey: key, through, examined, remove };
+  }
+
+  /**
+   * Remove what `plan` named, unless the key moved since it was made. Returns whether it did.
+   *
+   * The key is listed again first, and the plan is applied only if the observations at or
+   * before its `through` are still exactly the ones it examined. A key that gained a NEWER
+   * observation meanwhile is fine -- that one is past `through` and untouched -- but anything
+   * else (a retention prune, a second compaction) is answered `false` and left for the next run
+   * to plan afresh, rather than deleting on a reading that is no longer true. The plan never
+   * holds the last stamp it examined, so the key's newest observation is never removed.
+   *
+   * The journal pointer goes FIRST, then the manifest. Stopped between the two, the lake holds
+   * an observation no pointer names, which the next run finds redundant again and finishes; the
+   * other order would leave a pointer to nothing, and `journalSince(null)` -- a rebuild of
+   * `raw.records` -- would fail on it. Deleting an absent object is not an error, which is what
+   * makes that second attempt safe. Blobs are not touched: see `prune`.
+   */
+  async applyCompaction(plan: CompactionPlan): Promise<boolean> {
+    const byStamp = await this.#objectsByStamp(plan.sourceKey);
+    const { through } = plan;
+    const now =
+      through === null
+        ? []
+        : [...byStamp.keys()].filter((stamp) => stamp <= through).sort(byCodeUnit);
+    if (now.length !== plan.examined.length || now.some((s, i) => s !== plan.examined[i])) {
+      return false;
+    }
+    for (const { stamp, sha256 } of plan.remove) {
+      await this.#store.delete(LakeStore.journalKey(plan.stream, stamp, sha256));
+      for (const obj of byStamp.get(stamp) ?? []) {
+        await this.#store.delete(obj);
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Keep what the store has to say about itself, create-only, and return where it went.
+   *
+   * In the lake rather than in Postgres because what it records -- which observations left the
+   * archive -- must be as durable as the archive: everything in Postgres is a projection that
+   * may be dropped and rebuilt, and this could not be rebuilt from anything.
+   */
+  async report(kind: string, body: unknown): Promise<string> {
+    const key = reportKeyOf(kind, this.#stamps.next());
+    if (await this.#store.exists(key)) {
+      throw new ObjectExists(`refusing to overwrite an existing report at ${key}`);
+    }
+    await this.#store.put(key, encoder.encode(JSON.stringify(body, null, 2)));
+    return key;
   }
 }

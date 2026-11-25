@@ -7,8 +7,24 @@
  * data. `.claude/rules/raw-lake.md`.
  */
 
-/** Reserved key prefixes, written only by the store. `validateSourceKey` keeps callers out. */
-const RESERVED_PREFIXES = ["_blobs/", "_journal/"] as const;
+/**
+ * Reserved key prefixes, written only by the store. `validateSourceKey` keeps callers out.
+ *
+ * `_reports/` holds what the store says about itself -- a compaction's list of what it removed
+ * (`LakeStore.report`, ADR 0160) -- so a source key can never be mistaken for one, nor one for
+ * a source key.
+ */
+const RESERVED_PREFIXES = ["_blobs/", "_journal/", "_reports/"] as const;
+
+const REPORT_KIND = /^[a-z][a-z0-9-]*$/u;
+
+/** Where a report the store writes about itself lives: `_reports/{kind}/{stamp}.json`. */
+export function reportKey(kind: string, stamp: string): string {
+  if (!REPORT_KIND.test(kind)) {
+    throw new RangeError(`report kind must be a lower-case slug: ${JSON.stringify(kind)}`);
+  }
+  return `_reports/${kind}/${stamp}.json`;
+}
 
 const TRIM_SLASHES = /^\/+|\/+$/gu;
 
