@@ -48,3 +48,16 @@ tasks:
       Usage: task db:semantic-probe -- --tenant CASE-0042 [--part files|bodies|all] [--limit 200] [--multi 50] [--max-chars 32000]
     cmds:
       - bun run semantic:probe -- {{.CLI_ARGS}}
+
+  lake-compact:
+    # Deletes from the raw lake, so a dry run unless `--apply` is passed, and each stream's plan
+    # is written to the lake's `_reports/lake-compaction/` before anything is removed. It needs
+    # the object store as well as the database, which is why it reads the worker's own S3
+    # variables beside the DSN. docs/runbook/deployment.md, "Compacting the lake"; ADR 0160.
+    desc: >-
+      Remove the lake observations that repeat the one before them under a spec's
+      unorderedArrays, reporting every one. Dry run unless --apply. Needs
+      UNDERCROFT_POSTGRES_DSN, UNDERCROFT_S3_BUCKET_RAW and its endpoint and keys.
+      Usage: task db:lake-compact -- [--tenant CASE-0042] [--apply] [--concurrency 16]
+    cmds:
+      - bun run lake:compact -- {{.CLI_ARGS}}

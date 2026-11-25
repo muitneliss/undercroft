@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test as it } from "bun:test";
-import { createStampSource, TestClock } from "@undercroft/core";
+import { byCodeUnit, createStampSource, TestClock } from "@undercroft/core";
 import { InMemoryObjectStore } from "./memory.ts";
 import { type JournalEntry, LakeStore, ObjectExists } from "./store.ts";
 
@@ -306,5 +306,73 @@ describe("an observation is read in one call", () => {
     await backing.put(put.blobKey, bytes("tampered"));
 
     await expect(store.observation("hubspot/deals/1", stamp)).rejects.toBeInstanceOf(ObjectExists);
+  });
+});
+
+describe("compaction", () => {
+  // Two payloads are "the same record" when their letters are, in any order -- a stand-in for
+  // a spec's unordered arrays, which the store is handed and never told about (ADR 0160).
+  function sameLetters(data: Uint8Array): string {
+    return [...new TextDecoder().decode(data)].toSorted(byCodeUnit).join("");
+  }
+  const STREAM = "records/hubspot/CASE-0042/links";
+  const KEY = `${STREAM}/7`;
+
+  /** A history that flip-flops, changes for real, then flip-flops again: ab ba ab xy yx ba. */
+  async function history(store: LakeStore): Promise<string[]> {
+    const stamps: string[] = [];
+    for (const text of ["ab", "ba", "ab", "xy", "yx", "ba"]) {
+      const put = await store.put(KEY, bytes(text), { runId: "r1", stream: STREAM });
+      stamps.push(put.versionKey.split("/").at(-1)!);
+    }
+    return stamps;
+  }
+
+  it("keeps the first of each run of equivalent payloads and the newest, and names the rest", async () => {
+    const store = lake();
+    const s = await history(store);
+
+    const plan = await store.planCompaction(STREAM, KEY, sameLetters, s.at(-1)!);
+    expect(plan.remove.map((r) => r.stamp)).toEqual([s[1]!, s[2]!, s[4]!]);
+    expect(await store.applyCompaction(plan)).toBe(true);
+
+    // `xy` was a real change and survives; `ba`, the newest, survives though it repeats `ab`.
+    expect(await store.versions(KEY)).toEqual([s[0]!, s[3]!, s[5]!]);
+    expect(new TextDecoder().decode(await store.read(KEY))).toBe("ba");
+
+    // A rebuild of raw.records replays the journal from the start: every pointer it meets
+    // names an observation that is still there.
+    const replayed = await collect(store.journalSince(STREAM, null));
+    expect(replayed.map((e) => e.stamp)).toEqual([s[0]!, s[3]!, s[5]!]);
+    for (const entry of replayed) {
+      await store.observation(entry.sourceKey, entry.stamp);
+    }
+  });
+
+  it("touches nothing the loader has not passed", async () => {
+    const store = lake();
+    const s = await history(store);
+
+    // The loader has projected up to `xy`: that is the last observation considered, so it is
+    // kept, and `yx` and `ba` after it are not even looked at.
+    const plan = await store.planCompaction(STREAM, KEY, sameLetters, s[3]!);
+    expect(plan.remove.map((r) => r.stamp)).toEqual([s[1]!, s[2]!]);
+    await store.applyCompaction(plan);
+    expect(await store.versions(KEY)).toEqual([s[0]!, s[3]!, s[4]!, s[5]!]);
+
+    // A stream never loaded has no cursor, and nothing in it is considered.
+    expect((await store.planCompaction(STREAM, KEY, sameLetters, null)).remove).toEqual([]);
+  });
+
+  it("leaves a key that moved between plan and apply for the next run", async () => {
+    const store = lake();
+    const s = await history(store);
+    const stale = await store.planCompaction(STREAM, KEY, sameLetters, s.at(-1)!);
+    await store.applyCompaction(await store.planCompaction(STREAM, KEY, sameLetters, s.at(-1)!));
+
+    // The reading `stale` was made on is gone; it deletes nothing rather than act on it.
+    const deletes = backing.calls.delete;
+    expect(await store.applyCompaction(stale)).toBe(false);
+    expect(backing.calls.delete).toBe(deletes);
   });
 });

@@ -1,7 +1,9 @@
+export type { Canonicaliser } from "./compaction.ts";
 export { InMemoryObjectStore, type ObjectStoreCalls } from "./memory.ts";
 export { ObjectNotFound, type ObjectStore } from "./objectStore.ts";
 export { S3ObjectStore, type S3StoreConfig } from "./s3.ts";
 export {
+  type CompactionPlan,
   type JournalEntry,
   LakeStore,
   type LakeStoreOptions,

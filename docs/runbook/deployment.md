@@ -452,6 +452,67 @@ UNDERCROFT_POSTGRES_DSN=... task db:search-index
 It runs one pass and exits, non-zero when an index failed. If the service is mid-pass it holds
 the lock, and the hand-run pass logs `search_index.skipped` and does nothing.
 
+## Compacting the lake
+
+`task db:lake-compact` removes the lake observations that repeat the one kept before them, for
+the entities whose spec declares `unorderedArrays` -- the HubSpot association flip-flop history
+ADR 0158 stopped adding to. It keeps the first observation of each run of equal payloads and
+the newest, deletes each removed one's journal pointer and manifest, and leaves blobs alone.
+It never touches a stamp past a stream's `raw.load_cursor`, and it skips a stream whose tenant
+and source have a run in progress. Why each of those holds is in ADR 0160.
+
+**It is a dry run unless you pass `--apply`.** Either way, it writes each stream's plan -- every
+source key and stamp it will remove -- to the lake before anything else, under
+`_reports/lake-compaction/`, and after a real run a `done` report beside it naming what was
+actually removed and any key left alone because it moved. It prints one JSON line per stream
+with the counts and both report keys. A run cut off part way is resumed by running it again.
+
+It runs on your machine against production's database and object store, as the worker's own
+roles, through two SSH tunnels. A tunnel carries application data and changes no Dokploy
+configuration, as with Kestra below; the read-only rule on SSH is about the host, and this
+neither edits a file there nor runs anything in a container.
+
+1. **Find the two containers' addresses**, read-only, on the host `task obs:creds` names, with
+   the `appName` that `task cd:preflight` prints:
+
+   ```bash
+   docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' \
+     <appName>-postgres-1 <appName>-minio-1
+   ```
+
+2. **Open the tunnels** and leave them open while the command runs:
+
+   ```bash
+   ssh -N -L 15432:<postgres-ip>:5432 -L 19000:<minio-ip>:9000 <host>
+   ```
+
+3. **Take the worker's credentials from Dokploy's environment** (the panel, read only):
+   `UNDERCROFT_WORKER_PG_PASSWORD`, `UNDERCROFT_PG_DB` (default `undercroft`),
+   `UNDERCROFT_S3_ACCESS_KEY`, `UNDERCROFT_S3_SECRET_KEY` and `UNDERCROFT_S3_BUCKET_RAW`
+   (default `undercroft-raw`). Export them in that shell only; never write them to a file.
+4. **Dry run**, then read the plan reports and the counts:
+
+   ```bash
+   export UNDERCROFT_POSTGRES_DSN=postgres://undercroft_worker:<password>@localhost:15432/undercroft
+   export UNDERCROFT_S3_ENDPOINT=http://localhost:19000
+   export UNDERCROFT_S3_BUCKET_RAW=undercroft-raw UNDERCROFT_S3_ACCESS_KEY=... UNDERCROFT_S3_SECRET_KEY=...
+   task db:lake-compact -- --tenant CASE-0042
+   ```
+
+5. **Apply**, ideally between syncs so fewer streams are skipped for a run in progress:
+
+   ```bash
+   task db:lake-compact -- --tenant CASE-0042 --apply
+   ```
+
+   A stream reported `"skipped":"run-in-progress"` is untouched; run the command again later.
+   `--concurrency` (default 16) is how many keys are in flight at once; over a tunnel, latency
+   rather than MinIO is the limit.
+
+The reports are JSON objects in the lake's bucket; read them with any S3 client through the
+same tunnel, or MinIO's console on port 9001 tunnelled the same way. `_reports/` is reserved, so
+no source can land a key there.
+
 ## Sign-in
 
 Invite-only, by Google or by a one-time code emailed to the address. See ADR 0010 for the
