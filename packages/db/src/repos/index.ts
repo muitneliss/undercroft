@@ -101,6 +101,7 @@ export {
   type UnpublishedBuild,
 } from "./testOutcomes.ts";
 export {
+  anyRunRunning,
   claimExternalRun,
   claimFailedRuns,
   claimRecoveredRuns,

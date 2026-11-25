@@ -76,6 +76,40 @@ export async function readCursor(
   return rows[0]?.last_stamp ?? null;
 }
 
+/** A stream the loader has projected, and how far. */
+export interface LoadedStream extends StreamIdentity {
+  readonly lastStamp: string;
+}
+
+/**
+ * Every stream the loader has projected, with its cursor; one tenant's when `tenantId` is given.
+ *
+ * The list of streams IS this table: a stream with no cursor has never been loaded, so nothing
+ * that reads it -- compaction, ADR 0160 -- has anything it may touch there.
+ */
+export async function loadedStreams(
+  exec: SqlExecutor,
+  tenantId: string | null,
+): Promise<LoadedStream[]> {
+  const { rows } = await exec.query<{
+    source: string;
+    tenant_id: string;
+    entity: string;
+    last_stamp: string;
+  }>(
+    `SELECT source, tenant_id, entity, last_stamp FROM raw.load_cursor
+     WHERE $1::text IS NULL OR tenant_id = $1
+     ORDER BY source, tenant_id, entity`,
+    [tenantId],
+  );
+  return rows.map((row) => ({
+    source: row.source,
+    tenantId: row.tenant_id,
+    entity: row.entity,
+    lastStamp: row.last_stamp,
+  }));
+}
+
 /**
  * Record where this stream's load reached. Forward only.
  *

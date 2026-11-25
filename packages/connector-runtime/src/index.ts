@@ -19,6 +19,9 @@ export {
 // `refusedScopes` as well as the error it raises: the scope picker lists a portal's properties
 // outside any read, and must tell the same refusal apart in the same words.
 export { EntityNotGranted, refusedScopes } from "./refusal.ts";
+// The one way a payload becomes the text the lake stores, for anything that must agree with what
+// a read lands -- re-canonicalising a payload already in the lake above all (ADR 0158).
+export { canonicalPayload } from "./unordered.ts";
 export {
   type RawRecordOut,
   type ReadEnd,

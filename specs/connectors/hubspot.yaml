@@ -131,6 +131,12 @@ entities:
   # (ADR 0075). v4 rather than v3: v3 answers a contact's primary company alone, and no kind or
   # label on any link; v4 answers every link with its `associationTypes` -- category, typeId and
   # label. A record with more links than one answer carries is read to its last page.
+  #
+  # `unorderedArrays` on every link read: HubSpot answers a record's links (`to`) and each link's
+  # kinds (`associationTypes`) as sets, in an order that changes from one call to the next. Left
+  # as sent, every sync landed a "changed" version of a record nobody had touched -- tens per
+  # link record, alternating between two orders. Neither order means anything: a link's primary
+  # flag is its typeId, never its position (ADR 0158).
   - name: associations
     request:
       kind: batch-from
@@ -141,6 +147,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false # a portal with no associations is a real state
@@ -269,6 +276,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -285,6 +293,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -301,6 +310,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -317,6 +327,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -333,6 +344,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -349,6 +361,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -365,6 +378,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -489,6 +503,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -505,6 +520,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -521,6 +537,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -537,6 +554,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -553,6 +571,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -569,6 +588,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -585,6 +605,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -601,6 +622,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false
@@ -617,6 +639,7 @@ entities:
       bodyTemplate: hubspot-batch-inputs
     envelopePath: results
     idPath: from.id
+    unorderedArrays: [to, "to[].associationTypes"]
     pagination: { kind: none }
     guards:
       failOnEmpty: false

@@ -270,6 +270,22 @@ const Request = z.discriminatedUnion("kind", [
  */
 const RemovedWhen = z.enum(["absent", "parent-removed"]);
 
+/**
+ * A path to an array in a record whose order carries no meaning: dotted names, where `name[]`
+ * steps into every element of that array. `to` is a v4 association's links; `to[].associationTypes`
+ * is the kinds on each link. It ends at a name, because the thing it names is the array itself.
+ *
+ * A name per step and no `[n]`, unlike `JsonPath`: an index would pick one element out of an
+ * order the declaration says is not there.
+ */
+const UnorderedArrayPath = z
+  .string()
+  .regex(
+    /^[A-Za-z0-9_$-]+(?:\[\])?(?:\.[A-Za-z0-9_$-]+(?:\[\])?)*$/u,
+    "must be a dotted path of names, `name[]` stepping into each element, e.g. 'to[].associationTypes'",
+  )
+  .refine((path) => !path.endsWith("[]"), "must end at the array, not inside it: 'to', not 'to[]'");
+
 const Entity = z.object({
   name: z.string().regex(/^[a-z][a-z0-9_]*$/u, "entity name must be snake_case"),
   request: Request,
@@ -310,6 +326,18 @@ const Entity = z.object({
    * scope is chosen from leaves them out, and a run drops them from whatever was chosen.
    */
   neverRead: z.array(NeverReadPattern).min(1).optional(),
+  /**
+   * The arrays in a record that are SETS: the source answers the same members in a different
+   * order from one call to the next, and the order says nothing. HubSpot's v4 association batch
+   * read shuffles `to[].associationTypes` between calls, and every shuffle was a new version in
+   * the lake -- about thirty per link record, flip-flopping between two orders (ADR 0158).
+   *
+   * The runtime puts each declared array in one order -- by each element's canonical JSON --
+   * before the payload is hashed and landed, so the same set lands once. An array not named here
+   * keeps the order the source sent: order is meaningful in general, and treating it as noise
+   * without the spec saying so would be a guess.
+   */
+  unorderedArrays: z.array(UnorderedArrayPath).min(1).optional(),
 });
 
 export const ConnectorSpec = z

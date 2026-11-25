@@ -302,6 +302,25 @@ export async function runningRun(
   return rows[0]?.id ?? null;
 }
 
+/**
+ * Whether any run of any verb is in progress for this (tenant, source).
+ *
+ * Every pass of the lake-to-`raw.records` loader runs inside one, so "none" means no pass is
+ * holding a journal listing from before the cursor was last read. Compaction asks it for that
+ * reason (ADR 0160); it is a read and decides nothing about a run that starts a moment later --
+ * whose passes start from a cursor at least as far on, and so never read what compaction removes.
+ */
+export async function anyRunRunning(
+  exec: SqlExecutor,
+  pair: { tenantId: string; source: string },
+): Promise<boolean> {
+  const { rows } = await exec.query<{ id: string }>(
+    `SELECT id FROM ops.run WHERE tenant_id = $1 AND source = $2 AND status = 'running' LIMIT 1`,
+    [pair.tenantId, pair.source],
+  );
+  return rows.length > 0;
+}
+
 export async function closeRun(
   exec: SqlExecutor,
   id: string,
