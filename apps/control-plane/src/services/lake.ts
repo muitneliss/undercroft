@@ -38,27 +38,20 @@ import { entitiesForRuns, getRun, type Run } from "@undercroft/db/repos";
 
 import { readSchema, type SchemaFilter, type SchemaOutcome } from "./tableSchema.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
+import { countDocumentsOfRun, listDocuments, type RawDocument } from "../repos/rawDocuments.ts";
 import {
-  countDocumentsOfRun,
   countRecordsOfRun,
   type DocumentSummary,
-  listDocuments,
   listRecords,
   type Page,
-  type RawDocument,
   type RawRecord,
   type RecordStreamSummary,
   summariseDocuments,
   summariseRecords,
 } from "../repos/rawLake.ts";
 
-export type {
-  DocumentSummary,
-  Page,
-  RawDocument,
-  RawRecord,
-  RecordStreamSummary,
-} from "../repos/rawLake.ts";
+export type { RawDocument } from "../repos/rawDocuments.ts";
+export type { DocumentSummary, Page, RawRecord, RecordStreamSummary } from "../repos/rawLake.ts";
 
 export interface LakeSummary {
   readonly records: RecordStreamSummary[];

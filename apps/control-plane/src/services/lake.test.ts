@@ -159,6 +159,7 @@ describe("summary", () => {
         // the side where they part.
         distinctBlobs: 2,
         bytes: 3500,
+        purged: 0,
         readable: 0,
         refused: 0,
         waiting: 2,

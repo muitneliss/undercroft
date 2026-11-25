@@ -3,6 +3,8 @@ export { InMemoryObjectStore, type ObjectStoreCalls } from "./memory.ts";
 export { ObjectNotFound, type ObjectStore } from "./objectStore.ts";
 export { S3ObjectStore, type S3StoreConfig } from "./s3.ts";
 export {
+  BlobAbsent,
+  type BlobPurge,
   type CompactionPlan,
   type JournalEntry,
   LakeStore,

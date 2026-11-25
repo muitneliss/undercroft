@@ -164,6 +164,7 @@
 - [ADR 0158 A Spec Names the Arrays That Are Sets, and the Runtime Lands Them in One Order](sources/adr-0158-a-spec-names-the-arrays-that-are-sets-and-the-runtime-lands-them-in-one-order.md)
 - [ADR 0159 A Transform Keeps Its dbt Steps for Seven Days](sources/adr-0159-a-transform-keeps-its-dbt-steps-for-seven-days.md)
 - [ADR 0160 The Lake Compacts What a Spec Says Is the Same Record, and Says What It Removed](sources/adr-0160-the-lake-compacts-what-a-spec-says-is-the-same-record-and-says-what-it-removed.md)
+- [ADR 0161 A Document's Bytes Are Purged Once Extraction Has Had Its Go](sources/adr-0161-a-document-s-bytes-are-purged-once-extraction-has-had-its-go.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

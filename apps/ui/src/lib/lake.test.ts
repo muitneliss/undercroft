@@ -63,6 +63,7 @@ describe("a stream's address", () => {
           documents: 1,
           distinctBlobs: 1,
           bytes: 1,
+          purged: 0,
           readable: 0,
           refused: 0,
           waiting: 1,

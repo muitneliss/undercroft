@@ -29,6 +29,8 @@ function doc(over: Partial<RawDocumentRow> = {}): RawDocumentRow {
     metadataJson: '{"partIndex":1}',
     observedAt: LATER,
     runId: "run-1",
+    fileName: "invoice-0042.pdf",
+    sourceUrl: null,
     ...over,
   };
 }

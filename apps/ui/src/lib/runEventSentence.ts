@@ -14,7 +14,7 @@ import { sourceKind } from "@undercroft/contracts/sources";
 
 import { isSource, type RunEventView } from "@/api/types.ts";
 import { connectsBy } from "@/lib/connectionState.ts";
-import { formatCount } from "@/lib/money.ts";
+import { formatBytes, formatCount } from "@/lib/money.ts";
 
 /**
  * One count out of an event's detail, formatted for the reader.
@@ -221,17 +221,31 @@ function wholeReadSentence(
 }
 
 /**
+ * A run removing what it no longer keeps, and saying so (`raw-lake.md`: never prune silently).
+ *
  * A transform clearing old runs' dbt steps (ADR 0159): how many went and how many runs are left
- * for later, so the first prunes on a backlog read as catching up -- or that it could not.
+ * for later, so the first prunes on a backlog read as catching up -- or that it could not. An
+ * extract deleting the files it has read (ADR 0161): how many documents and how many bytes, and
+ * that each keeps its name, its link and its reading.
  */
-function stepPruneSentence(
+function removalSentence(
   t: TFunction,
-  event: "run_steps_pruned" | "run_steps_prune_failed",
-  detail: Record<string, unknown>,
+  locale: Locale,
+  { event, detail }: Pick<RunEventView, "event" | "detail">,
   n: (key: string) => string,
 ): string {
-  if (event === "run_steps_prune_failed") {
-    return t("journal.event.stepsPruneFailed", { errorType: String(detail.errorType ?? "") });
+  if (event === "run_steps_prune_failed" || event === "document_bytes_purge_failed") {
+    const errorType = String(detail.errorType ?? "");
+    return event === "run_steps_prune_failed"
+      ? t("journal.event.stepsPruneFailed", { errorType })
+      : t("journal.event.bytesPurgeFailed", { errorType });
+  }
+  if (event === "document_bytes_purged") {
+    const { bytes } = detail;
+    return t("journal.event.bytesPurged", {
+      documents: n("documents"),
+      bytes: formatBytes(typeof bytes === "number" ? bytes : null, locale),
+    });
   }
   return t("journal.event.stepsPruned", {
     removed: n("removed"),
@@ -292,7 +306,9 @@ export function eventSentence(
       return t("journal.event.truncated", { at: n("at") });
     case "run_steps_pruned":
     case "run_steps_prune_failed":
-      return stepPruneSentence(t, event.event, event.detail, n);
+    case "document_bytes_purged":
+    case "document_bytes_purge_failed":
+      return removalSentence(t, locale, event, n);
     default:
       return t("journal.event.unknown", { event: event.event });
   }

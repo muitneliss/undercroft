@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test as it } from "bun:test";
 import { byCodeUnit, createStampSource, TestClock } from "@undercroft/core";
 import { InMemoryObjectStore } from "./memory.ts";
-import { type JournalEntry, LakeStore, ObjectExists } from "./store.ts";
+import { BlobAbsent, type JournalEntry, LakeStore, ObjectExists } from "./store.ts";
 
 /**
  * The journal is yielded, so a suite that wants to assert on the whole of it says so.
@@ -374,5 +374,59 @@ describe("compaction", () => {
     const deletes = backing.calls.delete;
     expect(await store.applyCompaction(stale)).toBe(false);
     expect(backing.calls.delete).toBe(deletes);
+  });
+});
+
+describe("purging a blob (ADR 0161)", () => {
+  const KEY = "documents/drive/CASE-0042/f1";
+
+  it("deletes the bytes, keeps the manifest, and says so before it deletes", async () => {
+    const store = lake();
+    const put = await store.put(KEY, bytes("%PDF"), { runId: "r1", extra: { filename: "a.pdf" } });
+    const stamp = put.versionKey.split("/").at(-1)!;
+
+    const purge = await store.purgeBlobs([put.sha256], { runId: "r2" });
+
+    expect(purge).toMatchObject({ deleted: [put.sha256], absent: [] });
+    expect(await backing.exists(put.blobKey)).toBe(false);
+    // The observation is still traceable: its manifest names the file and the digest.
+    expect(await store.manifest(KEY, stamp)).toMatchObject({
+      sha256: put.sha256,
+      filename: "a.pdf",
+    });
+    const report = JSON.parse(new TextDecoder().decode(await backing.get(purge.report)));
+    expect(report).toEqual({ runId: "r2", digests: [put.sha256] });
+    // A reader is told the bytes are gone, not that the store is broken.
+    await expect(store.read(KEY)).rejects.toBeInstanceOf(BlobAbsent);
+  });
+
+  it("a second purge of a digest reports it absent, and nothing unnamed is deleted", async () => {
+    const store = lake();
+    const gone = await store.put(KEY, bytes("one"), { runId: "r1" });
+    const kept = await store.put("documents/drive/CASE-0042/f2", bytes("two"), { runId: "r1" });
+    await store.purgeBlobs([gone.sha256], { runId: "r2" });
+
+    expect(await store.purgeBlobs([gone.sha256], { runId: "r3" })).toMatchObject({
+      deleted: [],
+      absent: [gone.sha256],
+    });
+    expect(await backing.exists(kept.blobKey)).toBe(true);
+    await expect(store.purgeBlobs(["_journal/x"], { runId: "r4" })).rejects.toThrow(RangeError);
+  });
+
+  it("the same bytes at the same key write nothing; at another key they are stored afresh", async () => {
+    const store = lake();
+    const first = await store.put(KEY, bytes("%PDF"), { runId: "r1" });
+    await store.purgeBlobs([first.sha256], { runId: "r2" });
+
+    // Unchanged is decided from the manifest, so a file landed again unchanged stays purged.
+    expect((await store.put(KEY, bytes("%PDF"), { runId: "r3" })).status).toBe("unchanged");
+    expect(await backing.exists(first.blobKey)).toBe(false);
+
+    // Another document holding those bytes has not been read yet, so its landing brings them back.
+    await store.put("documents/gmail/CASE-0042/m1:1", bytes("%PDF"), { runId: "r4" });
+    expect(new TextDecoder().decode(await store.read("documents/gmail/CASE-0042/m1:1"))).toBe(
+      "%PDF",
+    );
   });
 });

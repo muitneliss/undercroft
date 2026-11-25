@@ -252,6 +252,7 @@ export const LAKE_SUMMARY: Out["lake"]["summary"] = {
     documents: 1,
     distinctBlobs: 1,
     bytes: 48_213,
+    purged: 0,
     readable: 1,
     refused: 0,
     waiting: 0,

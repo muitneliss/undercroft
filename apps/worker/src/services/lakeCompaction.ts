@@ -112,8 +112,11 @@ function declaredSets(specsDir: string, source: string): Map<string, readonly st
   return declared;
 }
 
-/** `work` over `items`, at most `limit` at a time, results in input order. */
-async function inTurns<T, R>(
+/**
+ * `work` over `items`, at most `limit` at a time, results in input order. Exported for the other
+ * operator command that walks the lake over a tunnel (`documentBytesPurge.ts`).
+ */
+export async function inTurns<T, R>(
   items: readonly T[],
   limit: number,
   work: (item: T) => Promise<R>,

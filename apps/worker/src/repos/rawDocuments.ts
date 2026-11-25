@@ -17,8 +17,8 @@
  * `bigint` exceeds what a JS number holds exactly, and the money rule's reasoning applies
  * unchanged to a file size: a value that silently rounds is worse than one that refuses.
  *
- * Nothing here decides anything. What is too large to fetch, and what a filename may be
- * written into, are decisions one layer up in `../services/landDocument.ts`.
+ * Nothing here decides anything. What is too large to fetch, and which names a human wrote may
+ * be written here, are decisions one layer up in `../services/landDocument.ts`.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -33,12 +33,15 @@ export interface RawDocumentRow {
   readonly contentType: string;
   /**
    * JSON *text*, cast to jsonb by Postgres and never re-serialised here. Opaque provider
-   * ids, timestamps, enumerated types and counts only; a filename belongs in the lake
-   * manifest. See `@undercroft/contracts`'s `rawDocument.ts`.
+   * ids, timestamps, enumerated types and counts only; the file's name has its own column and
+   * every other name belongs in the lake manifest. See `@undercroft/contracts`'s `rawDocument.ts`.
    */
   readonly metadataJson: string;
   readonly observedAt: string;
   readonly runId: string;
+  /** `file_name` and `source_url` (`700_document_trace.sql`, ADR 0161); `null` when unknown. */
+  readonly fileName: string | null;
+  readonly sourceUrl: string | null;
 }
 
 export interface DocumentIdentity {
@@ -72,34 +75,46 @@ export async function upsertDocuments(
     batch.map((d) => d.metadataJson),
     batch.map((d) => d.observedAt),
     batch.map((d) => d.runId),
+    batch.map((d) => d.fileName),
+    batch.map((d) => d.sourceUrl),
   ];
 
   const inserted = await exec.query<{ id: string }>(
     `INSERT INTO raw.documents (
         source, tenant_id, document_id, lake_key, sha256,
-        byte_length, content_type, metadata, observed_at, run_id)
+        byte_length, content_type, metadata, observed_at, run_id, file_name, source_url)
      SELECT * FROM unnest(
         $1::text[], $2::text[], $3::text[], $4::text[], $5::char(64)[],
-        $6::bigint[], $7::text[], $8::jsonb[], $9::timestamptz[], $10::text[])
+        $6::bigint[], $7::text[], $8::jsonb[], $9::timestamptz[], $10::text[],
+        $11::text[], $12::text[])
      ON CONFLICT (source, tenant_id, document_id) DO NOTHING
      RETURNING document_id AS id`,
     cols,
   );
 
+  // New bytes are in the lake again until their own extraction is attempted, so a purge record
+  // about the old ones is cleared with them (ADR 0161): left standing, it would keep the new
+  // bytes out of the extract backlog for ever.
   const changed = await exec.query<{ id: string }>(
     `UPDATE raw.documents d SET
-        lake_key     = v.lk,
-        sha256       = v.sha,
-        byte_length  = v.len,
-        content_type = v.ct,
-        metadata     = v.meta,
-        observed_at  = v.obs,
-        run_id       = v.rid,
-        deleted_at   = NULL
+        lake_key            = v.lk,
+        sha256              = v.sha,
+        byte_length         = v.len,
+        content_type        = v.ct,
+        metadata            = v.meta,
+        observed_at         = v.obs,
+        run_id              = v.rid,
+        file_name           = v.fn,
+        source_url          = v.url,
+        deleted_at          = NULL,
+        bytes_purged_at     = NULL,
+        bytes_purge_outcome = NULL,
+        bytes_purge_report  = NULL
      FROM unnest(
         $1::text[], $2::text[], $3::text[], $4::text[], $5::char(64)[],
-        $6::bigint[], $7::text[], $8::jsonb[], $9::timestamptz[], $10::text[])
-        AS v(src, tid, did, lk, sha, len, ct, meta, obs, rid)
+        $6::bigint[], $7::text[], $8::jsonb[], $9::timestamptz[], $10::text[],
+        $11::text[], $12::text[])
+        AS v(src, tid, did, lk, sha, len, ct, meta, obs, rid, fn, url)
      WHERE d.source = v.src AND d.tenant_id = v.tid AND d.document_id = v.did
        AND d.sha256      IS DISTINCT FROM v.sha
        AND d.observed_at <=              v.obs
@@ -107,9 +122,45 @@ export async function upsertDocuments(
     cols,
   );
 
+  await renameUnchanged(exec, identity, batch);
+
   const created = inserted.rows.length;
   const changedCount = changed.rows.length;
   return { created, changed: changedCount, unchanged: batch.length - created - changedCount };
+}
+
+/**
+ * Bring a document's name and link up to date where its bytes did not change.
+ *
+ * A file renamed at the source keeps its bytes, so the upsert above calls it unchanged and
+ * writes nothing -- which used to be right, because the name lived only in the manifest of the
+ * observation that carried it. Now that the name is a column a person traces the file by (ADR
+ * 0161), a stale one is a wrong value that looks right. Not counted: the bytes did not change,
+ * and the counts are about bytes. The same no-time-travel guard as the rest.
+ */
+async function renameUnchanged(
+  exec: SqlExecutor,
+  identity: DocumentIdentity,
+  batch: readonly RawDocumentRow[],
+): Promise<void> {
+  await exec.query(
+    `UPDATE raw.documents d SET file_name = v.fn, source_url = v.url
+       FROM unnest($3::text[], $4::char(64)[], $5::timestamptz[], $6::text[], $7::text[])
+         AS v(did, sha, obs, fn, url)
+      WHERE d.source = $1 AND d.tenant_id = $2 AND d.document_id = v.did
+        AND d.sha256 = v.sha
+        AND d.observed_at <= v.obs
+        AND (d.file_name IS DISTINCT FROM v.fn OR d.source_url IS DISTINCT FROM v.url)`,
+    [
+      identity.source,
+      identity.tenantId,
+      batch.map((d) => d.documentId),
+      batch.map((d) => d.sha256),
+      batch.map((d) => d.observedAt),
+      batch.map((d) => d.fileName),
+      batch.map((d) => d.sourceUrl),
+    ],
+  );
 }
 
 /**
@@ -121,8 +172,9 @@ export async function upsertDocuments(
  * label selection has been relabelled, not deleted, and tombstoning it would report a
  * deletion that never happened.
  *
- * The bytes stay in the lake regardless. `deleted_at` is a statement about the source, not
- * a licence to drop what we captured.
+ * `deleted_at` is a statement about the source, not a licence to drop what we captured: the
+ * bytes stay in the lake until extraction has had its attempt at them like any document's
+ * (ADR 0161), and one tombstoned before it was ever read keeps them.
  *
  * A file read out of an archive is kept while its ARCHIVE is: its id is never in a listing, so
  * judged by its own id every member would be tombstoned by every ingest (ADR 0108 decision 6).
@@ -146,19 +198,20 @@ export async function tombstoneMissing(
 /**
  * The live documents holding these bytes. An archive is read once per digest, and its members
  * land under every document holding it, so each message keeps its own (ADR 0108 decision 6).
+ * With each holder's link at the source, which is where a member of it is opened (ADR 0161).
  */
 export async function documentsHolding(
   exec: SqlExecutor,
   identity: DocumentIdentity,
   sha256: string,
-): Promise<string[]> {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT document_id AS id FROM raw.documents
+): Promise<{ documentId: string; sourceUrl: string | null }[]> {
+  const { rows } = await exec.query<{ id: string; url: string | null }>(
+    `SELECT document_id AS id, source_url AS url FROM raw.documents
       WHERE source = $1 AND tenant_id = $2 AND sha256 = $3 AND deleted_at IS NULL
       ORDER BY document_id`,
     [identity.source, identity.tenantId, sha256],
   );
-  return rows.map((row) => row.id);
+  return rows.map((row) => ({ documentId: row.id, sourceUrl: row.url }));
 }
 
 /**

@@ -13,6 +13,12 @@
  * refused outright has no workbook to write. So the backlog is exactly: read as a workbook, from
  * these bytes, and no sheets of the current generation -- and no refusal under it either, which
  * is what stops a digest the reader now refuses from heading every batch for ever.
+ *
+ * AND BYTES STILL IN THE LAKE. A document whose bytes were purged (ADR 0161) cannot be read
+ * again, so it is never owed: offered, its read would come back unreadable, record nothing, and
+ * keep the hourly scheduler starting a run for it for ever. The purge waits for this backlog
+ * (`documentPurge.ts`), so only a rows generation bumped AFTER a purge leaves a workbook here
+ * with older rows or none; its `bytes_purged_at` is the record of why, not a debt.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -56,6 +62,7 @@ const OWED_JOIN = `FROM raw.documents d
         AND t.tenant_id = d.tenant_id
         AND t.document_id = d.document_id
       WHERE d.deleted_at IS NULL
+        AND d.bytes_purged_at IS NULL
         AND t.source_sha256 = d.sha256
         AND (t.method = ANY($1::text[])
              OR (t.method IS NOT NULL

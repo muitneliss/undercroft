@@ -17,15 +17,20 @@ that belongs in a user's dbt project, not here.
 
 ## The three rules that matter most
 
-1. **Raw is the only durable layer.** Everything in Postgres is a projection and may be
-   dropped and rebuilt. Raw cannot be recomputed.
+1. **Raw is the only durable layer -- except a document's content.** Everything in Postgres is
+   a projection and may be dropped and rebuilt, and raw cannot be recomputed. The one
+   exception (ADR 0161, the owner's decision): a document's bytes are purged from the lake once
+   the extract pass has had its go at them, so its reading (`raw.document_text`, its workbook
+   rows) and its catalogue row's name, link and purge record cannot be rebuilt. Never drop them
+   as if they could.
 
 2. **Never guess; return nothing and say why.** An empty cell is visibly missing; a wrong
    value is invisibly false. "No evidence" is never "pass". This governs _values_:
    `money.ts` refuses to guess an amount, and a row the pipeline refuses is recorded with
    its reason rather than dropped.
 
-3. **One writer, many callers.** Every byte enters through `LakeStore`'s create-only path.
+3. **One writer, many callers.** Every byte enters through `LakeStore`'s create-only path, and
+   a document's bytes leave only through its `purgeBlobs`.
    The REST lake API is a caller, not a second writer.
 
 ## Rules
@@ -155,7 +160,7 @@ surface is split by concern, one Taskfile per namespace under `.taskfiles/`:
 | `build:*` | `.taskfiles/artifacts/` | the SPA bundle, the CLI bundle (`build:cli`) and its release tarball (`build:cli-pack`), the desktop app for this OS (`build:desktop`), generated assets/schemas, local Docker images, and the Postgres image published under its content-pinned tag (`build:postgres-image-publish`, ADR 0155)                                           |
 | `ci:*`    | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs; `ci:cli-pack-check`, `ci:skill-check` (network), `ci:desktop-check` (network, a display), `ci:visual` (Docker; `ci:visual-update` retakes its baselines), `ci:compose-check` and `ci:secrets-check` are CI steps outside it; `ci:wiki-check` gates the wiki locally |
 | `cd:*`    | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand; `cd:cli-upload` and `cd:desktop-release` attach the CLI and the desktop app to a release                                                                                                                                                                                                   |
-| `db:*`    | `.taskfiles/db/`        | DSN-parameterised migrate/invite, the `db:extract-accuracy` and `db:semantic-probe` measurements and the lake's `db:lake-compact` (ADR 0160), for a database that isn't the local one                                                                                                                                                     |
+| `db:*`    | `.taskfiles/db/`        | DSN-parameterised migrate/invite, the `db:extract-accuracy` and `db:semantic-probe` measurements and the lake's `db:lake-compact` (ADR 0160) and `db:document-purge` (ADR 0161), for a database that isn't the local one                                                                                                                  |
 | `obs:*`   | `.taskfiles/obs/`       | `scripts/observe.ts`: read a trace from Tempo, its lines from Loki and a container's log over read-only SSH, credentials looked up at run time; the `debug-trace` skill drives it                                                                                                                                                         |
 
 Every `ci:*`/`build:*` task wraps an existing `package.json` script or `scripts/*.ts` file —

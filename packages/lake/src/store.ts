@@ -18,6 +18,12 @@
  * 3. **Retention is bounded and reported.** Pruning names what it removed. Silent pruning
  *    of a durable store is indistinguishable from data loss.
  *
+ * One kind of object is not kept: a DOCUMENT's bytes, once the extract pass has had its attempt
+ * at them (ADR 0161, the owner's decision -- the file lives in the customer's own Drive or
+ * mailbox). That is `purgeBlobs`, which is told which digests to remove by a caller that knows
+ * what a document is, reports before it deletes, and leaves every manifest and journal pointer
+ * where it was. Nothing in this class decides that a blob may go.
+ *
  * Content addressing is the default here, not a later optimisation. A legacy store
  * addressed by provenance held 15,790 artefacts over 5,259 distinct payloads -- 10.42 GB
  * where 1.98 GB would do, with one 6.8 MB document stored under 126 separate keys.
@@ -27,7 +33,7 @@
 import { createStampSource, isStamp, type StampSource, systemClock } from "@undercroft/core";
 import { byCodeUnit } from "@undercroft/core/order";
 import { type Canonicaliser, type Considered, redundantStamps } from "./compaction.ts";
-import type { ObjectStore } from "./objectStore.ts";
+import { ObjectNotFound, type ObjectStore } from "./objectStore.ts";
 import {
   blobKey as blobKeyOf,
   journalKey as journalKeyOf,
@@ -59,6 +65,46 @@ export class ObjectExists extends Error {
     this.name = "ObjectExists";
   }
 }
+
+/**
+ * An observation's manifest names a blob the lake does not hold -- removed by `purgeBlobs` once
+ * the bytes had been read (ADR 0161), or never written.
+ *
+ * Its own class so a reader can say which: "these bytes were purged after extraction" is a fact
+ * about the archive, and a reader that met it as a bare `no such object` reported a missing
+ * file as a broken store. The manifest is still there, so the observation is still traceable.
+ */
+export class BlobAbsent extends Error {
+  readonly sha256: string;
+
+  constructor(of: { version: string; sha256: string }, options?: { cause?: unknown }) {
+    super(
+      `the bytes of ${of.version} are not in the lake: blob ${of.sha256} is absent -- purged ` +
+        "after extraction (ADR 0161) or never stored. Its manifest remains.",
+      options,
+    );
+    this.name = "BlobAbsent";
+    this.sha256 = of.sha256;
+  }
+}
+
+/** What `purgeBlobs` did: where it said so first, and each digest's outcome. */
+export interface BlobPurge {
+  /** The `_reports/blob-purge/` object written BEFORE anything was deleted. */
+  readonly report: string;
+  /** Digests whose blob was there and is gone. */
+  readonly deleted: readonly string[];
+  /** Digests whose blob was already gone: nothing to delete, and said so rather than counted. */
+  readonly absent: readonly string[];
+}
+
+/** The kind under `_reports/` a blob purge is written as. */
+const PURGE_REPORT_KIND = "blob-purge";
+
+/** Blobs checked and deleted at once: round trips in flight over a tunnel, not CPU. */
+const PURGE_LANES = 16;
+
+const DIGEST = /^[0-9a-f]{64}$/u;
 
 export interface PutResult {
   /**
@@ -329,7 +375,15 @@ export class LakeStore {
     if (typeof blobKey !== "string") {
       throw new Error(`manifest for ${version} has no blobKey`);
     }
-    const data = await this.#store.get(blobKey);
+    let data: Uint8Array;
+    try {
+      data = await this.#store.get(blobKey);
+    } catch (error) {
+      if (error instanceof ObjectNotFound) {
+        throw new BlobAbsent({ version, sha256: String(man.sha256) }, { cause: error });
+      }
+      throw error;
+    }
     const actual = await sha256Hex(data);
     if (actual !== man.sha256) {
       throw new ObjectExists(
@@ -531,6 +585,61 @@ export class LakeStore {
       }
     }
     return true;
+  }
+
+  // -- purge ----------------------------------------------------------------
+
+  /**
+   * Delete these blobs, having first written down that it is about to. ADR 0161.
+   *
+   * THE CALLER DECIDES, AND MUST HAVE ASKED EVERY HOLDER. A blob is shared by content: every
+   * observation at every key -- any source, any tenant -- whose bytes hash to a digest names the
+   * same `_blobs/` object. This store does not know which of those observations still need their
+   * bytes, and cannot: that is a question about documents and extraction, which live in Postgres.
+   * So the caller names only digests no holder of which still needs them, and this deletes
+   * exactly those.
+   *
+   * MANIFESTS AND JOURNAL POINTERS STAY. They are what says an observation happened, they are
+   * tiny, and `put` decides `unchanged` from the newest manifest at a key -- so a file landed
+   * again with the same bytes is still `unchanged`, writes nothing, and is not stored again. The
+   * same bytes landed at ANOTHER key find no blob and write it afresh, which is the one way a
+   * purged blob comes back, and is right: that document has not been read yet. A read of an
+   * observation whose blob is gone raises `BlobAbsent` rather than a bare not-found.
+   *
+   * REPORTED BEFORE IT DELETES, as compaction is (`raw-lake.md`: never prune silently): one
+   * `_reports/blob-purge/` object naming every digest and the caller's `context` -- which run, or
+   * which operator -- and only then the deletes. A purge cut off half way has still said what it
+   * set out to remove; a digest it reached is `deleted`, and one a second attempt finds already
+   * gone is `absent`. Deleting an absent object is not an error, which is what makes that second
+   * attempt safe.
+   */
+  async purgeBlobs(
+    digests: readonly string[],
+    context: Readonly<Record<string, unknown>>,
+  ): Promise<BlobPurge> {
+    for (const digest of digests) {
+      if (!DIGEST.test(digest)) {
+        throw new RangeError(`not a sha256 digest: ${JSON.stringify(digest)}`);
+      }
+    }
+    const unique = [...new Set(digests)];
+    const report = await this.report(PURGE_REPORT_KIND, { ...context, digests: unique });
+    const held: boolean[] = Array.from({ length: unique.length }, () => false);
+    // One iterator shared by every lane: each `next()` hands the next digest to whichever asks.
+    const queue = unique.entries();
+    const lane = async (): Promise<void> => {
+      for (const [index, digest] of queue) {
+        const key = LakeStore.blobKey(digest);
+        held[index] = await this.#store.exists(key);
+        await this.#store.delete(key);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(PURGE_LANES, unique.length) }, lane));
+    return {
+      report,
+      deleted: unique.filter((_, i) => held[i] === true),
+      absent: unique.filter((_, i) => held[i] !== true),
+    };
   }
 
   /**

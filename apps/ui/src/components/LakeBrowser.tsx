@@ -49,7 +49,7 @@ import {
   parseStream,
   streamKey,
 } from "@/lib/lake.ts";
-import { formatBytes } from "@/lib/money.ts";
+import { formatBytes, MISSING } from "@/lib/money.ts";
 import { formatDate, formatDateTime } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -148,6 +148,31 @@ function atSource(t: TFunction, deletedAt: string | null, locale: "vi" | "en"): 
   return deletedAt === null
     ? t("lake.live")
     : t("lake.deletedOn", { when: formatDate(deletedAt, locale) });
+}
+
+/**
+ * A document's file, by its name, opened where it lives (ADR 0161): its bytes leave the lake once
+ * read, so the source is where a reader goes to see it. No name is MISSING, never a guessed one;
+ * a link with no name -- a mail's body -- is still offered, worded rather than blank.
+ */
+function FileAtSource({
+  t,
+  fileName,
+  sourceUrl,
+}: {
+  t: TFunction;
+  fileName: string | null;
+  sourceUrl: string | null;
+}): React.JSX.Element {
+  const label = fileName ?? (sourceUrl === null ? MISSING : t("lake.openAtSource"));
+  if (sourceUrl === null) {
+    return <>{label}</>;
+  }
+  return (
+    <a href={sourceUrl} rel="noreferrer" target="_blank">
+      {label}
+    </a>
+  );
 }
 
 function RecordsTable({
@@ -312,6 +337,7 @@ function DocumentsTable({
           <TableHeader>
             <TableRow>
               <TableHead scope="col">{t("lake.colDocumentId")}</TableHead>
+              <TableHead scope="col">{t("lake.colFile")}</TableHead>
               <TableHead scope="col">{t("lake.colContentType")}</TableHead>
               <TableHead scope="col" className="num">
                 {t("lake.colBytes")}
@@ -319,12 +345,16 @@ function DocumentsTable({
               <TableHead scope="col">{t("lake.colObserved")}</TableHead>
               <TableHead scope="col">{t("lake.colRun")}</TableHead>
               <TableHead scope="col">{t("lake.colAtSource")}</TableHead>
+              <TableHead scope="col">{t("lake.colBytesHeld")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.map((row) => (
               <TableRow key={row.documentId}>
                 <TableCell className="datum">{row.documentId}</TableCell>
+                <TableCell className="datum">
+                  <FileAtSource t={t} fileName={row.fileName} sourceUrl={row.sourceUrl} />
+                </TableCell>
                 <TableCell className="datum datum--quiet">{row.contentType}</TableCell>
                 <TableCell className="num datum">{formatBytes(row.bytes, locale)}</TableCell>
                 <TableCell className="datum datum--quiet">
@@ -335,6 +365,11 @@ function DocumentsTable({
                 </TableCell>
                 <TableCell className="datum datum--quiet">
                   {atSource(t, row.deletedAt, locale)}
+                </TableCell>
+                <TableCell className="datum datum--quiet">
+                  {row.bytesPurgedAt === null
+                    ? t("lake.bytesHeld")
+                    : t("lake.bytesPurgedOn", { when: formatDate(row.bytesPurgedAt, locale) })}
                 </TableCell>
               </TableRow>
             ))}

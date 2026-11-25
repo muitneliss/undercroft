@@ -936,6 +936,11 @@ export const vi = {
     colAtSource: "Ở nguồn",
     colDocumentId: "Mã tài liệu",
     colContentType: "Loại nội dung",
+    colFile: "Tệp",
+    colBytesHeld: "Tệp trong kho thô",
+    openAtSource: "Mở ở nguồn",
+    bytesHeld: "Còn giữ",
+    bytesPurgedOn: "Đã xoá sau khi đọc, {{when}}",
     live: "Còn ở nguồn",
     deletedOn: "Đã xoá {{when}}",
     showPayload: "Xem nội dung",
@@ -1984,6 +1989,10 @@ export const vi = {
         "Đã dọn {{removed}} bước dbt của {{runs}} lần chạy cũ hơn {{keptDays}} ngày; còn {{remaining}} lần chạy chờ dọn ở các lần sau.",
       stepsPruneFailed:
         "Không dọn được các bước dbt cũ ({{errorType}}). Lần chạy này không bị ảnh hưởng; lần sau sẽ thử lại.",
+      bytesPurged:
+        "Đã xoá tệp của {{documents}} tài liệu khỏi kho dữ liệu thô ({{bytes}}) vì đã đọc xong; mỗi tài liệu vẫn giữ tên, đường dẫn về nơi gốc và kết quả đọc.",
+      bytesPurgeFailed:
+        "Không xoá được các tệp đã đọc khỏi kho dữ liệu thô ({{errorType}}). Những gì lần chạy này đọc được vẫn giữ nguyên; lần sau sẽ thử lại.",
       unknown: "Sự kiện {{event}}.",
     },
 

@@ -14,11 +14,15 @@
  * bytes are fetched, and an oversized document is reported with a reason rather than
  * dropped -- "no evidence" is never "pass".
  *
- * **The PII boundary.** `raw.documents` is granted to `undercroft_dbt`, so its columns are
- * one `dbt run` from a dashboard. A filename, a mail subject, an address or a folder name
- * therefore goes in `extra` -- the lake manifest, in the access-controlled object store --
- * and never in `metadata` or in the key. The split is the whole reason this function takes
- * them as two separate arguments rather than one bag it could pick from.
+ * **What reaches Postgres, and what reaches only the lake.** `raw.documents` is granted to
+ * `undercroft_dbt`, so its columns are one `dbt run` from a dashboard. Since ADR 0161 a
+ * document's bytes are purged once extraction has had its go at them, so the catalogue row is
+ * how a person finds the file again: its `fileName` and its `link` at the source cross into
+ * Postgres, deliberately and by name -- the owner's decision, superseding ADR 0015 on this one
+ * point. Everything ELSE a human wrote -- a mail subject, an address, a folder name -- still goes
+ * in `manifest`, the lake manifest in the access-controlled object store, and never in
+ * `metadata` or in the key. Three fields rather than one bag, so which side of the line each
+ * name falls on is visible at every call site.
  */
 
 import { documentKeyOf } from "@undercroft/contracts";
@@ -40,7 +44,18 @@ export interface DocumentToLand {
   readonly declaredBytes: string;
   /** Opaque ids, timestamps, enumerated types and counts. Reaches dbt. */
   readonly metadata: Readonly<Record<string, unknown>>;
-  /** Names a human wrote. Reaches the lake manifest only. */
+  /**
+   * What the source calls the file. Reaches `raw.documents.file_name`, and so dbt (ADR 0161),
+   * and the manifest as `filename`. `null` where the source gives the document no name -- a
+   * mail's body, a note -- never one made up.
+   */
+  readonly fileName: string | null;
+  /**
+   * Where a person opens it at the source. Reaches `raw.documents.source_url`. `null` where it
+   * cannot be derived from what the landing holds; never a guessed link.
+   */
+  readonly link: string | null;
+  /** Every other name a human wrote. Reaches the lake manifest only. */
   readonly manifest: Readonly<Record<string, unknown>>;
   readonly sourceUpdatedAt: string | null;
   /** Fetch the bytes. Deferred so the size guard can refuse before any download starts. */
@@ -128,6 +143,10 @@ async function landOne(
       // catalogued directly by the caller instead.
       extra: {
         ...document.manifest,
+        // The manifest has said `filename` since the first landing, and the operator's trace
+        // backfill reads it there for documents landed before the column existed (ADR 0161).
+        filename: document.fileName,
+        link: document.link,
         contentType: document.contentType,
         sourceUpdatedAt: document.sourceUpdatedAt,
       },

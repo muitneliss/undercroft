@@ -1,19 +1,19 @@
 ---
 title: File formats a Gmail or Drive connection can land
 type: source
-date: 2026-10-05
+date: 2026-11-25
 tags: []
 source: docs/reference/file-formats.md
 source_path: docs/reference/file-formats.md
-source_hash: 72d12cc948450849ce3c054f9d12bc6e949472256630f72193295847d30b1893
-ingested: 2026-10-05
+source_hash: 8963799010bf6129b0029118e7cbc6f90320e84cc2a94cf32b9cd5f5877064aa
+ingested: 2026-11-25
 ---
 
 # File formats a Gmail or Drive connection can land
 
 The reference page for every file type the connection picker offers, kept in step with `packages/contracts/src/fileFormats.ts` by `fileFormatsDoc.test.ts`. The decision behind it is [[ADR 0048: A file is recognised by its type first, and a signed record is verified before it is read]].
 
-**Reading levels.** `text` (words in reading order), `table` (each sheet's rows into `raw.document_rows`, every cell under its column letter, and as tab-separated text), `ocr` (tesseract, Vietnamese and English), `metadata` (lands and is catalogued, refused by name, not read). Bytes always stay whole in the raw lake.
+**Reading levels.** `text` (words in reading order), `table` (each sheet's rows into `raw.document_rows`, every cell under its column letter, and as tab-separated text), `ocr` (tesseract, Vietnamese and English), `metadata` (lands and is catalogued, refused by name, not read). A file lands whole in the raw lake and stays until the extract pass has read or refused it and written its rows or landed its members; then its bytes are deleted, `raw.documents` keeps `file_name`, `source_url`, `metadata.sourceUpdatedAt`, `observed_at` and the purge record, and its `raw.document_text` row is final ([[ADR 0161 A Document's Bytes Are Purged Once Extraction Has Had Its Go]]).
 
 **Matching.** MIME type first. The name counts only for `application/octet-stream`, and then only for an extension chosen as such, like `.oa`. Choosing `application/octet-stream` itself, which the Drive browse offers when such files are present, takes every file of that type. An extension is one to eight letters or digits after the last dot, at least one of them a letter, so `for Mr. Smith`, `Rev.1` and `Pte. Ltd.` have none. A Drive listing asks by MIME type; choosing an extension adds octet-stream and lets the name decide. The free-text field takes a MIME type or `.ext`.
 

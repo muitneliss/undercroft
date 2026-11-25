@@ -61,3 +61,17 @@ tasks:
       Usage: task db:lake-compact -- [--tenant CASE-0042] [--apply] [--concurrency 16]
     cmds:
       - bun run lake:compact -- {{.CLI_ARGS}}
+
+  document-purge:
+    # Deletes the only copy we hold of a customer's files once they have been read (the owner's
+    # decision, ADR 0161), so a dry run unless `--apply` is passed. It backfills each document's
+    # name and link first, reports what is still unread and why, and purges only what every
+    # holder in every tenant has settled. Same tunnel and variables as lake-compact.
+    # docs/runbook/deployment.md, "Purging document bytes".
+    desc: >-
+      Backfill raw.documents' file name and source link, report the documents still unread, and
+      purge from the lake the document bytes extraction has finished with, recording each one.
+      Dry run unless --apply. Needs UNDERCROFT_POSTGRES_DSN, UNDERCROFT_S3_BUCKET_RAW and its
+      endpoint and keys. Usage: task db:document-purge -- [--tenant CASE-0042] [--apply] [--concurrency 16]
+    cmds:
+      - bun run document:purge -- {{.CLI_ARGS}}

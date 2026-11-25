@@ -1,12 +1,12 @@
 ---
 title: Architecture
 type: source
-date: 2026-11-06
+date: 2026-11-25
 tags: []
 source: docs/architecture.md
 source_path: docs/architecture.md
-source_hash: f078aaa9f412f3f28df2dfccf2887e73579640ff6864f8b9899c591b5746c038
-ingested: 2026-11-06
+source_hash: a581825b9d96a80bee52bd3b4556b4b182773072c74a33322bb85b46add82f21
+ingested: 2026-11-25
 ---
 
 # Architecture
@@ -26,3 +26,5 @@ ingested: 2026-11-06
 **The security model** tabulates each door -- web session, CLI with `allowWrites` (its session cookie, or unattended a personal token read from an environment variable at `/trpc`, the profile's `allowWrites` still on top, [[ADR 0134 The CLI Signs In With a Personal Token When Nobody Is at Its Terminal]]), MCP with a read or write grant, the assistant, the service token, and ingest keys -- and the base procedures every router door shares, `requirePermission` among them: once membership is established a call is refused FORBIDDEN, naming the permission, when the caller's permissions -- decided by Casbin over policy projected from `app.tenant_member`, a customer's own role, the grants in force and the built-in grants -- lack the one the procedure needs ([[ADR 0139 Tenant Access Is Casbin Policy]], [[Permissions]]); a change to who holds what also passes the subset rule, so nobody gives, grants or takes away a permission they do not hold ([[ADR 0141 Custom Roles and Grants Under the Subset Rule]]). What a caller may read -- which models, raw streams and reports -- is their reach, decided the same way from object grants; the control plane narrows what it reads itself, and a reader of only some models runs report SQL as a scope login, `undercroft_bi_<slug>__<hash7>`, granted exactly those tables, through the worker's scoped routes ([[ADR 0142 Object Reach and Scope Logins]]); a grant on one model may also limit its rows -- a row-level policy TO that scope login -- and hide columns -- SELECT on the others only -- sent through the `limited` routes ([[ADR 0143 Row and Column Rules on Model Grants]]). Row-level security keys on the connected login, per-tenant passwords are never stored, and one is minted when a login is first used, shared by the builds and sessions that overlap it, and changed again once none is left ([[ADR 0087 A Tenant Login Is Leased Not Rotated Per Session]]), and the BI roles are revoked all of `raw` ([[ADR 0018: per-tenant roles and row-level security]]). Tenant logins reach Postgres through PgBouncer, pooled per login so row-level security still sees the tenant's own login; PgBouncer learns a live tenant login's stored secret from `ops.pgbouncer_auth` and nothing about a platform role's, the worker bounds how many runs of each kind it does at once, and a login with no connection free in time is answered as busy ([[ADR 0088 Tenant Logins Reach Postgres Through A Pooler And Runs Take A Turn]]). The platform `undercroft_bi` reads only the legacy shared `analytics` schema and three `ops` tables.
 
 **Scheduling, observability and release**: cadence or a five-field cron evaluated in Singapore time ([[ADR 0059: A sync may run on a cron expression, beside the four presets]]); `x-trace-id` on every response and export to the host's `otel-lgtm` ([[ADR 0058: Every request is traced, into the host's shared otel-lgtm stack]]); and a release-only deploy that is verified by image digest ([[Runbook Deployment]]).
+
+**Document bytes.** A document's bytes leave the lake through `purgeBlobs` once the extract verb has read or refused it and its workbook rows or archive members are in place; `raw.documents` keeps its file name, its link at the source and the purge record, and its text is the only reading there will be -- the one exception to everything in Postgres being a projection ([[ADR 0161 A Document's Bytes Are Purged Once Extraction Has Had Its Go]]).

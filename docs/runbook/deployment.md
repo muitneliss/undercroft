@@ -513,6 +513,51 @@ The reports are JSON objects in the lake's bucket; read them with any S3 client 
 same tunnel, or MinIO's console on port 9001 tunnelled the same way. `_reports/` is reserved, so
 no source can land a key there.
 
+## Purging document bytes
+
+Since ADR 0161 a document's bytes are deleted from the lake once the extract pass has had its go
+at them -- read or refused -- and its workbook rows or archive members are in place. Every extract
+pass does this for up to 1,000 digests of its own tenant and source and says so in its journal
+(`document_bytes_purged`). `task db:document-purge` is the one-off for what was landed before:
+
+1. **Trace.** Every document with neither `file_name` nor `source_url` gets them -- the name from
+   the lake manifest of the observation holding its current bytes, the link from its id, an
+   archive member's link from its archive. Drive and Gmail only; a HubSpot note has no name and no
+   link that can be derived, and is reported as `traceable: false` rather than guessed at.
+2. **Report what is still unread.** It does not extract. A document the extract pass has not
+   attempted keeps its bytes and is counted by why: `never-read`, `tombstoned-before-read`,
+   `refused-by-older-reader`, `workbook-rows-owed`, or `bytes-shared-with-unread` (a document
+   elsewhere, possibly another customer's, holds the same bytes and is unread). The hourly
+   extract schedule reads them; run the command again afterwards.
+3. **Purge** every digest no document in any tenant still needs, in batches of 2,000. Each batch
+   writes a `_reports/blob-purge/` report naming its digests before it deletes anything; then
+   every document it touched gets `bytes_purged_at`, `bytes_purge_outcome` (`deleted`, or
+   `absent` when the blob was already gone) and `bytes_purge_report`.
+
+**It is a dry run unless you pass `--apply`.** The dry run reads Postgres only -- not one
+manifest -- and changes nothing. There is no backup: the owner decided the files stay at their
+source, so an applied purge cannot be undone. Read the dry run first.
+
+It runs on your machine through the same two tunnels, with the same worker credentials, as
+[Compacting the lake](#compacting-the-lake) steps 1-3. Then:
+
+```bash
+export UNDERCROFT_POSTGRES_DSN=postgres://undercroft_worker:<password>@localhost:15432/undercroft
+export UNDERCROFT_S3_ENDPOINT=http://localhost:19000
+export UNDERCROFT_S3_BUCKET_RAW=undercroft-raw UNDERCROFT_S3_ACCESS_KEY=... UNDERCROFT_S3_SECRET_KEY=...
+task db:document-purge                                   # every tenant, dry run
+task db:document-purge -- --tenant CASE-0042             # one tenant, dry run
+task db:document-purge -- --tenant CASE-0042 --apply     # trace, then purge
+```
+
+It prints JSON lines: a `trace` line per (tenant, source) with how many documents were untraced
+and how many it traced, a `purge` line per batch with its digests, documents, bytes and report
+key, and finally an `outlook` line per tenant -- documents already purged, what a purge would
+remove now (`purgeableDigests`, `purgeableDocuments`, `purgeableBytes`) and what it keeps, by why.
+After an apply the outlook is what is left. It is resumable: stopped part way, run it again. A
+digest it deleted but had not yet recorded is found again and recorded `absent`. `--concurrency`
+(default 16) is how many manifests are read at once while tracing.
+
 ## Sign-in
 
 Invite-only, by Google or by a one-time code emailed to the address. See ADR 0010 for the

@@ -2,10 +2,12 @@
  * A Gmail message's parts as documents to land: the attachments the choice takes, and its body.
  *
  * Split from `gmail.ts`, which reads the mailbox and builds the record, because both documents
- * obey one rule that the record does not: the split between `metadata` and `manifest`.
- * `metadata` reaches `raw.documents`, which dbt and BI can read, so it carries opaque ids,
- * enumerations and counts only; every name a human wrote goes in `manifest`, which lives in the
- * access-controlled object store. `pii.md`, ADR 0015.
+ * obey one rule that the record does not: which names reach Postgres. `metadata` reaches
+ * `raw.documents`, which dbt can read, so it carries opaque ids, enumerations and counts only.
+ * An attachment's filename and the message's link reach it too, because the bytes leave the lake
+ * once read and those are how a person finds the message again (ADR 0161). The subject and the
+ * addresses go in `manifest` alone, which lives in the access-controlled object store: the
+ * owner's decision was the file's name, not the mail's. `pii.md`.
  */
 
 import { landedType } from "@undercroft/contracts";
@@ -15,6 +17,7 @@ import { decodeCharset } from "../extract/html.ts";
 import type { DocumentToLand } from "../landDocument.ts";
 import type { GoogleApi } from "./api.ts";
 import type { AttachmentPart, BodyPart } from "./gmailAttachments.ts";
+import { gmailMessageLink } from "./sourceLinks.ts";
 
 export const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 
@@ -64,7 +67,10 @@ export function attachmentDocument(
     contentType: landedType({ mimeType: part.mimeType, name: part.filename }),
     declaredBytes: part.size,
     metadata: { labelIds, partIndex: String(part.index), messageId },
-    manifest: { filename: part.filename, ...manifestOf(facts) },
+    // An empty filename is Gmail saying the part has none, which is not a name.
+    fileName: part.filename === "" ? null : part.filename,
+    link: gmailMessageLink(messageId),
+    manifest: manifestOf(facts),
     sourceUpdatedAt: facts.sourceUpdatedAt,
     fetchBytes: () => partBytes(api, messageId, part.attachmentId),
   };
@@ -91,6 +97,9 @@ export function bodyDocument(api: GoogleApi, facts: MessageFacts, body: BodyPart
     contentType: body.mimeType,
     declaredBytes: body.size,
     metadata: { labelIds, messageId, part: "body" },
+    // A body is not a file and has no name; the subject is the mail's, and stays in the manifest.
+    fileName: null,
+    link: gmailMessageLink(messageId),
     manifest: manifestOf(facts),
     sourceUpdatedAt: facts.sourceUpdatedAt,
     fetchBytes: async (): Promise<Uint8Array> => {

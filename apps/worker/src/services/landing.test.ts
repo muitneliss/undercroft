@@ -90,7 +90,9 @@ function document(over: Partial<DocumentToLand> = {}): DocumentToLand {
     contentType: "application/pdf",
     declaredBytes: String(PDF.byteLength),
     metadata: { partIndex: 1, labelIds: ["Label_8"] },
-    manifest: { filename: "invoice-0042.pdf", subject: "Invoice 0042" },
+    fileName: "invoice-0042.pdf",
+    link: "https://mail.google.com/mail/u/0/#all/19a2f",
+    manifest: { subject: "Invoice 0042" },
     sourceUpdatedAt: "2026-09-21T09:00:00.000Z",
     fetchBytes: (): Promise<Uint8Array> => Promise.resolve(PDF),
     ...over,
@@ -321,24 +323,50 @@ describe("a document sink catalogues what it lands, as it lands it", () => {
     expect(summary).toEqual({ landed: 2, created: 2, unchanged: 0, skipped: 0, failed: 0 });
   });
 
-  it("the catalogue carries opaque metadata and never a filename", async () => {
-    // `raw.documents` is granted to the dbt role, so every column here is one `dbt run` from
-    // a dashboard. The name a human wrote goes to the lake manifest, which dbt cannot reach.
-    // `.claude/rules/pii.md`, ADR 0015.
+  it("the catalogue carries the file's name and link, and every other name stays in the lake", async () => {
+    // The bytes leave the lake once read (ADR 0161), so the row is how a person finds the file
+    // again: its name and its link are columns. `raw.documents` is granted to the dbt role, so
+    // the mail's subject still goes to the manifest alone, and `metadata` stays opaque.
     const docs = documents(1);
     await docs.add(document({ documentId: "doc-1" }));
     await docs.close();
 
-    const [row] = await documentRows();
+    const { rows } = await db.query<{ metadata: unknown; file_name: string; source_url: string }>(
+      "SELECT metadata, file_name, source_url FROM raw.documents WHERE document_id = 'doc-1'",
+    );
 
-    expect(row?.metadata).toEqual({
-      partIndex: 1,
-      labelIds: ["Label_8"],
-      sourceUpdatedAt: "2026-09-21T09:00:00.000Z",
+    expect(rows[0]).toEqual({
+      metadata: {
+        partIndex: 1,
+        labelIds: ["Label_8"],
+        sourceUpdatedAt: "2026-09-21T09:00:00.000Z",
+      },
+      file_name: "invoice-0042.pdf",
+      source_url: "https://mail.google.com/mail/u/0/#all/19a2f",
     });
+    expect(JSON.stringify(rows[0])).not.toContain("Invoice 0042");
     const key = `documents/${SOURCE}/${TENANT}/doc-1`;
     const newest = (await lake.versions(key)).at(-1) ?? "";
-    expect((await lake.manifest(key, newest)).filename).toBe("invoice-0042.pdf");
+    expect(await lake.manifest(key, newest)).toMatchObject({
+      filename: "invoice-0042.pdf",
+      subject: "Invoice 0042",
+    });
+  });
+
+  it("a file renamed at the source with the same bytes gets its new name", async () => {
+    // Unchanged bytes write no new row version, but a stale name is a wrong value a person
+    // would trace the wrong file by.
+    const first = documents(1);
+    await first.add(document({ documentId: "doc-1" }));
+    await first.close();
+    const second = documents(1);
+    await second.add(document({ documentId: "doc-1", fileName: "invoice-0042-paid.pdf" }));
+    await second.close();
+
+    const { rows } = await db.query<{ file_name: string }>(
+      "SELECT file_name FROM raw.documents WHERE document_id = 'doc-1'",
+    );
+    expect(rows.map((row) => row.file_name)).toEqual(["invoice-0042-paid.pdf"]);
   });
 
   it("a document refused before its bytes were fetched gets a reason and no row", async () => {

@@ -748,6 +748,11 @@ export const en = {
     colAtSource: "At source",
     colDocumentId: "Document ID",
     colContentType: "Type",
+    colFile: "File",
+    colBytesHeld: "Bytes in the lake",
+    openAtSource: "Open at source",
+    bytesHeld: "Held",
+    bytesPurgedOn: "Deleted after reading, {{when}}",
     live: "Still at source",
     deletedOn: "Deleted {{when}}",
     showPayload: "Show payload",
@@ -1636,6 +1641,10 @@ export const en = {
         "Cleared {{removed}} dbt steps of {{runs}} runs older than {{keptDays}} days; {{remaining}} runs are left for later runs to clear.",
       stepsPruneFailed:
         "Could not clear old dbt steps ({{errorType}}). This run is unaffected; the next one tries again.",
+      bytesPurged:
+        "Deleted the files of {{documents}} documents from the lake ({{bytes}}) now that they have been read; each keeps its name, its link at the source and what reading it found.",
+      bytesPurgeFailed:
+        "Could not delete the files already read from the lake ({{errorType}}). What this run read is kept; the next run tries again.",
       unknown: "Event {{event}}.",
     },
 
