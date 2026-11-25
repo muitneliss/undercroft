@@ -263,6 +263,27 @@ it("a pinned image is proved against its own tag while a release rolls out", asy
   );
 });
 
+it("postgres is checked on its own container, not on kestra-postgres listed before it", async () => {
+  // Regression: `-postgres-` is also inside `<app>-kestra-postgres-1`, and the v1.86.0 deploy
+  // failed because verify read Kestra's postgres:17-alpine digest as ours.
+  const stack = routes({ tag: "v1.3.0" });
+  const listing = `${ENDPOINT}/docker.getContainersByAppNameMatch?appName=${APP}`;
+  stack[listing] = [
+    {
+      containerId: "kestra-postgres-container",
+      name: `${APP}-kestra-postgres-1`,
+      state: "running",
+      status: "Up 2 minutes (healthy)",
+    },
+    ...(stack[listing] as readonly unknown[]),
+  ];
+  const { deps, lines } = recorder(stack);
+
+  await verify(CFG, deps, ROLLOUT);
+
+  expect(lines).toContain("verify ok");
+});
+
 it("a pinned image on a stale digest fails the release", async () => {
   const { deps } = recorder(routes({ tag: "v1.3.0", postgresDigest: STALE_DIGEST }));
 

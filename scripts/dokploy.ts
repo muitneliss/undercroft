@@ -664,10 +664,23 @@ interface ServiceCheck {
  */
 type VerifiedService = { ok: true; digest: string } | { ok: false; problem: string };
 
+const REPLICA = /^\d+$/u;
+
+/**
+ * Whether `name` is Compose's `<appName>-<service>-<n>` for exactly this service. A substring
+ * test is not enough: `-postgres-` is also inside `<appName>-kestra-postgres-1`, and whichever
+ * of the two Dokploy listed first got its digest checked against the other's image.
+ */
+function isContainerOf(name: string, appName: string, service: string): boolean {
+  const prefix = `${appName}-${service}-`;
+  const bare = name.startsWith("/") ? name.slice(1) : name;
+  return bare.startsWith(prefix) && REPLICA.test(bare.slice(prefix.length));
+}
+
 async function verifyService(check: ServiceCheck): Promise<VerifiedService> {
   const { cfg, deps, service, image, appName, containers, oneShot } = check;
 
-  const container = containers.find((c) => c.name.includes(`-${service}-`));
+  const container = containers.find((c) => isContainerOf(c.name, appName, service));
   if (container === undefined) {
     return { ok: false, problem: `${service}: no container matching ${appName}-${service}-*` };
   }
