@@ -301,7 +301,7 @@ describe("runs.get", () => {
     ]);
     expect(run.entityCounts[0]?.entity).toBe("deals");
     expect(run.steps).toEqual([]);
-    expect(run.stepSummary.total).toBe(0);
+    expect(run.stepSummary?.total).toBe(0);
   });
 
   it("leads with the steps that did not pass, and lists the rest only when asked", async () => {

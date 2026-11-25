@@ -119,6 +119,7 @@ export {
   type OpenOutcome,
   openRun,
   pruneRefusals,
+  pruneSteps,
   reasonsFor,
   recordEntities,
   recordEvents,
@@ -147,6 +148,7 @@ export {
   type RunVerb,
   runningRun,
   SOURCE_OF_TRANSFORM,
+  type StepPrune,
   stepsFor,
 } from "./runs.ts";
 export { type RecordedScope, recordedScope, scopeForRun } from "./runScope.ts";

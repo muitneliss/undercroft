@@ -8,10 +8,12 @@
  * succeeded and never rejects, because the failure is already in the ledger.
  */
 
+import { STEP_RETENTION_DAYS } from "@undercroft/contracts/runs";
 import { describeError, newRunId } from "@undercroft/core";
 import {
   closeRun,
   MAX_ERROR_CHARS,
+  pruneSteps,
   recordSteps,
   type RunTrigger,
   SOURCE_OF_TRANSFORM,
@@ -82,7 +84,7 @@ export async function startTransform(
   journal.info("run_opened", { verb: "transform", trigger: input.trigger });
 
   const done = buildInTurn(deps, dbt, input, journal).then(
-    (outcome) => settleTransform(deps, runId, journal, outcome),
+    (outcome) => settleTransform(deps, { runId, tenantId: input.tenantId }, journal, outcome),
     async (error: unknown) => {
       await closeRun(deps.exec, runId, { status: "failed", error: messageOf(error) });
       journal.error("run_failed", describeError(error));
@@ -130,7 +132,7 @@ function buildInTurn(
 /** Write what the build did -- its steps, its outcome, and what it says for itself. */
 async function settleTransform(
   deps: JobDeps,
-  runId: string,
+  { runId, tenantId }: { runId: string; tenantId: string },
   journal: RunJournal,
   outcome: TransformOutcome,
 ): Promise<boolean> {
@@ -159,8 +161,31 @@ async function settleTransform(
     steps: outcome.steps.length,
     testsFailed: outcome.testsFailed,
   });
+  await pruneOldSteps(deps, tenantId, journal);
   await journal.flush();
   return outcome.ok;
+}
+
+/**
+ * Clear this tenant's dbt steps past `STEP_RETENTION_DAYS`, a bounded batch, and say so (ADR 0159).
+ *
+ * After the run is closed, so a prune cannot cost the run its record; done by the verb that
+ * writes the steps, as `pruneRefusals` is by extract (ADR 0039), because one statement does not
+ * earn a scheduler. Named in the journal whenever it removed anything -- a store that prunes
+ * silently cannot be told from one losing data (`raw-lake.md`) -- with how many runs it left for
+ * the next call, so the first prunes on a backlog read as catching up rather than as finished.
+ * A prune that fails is a warning on a run that succeeded at what it was for, never its failure:
+ * `done` does not reject, and the steps are still there for the next run to clear.
+ */
+async function pruneOldSteps(deps: JobDeps, tenantId: string, journal: RunJournal): Promise<void> {
+  try {
+    const pruned = await pruneSteps(deps.exec, tenantId, STEP_RETENTION_DAYS);
+    if (pruned.removed > 0) {
+      journal.info("run_steps_pruned", { ...pruned, keptDays: STEP_RETENTION_DAYS });
+    }
+  } catch (error) {
+    journal.warn("run_steps_prune_failed", describeError(error));
+  }
 }
 
 /**

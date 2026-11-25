@@ -30,7 +30,7 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
-import { REFUSAL_RETENTION_DAYS } from "@undercroft/contracts/runs";
+import { REFUSAL_RETENTION_DAYS, STEP_RETENTION_DAYS } from "@undercroft/contracts/runs";
 
 import type { RunDetail as RunDetailView } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
@@ -362,6 +362,9 @@ function RunCounts({
 /**
  * The run's dbt steps, every one -- the leaf asks for all of them (`EVERY_STEP`) -- and a line
  * saying so when a run has more than one page holds, so a page is never read as the whole.
+ *
+ * A run whose steps the retention prune cleared (`stepSummary` null, ADR 0159) says so in a line
+ * rather than showing nothing, which would read as a build that ran no step.
  */
 function RunSteps({
   detail,
@@ -371,6 +374,9 @@ function RunSteps({
   locale: ReturnType<typeof useUiStore.getState>["locale"];
 }): React.JSX.Element | null {
   const { t } = useTranslation();
+  if (detail.stepSummary === null) {
+    return <p className="note">{t("journal.stepsPrunedNote", { days: STEP_RETENTION_DAYS })}</p>;
+  }
   if (detail.steps.length === 0) {
     return null;
   }

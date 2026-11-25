@@ -136,7 +136,9 @@ door with this rule.
 - **Read a run's steps from its summary.** `runs.get` answers with `stepSummary` -- every dbt
   step counted by kind and status -- and lists only the steps that did not pass. Ask for
   `steps: "all"`, or narrow with `stepStatus`, `stepKind` or `stepName`, only when you need
-  more, and page with `stepCursor`. A `skipped` step is not a pass.
+  more, and page with `stepCursor`. A `skipped` step is not a pass. A transform's steps are kept
+  for 7 days: an older run answers `stepSummary: null`, which means its steps were cleared, not
+  that it ran none -- its status and `testsFailed` still stand.
 - **Build related models in one call.** `models.build` takes `names` (up to 20; `name`, `+name`
   with its upstream, `name+` with its downstream) and builds them as one run, so never loop over
   models one call at a time. Its answer is reported like `runs.get`'s, plus `rowCounts` (`null`

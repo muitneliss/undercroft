@@ -1900,6 +1900,8 @@ export const vi = {
 
     stepsHead: "Các bước dbt",
     stepsCut: "Đang hiện {{shown}} trong {{total}} bước; lần chạy này có nhiều bước hơn một trang.",
+    stepsPrunedNote:
+      "Các bước dbt của lần chạy này đã được dọn sau {{days}} ngày. Kết quả, số kiểm thử không đạt và nhật ký vẫn còn nguyên.",
     colStep: "Bước",
     colStatus: "Trạng thái",
     colFailures: "Dòng lỗi",
@@ -1978,6 +1980,10 @@ export const vi = {
       runStopped:
         "Dừng giữa chừng vì worker tắt, thường do triển khai bản mới. Những gì đã về được giữ lại: {{created}} mới, {{changed}} đổi, {{refused}} bị từ chối. Lần chạy sau tiếp tục từ đây.",
       truncated: "Đã ghi {{at}} dòng; từ đây chỉ ghi cảnh báo và lỗi.",
+      stepsPruned:
+        "Đã dọn {{removed}} bước dbt của {{runs}} lần chạy cũ hơn {{keptDays}} ngày; còn {{remaining}} lần chạy chờ dọn ở các lần sau.",
+      stepsPruneFailed:
+        "Không dọn được các bước dbt cũ ({{errorType}}). Lần chạy này không bị ảnh hưởng; lần sau sẽ thử lại.",
       unknown: "Sự kiện {{event}}.",
     },
 

@@ -161,6 +161,7 @@
 - [ADR 0155 A Search Ranks Through a BM25 Index per Tenant, Behind a Door](sources/adr-0155-a-search-ranks-through-a-bm25-index-per-tenant-behind-a-door.md)
 - [ADR 0156 BM25 Search, as Measured Before It Shipped](sources/adr-0156-bm25-search-as-measured-before-it-shipped.md)
 - [ADR 0157 A Search Page Interleaves Its Kinds by Place, and capped Names the Older Path](sources/adr-0157-a-search-page-interleaves-its-kinds-by-place-and-capped-names-the-older-path.md)
+- [ADR 0159 A Transform Keeps Its dbt Steps for Seven Days](sources/adr-0159-a-transform-keeps-its-dbt-steps-for-seven-days.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

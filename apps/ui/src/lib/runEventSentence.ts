@@ -220,6 +220,27 @@ function wholeReadSentence(
     : t("journal.event.wholeReadWaiting", { entity });
 }
 
+/**
+ * A transform clearing old runs' dbt steps (ADR 0159): how many went and how many runs are left
+ * for later, so the first prunes on a backlog read as catching up -- or that it could not.
+ */
+function stepPruneSentence(
+  t: TFunction,
+  event: "run_steps_pruned" | "run_steps_prune_failed",
+  detail: Record<string, unknown>,
+  n: (key: string) => string,
+): string {
+  if (event === "run_steps_prune_failed") {
+    return t("journal.event.stepsPruneFailed", { errorType: String(detail.errorType ?? "") });
+  }
+  return t("journal.event.stepsPruned", {
+    removed: n("removed"),
+    runs: n("runs"),
+    keptDays: n("keptDays"),
+    remaining: n("remaining"),
+  });
+}
+
 export function eventSentence(
   t: TFunction,
   locale: Locale,
@@ -269,6 +290,9 @@ export function eventSentence(
       return endSentence(t, event.event, event.detail, n);
     case "events_truncated":
       return t("journal.event.truncated", { at: n("at") });
+    case "run_steps_pruned":
+    case "run_steps_prune_failed":
+      return stepPruneSentence(t, event.event, event.detail, n);
     default:
       return t("journal.event.unknown", { event: event.event });
   }

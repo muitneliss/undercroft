@@ -1,12 +1,12 @@
 ---
 title: What an ingest run counts
 type: source
-date: 2026-10-18
+date: 2026-11-25
 tags: []
 source: docs/reference/run-counts.md
 source_path: docs/reference/run-counts.md
-source_hash: 57ae1c80dcdfb85dc03591ff3f230dff868e4dbf26bbbc41f7d242084e54947d
-ingested: 2026-10-18
+source_hash: 56a9ed4cb5671182a6140785b50eb5dc474b3fb0ed59e32f48b0b2699e86678b
+ingested: 2026-11-25
 ---
 
 # What an ingest run counts
@@ -32,6 +32,8 @@ The reference page for the five per-entity numbers an ingest run reports, which 
 **Narrowing the ledger.** `runs list` also takes `kind` (one or several; read off `verb` and `trigger`, never stored: `build` is an editor's transform, `lake-api` a pushed ingest, `extract`/`semantic`/`semantic-init` their own verbs), `status`, `trigger`, `parentRunId`, `chained`, `startedAfter` (inclusive) / `startedBefore` (exclusive) and up to 50 `ids`, combined with each other and the cursor; an empty page means nothing matched (issue #439).
 
 **A run's dbt steps.** `runs get` reports them as `stepSummary` (total, counts by kind and dbt status, how many are problems) and the page asked for: `steps` is `none`, `problems` (default: anything not `success`, `pass` or `skipped`, an unknown status included) or `all`, narrowed by `stepStatus`/`stepKind`/`stepName` (a filter without `steps` reads all), paged by `stepLimit` (at most 2,000) and `stepCursor`. A skipped step is counted as skipped, never as a pass. The Journal asks for every step (issue #441). With `waitSeconds` it answers once the run has ended ([[ADR 0124 A Procedure That Waits Holds Its Request Open to Its Own Cap, and Nothing Else Does]]).
+
+**Steps are kept for 7 days.** A transform's steps are cleared 7 days after the run started, by a later transform of the same customer, which records `run_steps_pruned` in its journal (steps removed, runs cleared, runs left). A cleared run answers `stepSummary: null` and no steps -- never a summary of zero -- while its status, `testsFailed` and journal stay. A run still a model's newest, newest published or newest held build keeps its steps however old ([[ADR 0159 A Transform Keeps Its dbt Steps for Seven Days]]).
 
 **A run's verdict and a model's tests.** Every run carries `verdict` -- `running`, `failed`, `tests-failing` (finished `ok` with a failing or erroring test) or `clean` -- read off its status and failing-test count, never stored; a build has succeeded when it is `clean`. Each model on `models list`/`models get` carries `lastTests` (`passing`, `failing` or `unknown`, never a pass for no record) from the published build serving its rows, tests attributed by dbt's manifest, with `unpublished` naming a newer build held back in staging; each model step carries `promoted`. A Reports answer carries `qualifiers` for each table its plan read whose tests fail or are unknown or whose current build was held (the rows are the last passing version), rows always served, and a query over a model never published is refused as having no passing version yet ([[ADR 0131 A Build Publishes Only What Passed]]). Building `name` or `name+` over a parent with failing tests is refused; `+name` rebuilds and tests the parents first. [[ADR 0129 A Failing Test Is Visible Wherever the Figure Is Read]].
 

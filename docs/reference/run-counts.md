@@ -120,6 +120,15 @@ or `all`; `stepStatus`, `stepKind` and `stepName` narrow it (a filter given with
 reads all of them); `stepLimit` (at most 2,000) and `stepCursor` page it. The Journal asks for
 every step.
 
+A transform's steps are kept for 7 days from the run's start, and then cleared by a later
+transform of the same customer, which says so in its own journal (`run_steps_pruned`: how many
+steps, from how many runs, and how many runs it left for the next one). A run whose steps were
+cleared answers `stepSummary: null` and no steps -- never a summary of zero -- while its status,
+`testsFailed` and journal stay. A run that is still the newest build, published build or held
+build of some model keeps its steps however old it is, so a model's last build and its tests
+never read as missing
+([ADR 0159](../adr/0159-a-transform-keeps-its-dbt-steps-for-seven-days.md)).
+
 ## A run's verdict, and a model's tests
 
 A run's status is `running`, `ok` or `failed`. A build whose tests find rows that break them is

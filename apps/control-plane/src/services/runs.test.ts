@@ -192,6 +192,28 @@ describe("what a run says about the rows it refused", () => {
 });
 
 /**
+ * A run whose dbt steps the retention prune cleared (ADR 0159) must not count the empty table
+ * that is left: "0 steps, 0 failing" is a count nobody made.
+ */
+describe("what a run says once its steps are cleared", () => {
+  it("answers no step summary, rather than a summary of zero", async () => {
+    await db.asSuperuser((tx) =>
+      tx.query("UPDATE ops.run SET steps_pruned_at = now() WHERE id = 'run-mine'"),
+    );
+
+    expect(await get(db, TENANT, "run-mine", READ)).toMatchObject({
+      stepSummary: null,
+      steps: [],
+      nextStepCursor: null,
+    });
+  });
+
+  it("a run that recorded no steps and lost none still counts zero", async () => {
+    expect((await get(db, TENANT, "run-mine", READ))?.stepSummary?.total).toBe(0);
+  });
+});
+
+/**
  * `get` with a wait (issue 440), on a clock only the test moves, so nothing here waits for real
  * and nothing passes by being fast. A wait is "parked" once it sleeps on that clock; the test
  * polls for that, changes the ledger, then moves time.

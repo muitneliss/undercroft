@@ -1571,6 +1571,8 @@ export const en = {
 
     stepsHead: "dbt steps",
     stepsCut: "Showing {{shown}} of {{total}} steps; this run has more steps than one page holds.",
+    stepsPrunedNote:
+      "This run's dbt steps were cleared after {{days}} days. Its outcome, failing-test count and journal are kept.",
     colStep: "Step",
     colStatus: "Status",
     colFailures: "Failing rows",
@@ -1630,6 +1632,10 @@ export const en = {
       runStopped:
         "Stopped part-way because the worker shut down, usually for a deploy. What it landed is kept: {{created}} new, {{changed}} changed, {{refused}} refused. The next run carries on from here.",
       truncated: "{{at}} lines recorded; from here only warnings and errors are kept.",
+      stepsPruned:
+        "Cleared {{removed}} dbt steps of {{runs}} runs older than {{keptDays}} days; {{remaining}} runs are left for later runs to clear.",
+      stepsPruneFailed:
+        "Could not clear old dbt steps ({{errorType}}). This run is unaffected; the next one tries again.",
       unknown: "Event {{event}}.",
     },
 

@@ -22,6 +22,15 @@
 export const REFUSAL_RETENTION_DAYS = 7;
 
 /**
+ * How long a transform run keeps its dbt steps in `ops.run_step` (ADR 0159).
+ *
+ * The worker prunes to this at the end of each transform (`transformRun.ts`), and the browser
+ * words a cleared run's step list with it -- one number for both, for the reason above. A run
+ * that is still some model's newest evidence keeps its steps past it (`690_run_step_retention.sql`).
+ */
+export const STEP_RETENTION_DAYS = 7;
+
+/**
  * The most dbt steps one answer lists (`stepLimit` on `runs.get`). About twice the largest run
  * measured (1,011 steps), so the web leaf -- which asks for this many -- shows every step of a
  * real run on one page, and says so when a run outgrows it rather than showing a page as the

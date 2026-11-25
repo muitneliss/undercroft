@@ -17,10 +17,14 @@ import { join } from "node:path";
 import { createStampSource, TestClock } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import {
+  closeRun,
+  eventsFor,
   getModel,
   openRun,
   provisionTenantRoles,
+  recordSteps,
   saveModel,
+  stepsFor,
   tenantRolesFor,
 } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
@@ -239,6 +243,48 @@ describe("POST /v1/models/build", () => {
   });
 
   // ADR 0131: what a dashboard would read is the last passing version, not this build's rows.
+  it("a build clears the steps it superseded past the retention window, and its journal says so", async () => {
+    // A build of the same model a month ago: once this build's step is newer, it is no model's
+    // evidence any more (ADR 0159).
+    await openRun(db, {
+      id: "t-month-ago",
+      tenantId: TENANT,
+      source: "*",
+      verb: "transform",
+      trigger: "schedule",
+    });
+    await recordSteps(db, "t-month-ago", [
+      {
+        uniqueId: "model.undercroft.stg_deals",
+        kind: "model",
+        name: "stg_deals",
+        status: "success",
+        failures: null,
+        relation: null,
+        message: null,
+        executionMs: 1,
+        promoted: true,
+      },
+    ]);
+    await closeRun(db, "t-month-ago", { status: "ok" });
+    await db.asSuperuser((tx) =>
+      tx.exec(
+        "UPDATE ops.run SET started_at = now() - interval '30 days' WHERE id = 't-month-ago'",
+      ),
+    );
+
+    const res = await post(api(passingDbt), "/v1/models/build", {
+      tenantId: TENANT,
+      select: ["stg_deals"],
+    });
+    const body = (await res.json()) as { runId: string };
+
+    expect(await stepsFor(db, "t-month-ago")).toEqual([]);
+    expect(await stepsFor(db, body.runId)).toHaveLength(2);
+    const pruned = (await eventsFor(db, body.runId)).find((e) => e.event === "run_steps_pruned");
+    expect(pruned?.detail).toEqual({ removed: 1, runs: 1, remaining: 0, keptDays: 7 });
+  });
+
   it("a build whose test failed is held back: not counted, not previewed, and its step says so", async () => {
     await post(api(passingDbt), "/v1/models/build", { tenantId: TENANT, select: ["stg_deals"] });
 

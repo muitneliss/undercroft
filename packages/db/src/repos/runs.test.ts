@@ -21,13 +21,17 @@ import {
   recordEvents,
   recordExternalBatch,
   pruneRefusals,
+  pruneSteps,
   reasonsFor,
   recordRefusalReasons,
   recordRefusals,
+  recordSteps,
   refusalsFor,
   RUN_KINDS,
   type RunFilter,
+  stepsFor,
 } from "./runs.ts";
+import { lastBuildPerModel } from "./models.ts";
 
 let db: TestDatabase;
 
@@ -645,5 +649,83 @@ describe("a run says which build produced it", () => {
   it("records a blank when the image did not say, rather than a guess", async () => {
     await openRun(db, { id: "r-blank", ...PAIR });
     expect((await getRun(db, PAIR.tenantId, "r-blank"))?.releaseTag).toBe("");
+  });
+});
+
+/**
+ * Step retention (ADR 0159): a transform's dbt steps go after 7 days, a bounded batch per call,
+ * except where they are still a model's newest evidence -- and a cleared run says so.
+ */
+describe("step retention", () => {
+  const BUILD = {
+    tenantId: "CASE-0042",
+    source: "*",
+    verb: "transform",
+    trigger: "schedule",
+  } as const;
+
+  /** A closed transform that built `models`, started `daysAgo` days ago. */
+  async function built(id: string, daysAgo: number, models: readonly string[]): Promise<void> {
+    await openRun(db, { id, ...BUILD });
+    await recordSteps(
+      db,
+      id,
+      models.map((name) => ({
+        uniqueId: `model.p.${name}`,
+        kind: "model",
+        name,
+        status: "success",
+        failures: null,
+        relation: null,
+        message: null,
+        executionMs: 1,
+        promoted: true,
+      })),
+    );
+    await closeRun(db, id, { status: "ok" });
+    await db.asSuperuser((tx) =>
+      tx.query("UPDATE ops.run SET started_at = now() - make_interval(days => $2) WHERE id = $1", [
+        id,
+        daysAgo,
+      ]),
+    );
+  }
+
+  it("clears a superseded run past the window, stamps it, and says what went", async () => {
+    await built("t-old", 30, ["orders", "customers"]);
+    await built("t-new", 1, ["orders", "customers"]);
+
+    expect(await pruneSteps(db, "CASE-0042", 7)).toEqual({ removed: 2, runs: 1, remaining: 0 });
+    expect(await stepsFor(db, "t-old")).toEqual([]);
+    expect((await getRun(db, "CASE-0042", "t-old"))?.stepsPrunedAt).not.toBeNull();
+    // The quiet half: the run inside the window is untouched and not marked.
+    expect(await stepsFor(db, "t-new")).toHaveLength(2);
+    expect((await getRun(db, "CASE-0042", "t-new"))?.stepsPrunedAt).toBeNull();
+  });
+
+  it("keeps an old run whole while it is still a model's newest build", async () => {
+    // `customers` was last built 30 days ago; pruning that run would make it read "never built".
+    await built("t-old", 30, ["orders", "customers"]);
+    await built("t-new", 1, ["orders"]);
+
+    expect(await pruneSteps(db, "CASE-0042", 7)).toEqual({ removed: 0, runs: 0, remaining: 0 });
+    expect(await stepsFor(db, "t-old")).toHaveLength(2);
+    expect((await lastBuildPerModel(db, "CASE-0042")).get("customers")?.runId).toBe("t-old");
+  });
+
+  it("clears whole runs, oldest first, up to the bound, and counts the runs it left", async () => {
+    await built("t-oldest", 40, ["orders"]);
+    await built("t-older", 30, ["orders"]);
+    await built("t-new", 1, ["orders"]);
+
+    const { rows } = await db.query<{
+      removed: number;
+      cleared_runs: number;
+      remaining_runs: number;
+    }>("SELECT * FROM ops.prune_run_steps('CASE-0042', 7, 1)");
+
+    expect(rows[0]).toEqual({ removed: 1, cleared_runs: 1, remaining_runs: 1 });
+    expect(await stepsFor(db, "t-oldest")).toEqual([]);
+    expect(await stepsFor(db, "t-older")).toHaveLength(1);
   });
 });
