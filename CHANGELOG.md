@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.87.0](https://github.com/muitneliss/undercroft/compare/v1.86.0...v1.87.0) (2026-11-25)
+
+
+### Features
+
+* **documents:** purge a document's bytes once extraction has had its go, keeping its name and link (ADR 0161) ([#551](https://github.com/muitneliss/undercroft/issues/551)) ([00fb8c9](https://github.com/muitneliss/undercroft/commit/00fb8c93e530cb34038608737cec1fe37af3ff3f))
+
+
+### Bug Fixes
+
+* **deploy:** verify reads each service's own container, not kestra-postgres for postgres ([#549](https://github.com/muitneliss/undercroft/issues/549)) ([dd534d7](https://github.com/muitneliss/undercroft/commit/dd534d745f03d069d487d19833976c06b5653e45))
+
 ## [1.86.0](https://github.com/muitneliss/undercroft/compare/v1.85.0...v1.86.0) (2026-11-25)
 
 
