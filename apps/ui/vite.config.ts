@@ -102,11 +102,17 @@ export default defineConfig({
     // the control plane left this proxy pointing at whatever DID answer on 3000, and the
     // symptom is a 404 from `/trpc/session.me` and `/api/auth/sign-in/social` that reads
     // exactly like a broken control plane rather than a misrouted one. Default unchanged.
+    //
+    // Each entry is an object rather than the bare origin because Vite expands a string to
+    // `changeOrigin: true`, which rewrites `Host` to the control plane's own port. Local sign-in
+    // (`devSignIn.ts`) refuses a request addressed to any host but the public URL's, so the
+    // rewrite turned `UNDERCROFT_DEV_SIGN_IN_AS` into "Local sign-in works only at
+    // http://localhost:5173" on that very page. The browser's `Host` is what the server must see.
     proxy: {
-      "/trpc": apiOrigin,
-      "/oauth": apiOrigin,
-      "/api": apiOrigin,
-      "/mcp": apiOrigin,
+      "/trpc": { target: apiOrigin, changeOrigin: false },
+      "/oauth": { target: apiOrigin, changeOrigin: false },
+      "/api": { target: apiOrigin, changeOrigin: false },
+      "/mcp": { target: apiOrigin, changeOrigin: false },
     },
   },
 });
