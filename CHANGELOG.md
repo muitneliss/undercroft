@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.87.1](https://github.com/muitneliss/undercroft/compare/v1.87.0...v1.87.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* **ui:** the dev proxy keeps the browser's Host, so local sign-in works at :5173 ([#552](https://github.com/muitneliss/undercroft/issues/552)) ([ec27c47](https://github.com/muitneliss/undercroft/commit/ec27c472fcdaffb0463588f6b824c1d5f5bd0342))
+
 ## [1.87.0](https://github.com/muitneliss/undercroft/compare/v1.86.0...v1.87.0) (2026-11-25)
 
 
